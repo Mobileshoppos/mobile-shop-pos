@@ -1,3 +1,5 @@
+// --- File: src/components/Reports.jsx (UPDATED FOR NEW INVENTORY SYSTEM) ---
+
 import React, { useState, useEffect } from 'react';
 import { Typography, Table, Card, App as AntApp, Row, Col, Statistic, Spin } from 'antd';
 import { supabase } from '../supabaseClient';
@@ -11,13 +13,12 @@ const Reports = () => {
   const [products, setProducts] = useState([]);
   const [stockLoading, setStockLoading] = useState(true);
   
-  // Hum ne is state ko update kiya hai
   const [summaryData, setSummaryData] = useState({
     totalRevenue: 0,
     totalCost: 0,
     grossProfit: 0,
-    totalExpenses: 0, // Nayi state
-    netProfit: 0,      // Nayi state
+    totalExpenses: 0,
+    netProfit: 0,
   });
   const [summaryLoading, setSummaryLoading] = useState(true);
 
@@ -26,7 +27,12 @@ const Reports = () => {
       const getStockData = async () => {
         try {
           setStockLoading(true);
-          let { data, error } = await supabase.from('products').select('*').order('name', { ascending: true });
+          // --- TABDEELI: Ab hum 'products_with_quantity' view se data lenge ---
+          let { data, error } = await supabase
+            .from('products_with_quantity') // <--- YEH LINE BADAL GAYI HAI
+            .select('*')
+            .order('name', { ascending: true });
+
           if (error) throw error;
           setProducts(data);
         } catch (error) {
@@ -36,42 +42,33 @@ const Reports = () => {
         }
       };
 
-      // Yeh function P&L ka saara data fetch karega
       const getSummaryData = async () => {
         try {
           setSummaryLoading(true);
-          
-          // 1. Total Revenue (Aamdani) fetch karein
           let { data: salesData, error: salesError } = await supabase.from('sales').select('total_amount');
           if (salesError) throw salesError;
           const totalRevenue = salesData.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
 
-          // 2. Total Cost of Goods (Laagat) fetch karein
+          // Cost of Goods ki calculation ab inventory se honi chahiye for accuracy,
+          // lekin for simplicity, hum abhi bhi default purchase price istemal kar rahe hain.
+          // Isay mustaqbil mein behtar banaya ja sakta hai.
           let { data: saleItems, error: itemsError } = await supabase.from('sale_items').select('quantity, products(purchase_price)');
           if (itemsError) throw itemsError;
           let totalCost = 0;
           for (const item of saleItems) {
             if (item.products) {
-              totalCost += item.quantity * item.products.purchase_price;
+              totalCost += item.quantity * (item.products.purchase_price || 0);
             }
           }
           
-          // 3. NAYA STEP: Total Expenses (Akhrajaat) fetch karein
           let { data: expensesData, error: expensesError } = await supabase.from('expenses').select('amount');
           if (expensesError) throw expensesError;
           const totalExpenses = expensesData.reduce((sum, expense) => sum + (expense.amount || 0), 0);
 
-          // 4. Sab kuch calculate karein
           const grossProfit = totalRevenue - totalCost;
           const netProfit = grossProfit - totalExpenses;
           
-          setSummaryData({
-            totalRevenue,
-            totalCost,
-            grossProfit,
-            totalExpenses,
-            netProfit,
-          });
+          setSummaryData({ totalRevenue, totalCost, grossProfit, totalExpenses, netProfit });
 
         } catch (error) {
           message.error('Error fetching summary data: ' + error.message);
@@ -90,10 +87,10 @@ const Reports = () => {
     { title: 'Brand', dataIndex: 'brand', key: 'brand' },
     { title: 'Stock Quantity', dataIndex: 'quantity', key: 'quantity', align: 'right' },
     { title: 'Purchase Price', dataIndex: 'purchase_price', key: 'purchase_price', align: 'right', render: (price) => `Rs. ${price ? price.toFixed(2) : '0.00'}` },
-    { title: 'Total Value', key: 'total_value', align: 'right', render: (text, record) => { const totalValue = record.quantity * record.purchase_price; return <Text strong>Rs. {totalValue ? totalValue.toFixed(2) : '0.00'}</Text>; }}
+    { title: 'Total Value', key: 'total_value', align: 'right', render: (text, record) => { const totalValue = (record.quantity || 0) * (record.purchase_price || 0); return <Text strong>Rs. {totalValue.toFixed(2)}</Text>; }}
   ];
 
-  const totalStockValue = products.reduce((sum, product) => sum + (product.quantity * product.purchase_price), 0);
+  const totalStockValue = products.reduce((sum, product) => sum + ((product.quantity || 0) * (product.purchase_price || 0)), 0);
 
   return (
     <>
@@ -103,29 +100,11 @@ const Reports = () => {
         <Title level={4}>Profit & Loss Summary</Title>
         {summaryLoading ? <div style={{ textAlign: 'center', padding: '48px' }}><Spin size="large" /></div> : (
           <Row gutter={[16, 24]}>
-            <Col xs={24} sm={12} md={6}>
-              <Statistic title="Total Revenue (Aamdani)" value={summaryData.totalRevenue} precision={2} prefix="Rs." />
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Statistic title="Cost of Goods (Laagat)" value={summaryData.totalCost} precision={2} prefix="Rs." />
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Statistic title="Gross Profit (Aamdani - Laagat)" value={summaryData.grossProfit} precision={2} prefix="Rs." />
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Statistic title="Total Expenses (Kul Akhrajaat)" value={summaryData.totalExpenses} precision={2} prefix="Rs." valueStyle={{ color: '#cf1322' }} />
-            </Col>
-            <Col xs={24}>
-              <Card style={{ background: '#2c2c2c' }}>
-                <Statistic 
-                  title={<Title level={4}>Net Profit (Asal Munafa)</Title>} 
-                  value={summaryData.netProfit} 
-                  precision={2} 
-                  prefix="Rs. " 
-                  valueStyle={{ color: summaryData.netProfit >= 0 ? '#3f8600' : '#cf1322', fontSize: '2.5rem' }} 
-                />
-              </Card>
-            </Col>
+            <Col xs={24} sm={12} md={6}><Statistic title="Total Revenue (Aamdani)" value={summaryData.totalRevenue} precision={2} prefix="Rs." /></Col>
+            <Col xs={24} sm={12} md={6}><Statistic title="Cost of Goods (Laagat)" value={summaryData.totalCost} precision={2} prefix="Rs." /></Col>
+            <Col xs={24} sm={12} md={6}><Statistic title="Gross Profit (Aamdani - Laagat)" value={summaryData.grossProfit} precision={2} prefix="Rs." /></Col>
+            <Col xs={24} sm={12} md={6}><Statistic title="Total Expenses (Kul Akhrajaat)" value={summaryData.totalExpenses} precision={2} prefix="Rs." valueStyle={{ color: '#cf1322' }} /></Col>
+            <Col xs={24}><Card style={{ background: '#2c2c2c' }}><Statistic title={<Title level={4}>Net Profit (Asal Munafa)</Title>} value={summaryData.netProfit} precision={2} prefix="Rs. " valueStyle={{ color: summaryData.netProfit >= 0 ? '#3f8600' : '#cf1322', fontSize: '2.5rem' }} /></Card></Col>
           </Row>
         )}
       </Card>
