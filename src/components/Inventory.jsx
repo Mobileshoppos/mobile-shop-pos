@@ -1,4 +1,4 @@
-// --- File: src/components/Inventory.jsx (FINAL VERSION - With Frontend Duplicate IMEI Check) ---
+// --- File: src/components/Inventory.jsx (FIXED - Accessories form visibility issue) ---
 
 import React, { useState, useEffect, useRef, createRef } from 'react';
 import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Space, Divider, Tooltip } from 'antd';
@@ -122,10 +122,18 @@ const Inventory = () => {
 
   const handleSubmit = async () => {
     try {
+      // --- UPDATE: Ab yeh accessories ke form ko bhi handle karega ---
+      const isSmartPhone = selectedProduct?.categories?.name === 'Smart Phones / Devices';
+      if (!isSmartPhone) {
+        // Agar accessory hai, to seedha purana tareeqa istemal karo
+        await stockForm.validateFields();
+        handleStockOk(stockForm.getFieldsValue());
+        return;
+      }
+
       let values = stockForm.getFieldsValue();
       let itemsToSave = values.items || [];
       
-      // Step 1: Aakhri khali row ko hatana
       if (itemsToSave.length > 0) {
         const lastItem = itemsToSave[itemsToSave.length - 1];
         if (lastItem && (!lastItem.imei || lastItem.imei.trim() === '')) {
@@ -133,7 +141,6 @@ const Inventory = () => {
         }
       }
       
-      // --- NAYA FEATURE: Duplicate IMEI Check ---
       const imeiMap = new Map();
       for (let i = 0; i < itemsToSave.length; i++) {
         const item = itemsToSave[i];
@@ -142,20 +149,14 @@ const Inventory = () => {
           if (imeiMap.has(imei)) {
             const firstIndex = imeiMap.get(imei);
             message.error(`Duplicate IMEI "${imei}" found in Row ${firstIndex + 1} and Row ${i + 1}.`);
-            return; // Submission ko roko
+            return;
           }
           imeiMap.set(imei, i);
         }
       }
-      // --- CHECK MUKAMMAL ---
 
-      // Step 2: Form ki values ko update karna (taake khali row validation mein na aaye)
       stockForm.setFieldsValue({ items: itemsToSave });
-      
-      // Step 3: Form ko validate karna
       await stockForm.validateFields();
-
-      // Step 4: Agar sab theek hai, to data save karna
       handleStockOk({ items: itemsToSave });
 
     } catch (errorInfo) {
@@ -288,7 +289,17 @@ const Inventory = () => {
               )}
             </Form.List>
           ) : (
-            <>{/* Accessories form unchanged */}</>
+            // --- YEH HISSA MISSING THA ---
+            // Accessories ke liye Simple Form
+            <>
+              <Form.Item name="quantity" label="Quantity" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={1} /></Form.Item>
+              <Form.Item name="imei" label="Serial Number (Optional)"><Input /></Form.Item>
+              <Form.Item name="color" label="Color"><Input /></Form.Item>
+              <Form.Item name="condition" label="Condition" rules={[{ required: true }]}><Select><Option value="New">New</Option><Option value="Open Box">Open Box</Option><Option value="Used">Used</Option><Option value="Refurbished">Refurbished</Option></Select></Form.Item>
+              <Form.Item name="purchase_price" label="Actual Purchase Price"><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item>
+              <Form.Item name="sale_price" label="Specific Sale Price"><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item>
+            </>
+            // --- FIX MUKAMMAL ---
           )}
         </Form>
       </Modal>
