@@ -1,7 +1,6 @@
-// src/App.jsx (Mukammal naya code "QPOS" ke saath)
+// src/App.jsx (Menu header ke baghair)
 
 import React, { useState, useEffect } from 'react';
-// --- TABDEELI: Hum ne "Typography" ko yahan import kiya hai ---
 import { ConfigProvider, theme, Layout, Menu, App as AntApp, Typography } from 'antd';
 import { BrowserRouter, Routes, Route, Link, Outlet, useLocation, Navigate } from 'react-router-dom';
 import { 
@@ -30,7 +29,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { supabase } from './supabaseClient';
 
 const { Sider, Content } = Layout;
-// --- TABDEELI: Hum ne "Title" ko Typography se nikala hai ---
 const { Title } = Typography;
 
 const menuItems = [
@@ -47,39 +45,64 @@ const menuItems = [
 const MainLayout = ({ isDarkMode, toggleTheme }) => {
   const location = useLocation();
   const { token } = theme.useToken();
+  const [collapsed, setCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 992);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 992;
+      setIsMobile(mobile);
+      if (!mobile) {
+        setCollapsed(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const handleMenuItemClick = () => {
+    if (isMobile) {
+      setCollapsed(true);
+    }
+  };
   
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
 
+  const processedMenuItems = menuItems.map(item => {
+    if (item.type === 'divider') return item;
+    return { ...item, onClick: handleMenuItemClick };
+  });
+
   const menuItemsWithLogout = [
-    ...menuItems,
+    ...processedMenuItems,
     { type: 'divider' }, 
-    { key: 'logout', icon: <LogoutOutlined />, danger: true, label: 'Logout', onClick: handleLogout },
+    { key: 'logout', icon: <LogoutOutlined />, danger: true, label: 'Logout', onClick: () => {
+      handleLogout();
+      handleMenuItemClick();
+    }},
   ];
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider breakpoint="lg" collapsedWidth="0" theme="dark">
-        {/* --- YEH HAMARA NAYA "QPOS" HEADER HAI --- */}
-        <Link to="/" style={{ textDecoration: 'none' }}>
-          <div 
-            className="logo" 
-            style={{ 
-              height: '40px', 
-              margin: '16px', 
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'rgba(255, 255, 255, 0.2)', 
-              borderRadius: '8px' 
-            }}
-          >
-            <Title level={4} style={{ color: 'white', margin: 0, lineHeight: '40px' }}>QPOS</Title>
-          </div>
-        </Link>
-        {/* --- HEADER MUKAMMAL --- */}
-        <Menu theme="dark" mode="inline" selectedKeys={[location.pathname]} items={menuItemsWithLogout} />
+      <Sider 
+        breakpoint="lg" 
+        collapsedWidth={isMobile ? "0" : "80"}
+        theme="dark"
+        collapsible
+        collapsed={collapsed}
+        onCollapse={(value) => setCollapsed(value)}
+      >
+        {/* --- TABDEELI: Hum ne yahan se menu ka header (QPOS logo) hata diya hai --- */}
+        <Menu 
+          theme="dark" 
+          mode="inline" 
+          selectedKeys={[location.pathname]} 
+          items={menuItemsWithLogout} 
+          // Thora sa margin add kiya hai taake menu behtar dikhe
+          style={{ marginTop: '16px' }} 
+        />
       </Sider>
       <Layout style={{ background: token.colorBgLayout }}>
         <Content style={{ padding: '24px 16px 0' }}>
@@ -123,7 +146,7 @@ function App() {
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme) return savedTheme === 'dark';
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return window.matchMedia && window.matchMedia('(pre-color-scheme: dark)').matches;
   });
 
   useEffect(() => {
