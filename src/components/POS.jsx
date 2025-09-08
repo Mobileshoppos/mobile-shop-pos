@@ -1,4 +1,4 @@
-// --- File: src/components/POS.jsx (UPDATED FOR NEW INVENTORY SYSTEM) ---
+// src/components/POS.jsx (Mukammal naya aur theek kiya hua code)
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -28,10 +28,8 @@ const POS = () => {
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState('Amount');
 
-  // --- TABDEELI #1: Ab hum 'products_with_quantity' view se data lenge ---
   const getProducts = async () => {
     try {
-      // Yahan 'products' ke bajaye 'products_with_quantity' istemal kiya gaya hai
       let { data, error } = await supabase.from('products_with_quantity').select('*').order('name', { ascending: true });
       if (error) throw error;
       setProducts(data);
@@ -61,7 +59,6 @@ const POS = () => {
     }
   }, [user, message]);
 
-  // handleAddToCart aur baqi chotay functions waise hi rahenge
   const handleAddToCart = (product) => {
     if (product.quantity <= 0) { message.warning('This product is out of stock!'); return; }
     const existingItem = cart.find(item => item.id === product.id);
@@ -80,7 +77,6 @@ const POS = () => {
     else { setCart(cart.map(item => item.id === productId ? { ...item, quantity: newQuantity } : item)); }
   };
 
-  // --- TABDEELI #2: Stock update karne ki logic mukammal tor par nayi hai ---
   const handleCompleteSale = async () => {
     if (cart.length === 0) return;
     if (paymentMethod === 'Unpaid' && !selectedCustomer) { message.error('Please select a customer for a credit (Pay Later) sale.'); return; }
@@ -94,7 +90,6 @@ const POS = () => {
       onOk: async () => {
         try {
           setIsSubmitting(true);
-          // Step 1: Sale aur Sale Items ko save karna (yeh pehle jaisa hai)
           const saleRecord = { customer_id: selectedCustomer, subtotal, discount: discountAmount, total_amount: grandTotal, amount_paid_at_sale: paymentMethod === 'Paid' ? grandTotal : amountPaid, payment_status: udhaarAmount > 0 ? 'Unpaid' : 'Paid', user_id: user.id };
           const { data: saleData, error: saleError } = await supabase.from('sales').insert(saleRecord).select().single();
           if (saleError) throw saleError;
@@ -103,10 +98,7 @@ const POS = () => {
           const { error: saleItemsError } = await supabase.from('sale_items').insert(saleItems);
           if (saleItemsError) throw saleItemsError;
 
-          // --- YEH NAYI LOGIC HAI ---
-          // Step 2: Har beche gaye item ke liye inventory se stock ka status 'Sold' karna
           for (const item of cart) {
-            // 'inventory' table se is product ke 'Available' items ke IDs nikalein
             const { data: availableItems, error: stockError } = await supabase
               .from('inventory')
               .select('id')
@@ -116,13 +108,11 @@ const POS = () => {
 
             if (stockError) throw stockError;
             if (availableItems.length < item.quantity) {
-              // Aisa hona nahi chahiye kyunke UI check karta hai, lekin yeh ek safety check hai
               throw new Error(`Not enough stock for ${item.name}. Sale cannot be completed.`);
             }
 
             const inventoryIdsToUpdate = availableItems.map(invItem => invItem.id);
 
-            // Un IDs ka status 'Sold' kar dein
             const { error: updateError } = await supabase
               .from('inventory')
               .update({ status: 'Sold' })
@@ -132,20 +122,17 @@ const POS = () => {
           }
           
           message.success('Sale completed successfully!');
-          // Cart aur form reset karna
           setCart([]);
           setSelectedCustomer(null);
           setPaymentMethod('Paid');
           setAmountPaid(0);
           setDiscount(0);
           setDiscountType('Amount');
-          // Naya data load karna
           await getProducts();
           await getCustomers();
 
         } catch (error) {
           message.error('Sale failed: ' + error.message);
-          // Yahan humein sale ko reverse karne ki logic bhi daalni chahiye, lekin woh Phase 2 ka kaam hai
         } finally {
           setIsSubmitting(false);
         }
@@ -153,7 +140,6 @@ const POS = () => {
     });
   };
 
-  // Baqi tamam code (JSX/UI) bilkul waise ka waisa hi hai
   const filteredProducts = products.filter(product => product.name.toLowerCase().includes(searchTerm.toLowerCase()));
   const subtotal = cart.reduce((sum, item) => sum + (item.sale_price * item.quantity), 0);
   let discountAmount = discountType === 'Amount' ? discount : (subtotal * discount) / 100;
@@ -164,27 +150,75 @@ const POS = () => {
 
   return (
     <>
-      <Title level={2} style={{ color: 'white', marginBottom: '24px' }}>Point of Sale</Title>
+      {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
+      <Title level={2} style={{ marginBottom: '24px' }}>Point of Sale</Title>
       <Row gutter={24}>
         <Col xs={24} md={14}>
           <Card>
             <Search placeholder="Search for products..." onChange={(e) => setSearchTerm(e.target.value)} style={{ marginBottom: '16px' }} />
-            <List loading={loading} dataSource={filteredProducts} renderItem={(product) => (<List.Item><List.Item.Meta title={<Text style={{ color: 'white' }}>{product.name}</Text>} description={`Brand: ${product.brand} - Stock: ${product.quantity}`} /><Button type="primary" icon={<PlusOutlined />} onClick={() => handleAddToCart(product)} disabled={product.quantity <= 0}>Add</Button></List.Item>)} style={{ height: '60vh', overflowY: 'auto' }} />
+            <List 
+              loading={loading} 
+              dataSource={filteredProducts} 
+              renderItem={(product) => (
+                <List.Item>
+                  {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
+                  <List.Item.Meta title={<Text>{product.name}</Text>} description={`Brand: ${product.brand} - Stock: ${product.quantity}`} />
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => handleAddToCart(product)} disabled={product.quantity <= 0}>Add</Button>
+                </List.Item>
+              )} 
+              style={{ height: '60vh', overflowY: 'auto' }} 
+            />
           </Card>
         </Col>
         <Col xs={24} md={10}>
           <Card>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}><Title level={4} style={{ margin: 0 }}>Current Bill</Title>{cart.length > 0 && (<Button danger type="text" icon={<DeleteOutlined />} onClick={handleResetCart}>Reset Cart</Button>)}</div>
-            <Form.Item label="Customer"><Space.Compact style={{ width: '100%' }}><Select showSearch placeholder="Select a customer (optional)" style={{ width: '100%' }} value={selectedCustomer} onChange={(value) => setSelectedCustomer(value)} filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())} options={customers.map(customer => ({ value: customer.id, label: `${customer.name} - ${customer.phone_number}` }))} allowClear /><Button icon={<UserAddOutlined />} onClick={() => setIsAddCustomerModalOpen(true)} /></Space.Compact></Form.Item>
-            <Radio.Group onChange={(e) => setPaymentMethod(e.target.value)} value={paymentMethod} style={{ marginBottom: '16px' }}><Radio value={'Paid'}>Paid</Radio><Radio value={'Unpaid'} disabled={!selectedCustomer}>Pay Later (Udhaar)</Radio></Radio.Group>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <Title level={4} style={{ margin: 0 }}>Current Bill</Title>
+              {cart.length > 0 && (<Button danger type="text" icon={<DeleteOutlined />} onClick={handleResetCart}>Reset Cart</Button>)}
+            </div>
+            <Form.Item label="Customer">
+              <Space.Compact style={{ width: '100%' }}>
+                <Select showSearch placeholder="Select a customer (optional)" style={{ width: '100%' }} value={selectedCustomer} onChange={(value) => setSelectedCustomer(value)} filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())} options={customers.map(customer => ({ value: customer.id, label: `${customer.name} - ${customer.phone_number}` }))} allowClear />
+                <Button icon={<UserAddOutlined />} onClick={() => setIsAddCustomerModalOpen(true)} />
+              </Space.Compact>
+            </Form.Item>
+            <Radio.Group onChange={(e) => setPaymentMethod(e.target.value)} value={paymentMethod} style={{ marginBottom: '16px' }}>
+              <Radio value={'Paid'}>Paid</Radio>
+              <Radio value={'Unpaid'} disabled={!selectedCustomer}>Pay Later (Udhaar)</Radio>
+            </Radio.Group>
             {paymentMethod === 'Unpaid' && selectedCustomer && (<Form.Item label="Amount Paid Now (optional)"><InputNumber style={{ width: '100%' }} prefix="Rs. " min={0} max={grandTotal} value={amountPaid} onChange={(value) => setAmountPaid(value || 0)} /></Form.Item>)}
-            {cart.length === 0 ? <Empty description="Cart is empty" /> : <List dataSource={cart} renderItem={(item) => { const productInStock = products.find(p => p.id === item.id); return (<List.Item actions={[<Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleRemoveFromCart(item.id)} />]}><List.Item.Meta title={<Text style={{ color: 'white' }}>{item.name}</Text>} description={`Rs. ${item.sale_price.toFixed(2)}`} /><Space><InputNumber size="small" min={1} max={productInStock?.quantity || item.quantity} value={item.quantity} onChange={(value) => handleQuantityChange(item.id, value)} style={{ width: '60px' }} /><Text strong style={{ color: 'white', minWidth: '80px', textAlign: 'right' }}>Rs. {(item.sale_price * item.quantity).toFixed(2)}</Text></Space></List.Item>); }} style={{ maxHeight: '30vh', overflowY: 'auto', marginBottom: '16px' }} />}
+            {cart.length === 0 ? <Empty description="Cart is empty" /> : 
+              <List 
+                dataSource={cart} 
+                renderItem={(item) => { 
+                  const productInStock = products.find(p => p.id === item.id); 
+                  return (
+                    <List.Item actions={[<Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleRemoveFromCart(item.id)} />]}>
+                      {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
+                      <List.Item.Meta title={<Text>{item.name}</Text>} description={`Rs. ${item.sale_price.toFixed(2)}`} />
+                      <Space>
+                        <InputNumber size="small" min={1} max={productInStock?.quantity || item.quantity} value={item.quantity} onChange={(value) => handleQuantityChange(item.id, value)} style={{ width: '60px' }} />
+                        {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
+                        <Text strong style={{ minWidth: '80px', textAlign: 'right' }}>Rs. {(item.sale_price * item.quantity).toFixed(2)}</Text>
+                      </Space>
+                    </List.Item>
+                  ); 
+                }} 
+                style={{ maxHeight: '30vh', overflowY: 'auto', marginBottom: '16px' }} 
+              />
+            }
             <Divider />
-            <Row gutter={16} style={{ marginBottom: '16px' }}><Col span={14}><InputNumber style={{ width: '100%' }} placeholder="Discount" value={discount} onChange={(val) => setDiscount(val || 0)} min={0} /></Col><Col span={10}><Radio.Group value={discountType} onChange={(e) => setDiscountType(e.target.value)}><Radio.Button value="Amount">Rs.</Radio.Button><Radio.Button value="Percentage">%</Radio.Button></Radio.Group></Col></Row>
+            <Row gutter={16} style={{ marginBottom: '16px' }}>
+              <Col span={14}><InputNumber style={{ width: '100%' }} placeholder="Discount" value={discount} onChange={(val) => setDiscount(val || 0)} min={0} /></Col>
+              <Col span={10}><Radio.Group value={discountType} onChange={(e) => setDiscountType(e.target.value)}><Radio.Button value="Amount">Rs.</Radio.Button><Radio.Button value="Percentage">%</Radio.Button></Radio.Group></Col>
+            </Row>
             <Row justify="space-between"><Text>Subtotal</Text><Text>Rs. {subtotal.toFixed(2)}</Text></Row>
             <Row justify="space-between"><Text>Discount</Text><Text style={{ color: '#ff4d4f' }}>- Rs. {discountAmount.toFixed(2)}</Text></Row>
             <Divider style={{ margin: '8px 0' }}/>
-            <Row justify="space-between" align="middle"><Col><Statistic title={<Title level={5} style={{ margin: 0 }}>Grand Total</Title>} value={grandTotal} precision={2} prefix="Rs. " /></Col><Col><Button type="primary" size="large" disabled={cart.length === 0 || isSubmitting} loading={isSubmitting} onClick={handleCompleteSale}>Complete Sale</Button></Col></Row>
+            <Row justify="space-between" align="middle">
+              <Col><Statistic title={<Title level={5} style={{ margin: 0 }}>Grand Total</Title>} value={grandTotal} precision={2} prefix="Rs. " /></Col>
+              <Col><Button type="primary" size="large" disabled={cart.length === 0 || isSubmitting} loading={isSubmitting} onClick={handleCompleteSale}>Complete Sale</Button></Col>
+            </Row>
           </Card>
         </Col>
       </Row>

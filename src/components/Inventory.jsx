@@ -1,4 +1,4 @@
-// --- File: src/components/Inventory.jsx (FIXED - Accessories form visibility issue) ---
+// src/components/Inventory.jsx (Mukammal naya aur theek kiya hua code)
 
 import React, { useState, useEffect, useRef, createRef } from 'react';
 import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Space, Divider, Tooltip } from 'antd';
@@ -122,10 +122,8 @@ const Inventory = () => {
 
   const handleSubmit = async () => {
     try {
-      // --- UPDATE: Ab yeh accessories ke form ko bhi handle karega ---
       const isSmartPhone = selectedProduct?.categories?.name === 'Smart Phones / Devices';
       if (!isSmartPhone) {
-        // Agar accessory hai, to seedha purana tareeqa istemal karo
         await stockForm.validateFields();
         handleStockOk(stockForm.getFieldsValue());
         return;
@@ -223,7 +221,8 @@ const Inventory = () => {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <Title level={2} style={{ color: 'white' }}>Product Inventory</Title>
+        {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
+        <Title level={2}>Product Inventory</Title>
         <Button type="primary" size="large" onClick={showProductModal}>Add New Product Model</Button>
       </div>
       <Table columns={columns} dataSource={products} rowKey="id" loading={loading} />
@@ -289,8 +288,6 @@ const Inventory = () => {
               )}
             </Form.List>
           ) : (
-            // --- YEH HISSA MISSING THA ---
-            // Accessories ke liye Simple Form
             <>
               <Form.Item name="quantity" label="Quantity" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={1} /></Form.Item>
               <Form.Item name="imei" label="Serial Number (Optional)"><Input /></Form.Item>
@@ -299,7 +296,6 @@ const Inventory = () => {
               <Form.Item name="purchase_price" label="Actual Purchase Price"><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item>
               <Form.Item name="sale_price" label="Specific Sale Price"><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item>
             </>
-            // --- FIX MUKAMMAL ---
           )}
         </Form>
       </Modal>

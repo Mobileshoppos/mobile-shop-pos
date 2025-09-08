@@ -1,3 +1,5 @@
+// src/components/ExpenseCategories.jsx (Mukammal naya aur theek kiya hua code)
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Typography,
@@ -26,12 +28,10 @@ const ExpenseCategories = () => {
   const [editingCategory, setEditingCategory] = useState(null);
   const [form] = Form.useForm();
 
-  // Database se categories fetch karne ka function
   const getCategories = useCallback(async () => {
     if (!user) return;
     try {
       setLoading(true);
-      // Hum sirf woh categories mangwa rahe hain jo ya to default hain (user_id is null) ya is user ne banayi hain
       let { data, error } = await supabase
         .from('expense_categories')
         .select('*')
@@ -50,7 +50,6 @@ const ExpenseCategories = () => {
     getCategories();
   }, [getCategories]);
 
-  // Modal ko kholne aur band karne ke functions
   const showModal = (category = null) => {
     setEditingCategory(category);
     form.setFieldsValue(category ? { name: category.name } : { name: '' });
@@ -63,40 +62,35 @@ const ExpenseCategories = () => {
     form.resetFields();
   };
 
-  // Form submit hone par (Add ya Update)
   const handleOk = async (values) => {
     try {
       if (editingCategory) {
-        // Agar category pehle se hai, to update karein
         const { error } = await supabase.from('expense_categories').update({ name: values.name }).eq('id', editingCategory.id);
         if (error) throw error;
         message.success('Category updated successfully!');
       } else {
-        // Warna nayi category banayein
         const { error } = await supabase.from('expense_categories').insert([{ name: values.name, user_id: user.id }]);
         if (error) throw error;
         message.success('Category added successfully!');
       }
       handleCancel();
-      getCategories(); // List ko refresh karein
+      getCategories();
     } catch (error) {
       message.error('Error saving category: ' + error.message);
     }
   };
   
-  // Category delete karne ka function
   const handleDelete = async (categoryId) => {
     try {
         const { error } = await supabase.from('expense_categories').delete().eq('id', categoryId);
         if (error) throw error;
         message.success('Category deleted successfully!');
-        getCategories(); // List ko refresh karein
+        getCategories();
     } catch (error) {
         message.error('Error deleting category: ' + error.message);
     }
   };
 
-  // Table ke columns ki settings
   const columns = [
     {
       title: 'Category Name',
@@ -109,7 +103,6 @@ const ExpenseCategories = () => {
       width: 150,
       align: 'center',
       render: (_, record) => {
-        // Agar category ka user_id hai (yani user ne banayi hai), to Edit/Delete buttons dikhayein
         if (record.user_id) {
           return (
             <Space>
@@ -125,7 +118,6 @@ const ExpenseCategories = () => {
             </Space>
           );
         }
-        // Warna "Default" likha dikhayein
         return (
           <Tooltip title="Default categories cannot be edited or deleted.">
             <span style={{ color: '#666', cursor: 'not-allowed' }}>Default</span>
@@ -138,7 +130,8 @@ const ExpenseCategories = () => {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <Title level={2} style={{ margin: 0, color: 'white' }}>Manage Expense Categories</Title>
+        {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
+        <Title level={2} style={{ margin: 0 }}>Manage Expense Categories</Title>
         <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()}>
           Add New Category
         </Button>

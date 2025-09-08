@@ -1,4 +1,4 @@
-// --- File: src/components/Categories.jsx (FINAL CODE) ---
+// src/components/Categories.jsx (Mukammal naya aur theek kiya hua code)
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -11,7 +11,7 @@ import {
   App as AntApp,
   Space,
   Popconfirm,
-  Switch, // Switch component import karein
+  Switch,
   Tooltip
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -29,12 +29,10 @@ const Categories = () => {
   const [editingCategory, setEditingCategory] = useState(null);
   const [form] = Form.useForm();
 
-  // Data fetch karne ka function
   const getCategories = useCallback(async () => {
     if (!user) return;
     try {
       setLoading(true);
-      // Supabase se categories aur unki settings fetch karein
       let { data, error } = await supabase.rpc('get_user_categories_with_settings');
       
       if (error) throw error;
@@ -50,7 +48,6 @@ const Categories = () => {
     getCategories();
   }, [getCategories]);
 
-  // Enable/Disable switch ko handle karne ka function
   const handleVisibilityChange = async (categoryId, isVisible) => {
     try {
       const { error } = await supabase
@@ -61,7 +58,6 @@ const Categories = () => {
         );
       if (error) throw error;
       message.success('Setting saved!');
-      // State ko update karein taake UI फौरन update ho
       setCategories(prev => prev.map(cat => 
         cat.id === categoryId ? { ...cat, is_visible: isVisible } : cat
       ));
@@ -70,7 +66,6 @@ const Categories = () => {
     }
   };
   
-  // Baqi functions (Add, Edit, Delete)
   const showModal = (category = null) => {
     setEditingCategory(category);
     form.setFieldsValue(category ? { name: category.name } : { name: '' });
@@ -163,7 +158,8 @@ const Categories = () => {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <Title level={2} style={{ margin: 0, color: 'white' }}>Manage Categories</Title>
+        {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
+        <Title level={2} style={{ margin: 0 }}>Manage Product Categories</Title>
         <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()}>
           Add New Category
         </Button>

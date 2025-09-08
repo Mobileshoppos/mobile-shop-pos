@@ -1,4 +1,4 @@
-// --- File: src/components/Reports.jsx (UPDATED FOR NEW INVENTORY SYSTEM) ---
+// src/components/Reports.jsx (Mukammal naya aur theek kiya hua code)
 
 import React, { useState, useEffect } from 'react';
 import { Typography, Table, Card, App as AntApp, Row, Col, Statistic, Spin } from 'antd';
@@ -27,9 +27,8 @@ const Reports = () => {
       const getStockData = async () => {
         try {
           setStockLoading(true);
-          // --- TABDEELI: Ab hum 'products_with_quantity' view se data lenge ---
           let { data, error } = await supabase
-            .from('products_with_quantity') // <--- YEH LINE BADAL GAYI HAI
+            .from('products_with_quantity')
             .select('*')
             .order('name', { ascending: true });
 
@@ -48,10 +47,7 @@ const Reports = () => {
           let { data: salesData, error: salesError } = await supabase.from('sales').select('total_amount');
           if (salesError) throw salesError;
           const totalRevenue = salesData.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
-
-          // Cost of Goods ki calculation ab inventory se honi chahiye for accuracy,
-          // lekin for simplicity, hum abhi bhi default purchase price istemal kar rahe hain.
-          // Isay mustaqbil mein behtar banaya ja sakta hai.
+          
           let { data: saleItems, error: itemsError } = await supabase.from('sale_items').select('quantity, products(purchase_price)');
           if (itemsError) throw itemsError;
           let totalCost = 0;
@@ -94,7 +90,8 @@ const Reports = () => {
 
   return (
     <>
-      <Title level={2} style={{ color: 'white', marginBottom: '24px' }}>Reports</Title>
+      {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
+      <Title level={2} style={{ marginBottom: '24px' }}>Reports</Title>
       
       <Card style={{ marginBottom: '24px' }}>
         <Title level={4}>Profit & Loss Summary</Title>
@@ -104,7 +101,23 @@ const Reports = () => {
             <Col xs={24} sm={12} md={6}><Statistic title="Cost of Goods (Laagat)" value={summaryData.totalCost} precision={2} prefix="Rs." /></Col>
             <Col xs={24} sm={12} md={6}><Statistic title="Gross Profit (Aamdani - Laagat)" value={summaryData.grossProfit} precision={2} prefix="Rs." /></Col>
             <Col xs={24} sm={12} md={6}><Statistic title="Total Expenses (Kul Akhrajaat)" value={summaryData.totalExpenses} precision={2} prefix="Rs." valueStyle={{ color: '#cf1322' }} /></Col>
-            <Col xs={24}><Card style={{ background: '#2c2c2c' }}><Statistic title={<Title level={4}>Net Profit (Asal Munafa)</Title>} value={summaryData.netProfit} precision={2} prefix="Rs. " valueStyle={{ color: summaryData.netProfit >= 0 ? '#3f8600' : '#cf1322', fontSize: '2.5rem' }} /></Card></Col>
+            
+            {/* --- TABDEELI: Yahan se hardcoded 'background: #2c2c2c' hata diya hai --- */}
+            {/* Ab yeh Card hamari theme ka background istemal karega */}
+            <Col xs={24}>
+              <Card>
+                <Statistic 
+                  title={<Title level={4}>Net Profit (Asal Munafa)</Title>} 
+                  value={summaryData.netProfit} 
+                  precision={2} 
+                  prefix="Rs. " 
+                  valueStyle={{ 
+                    color: summaryData.netProfit >= 0 ? '#3f8600' : '#cf1322', 
+                    fontSize: '2.5rem' 
+                  }} 
+                />
+              </Card>
+            </Col>
           </Row>
         )}
       </Card>

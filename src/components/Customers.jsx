@@ -1,16 +1,18 @@
+// src/components/Customers.jsx (Mukammal naya aur theek kiya hua code)
+
 import React, { useState, useEffect } from 'react';
 import {
   Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions
 } from 'antd';
 import { UserAddOutlined, EyeOutlined, DollarCircleOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
-import { useAuth } from '../context/AuthContext'; // Step 1: Import karein
+import { useAuth } from '../context/AuthContext';
 
 const { Title, Text } = Typography;
 
 const Customers = () => {
   const { message } = AntApp.useApp();
-  const { user } = useAuth(); // Step 2: User ki maloomat hasil karein
+  const { user } = useAuth();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -36,7 +38,7 @@ const Customers = () => {
   };
 
   useEffect(() => {
-    if (user) { // Yeh check karein ke user login hai
+    if (user) {
       getCustomers();
     }
   }, [user]);
@@ -48,7 +50,7 @@ const Customers = () => {
           name: values.name, 
           phone_number: values.phone_number, 
           address: values.address,
-          user_id: user.id // Step 3: User ID shamil karein
+          user_id: user.id
         }
       ]);
       if (error) throw error;
@@ -62,7 +64,6 @@ const Customers = () => {
   };
 
   const handleViewLedger = async (customer) => {
-    // ... (Is function mein koi tabdeeli nahi)
     setSelectedCustomer(customer);
     setIsLedgerModalOpen(true);
     try {
@@ -106,7 +107,7 @@ const Customers = () => {
         { 
           customer_id: selectedCustomer.id, 
           amount_paid: values.amount,
-          user_id: user.id // Step 3: User ID shamil karein
+          user_id: user.id
         }
       ]);
       if (paymentError) throw paymentError;
@@ -131,7 +132,6 @@ const Customers = () => {
   ];
   
   const expandedRowRender = (record) => {
-    // ... (Is function mein koi tabdeeli nahi)
     if (record.type !== 'sale') return null;
     const itemColumns = [
       { title: 'Product Name', dataIndex: 'name', key: 'name' },
@@ -142,7 +142,9 @@ const Customers = () => {
     ];
     const itemsDataSource = record.sale_items?.map(item => ({ name: item.products.name, brand: item.products.brand, quantity: item.quantity, price: item.price_at_sale })) || [];
     return (
-      <Card size="small" style={{ margin: '8px 0', backgroundColor: '#2c2c2c' }}>
+      // --- TABDEELI: Yahan se hardcoded 'backgroundColor' hata diya hai ---
+      // Ab yeh Card hamari theme ka background istemal karega
+      <Card size="small" style={{ margin: '8px 0' }}>
         <Descriptions title={`Invoice #${record.id} Summary`} bordered size="small" column={1}>
           <Descriptions.Item label="Subtotal">Rs. {(record.subtotal || 0).toFixed(2)}</Descriptions.Item>
           <Descriptions.Item label="Discount">- Rs. {(record.discount || 0).toFixed(2)}</Descriptions.Item>
@@ -159,7 +161,8 @@ const Customers = () => {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <Title level={2} style={{ margin: 0, color: 'white' }}>Customer Management</Title>
+        {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
+        <Title level={2} style={{ margin: 0 }}>Customer Management</Title>
         <Button 
           type="primary" 
           icon={<UserAddOutlined />} 

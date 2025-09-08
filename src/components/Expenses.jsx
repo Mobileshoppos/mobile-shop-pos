@@ -1,3 +1,5 @@
+// src/components/Expenses.jsx (Mukammal naya aur theek kiya hua code)
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Typography,
@@ -16,7 +18,7 @@ import {
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
-import dayjs from 'dayjs'; // Date format karne ke liye
+import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -31,19 +33,16 @@ const Expenses = () => {
   const [editingExpense, setEditingExpense] = useState(null);
   const [form] = Form.useForm();
 
-  // Database se expenses aur categories fetch karne ka function
   const getData = useCallback(async () => {
     if (!user) return;
     try {
       setLoading(true);
-      // Expenses fetch karein
       let { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
-        .select('*, expense_categories ( name )') // Category ka naam bhi saath mangwayein
+        .select('*, expense_categories ( name )')
         .order('expense_date', { ascending: false });
       if (expensesError) throw expensesError;
       
-      // Categories fetch karein (dropdown ke liye)
       let { data: categoriesData, error: categoriesError } = await supabase
         .from('expense_categories')
         .select('*');
@@ -62,17 +61,16 @@ const Expenses = () => {
     getData();
   }, [getData]);
 
-  // Modal ko kholne aur band karne ke functions
   const showModal = (expense = null) => {
     setEditingExpense(expense);
     if (expense) {
       form.setFieldsValue({
         ...expense,
-        expense_date: dayjs(expense.expense_date), // Date ko sahi format mein set karein
+        expense_date: dayjs(expense.expense_date),
       });
     } else {
       form.resetFields();
-      form.setFieldsValue({ expense_date: dayjs() }); // Nayi entry ke liye aaj ki date set karein
+      form.setFieldsValue({ expense_date: dayjs() });
     }
     setIsModalOpen(true);
   };
@@ -83,13 +81,12 @@ const Expenses = () => {
     form.resetFields();
   };
 
-  // Form submit hone par (Add ya Update)
   const handleOk = async (values) => {
     try {
       const expenseData = {
         ...values,
         user_id: user.id,
-        expense_date: dayjs(values.expense_date).format('YYYY-MM-DD'), // Date ko database format mein bhejein
+        expense_date: dayjs(values.expense_date).format('YYYY-MM-DD'),
       };
 
       if (editingExpense) {
@@ -102,25 +99,23 @@ const Expenses = () => {
         message.success('Expense added successfully!');
       }
       handleCancel();
-      getData(); // List ko refresh karein
+      getData();
     } catch (error) {
       message.error('Error saving expense: ' + error.message);
     }
   };
   
-  // Expense delete karne ka function
   const handleDelete = async (expenseId) => {
     try {
       const { error } = await supabase.from('expenses').delete().eq('id', expenseId);
       if (error) throw error;
       message.success('Expense deleted successfully!');
-      getData(); // List ko refresh karein
+      getData();
     } catch (error) {
       message.error('Error deleting expense: ' + error.message);
     }
   };
 
-  // Table ke columns ki settings
   const columns = [
     { title: 'Date', dataIndex: 'expense_date', key: 'expense_date', render: (date) => dayjs(date).format('DD MMM, YYYY') },
     { title: 'Title / Description', dataIndex: 'title', key: 'title' },
@@ -144,7 +139,8 @@ const Expenses = () => {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <Title level={2} style={{ margin: 0, color: 'white' }}>Manage Expenses</Title>
+        {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
+        <Title level={2} style={{ margin: 0 }}>Manage Expenses</Title>
         <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()}>
           Add New Expense
         </Button>
