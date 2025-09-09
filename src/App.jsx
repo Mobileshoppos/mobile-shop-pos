@@ -1,4 +1,4 @@
-// src/App.jsx (Menu header ke baghair)
+// src/App.jsx (Menu header ke baghair) - MODIFIED
 
 import React, { useState, useEffect } from 'react';
 import { ConfigProvider, theme, Layout, Menu, App as AntApp, Typography } from 'antd';
@@ -10,7 +10,8 @@ import {
   UserOutlined, 
   LogoutOutlined, 
   AppstoreOutlined,
-  DollarCircleOutlined
+  DollarCircleOutlined,
+  SettingOutlined // --- NAYA ICON IMPORT KIYA GAYA ---
 } from '@ant-design/icons';
 
 // Components
@@ -22,6 +23,9 @@ import Categories from './components/Categories';
 import Expenses from './components/Expenses';
 import ExpenseCategories from './components/ExpenseCategories';
 import AppHeader from './components/Header';
+
+// Pages --- NAYA COMPONENT IMPORT KIYA GAYA ---
+import Profile from './pages/Profile'; 
 
 // Auth
 import AuthPage from './pages/AuthPage'; 
@@ -37,6 +41,8 @@ const menuItems = [
   { key: '/reports', icon: <PieChartOutlined />, label: <Link to="/reports">Reports</Link> },
   { key: '/customers', icon: <UserOutlined />, label: <Link to="/customers">Customers</Link> },
   { key: '/categories', icon: <AppstoreOutlined />, label: <Link to="/categories">Product Categories</Link> },
+  // --- NAYA MENU ITEM SHAMIL KIYA GAYA ---
+  { key: '/profile', icon: <SettingOutlined />, label: <Link to="/profile">Profile Settings</Link> },
   { type: 'divider' },
   { key: '/expenses', icon: <DollarCircleOutlined />, label: <Link to="/expenses">Expenses</Link> },
   { key: '/expense-categories', icon: <AppstoreOutlined />, label: <Link to="/expense-categories">Expense Categories</Link> },
@@ -94,13 +100,11 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
         collapsed={collapsed}
         onCollapse={(value) => setCollapsed(value)}
       >
-        {/* --- TABDEELI: Hum ne yahan se menu ka header (QPOS logo) hata diya hai --- */}
         <Menu 
           theme="dark" 
           mode="inline" 
           selectedKeys={[location.pathname]} 
           items={menuItemsWithLogout} 
-          // Thora sa margin add kiya hai taake menu behtar dikhe
           style={{ marginTop: '16px' }} 
         />
       </Sider>
@@ -134,6 +138,8 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route path="reports" element={<Reports />} />
         <Route path="customers" element={<Customers />} />
         <Route path="categories" element={<Categories />} />
+        {/* --- NAYA ROUTE SHAMIL KIYA GAYA --- */}
+        <Route path="profile" element={<Profile />} />
         <Route path="expenses" element={<Expenses />} />
         <Route path="expense-categories" element={<ExpenseCategories />} />
         <Route path="*" element={<Navigate to="/" />} />
