@@ -1,13 +1,12 @@
-// src/components/Header.jsx - MODIFIED WITH "CHIP" (TAG) DESIGN
+// src/components/Header.jsx - MODIFIED (SWITCH REMOVED)
 
 import React from 'react';
-import { Layout, Typography, Switch, Space, Tag } from 'antd'; // NAYA IZAFA: Tag import kiya
-import { SunOutlined, MoonOutlined, ShopOutlined } from '@ant-design/icons';
+import { Layout, Tag } from 'antd';
+import { ShopOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 
 const { Header } = Layout;
 
-// Container ke styles abhi bhi zaroori hain lambe text ko handle karne ke liye
 const titleContainerStyle = {
   display: 'flex',
   alignItems: 'center',
@@ -17,22 +16,18 @@ const titleContainerStyle = {
   minWidth: 0, 
 };
 
-const AppHeader = ({ isDarkMode, toggleTheme }) => {
+// Header se isDarkMode aur toggleTheme props hata diye gaye hain
+const AppHeader = () => {
   const { profile } = useAuth();
   
-  // NAYA IZAFA: Chip/Tag ke liye khaas styles
   const chipStyle = {
     display: 'flex',
     alignItems: 'center',
-    // Padding taake chip thori bari aur numayan lage
     padding: '8px 16px',
-    // Border radius taake yeh "pill" shape mein aaye
     borderRadius: '16px',
-    // Font size ko responsive banaya gaya hai
     fontSize: 'clamp(0.9rem, 2.5vw, 1.2rem)',
     lineHeight: '1.2',
-    border: 'none', // Koi extra border nahi chahiye
-    // Transition effect taake size smoothly change ho
+    border: 'none',
     transition: 'all 0.2s ease-in-out',
   };
 
@@ -42,10 +37,8 @@ const AppHeader = ({ isDarkMode, toggleTheme }) => {
         
         <div 
           style={titleContainerStyle}
-          // Title attribute taake agar naam cut jaye to mouse le jaane par poora naam dikhe
           title={profile?.shop_name || 'My Shop'}
         >
-          {/* NAYA IZAFA: Title ko Ant Design ke <Tag> (Chip) se replace kiya gaya hai */}
           <Tag 
             color="blue" 
             icon={<ShopOutlined />} 
@@ -55,14 +48,7 @@ const AppHeader = ({ isDarkMode, toggleTheme }) => {
           </Tag>
         </div>
 
-        <Space>
-          <Switch
-            checkedChildren={<MoonOutlined />}
-            unCheckedChildren={<SunOutlined />}
-            checked={isDarkMode}
-            onChange={toggleTheme}
-          />
-        </Space>
+        {/* Yahan se Space aur Switch component hata diya gaya hai */}
       </div>
     </Header>
   );

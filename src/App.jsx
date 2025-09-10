@@ -1,7 +1,7 @@
-// src/App.jsx (Menu header ke baghair) - MODIFIED
+// src/App.jsx - FONT SIZE CONTROL CORRECTLY ADDED
 
 import React, { useState, useEffect } from 'react';
-import { ConfigProvider, theme, Layout, Menu, App as AntApp, Typography } from 'antd';
+import { ConfigProvider, theme, Layout, Menu, App as AntApp, Switch } from 'antd';
 import { BrowserRouter, Routes, Route, Link, Outlet, useLocation, Navigate } from 'react-router-dom';
 import { 
   HomeOutlined, 
@@ -11,10 +11,12 @@ import {
   LogoutOutlined, 
   AppstoreOutlined,
   DollarCircleOutlined,
-  SettingOutlined // --- NAYA ICON IMPORT KIYA GAYA ---
+  SettingOutlined,
+  SunOutlined,
+  MoonOutlined
 } from '@ant-design/icons';
 
-// Components
+// Components & Pages
 import Inventory from './components/Inventory';
 import POS from './components/POS';
 import Reports from './components/Reports';
@@ -23,46 +25,41 @@ import Categories from './components/Categories';
 import Expenses from './components/Expenses';
 import ExpenseCategories from './components/ExpenseCategories';
 import AppHeader from './components/Header';
-
-// Pages --- NAYA COMPONENT IMPORT KIYA GAYA ---
 import Profile from './pages/Profile'; 
+import AuthPage from './pages/AuthPage'; 
 
 // Auth
-import AuthPage from './pages/AuthPage'; 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { supabase } from './supabaseClient';
 
 const { Sider, Content } = Layout;
-const { Title } = Typography;
 
 const menuItems = [
-  { key: '/', icon: <HomeOutlined />, label: <Link to="/">Inventory</Link> },
-  { key: '/pos', icon: <ShoppingCartOutlined />, label: <Link to="/pos">Point of Sale</Link> },
-  { key: '/reports', icon: <PieChartOutlined />, label: <Link to="/reports">Reports</Link> },
-  { key: '/customers', icon: <UserOutlined />, label: <Link to="/customers">Customers</Link> },
-  { key: '/categories', icon: <AppstoreOutlined />, label: <Link to="/categories">Product Categories</Link> },
-  // --- NAYA MENU ITEM SHAMIL KIYA GAYA ---
-  { key: '/profile', icon: <SettingOutlined />, label: <Link to="/profile">Profile Settings</Link> },
-  { type: 'divider' },
-  { key: '/expenses', icon: <DollarCircleOutlined />, label: <Link to="/expenses">Expenses</Link> },
-  { key: '/expense-categories', icon: <AppstoreOutlined />, label: <Link to="/expense-categories">Expense Categories</Link> },
+    { key: '/', icon: <HomeOutlined />, label: <Link to="/">Inventory</Link> },
+    { key: '/pos', icon: <ShoppingCartOutlined />, label: <Link to="/pos">Point of Sale</Link> },
+    { key: '/reports', icon: <PieChartOutlined />, label: <Link to="/reports">Reports</Link> },
+    { key: '/customers', icon: <UserOutlined />, label: <Link to="/customers">Customers</Link> },
+    { key: '/categories', icon: <AppstoreOutlined />, label: <Link to="/categories">Product Categories</Link> },
+    { key: '/profile', icon: <SettingOutlined />, label: <Link to="/profile">Profile Settings</Link> },
+    { type: 'divider' },
+    { key: '/expenses', icon: <DollarCircleOutlined />, label: <Link to="/expenses">Expenses</Link> },
+    { key: '/expense-categories', icon: <AppstoreOutlined />, label: <Link to="/expense-categories">Expense Categories</Link> },
 ];
 
 const MainLayout = ({ isDarkMode, toggleTheme }) => {
   const location = useLocation();
   const { token } = theme.useToken();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 992);
 
   useEffect(() => {
     const handleResize = () => {
       const mobile = window.innerWidth < 992;
       setIsMobile(mobile);
-      if (!mobile) {
-        setCollapsed(false);
-      }
+      setCollapsed(mobile); 
     };
     window.addEventListener('resize', handleResize);
+    handleResize();
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
@@ -90,6 +87,17 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
     }},
   ];
 
+  const siderStyle = {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    ...(isMobile && {
+        position: 'fixed',
+        height: '100vh',
+        zIndex: 1000,
+    }),
+  };
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Sider 
@@ -99,15 +107,46 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
         collapsible
         collapsed={collapsed}
         onCollapse={(value) => setCollapsed(value)}
+        style={siderStyle}
       >
-        <Menu 
-          theme="dark" 
-          mode="inline" 
-          selectedKeys={[location.pathname]} 
-          items={menuItemsWithLogout} 
-          style={{ marginTop: '16px' }} 
-        />
+        <div>
+            <Menu 
+              theme="dark" 
+              mode="inline" 
+              selectedKeys={[location.pathname]} 
+              items={menuItemsWithLogout} 
+              style={{ 
+                marginTop: '16px',
+                background: 'transparent',
+              }} 
+            />
+        </div>
+        
+        <div style={{ padding: '16px', textAlign: 'center' }}>
+            <Switch
+                checkedChildren={<MoonOutlined />}
+                unCheckedChildren={<SunOutlined />}
+                checked={isDarkMode}
+                onChange={toggleTheme}
+            />
+        </div>
       </Sider>
+
+      {isMobile && !collapsed && (
+        <div 
+          onClick={() => setCollapsed(true)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 999,
+          }}
+        />
+      )}
+
       <Layout style={{ background: token.colorBgLayout }}>
         <Content style={{ padding: '24px 16px 0' }}>
           <div style={{
@@ -115,7 +154,7 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
             borderRadius: token.borderRadiusLG,
             minHeight: 'calc(100vh - 24px)',
           }}>
-            <AppHeader isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
+            <AppHeader />
             <div style={{ padding: '0 24px 24px' }}>
               <Outlet />
             </div>
@@ -138,7 +177,6 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route path="reports" element={<Reports />} />
         <Route path="customers" element={<Customers />} />
         <Route path="categories" element={<Categories />} />
-        {/* --- NAYA ROUTE SHAMIL KIYA GAYA --- */}
         <Route path="profile" element={<Profile />} />
         <Route path="expenses" element={<Expenses />} />
         <Route path="expense-categories" element={<ExpenseCategories />} />
@@ -161,27 +199,45 @@ function App() {
 
   const toggleTheme = () => setIsDarkMode(prevMode => !prevMode);
 
-  const lightTheme = {
-    colorPrimary: '#1677ff',
-    colorBgLayout: '#f5f5f5',
-    colorBgContainer: '#ffffff',
-    borderRadiusLG: 12,
-    fontFamily: "'Poppins', 'Montserrat', sans-serif",
-    components: { Card: { colorBgContainer: '#fafafa' }, Table: { colorBgContainer: '#fafafa' } }
-  };
-
-  const darkTheme = {
-    colorPrimary: '#1677ff',
-    borderRadiusLG: 12,
-    fontFamily: "'Poppins', 'Montserrat', sans-serif",
+  const sharedComponents = {
+    Layout: {
+        siderBg: '#1F1F1F',
+        triggerBg: '#282828',
+        triggerColor: '#FFFFFF',
+    },
+    Menu: {
+        itemSelectedBg: '#3A3A3A',
+        itemSelectedColor: '#FFFFFF',
+        colorText: 'rgba(255, 255, 255, 0.65)',
+        darkItemBg: '#1F1F1F',
+        // YAHAN SIRF MENU KA FONT SIZE CONTROL HOGA
+        fontSize: 15,
+    }
   };
 
   return (
     <ConfigProvider
       theme={{
         algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
-        token: isDarkMode ? darkTheme : lightTheme,
-        components: isDarkMode ? darkTheme.components : lightTheme.components,
+        token: {
+            fontFamily: "'Poppins', 'Montserrat', sans-serif",
+            borderRadiusLG: 12,
+            // YAHAN POORI APP KA FONT SIZE CONTROL HOGA
+            fontSize: 15,
+            ...(isDarkMode 
+                ? { 
+                    colorPrimary: '#3A3A3A',
+                    colorBgLayout: '#1F1F1F',
+                    colorBgContainer: '#1F1F1F',
+                } 
+                : { 
+                    colorPrimary: '#1677ff',
+                    colorBgLayout: '#f5f5f5',
+                    colorBgContainer: '#ffffff',
+                }
+            ),
+        },
+        components: sharedComponents,
       }}
     >
       <AntApp>
