@@ -1,4 +1,4 @@
-// src/components/POS.jsx (Mukammal naya aur theek kiya hua code)
+// src/components/POS.jsx (Mukammal, aakhri aur theek kiya hua code)
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -30,7 +30,11 @@ const POS = () => {
 
   const getProducts = async () => {
     try {
-      let { data, error } = await supabase.from('products_with_quantity').select('*').order('name', { ascending: true });
+      let { data, error } = await supabase
+        .from('products_display_view') 
+        .select('*')
+        .order('name', { ascending: true });
+      
       if (error) throw error;
       setProducts(data);
     } catch (error) {
@@ -66,7 +70,7 @@ const POS = () => {
       if (existingItem.quantity >= product.quantity) { message.warning(`No more stock available for ${product.name}.`); return; }
       setCart(cart.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item));
     } else {
-      setCart([...cart, { ...product, quantity: 1 }]);
+      setCart([...cart, { ...product, sale_price: product.default_sale_price, quantity: 1 }]);
     }
   };
 
@@ -98,21 +102,28 @@ const POS = () => {
           const { error: saleItemsError } = await supabase.from('sale_items').insert(saleItems);
           if (saleItemsError) throw saleItemsError;
 
+          // --- AAKHRI AUR MUSTAQIL HAL YAHAN HAI ---
+          // Har beche gaye item ke liye, inventory mein status 'Sold' karein
           for (const item of cart) {
+            // Pehle 'Available' items dhoondein
             const { data: availableItems, error: stockError } = await supabase
               .from('inventory')
               .select('id')
               .eq('product_id', item.id)
               .eq('status', 'Available')
+              .eq('user_id', user.id) // Sirf is user ke stock se
               .limit(item.quantity);
 
             if (stockError) throw stockError;
             if (availableItems.length < item.quantity) {
-              throw new Error(`Not enough stock for ${item.name}. Sale cannot be completed.`);
+              // Agar stock kam par jaye to poori sale ko rollback karna behtar hai, lekin filhal error dikhayein
+              throw new Error(`Not enough available stock for ${item.name}. Sale cannot be completed.`);
             }
 
+            // Un items ki IDs haasil karein jinhein update karna hai
             const inventoryIdsToUpdate = availableItems.map(invItem => invItem.id);
 
+            // Un IDs ka status 'Sold' kar dein
             const { error: updateError } = await supabase
               .from('inventory')
               .update({ status: 'Sold' })
@@ -120,6 +131,7 @@ const POS = () => {
             
             if (updateError) throw updateError;
           }
+          // --- HAL KHATAM ---
           
           message.success('Sale completed successfully!');
           setCart([]);
@@ -128,7 +140,7 @@ const POS = () => {
           setAmountPaid(0);
           setDiscount(0);
           setDiscountType('Amount');
-          await getProducts();
+          await getProducts(); // Naya stock fetch karein
           await getCustomers();
 
         } catch (error) {
@@ -150,7 +162,6 @@ const POS = () => {
 
   return (
     <>
-      {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
       <Title level={2} style={{ marginBottom: '24px' }}>Point of Sale</Title>
       <Row gutter={24}>
         <Col xs={24} md={14}>
@@ -161,7 +172,6 @@ const POS = () => {
               dataSource={filteredProducts} 
               renderItem={(product) => (
                 <List.Item>
-                  {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
                   <List.Item.Meta title={<Text>{product.name}</Text>} description={`Brand: ${product.brand} - Stock: ${product.quantity}`} />
                   <Button type="primary" icon={<PlusOutlined />} onClick={() => handleAddToCart(product)} disabled={product.quantity <= 0}>Add</Button>
                 </List.Item>
@@ -194,11 +204,9 @@ const POS = () => {
                   const productInStock = products.find(p => p.id === item.id); 
                   return (
                     <List.Item actions={[<Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleRemoveFromCart(item.id)} />]}>
-                      {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
                       <List.Item.Meta title={<Text>{item.name}</Text>} description={`Rs. ${item.sale_price.toFixed(2)}`} />
                       <Space>
                         <InputNumber size="small" min={1} max={productInStock?.quantity || item.quantity} value={item.quantity} onChange={(value) => handleQuantityChange(item.id, value)} style={{ width: '60px' }} />
-                        {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
                         <Text strong style={{ minWidth: '80px', textAlign: 'right' }}>Rs. {(item.sale_price * item.quantity).toFixed(2)}</Text>
                       </Space>
                     </List.Item>
