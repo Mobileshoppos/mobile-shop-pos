@@ -13,7 +13,8 @@ import {
   DollarCircleOutlined,
   SettingOutlined,
   SunOutlined,
-  MoonOutlined
+  MoonOutlined,
+  TeamOutlined // NEW ICON IMPORTED
 } from '@ant-design/icons';
 
 // Components & Pages
@@ -27,6 +28,11 @@ import ExpenseCategories from './components/ExpenseCategories';
 import AppHeader from './components/Header';
 import Profile from './pages/Profile'; 
 import AuthPage from './pages/AuthPage'; 
+import Suppliers from './components/Suppliers';
+import Purchases from './components/Purchases';
+import PurchaseDetails from './components/PurchaseDetails';
+import SupplierDetails from './components/SupplierDetails';
+
 
 // Auth
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -39,6 +45,8 @@ const menuItems = [
     { key: '/pos', icon: <ShoppingCartOutlined />, label: <Link to="/pos">Point of Sale</Link> },
     { key: '/reports', icon: <PieChartOutlined />, label: <Link to="/reports">Reports</Link> },
     { key: '/customers', icon: <UserOutlined />, label: <Link to="/customers">Customers</Link> },
+    { key: '/suppliers', icon: <TeamOutlined />, label: <Link to="/suppliers">Suppliers</Link> },
+    { key: '/purchases', icon: <DollarCircleOutlined />, label: <Link to="/purchases">Purchases</Link> },
     { key: '/categories', icon: <AppstoreOutlined />, label: <Link to="/categories">Product Categories</Link> },
     { key: '/profile', icon: <SettingOutlined />, label: <Link to="/profile">Profile Settings</Link> },
     { type: 'divider' },
@@ -176,6 +184,10 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route path="pos" element={<POS />} />
         <Route path="reports" element={<Reports />} />
         <Route path="customers" element={<Customers />} />
+        <Route path="suppliers" element={<Suppliers />} />
+        <Route path="suppliers/:id" element={<SupplierDetails />} />
+        <Route path="purchases" element={<Purchases />} />
+        <Route path="purchases/:id" element={<PurchaseDetails />} />
         <Route path="categories" element={<Categories />} />
         <Route path="profile" element={<Profile />} />
         <Route path="expenses" element={<Expenses />} />

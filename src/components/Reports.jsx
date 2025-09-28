@@ -1,9 +1,11 @@
 // src/components/Reports.jsx (Mukammal naya aur theek kiya hua code)
 
 import React, { useState, useEffect } from 'react';
-import { Typography, Table, Card, App as AntApp, Row, Col, Statistic, Spin } from 'antd';
+import { Typography, Table, Card, App as AntApp, Row, Col, Statistic, Spin, DatePicker, Space, Button } from 'antd';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import DataService from '../DataService';
+import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 
@@ -21,6 +23,12 @@ const Reports = () => {
     netProfit: 0,
   });
   const [summaryLoading, setSummaryLoading] = useState(true);
+  const [payableData, setPayableData] = useState([]);
+  const [payableLoading, setPayableLoading] = useState(true);
+  const [supplierReportData, setSupplierReportData] = useState([]);
+  const [supplierReportLoading, setSupplierReportLoading] = useState(false);
+  // Set default date range to the last 30 days
+  const [dateRange, setDateRange] = useState([dayjs().subtract(30, 'day'), dayjs()]);
 
   useEffect(() => {
     if (user) {
@@ -78,8 +86,39 @@ const Reports = () => {
 
       getStockData();
       getSummaryData();
+      getPayableData();
     }
-  }, [user, message]);
+  }, [user, message, dateRange]);
+
+  const getPayableData = async () => {
+        try {
+          setPayableLoading(true);
+          const data = await DataService.getAccountsPayable();
+          setPayableData(data || []);
+        } catch (error) {
+          message.error('Error fetching accounts payable: ' + error.message);
+        } finally {
+          setPayableLoading(false);
+        }
+      };
+
+  const getSupplierReportData = async () => {
+    if (!dateRange || dateRange.length !== 2) {
+      message.warning('Please select a valid date range.');
+      return;
+    }
+    try {
+      setSupplierReportLoading(true);
+      const startDate = dateRange[0].format('YYYY-MM-DD');
+      const endDate = dateRange[1].format('YYYY-MM-DD');
+      const data = await DataService.getSupplierPurchaseReport(startDate, endDate);
+      setSupplierReportData(data || []);
+    } catch (error) {
+      message.error('Error fetching supplier purchase report: ' + error.message);
+    } finally {
+      setSupplierReportLoading(false);
+    }
+  };
 
   const stockColumns = [
     { title: 'Product Name', dataIndex: 'name', key: 'name' },
@@ -125,6 +164,83 @@ const Reports = () => {
       <Card>
         <Title level={4}>Current Stock Report</Title>
         <Table columns={stockColumns} dataSource={products} loading={stockLoading} rowKey="id" pagination={false} scroll={{ y: '40vh' }} summary={() => (<Table.Summary.Row><Table.Summary.Cell index={0} colSpan={4}><Text strong style={{ float: 'right' }}>Grand Total Stock Value</Text></Table.Summary.Cell><Table.Summary.Cell index={1} align="right"><Title level={5}>Rs. {totalStockValue.toFixed(2)}</Title></Table.Summary.Cell></Table.Summary.Row>)} />
+      </Card>
+
+      <Card style={{ marginTop: '24px' }}>
+        <Title level={4}>Accounts Payable (Suppliers ko Baqaya Jaat)</Title>
+        <Table
+          columns={[
+            { title: 'Supplier Name', dataIndex: 'name', key: 'name' },
+            { title: 'Contact Person', dataIndex: 'contact_person', key: 'contact_person' },
+            { title: 'Phone', dataIndex: 'phone', key: 'phone' },
+            {
+              title: 'Balance Due',
+              dataIndex: 'balance_due',
+              key: 'balance_due',
+              align: 'right',
+              render: (amount) => (
+                <Text type="danger" strong>
+                  {`Rs. ${amount.toLocaleString()}`}
+                </Text>
+              ),
+            },
+          ]}
+          dataSource={payableData}
+          loading={payableLoading}
+          rowKey="name" // Assuming supplier names are unique for this report
+          pagination={false}
+          summary={(data) => {
+            const totalPayable = data.reduce((sum, item) => sum + item.balance_due, 0);
+            return (
+              <Table.Summary.Row>
+                <Table.Summary.Cell index={0} colSpan={3}>
+                  <Text strong style={{ float: 'right' }}>
+                    Total Amount Payable
+                  </Text>
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={1} align="right">
+                  <Title level={5} type="danger">
+                    Rs. {totalPayable.toLocaleString()}
+                  </Title>
+                </Table.Summary.Cell>
+              </Table.Summary.Row>
+            );
+          }}
+        />
+      </Card>
+
+      <Card style={{ marginTop: '24px' }}>
+        <Title level={4}>Supplier Wise Purchase Report</Title>
+        <Space style={{ marginBottom: '16px' }}>
+          <DatePicker.RangePicker
+            value={dateRange}
+            onChange={setDateRange}
+          />
+          <Button type="primary" onClick={getSupplierReportData} loading={supplierReportLoading}>
+            Generate Report
+          </Button>
+        </Space>
+        <Table
+          columns={[
+            { title: 'Supplier Name', dataIndex: 'supplier_name', key: 'supplier_name' },
+            { title: 'Total Purchases', dataIndex: 'purchase_count', key: 'purchase_count', align: 'right' },
+            {
+              title: 'Total Amount',
+              dataIndex: 'total_purchase_amount',
+              key: 'total_purchase_amount',
+              align: 'right',
+              render: (amount) => (
+                <Text strong>
+                  {`Rs. ${amount.toLocaleString()}`}
+                </Text>
+              ),
+            },
+          ]}
+          dataSource={supplierReportData}
+          loading={supplierReportLoading}
+          rowKey="supplier_name"
+          pagination={false}
+        />
       </Card>
     </>
   );
