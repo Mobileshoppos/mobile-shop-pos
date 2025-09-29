@@ -120,8 +120,8 @@ const DataService = {
     return data;
   },
 
-  async recordSupplierPayment(paymentData) {
-    const { error } = await supabase.rpc('record_supplier_payment', {
+  async recordPurchasePayment(paymentData) { // Naam tabdeel ho gaya
+    const { error } = await supabase.rpc('record_purchase_payment', { // Naam yahan bhi tabdeel ho gaya
         p_supplier_id: paymentData.supplier_id,
         p_purchase_id: paymentData.purchase_id,
         p_amount: paymentData.amount,

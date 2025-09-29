@@ -72,7 +72,7 @@ const PurchaseDetails = () => {
                 supplier_id: purchase.supplier_id,
                 purchase_id: purchase.id,
             };
-            await DataService.recordSupplierPayment(paymentData);
+            await DataService.recordPurchasePayment(paymentData);
             notification.success({ message: 'Success', description: 'Payment recorded successfully!' });
             setIsPaymentModalVisible(false);
             fetchDetails();
