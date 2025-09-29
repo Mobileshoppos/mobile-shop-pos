@@ -48,24 +48,32 @@ const Suppliers = () => {
         });
     };
 
-    const handleModalOk = () => {
-        form.validateFields()
-            .then(async (values) => {
-                try {
-                    if (editingSupplier) {
-                        const updated = await DataService.updateSupplier(editingSupplier.id, values);
-                        setSuppliers(prev => prev.map(item => (item.id === editingSupplier.id ? updated : item)));
-                        notification.success({ message: 'Success', description: 'Supplier updated successfully.' });
-                    } else {
-                        const newSupplier = await DataService.addSupplier(values);
-                        setSuppliers(prev => [newSupplier, ...prev]);
-                        notification.success({ message: 'Success', description: `Supplier "${newSupplier.name}" added.` });
-                    }
-                    setIsModalVisible(false);
-                } catch (error) { notification.error({ message: 'Error', description: 'Failed to save supplier.' }); }
-            })
-            .catch(info => console.log('Validate Failed:', info));
-    };
+    const handleModalOk = async () => { // Function ko async banayein
+    try {
+        const values = await form.validateFields();
+
+        if (editingSupplier) {
+            // Update logic
+            await DataService.updateSupplier(editingSupplier.id, values);
+            notification.success({ message: 'Success', description: 'Supplier updated successfully.' });
+        } else {
+            // Add logic
+            const newSupplier = await DataService.addSupplier(values);
+            notification.success({ message: 'Success', description: `Supplier "${newSupplier.name}" added.` });
+        }
+
+        setIsModalVisible(false);
+        // THE FIX: Naya data anay ka intezar karein (await)
+        await fetchSuppliers();
+
+    } catch (error) {
+        // Agar validation fail ho to error ko ignore karein, warna save error dikhayein
+        if (error.name !== 'ValidationError') {
+            notification.error({ message: 'Error', description: 'Failed to save supplier.' });
+        }
+        console.log('Operation failed:', error);
+    }
+};
 
     const handleModalCancel = () => { setIsModalVisible(false); };
 
@@ -81,11 +89,16 @@ const Suppliers = () => {
             key: 'balance_due',
             align: 'right',
             sorter: (a, b) => a.balance_due - b.balance_due,
-            render: (amount) => (
-                <Typography.Text type={amount > 0 ? 'danger' : 'secondary'} strong>
-                    {`Rs. ${amount.toLocaleString()}`}
-                </Typography.Text>
-            ),
+            render: (amount) => {
+    if (typeof amount !== 'number') {
+        return <Typography.Text type="secondary">...</Typography.Text>;
+    }
+    return (
+        <Typography.Text type={amount > 0 ? 'danger' : 'secondary'} strong>
+            {`Rs. ${amount.toLocaleString()}`}
+        </Typography.Text>
+    );
+},
         },
         { title: 'Contact Person', dataIndex: 'contact_person', key: 'contact_person' },
         { title: 'Phone', dataIndex: 'phone', key: 'phone' },
