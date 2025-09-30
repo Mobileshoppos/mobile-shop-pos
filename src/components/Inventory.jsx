@@ -1,4 +1,4 @@
-// src/components/Inventory.jsx (Correct Refactored Code)
+// src/components/Inventory.jsx (Conditionally Hide Barcode Field)
 
 import React, { useState, useEffect } from 'react';
 import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Tooltip } from 'antd';
@@ -29,6 +29,10 @@ const Inventory = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   
   const [productForm] = Form.useForm();
+  
+  // --- YAHAN TABDEELI KI GAYI HAI (Step 1) ---
+  // Form ke andar 'category_id' field ki value ko watch karein
+  const selectedCategoryId = Form.useWatch('category_id', productForm);
 
   const getData = async () => {
     try {
@@ -55,8 +59,18 @@ const Inventory = () => {
 
   const handleProductOk = async (values) => {
     try {
-      const { error } = await supabase.from('products').insert([{ ...values, user_id: user.id }]);
-      if (error) throw error;
+      const productData = {
+        ...values,
+        barcode: values.barcode || null,
+        user_id: user.id
+      };
+      const { error } = await supabase.from('products').insert([productData]);
+      if (error) {
+        if (error.code === '23505') {
+            throw new Error('This barcode is already assigned to another product.');
+        }
+        throw error;
+      }
       message.success('Product Model added successfully!');
       setIsProductModalOpen(false);
       productForm.resetFields();
@@ -74,6 +88,10 @@ const Inventory = () => {
     setSelectedProduct(null);
     getData();
   };
+  
+  // --- YAHAN TABDEELI KI GAYI HAI (Step 2) ---
+  // Check karein ke kya selected category "Smart Phones / Devices" hai
+  const isSmartPhoneCategorySelected = categories.find(c => c.id === selectedCategoryId)?.name === 'Smart Phones / Devices';
 
   const mainColumns = [
     { 
@@ -108,6 +126,19 @@ const Inventory = () => {
           <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="category_id" label="Category" rules={[{ required: true }]}><Select placeholder="Select...">{categories.map(c => (<Option key={c.id} value={c.id}>{c.name}</Option>))}</Select></Form.Item>
           <Form.Item name="brand" label="Brand" rules={[{ required: true }]}><Input /></Form.Item>
+          
+          {/* --- YAHAN TABDEELI KI GAYI HAI (Step 3) --- */}
+          {/* Barcode field sirf tab dikhayein jab Smart Phone category select NA ho */}
+          {!isSmartPhoneCategorySelected && (
+            <Form.Item 
+              name="barcode" 
+              label="Barcode / QR Code (Optional)"
+              help="You can scan a barcode directly into this field."
+            >
+              <Input placeholder="e.g., 8964000141061" />
+            </Form.Item>
+          )}
+          
           <Form.Item name="purchase_price" label="Default Purchase Price"><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item>
           <Form.Item name="sale_price" label="Default Sale Price"><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item>
         </Form>

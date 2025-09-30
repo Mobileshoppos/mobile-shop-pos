@@ -1,6 +1,6 @@
-// src/components/POS.jsx (Flexbox ke zariye scrollbar ka yaqeeni hal)
+// src/components/POS.jsx (Final Version with Auto-Focus After Sale)
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider
 } from 'antd';
@@ -27,6 +27,7 @@ const POS = () => {
   const [addForm] = Form.useForm();
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState('Amount');
+  const searchInputRef = useRef(null);
 
   const getProducts = async () => {
     try {
@@ -58,6 +59,9 @@ const POS = () => {
         setLoading(true);
         await Promise.all([getProducts(), getCustomers()]);
         setLoading(false);
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+        }
       };
       initialLoad();
     }
@@ -71,6 +75,21 @@ const POS = () => {
       setCart(cart.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item));
     } else {
       setCart([...cart, { ...product, sale_price: product.default_sale_price, quantity: 1 }]);
+    }
+  };
+
+  const handleSearch = (value) => {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) {
+      setSearchTerm('');
+      return;
+    }
+    const productByBarcode = products.find(p => p.barcode === trimmedValue);
+    if (productByBarcode) {
+      handleAddToCart(productByBarcode);
+      setSearchTerm('');
+    } else {
+      setSearchTerm(trimmedValue);
     }
   };
 
@@ -154,6 +173,13 @@ const POS = () => {
           await getProducts();
           await getCustomers();
 
+          // --- YAHAN AAKHRI TABDEELI KI GAYI HAI ---
+          // Sale ke baad search bar par dobara focus karein
+          if (searchInputRef.current) {
+            searchInputRef.current.focus();
+          }
+          // --- TABDEELI KHATAM ---
+
         } catch (error) {
           message.error('Sale failed: ' + error.message);
         } finally {
@@ -181,7 +207,13 @@ const POS = () => {
       <Row gutter={24}>
         <Col xs={24} md={14}>
           <Card>
-            <Search placeholder="Search for products..." onChange={(e) => setSearchTerm(e.target.value)} style={{ marginBottom: '16px' }} />
+            <Search 
+              placeholder="Search by name or scan barcode..." 
+              onChange={(e) => handleSearch(e.target.value)} 
+              value={searchTerm}
+              style={{ marginBottom: '16px' }}
+              ref={searchInputRef}
+            />
             <List 
               loading={loading} 
               dataSource={filteredProducts} 
@@ -225,11 +257,10 @@ const POS = () => {
                           <Col><Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleFullRemoveFromCart(item.id)} /></Col>
                         </Row>
                         
-                        {/* --- YAHAN MUKAMMAL TABDEELI KI GAYI HAI --- */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
                           <InputNumber 
                             size="small" 
-                            style={{ flex: 1 }} // Yeh baqi jagah le lega
+                            style={{ flex: 1 }}
                             prefix="Rs. " 
                             value={item.sale_price} 
                             onChange={(value) => handleCartItemUpdate(item.id, 'sale_price', value || 0)} 
@@ -237,13 +268,13 @@ const POS = () => {
                           />
                           <InputNumber 
                             size="small" 
-                            style={{ width: '60px' }} // Iski chaurai fix hai
+                            style={{ width: '60px' }}
                             value={item.quantity} 
                             onChange={(value) => handleCartItemUpdate(item.id, 'quantity', value || 1)} 
                             min={1} 
                             max={productInStock?.quantity || item.quantity} 
                           />
-                          <Text strong style={{ flex: 1, textAlign: 'right', minWidth: '80px' }}> {/* Yeh bhi baqi jagah le lega */}
+                          <Text strong style={{ flex: 1, textAlign: 'right', minWidth: '80px' }}>
                             Rs. {(item.sale_price * item.quantity).toFixed(2)}
                           </Text>
                         </div>
