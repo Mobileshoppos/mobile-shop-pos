@@ -1,4 +1,4 @@
-// src/components/POS.jsx (Mukammal, aakhri aur theek kiya hua code)
+// src/components/POS.jsx (Flexbox ke zariye scrollbar ka yaqeeni hal)
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -74,11 +74,29 @@ const POS = () => {
     }
   };
 
-  const handleQuantityChange = (productId, newQuantity) => {
-    const productInStock = products.find(p => p.id === productId);
-    if (newQuantity > productInStock.quantity) { message.warning(`Only ${productInStock.quantity} items available in stock.`); return; }
-    if (newQuantity < 1) { setCart(cart.filter(item => item.id !== productId)); } 
-    else { setCart(cart.map(item => item.id === productId ? { ...item, quantity: newQuantity } : item)); }
+  const handleCartItemUpdate = (productId, field, value) => {
+    setCart(cart.map(item => {
+      if (item.id === productId) {
+        if (field === 'quantity') {
+          const productInStock = products.find(p => p.id === productId);
+          if (value > productInStock.quantity) {
+            message.warning(`Only ${productInStock.quantity} items available in stock.`);
+            return { ...item, quantity: productInStock.quantity };
+          }
+        }
+        return { ...item, [field]: value };
+      }
+      return item;
+    }));
+  };
+  
+  const handleRemoveFromCart = (productId) => {
+    const item = cart.find(item => item.id === productId);
+    if (item && item.quantity <= 1) {
+        setCart(cart.filter(cartItem => cartItem.id !== productId));
+    } else {
+        handleCartItemUpdate(productId, 'quantity', item.quantity - 1);
+    }
   };
 
   const handleCompleteSale = async () => {
@@ -102,28 +120,22 @@ const POS = () => {
           const { error: saleItemsError } = await supabase.from('sale_items').insert(saleItems);
           if (saleItemsError) throw saleItemsError;
 
-          // --- AAKHRI AUR MUSTAQIL HAL YAHAN HAI ---
-          // Har beche gaye item ke liye, inventory mein status 'Sold' karein
           for (const item of cart) {
-            // Pehle 'Available' items dhoondein
             const { data: availableItems, error: stockError } = await supabase
               .from('inventory')
               .select('id')
               .eq('product_id', item.id)
               .eq('status', 'Available')
-              .eq('user_id', user.id) // Sirf is user ke stock se
+              .eq('user_id', user.id)
               .limit(item.quantity);
 
             if (stockError) throw stockError;
             if (availableItems.length < item.quantity) {
-              // Agar stock kam par jaye to poori sale ko rollback karna behtar hai, lekin filhal error dikhayein
               throw new Error(`Not enough available stock for ${item.name}. Sale cannot be completed.`);
             }
 
-            // Un items ki IDs haasil karein jinhein update karna hai
             const inventoryIdsToUpdate = availableItems.map(invItem => invItem.id);
 
-            // Un IDs ka status 'Sold' kar dein
             const { error: updateError } = await supabase
               .from('inventory')
               .update({ status: 'Sold' })
@@ -131,7 +143,6 @@ const POS = () => {
             
             if (updateError) throw updateError;
           }
-          // --- HAL KHATAM ---
           
           message.success('Sale completed successfully!');
           setCart([]);
@@ -140,7 +151,7 @@ const POS = () => {
           setAmountPaid(0);
           setDiscount(0);
           setDiscountType('Amount');
-          await getProducts(); // Naya stock fetch karein
+          await getProducts();
           await getCustomers();
 
         } catch (error) {
@@ -157,7 +168,11 @@ const POS = () => {
   let discountAmount = discountType === 'Amount' ? discount : (subtotal * discount) / 100;
   const grandTotal = Math.max(0, subtotal - discountAmount);
   const handleAddCustomer = async (values) => { try { const { data, error } = await supabase.from('customers').insert([{ ...values, user_id: user.id }]).select().single(); if (error) throw error; message.success('Customer added successfully!'); setIsAddCustomerModalOpen(false); addForm.resetFields(); await getCustomers(); setSelectedCustomer(data.id); } catch (error) { message.error('Error adding customer: ' + error.message); } };
-  const handleRemoveFromCart = (productId) => { setCart(cart.filter(item => item.id !== productId)); };
+  
+  const handleFullRemoveFromCart = (productId) => {
+    setCart(cart.filter(item => item.id !== productId));
+  };
+
   const handleResetCart = () => { modal.confirm({ title: 'Reset Bill?', content: 'Are you sure you want to remove all items from the current bill?', okText: 'Yes, Reset', cancelText: 'No', onOk: () => { setCart([]); setDiscount(0); setAmountPaid(0); setSelectedCustomer(null); message.success('Bill has been reset.'); } }); };
 
   return (
@@ -203,12 +218,37 @@ const POS = () => {
                 renderItem={(item) => { 
                   const productInStock = products.find(p => p.id === item.id); 
                   return (
-                    <List.Item actions={[<Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleRemoveFromCart(item.id)} />]}>
-                      <List.Item.Meta title={<Text>{item.name}</Text>} description={`Rs. ${item.sale_price.toFixed(2)}`} />
-                      <Space>
-                        <InputNumber size="small" min={1} max={productInStock?.quantity || item.quantity} value={item.quantity} onChange={(value) => handleQuantityChange(item.id, value)} style={{ width: '60px' }} />
-                        <Text strong style={{ minWidth: '80px', textAlign: 'right' }}>Rs. {(item.sale_price * item.quantity).toFixed(2)}</Text>
-                      </Space>
+                    <List.Item style={{ paddingInline: 0 }}> 
+                      <div style={{ width: '100%' }}>
+                        <Row justify="space-between" align="middle">
+                          <Col><Text strong>{item.name}</Text></Col>
+                          <Col><Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleFullRemoveFromCart(item.id)} /></Col>
+                        </Row>
+                        
+                        {/* --- YAHAN MUKAMMAL TABDEELI KI GAYI HAI --- */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                          <InputNumber 
+                            size="small" 
+                            style={{ flex: 1 }} // Yeh baqi jagah le lega
+                            prefix="Rs. " 
+                            value={item.sale_price} 
+                            onChange={(value) => handleCartItemUpdate(item.id, 'sale_price', value || 0)} 
+                            min={0} 
+                          />
+                          <InputNumber 
+                            size="small" 
+                            style={{ width: '60px' }} // Iski chaurai fix hai
+                            value={item.quantity} 
+                            onChange={(value) => handleCartItemUpdate(item.id, 'quantity', value || 1)} 
+                            min={1} 
+                            max={productInStock?.quantity || item.quantity} 
+                          />
+                          <Text strong style={{ flex: 1, textAlign: 'right', minWidth: '80px' }}> {/* Yeh bhi baqi jagah le lega */}
+                            Rs. {(item.sale_price * item.quantity).toFixed(2)}
+                          </Text>
+                        </div>
+
+                      </div>
                     </List.Item>
                   ); 
                 }} 
@@ -217,7 +257,7 @@ const POS = () => {
             }
             <Divider />
             <Row gutter={16} style={{ marginBottom: '16px' }}>
-              <Col span={14}><InputNumber style={{ width: '100%' }} placeholder="Discount" value={discount} onChange={(val) => setDiscount(val || 0)} min={0} /></Col>
+              <Col span={14}><InputNumber style={{ width: '100%' }} placeholder="Total Bill Discount" value={discount} onChange={(val) => setDiscount(val || 0)} min={0} /></Col>
               <Col span={10}><Radio.Group value={discountType} onChange={(e) => setDiscountType(e.target.value)}><Radio.Button value="Amount">Rs.</Radio.Button><Radio.Button value="Percentage">%</Radio.Button></Radio.Group></Col>
             </Row>
             <Row justify="space-between"><Text>Subtotal</Text><Text>Rs. {subtotal.toFixed(2)}</Text></Row>
