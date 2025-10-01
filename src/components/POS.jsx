@@ -7,13 +7,14 @@ import {
 import { PlusOutlined, UserAddOutlined, DeleteOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { generateSaleReceipt } from '../utils/receiptGenerator';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
 
 const POS = () => {
   const { message, modal } = App.useApp();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -162,6 +163,30 @@ const POS = () => {
             
             if (updateError) throw updateError;
           }
+          const customerDetails = customers.find(c => c.id === selectedCustomer);
+
+          // 2. Receipt ke liye tamam data ek object mein jama karein
+          const saleDetailsForReceipt = {
+            shopName: profile?.shop_name || 'Your Shop Name',
+            shopAddress: profile?.address || 'Your Shop Address',
+            shopPhone: profile?.phone_number || '',
+            saleId: saleData.id,
+            saleDate: saleData.created_at,
+            customerName: customerDetails?.name,
+            items: cart.map(item => ({
+              name: item.name,
+              quantity: item.quantity,
+              price_at_sale: item.sale_price, // yahan 'sale_price' istemal ho raha hai
+            })),
+            subtotal: subtotal,
+            discount: discountAmount,
+            grandTotal: grandTotal,
+            amountPaid: saleRecord.amount_paid_at_sale,
+            paymentStatus: saleRecord.payment_status,
+          };
+
+          // 3. Receipt generate karne wala function call karein
+          generateSaleReceipt(saleDetailsForReceipt);
           
           message.success('Sale completed successfully!');
           setCart([]);
