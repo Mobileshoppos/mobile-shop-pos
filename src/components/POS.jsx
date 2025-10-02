@@ -123,93 +123,84 @@ const POS = () => {
     if (cart.length === 0) return;
     if (paymentMethod === 'Unpaid' && !selectedCustomer) { message.error('Please select a customer for a credit (Pay Later) sale.'); return; }
     if (paymentMethod === 'Unpaid' && amountPaid > grandTotal) { message.error('Amount paid cannot be greater than the grand total.'); return; }
+    
     const udhaarAmount = grandTotal - amountPaid;
     const confirmMessage = `Subtotal: Rs. ${subtotal.toFixed(2)}\nDiscount: Rs. ${discountAmount.toFixed(2)}\n--------------------\nGrand Total: Rs. ${grandTotal.toFixed(2)}\n` + (paymentMethod === 'Unpaid' && udhaarAmount > 0 ? `Amount Paid: Rs. ${amountPaid.toFixed(2)}\nNew Udhaar: Rs. ${udhaarAmount.toFixed(2)}\n` : '') + `\nProceed?`;
-    
+
     modal.confirm({
       title: 'Confirm Sale',
       content: <pre style={{ whiteSpace: 'pre-wrap' }}>{confirmMessage}</pre>,
       onOk: async () => {
+        let saleDataForReceipt = null; // Receipt ke liye data yahan store karenge
+        
+        // --- STAGE 1: DATABASE TRANSACTION ---
         try {
           setIsSubmitting(true);
-          const saleRecord = { customer_id: selectedCustomer, subtotal, discount: discountAmount, total_amount: grandTotal, amount_paid_at_sale: paymentMethod === 'Paid' ? grandTotal : amountPaid, payment_status: udhaarAmount > 0 ? 'Unpaid' : 'Paid', user_id: user.id };
+          
+          // Sale record save karein
+          const saleRecord = { customer_id: selectedCustomer, subtotal, discount: discountAmount, total_amount: grandTotal, amount_paid_at_sale: paymentMethod === 'Paid' ? grandTotal : amountPaid, payment_status: (paymentMethod === 'Unpaid' && (grandTotal - amountPaid > 0)) ? 'Unpaid' : 'Paid', user_id: user.id };
           const { data: saleData, error: saleError } = await supabase.from('sales').insert(saleRecord).select().single();
           if (saleError) throw saleError;
-          
+
+          // Sale items save karein
           const saleItems = cart.map(item => ({ sale_id: saleData.id, product_id: item.id, quantity: item.quantity, price_at_sale: item.sale_price, user_id: user.id }));
           const { error: saleItemsError } = await supabase.from('sale_items').insert(saleItems);
           if (saleItemsError) throw saleItemsError;
 
+          // Inventory update karein (yeh hissa pehle jaisa hi hai)
           for (const item of cart) {
-            const { data: availableItems, error: stockError } = await supabase
-              .from('inventory')
-              .select('id')
-              .eq('product_id', item.id)
-              .eq('status', 'Available')
-              .eq('user_id', user.id)
-              .limit(item.quantity);
-
+            const { data: availableItems, error: stockError } = await supabase.from('inventory').select('id').eq('product_id', item.id).eq('status', 'Available').eq('user_id', user.id).limit(item.quantity);
             if (stockError) throw stockError;
-            if (availableItems.length < item.quantity) {
-              throw new Error(`Not enough available stock for ${item.name}. Sale cannot be completed.`);
-            }
-
+            if (availableItems.length < item.quantity) throw new Error(`Not enough stock for ${item.name}.`);
             const inventoryIdsToUpdate = availableItems.map(invItem => invItem.id);
-
-            const { error: updateError } = await supabase
-              .from('inventory')
-              .update({ status: 'Sold' })
-              .in('id', inventoryIdsToUpdate);
-            
+            const { error: updateError } = await supabase.from('inventory').update({ status: 'Sold' }).in('id', inventoryIdsToUpdate);
             if (updateError) throw updateError;
           }
-          const customerDetails = customers.find(c => c.id === selectedCustomer);
 
-          // 2. Receipt ke liye tamam data ek object mein jama karein
-          const saleDetailsForReceipt = {
-            shopName: profile?.shop_name || 'Your Shop Name',
-            shopAddress: profile?.address || 'Your Shop Address',
-            shopPhone: profile?.phone_number || '',
-            saleId: saleData.id,
-            saleDate: saleData.created_at,
-            customerName: customerDetails?.name,
-            items: cart.map(item => ({
-              name: item.name,
-              quantity: item.quantity,
-              price_at_sale: item.sale_price, // yahan 'sale_price' istemal ho raha hai
-            })),
-            subtotal: subtotal,
-            discount: discountAmount,
-            grandTotal: grandTotal,
-            amountPaid: saleRecord.amount_paid_at_sale,
-            paymentStatus: saleRecord.payment_status,
-          };
-
-          // 3. Receipt generate karne wala function call karein
-          generateSaleReceipt(saleDetailsForReceipt);
-          
+          // Agar yahan tak sab theek hai, to sale kamiyab hai!
           message.success('Sale completed successfully!');
-          setCart([]);
-          setSelectedCustomer(null);
-          setPaymentMethod('Paid');
-          setAmountPaid(0);
-          setDiscount(0);
-          setDiscountType('Amount');
-          await getProducts();
-          await getCustomers();
-
-          // --- YAHAN AAKHRI TABDEELI KI GAYI HAI ---
-          // Sale ke baad search bar par dobara focus karein
-          if (searchInputRef.current) {
-            searchInputRef.current.focus();
-          }
-          // --- TABDEELI KHATAM ---
+          saleDataForReceipt = saleData; // Receipt ke liye data save kar lein
 
         } catch (error) {
-          message.error('Sale failed: ' + error.message);
-        } finally {
+          // Agar database mein koi masla ho to yahan error dikhayein
+          message.error('Sale failed during database operation: ' + error.message);
           setIsSubmitting(false);
+          return; // Function ko yahin rok dein
         }
+
+        // --- STAGE 2: RECEIPT GENERATION ---
+        if (saleDataForReceipt) {
+          try {
+            // Database se sale ki mukammal tafseel mangwayein
+            const { data: receiptDetails, error: rpcError } = await supabase.rpc('get_sale_details', {
+              p_sale_id: saleDataForReceipt.id
+            });
+            if (rpcError) throw rpcError;
+
+            // Receipt generate karein
+            generateSaleReceipt(receiptDetails);
+
+          } catch (error) {
+            // Agar sirf receipt mein masla ho to warning dikhayein
+            console.error("Receipt generation failed:", error);
+            message.warning('Sale was saved, but printing the receipt failed. You can reprint it from Sales History.');
+          }
+        }
+
+        // --- STAGE 3: CLEANUP ---
+        // State ko reset karein
+        setCart([]);
+        setSelectedCustomer(null);
+        setPaymentMethod('Paid');
+        setAmountPaid(0);
+        setDiscount(0);
+        setDiscountType('Amount');
+        await getProducts();
+        await getCustomers();
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+        }
+        setIsSubmitting(false);
       }
     });
   };

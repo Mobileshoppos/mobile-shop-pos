@@ -14,7 +14,8 @@ import {
   SettingOutlined,
   SunOutlined,
   MoonOutlined,
-  TeamOutlined // NEW ICON IMPORTED
+  TeamOutlined,
+  HistoryOutlined
 } from '@ant-design/icons';
 
 // Components & Pages
@@ -32,6 +33,7 @@ import Suppliers from './components/Suppliers';
 import Purchases from './components/Purchases';
 import PurchaseDetails from './components/PurchaseDetails';
 import SupplierDetails from './components/SupplierDetails';
+import SalesHistory from './components/SalesHistory';
 
 
 // Auth
@@ -44,6 +46,7 @@ const menuItems = [
     { key: '/', icon: <HomeOutlined />, label: <Link to="/">Inventory</Link> },
     { key: '/pos', icon: <ShoppingCartOutlined />, label: <Link to="/pos">Point of Sale</Link> },
     { key: '/reports', icon: <PieChartOutlined />, label: <Link to="/reports">Reports</Link> },
+    { key: '/sales-history', icon: <HistoryOutlined />, label: <Link to="/sales-history">Sales History</Link> },
     { key: '/customers', icon: <UserOutlined />, label: <Link to="/customers">Customers</Link> },
     { key: '/suppliers', icon: <TeamOutlined />, label: <Link to="/suppliers">Suppliers</Link> },
     { key: '/purchases', icon: <DollarCircleOutlined />, label: <Link to="/purchases">Purchases</Link> },
@@ -193,6 +196,7 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route path="expenses" element={<Expenses />} />
         <Route path="expense-categories" element={<ExpenseCategories />} />
         <Route path="*" element={<Navigate to="/" />} />
+        <Route path="/sales-history" element={<SalesHistory />} />
       </Route>
     </Routes>
   );
