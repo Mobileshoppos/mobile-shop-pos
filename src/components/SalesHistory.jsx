@@ -65,26 +65,49 @@ const SalesHistory = () => {
 
   const columns = [
     {
-      title: 'Sale ID',
+      title: '#',
       dataIndex: 'sale_id',
       key: 'sale_id',
+      fixed: 'left', // Sirf yeh column ab sticky hai
+      width: 60,
+      align: 'center',
     },
     {
-      title: 'Date',
+      // Tajweez #2: Title ko bhi 2 lines mein kar diya gaya hai
+      title: (
+        <div>
+          <div>Date</div>
+          <div>Time</div>
+        </div>
+      ),
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (text) => new Date(text).toLocaleString(),
+      // Tajweez #1: Is column se 'fixed' property hata di gayi hai
+      width: 120,
+      render: (text) => {
+        const d = new Date(text);
+        const date = d.toLocaleDateString();
+        const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return (
+          <div>
+            <div>{date}</div>
+            <div>{time}</div>
+          </div>
+        );
+      },
     },
     {
       title: 'Customer',
       dataIndex: 'customer_name',
       key: 'customer_name',
+      width: 220,
     },
     {
       title: 'Total Items',
       dataIndex: 'total_items',
       key: 'total_items',
       align: 'center',
+      width: 120,
     },
     {
       title: 'Total Amount',
@@ -92,6 +115,7 @@ const SalesHistory = () => {
       key: 'total_amount',
       render: (amount) => `Rs. ${amount.toFixed(2)}`,
       align: 'right',
+      width: 150,
     },
     {
       title: 'Payment Status',
@@ -102,18 +126,23 @@ const SalesHistory = () => {
           {status.toUpperCase()}
         </Tag>
       ),
+      align: 'center',
+      width: 150,
     },
     {
       title: 'Salesperson',
       dataIndex: 'salesperson_name',
       key: 'salesperson_name',
+      width: 220,
     },
     {
       title: 'Actions',
       key: 'actions',
+      fixed: 'right',
+      width: 80,
+      align: 'center',
       render: (_, record) => (
         <Tooltip title="Reprint Receipt">
-          {/* STEP 4: Button mein 'loading' prop add karein */}
           <Button 
             icon={<PrinterOutlined />} 
             onClick={() => handleReprint(record.sale_id)}
@@ -128,12 +157,14 @@ const SalesHistory = () => {
     <>
       <Title level={2} style={{ marginBottom: '24px' }}>Sales History</Title>
       <Card>
+        {/* TABLE COMPONENT KO IS SE BADAL DEIN */}
         <Table
           columns={columns}
           dataSource={sales}
           loading={loading}
           rowKey="sale_id"
           pagination={{ pageSize: 10 }}
+          scroll={{ x: 1300 }} // Yeh line add karein
         />
       </Card>
     </>

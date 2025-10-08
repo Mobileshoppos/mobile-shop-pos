@@ -1,10 +1,11 @@
-// src/components/Purchases.jsx (Final Corrected Code with Typo Fix)
+// src/components/Purchases.jsx (Updated Code)
 
-import React, { useState, useEffect } from 'react'; // <-- FIX: 'auseState' corrected to 'useState'
-import { Table, Tag, Typography, Button, App as AntApp } from 'antd';
-import { EyeOutlined } from '@ant-design/icons';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Table, Tag, Typography, Button, App as AntApp, Flex } from 'antd';
+import { EyeOutlined, PlusOutlined } from '@ant-design/icons'; // <-- PlusOutlined ko import kiya gaya
 import { Link } from 'react-router-dom';
 import DataService from '../DataService';
+import AddPurchaseForm from './AddPurchaseForm'; // <-- Hamara naya form import kiya gaya
 
 const { Title, Text } = Typography;
 
@@ -21,25 +22,34 @@ const Purchases = () => {
     const [purchases, setPurchases] = useState([]);
     const [loading, setLoading] = useState(true);
     const { notification } = AntApp.useApp();
+    
+    // --- NAYI TABDEELIYAN (Step 1) ---
+    const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+
+    const fetchPurchases = useCallback(async () => {
+        setLoading(true);
+        try {
+            const data = await DataService.getPurchases();
+            setPurchases(data || []);
+        } catch (error) {
+            notification.error({
+                message: 'Error',
+                description: 'Failed to fetch purchase history. Please try again.',
+            });
+        } finally {
+            setLoading(false);
+        }
+    }, [notification]);
 
     useEffect(() => {
-        const fetchPurchases = async () => {
-            setLoading(true);
-            try {
-                const data = await DataService.getPurchases();
-                setPurchases(data || []);
-            } catch (error) {
-                notification.error({
-                    message: 'Error',
-                    description: 'Failed to fetch purchase history. Please try again.',
-                });
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchPurchases();
-    }, [notification]);
+    }, [fetchPurchases]);
+    
+    // --- NAYI TABDEELIYAN (Step 2) ---
+    const handlePurchaseCreated = () => {
+        setIsAddModalVisible(false); // Modal ko band karein
+        fetchPurchases(); // List ko refresh karein
+    };
 
     const columns = [
         {
@@ -97,10 +107,22 @@ const Purchases = () => {
     ];
 
     return (
-        <div>
-            <Title level={2} style={{ marginBottom: '24px' }}>
-                Purchase History
-            </Title>
+        <> {/* <-- Yahan Fragment istemal kiya gaya */}
+            {/* --- NAYI TABDEELIYAN (Step 3) --- */}
+            <Flex justify="space-between" align="center" style={{ marginBottom: '24px' }}>
+                <Title level={2} style={{ margin: 0 }}>
+                    Purchase History
+                </Title>
+                <Button 
+                    type="primary" 
+                    icon={<PlusOutlined />} 
+                    size="large"
+                    onClick={() => setIsAddModalVisible(true)}
+                >
+                    Create New Purchase
+                </Button>
+            </Flex>
+
             <Table
                 columns={columns}
                 dataSource={purchases}
@@ -108,7 +130,14 @@ const Purchases = () => {
                 loading={loading}
                 scroll={{ x: true }}
             />
-        </div>
+
+            {/* --- NAYI TABDEELIYAN (Step 4) --- */}
+            <AddPurchaseForm
+                visible={isAddModalVisible}
+                onCancel={() => setIsAddModalVisible(false)}
+                onPurchaseCreated={handlePurchaseCreated}
+            />
+        </>
     );
 };
 

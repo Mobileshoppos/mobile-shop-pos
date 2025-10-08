@@ -1,12 +1,12 @@
-// src/components/Inventory.jsx (Conditionally Hide Barcode Field)
+// src/components/Inventory.jsx (Cleaned up code)
 
 import React, { useState, useEffect } from 'react';
-import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Tooltip } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag } from 'antd';
+// Note: PlusOutlined aur Tooltip ko hata diya gaya hai
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import ExpandedVariantsList from './ExpandedVariantsList';
-import AddStockModal from './AddStockModal';
+// Note: AddStockModal ko hata diya gaya hai
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -25,18 +25,15 @@ const Inventory = () => {
   const [loading, setLoading] = useState(true);
   
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-  const [isStockModalOpen, setIsStockModalOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState(null);
   
   const [productForm] = Form.useForm();
   
-  // --- YAHAN TABDEELI KI GAYI HAI (Step 1) ---
-  // Form ke andar 'category_id' field ki value ko watch karein
   const selectedCategoryId = Form.useWatch('category_id', productForm);
 
   const getData = async () => {
     try {
       setLoading(true);
+      // DataService se data fetch karna behtar hai, lekin filhal isay aise hi rakhte hain
       const { data: productsData, error: productsError } = await supabase
         .from('products_display_view')
         .select('*')
@@ -77,20 +74,7 @@ const Inventory = () => {
       getData();
     } catch (error) { message.error('Error adding product model: ' + error.message); }
   };
-
-  const showStockModal = (product) => {
-    setSelectedProduct(product);
-    setIsStockModalOpen(true);
-  };
-
-  const handleStockAdded = () => {
-    setIsStockModalOpen(false);
-    setSelectedProduct(null);
-    getData();
-  };
   
-  // --- YAHAN TABDEELI KI GAYI HAI (Step 2) ---
-  // Check karein ke kya selected category "Smart Phones / Devices" hai
   const isSmartPhoneCategorySelected = categories.find(c => c.id === selectedCategoryId)?.name === 'Smart Phones / Devices';
 
   const mainColumns = [
@@ -103,12 +87,8 @@ const Inventory = () => {
     { title: 'Category', dataIndex: 'category_name', key: 'category' },
     { title: 'Total Stock', dataIndex: 'quantity', key: 'quantity', render: (qty) => <Tag color={qty > 0 ? 'blue' : 'red'}>{qty ?? 0}</Tag> },
     { title: 'Sale Price Range', key: 'price_range', render: (_, record) => formatPriceRange(record.min_sale_price, record.max_sale_price) },
-    { 
-      title: 'Actions', key: 'actions', 
-      render: (_, record) => (
-        <Tooltip title="Add Stock"><Button type="primary" shape="circle" icon={<PlusOutlined />} onClick={() => showStockModal(record)} /></Tooltip>
-      ),
-    },
+    // --- YAHAN TABDEELI KI GAYI HAI ---
+    // 'Actions' column ko mukammal tor par hata diya gaya hai.
   ];
 
   return (
@@ -127,8 +107,6 @@ const Inventory = () => {
           <Form.Item name="category_id" label="Category" rules={[{ required: true }]}><Select placeholder="Select...">{categories.map(c => (<Option key={c.id} value={c.id}>{c.name}</Option>))}</Select></Form.Item>
           <Form.Item name="brand" label="Brand" rules={[{ required: true }]}><Input /></Form.Item>
           
-          {/* --- YAHAN TABDEELI KI GAYI HAI (Step 3) --- */}
-          {/* Barcode field sirf tab dikhayein jab Smart Phone category select NA ho */}
           {!isSmartPhoneCategorySelected && (
             <Form.Item 
               name="barcode" 
@@ -143,9 +121,7 @@ const Inventory = () => {
           <Form.Item name="sale_price" label="Default Sale Price"><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item>
         </Form>
       </Modal>
-      {isStockModalOpen && (
-        <AddStockModal visible={isStockModalOpen} onCancel={() => setIsStockModalOpen(false)} product={selectedProduct} onStockAdded={handleStockAdded} />
-      )}
+      {/* AddStockModal ke component ko yahan se hata diya gaya hai */}
     </>
   );
 };

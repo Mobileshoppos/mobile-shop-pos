@@ -29,10 +29,10 @@ import ExpenseCategories from './components/ExpenseCategories';
 import AppHeader from './components/Header';
 import Profile from './pages/Profile'; 
 import AuthPage from './pages/AuthPage'; 
-import Suppliers from './components/Suppliers';
+// import Suppliers from './components/Suppliers';
 import Purchases from './components/Purchases';
 import PurchaseDetails from './components/PurchaseDetails';
-import SupplierDetails from './components/SupplierDetails';
+import SupplierDashboard from './components/SupplierDashboard';
 import SalesHistory from './components/SalesHistory';
 
 
@@ -187,8 +187,7 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route path="pos" element={<POS />} />
         <Route path="reports" element={<Reports />} />
         <Route path="customers" element={<Customers />} />
-        <Route path="suppliers" element={<Suppliers />} />
-        <Route path="suppliers/:id" element={<SupplierDetails />} />
+        <Route path="suppliers" element={<SupplierDashboard />} />
         <Route path="purchases" element={<Purchases />} />
         <Route path="purchases/:id" element={<PurchaseDetails />} />
         <Route path="categories" element={<Categories />} />

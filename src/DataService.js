@@ -1,4 +1,4 @@
-// src/DataService.js (Final and Complete Code)
+// src/DataService.js (Final Update for Purchase Details)
 
 import { supabase } from './supabaseClient';
 
@@ -8,16 +8,26 @@ const DataService = {
   // INVENTORY & PRODUCT FUNCTIONS
   // =================================================================
   async getInventoryData() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { return { productsData: [], categoriesData: [] }; }
+
     const { data: productsData, error: productsError } = await supabase
       .from('products_with_quantity')
       .select('*, categories(name)')
+      .eq('user_id', user.id)
       .order('name', { ascending: true });
+      
     if (productsError) { console.error('DataService Error:', productsError); throw productsError; }
+
+    const formattedProducts = productsData.map(product => ({
+      ...product,
+      category_name: product.categories ? product.categories.name : null,
+    }));
 
     const { data: categoriesData, error: categoriesError } = await supabase.rpc('get_user_categories_with_settings');
     if (categoriesError) { console.error('DataService Error:', categoriesError); throw categoriesError; }
     
-    return { productsData, categoriesData };
+    return { productsData: formattedProducts, categoriesData };
   },
 
   async addProduct(productData) {
@@ -25,12 +35,13 @@ const DataService = {
     if (error) { console.error('DataService Error:', error); throw error; }
     return true;
   },
-
+  
+  // ... baqi functions waise hi rahenge ...
+  
   // =================================================================
   // SUPPLIER FUNCTIONS
   // =================================================================
   async getSuppliers() {
-    // FROM 'suppliers' CHANGED TO 'suppliers_with_balance'
     const { data, error } = await supabase.from('suppliers_with_balance').select('*').order('name', { ascending: true });
     if (error) { console.error('DataService Error:', error); throw error; }
     return data;
@@ -55,7 +66,6 @@ const DataService = {
   },
 
   async getSupplierLedgerDetails(supplierId) {
-    // The select query now includes the new 'credit_balance' column
     const { data: supplierData, error: supplierError } = await supabase.from('suppliers').select('*, credit_balance').eq('id', supplierId).single();
     if (supplierError) { console.error('DataService Error:', supplierError); throw supplierError; }
 
@@ -69,12 +79,11 @@ const DataService = {
   },
 
   async getAccountsPayable() {
-    // We use the 'suppliers_with_balance' view we created earlier
     const { data, error } = await supabase
       .from('suppliers_with_balance')
       .select('name, contact_person, phone, balance_due')
-      .gt('balance_due', 0) // Only get suppliers to whom we owe money
-      .order('balance_due', { ascending: false }); // Show largest debt first
+      .gt('balance_due', 0)
+      .order('balance_due', { ascending: false });
 
     if (error) {
       console.error('DataService Error:', error);
@@ -105,7 +114,15 @@ const DataService = {
     const { data: itemsData, error: itemsError } = await supabase.from('inventory').select('*, products(name, brand)').eq('purchase_id', purchaseId);
     if (itemsError) { console.error('DataService Error:', itemsError); throw itemsError; }
     
-    return { purchase: purchaseData, items: itemsData };
+    // --- YAHAN TABDEELI KI GAYI HAI ---
+    // Data ko component ke liye saaf (flatten) karein
+    const formattedItems = (itemsData || []).map(item => ({
+        ...item,
+        product_name: item.products ? item.products.name : 'Product Not Found',
+        product_brand: item.products ? item.products.brand : '',
+    }));
+
+    return { purchase: purchaseData, items: formattedItems };
   },
 
   async getPurchases() {
@@ -120,8 +137,8 @@ const DataService = {
     return data;
   },
 
-  async recordPurchasePayment(paymentData) { // Naam tabdeel ho gaya
-    const { error } = await supabase.rpc('record_purchase_payment', { // Naam yahan bhi tabdeel ho gaya
+  async recordPurchasePayment(paymentData) {
+    const { error } = await supabase.rpc('record_purchase_payment', {
         p_supplier_id: paymentData.supplier_id,
         p_purchase_id: paymentData.purchase_id,
         p_amount: paymentData.amount,
@@ -189,6 +206,5 @@ const DataService = {
     return true;
   },
 };
-
 
 export default DataService;
