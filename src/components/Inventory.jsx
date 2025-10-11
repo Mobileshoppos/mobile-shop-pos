@@ -1,12 +1,10 @@
-// src/components/Inventory.jsx (Cleaned up code)
+// src/components/Inventory.jsx (Barcode Search Added)
 
-import React, { useState, useEffect } from 'react';
-import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag } from 'antd';
-// Note: PlusOutlined aur Tooltip ko hata diya gaya hai
+import React, { useState, useEffect, useMemo } from 'react';
+import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card } from 'antd';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import ExpandedVariantsList from './ExpandedVariantsList';
-// Note: AddStockModal ko hata diya gaya hai
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -30,10 +28,12 @@ const Inventory = () => {
   
   const selectedCategoryId = Form.useWatch('category_id', productForm);
 
+  const [searchText, setSearchText] = useState('');
+  const [filterCategory, setFilterCategory] = useState(null);
+
   const getData = async () => {
     try {
       setLoading(true);
-      // DataService se data fetch karna behtar hai, lekin filhal isay aise hi rakhte hain
       const { data: productsData, error: productsError } = await supabase
         .from('products_display_view')
         .select('*')
@@ -77,6 +77,35 @@ const Inventory = () => {
   
   const isSmartPhoneCategorySelected = categories.find(c => c.id === selectedCategoryId)?.name === 'Smart Phones / Devices';
 
+  const filteredProducts = useMemo(() => {
+    if (!searchText && !filterCategory) {
+      return products;
+    }
+
+    let filtered = products;
+    
+    if (searchText) {
+      const lowercasedSearch = searchText.toLowerCase();
+      filtered = filtered.filter(product =>
+        product.name.toLowerCase().includes(lowercasedSearch) ||
+        (product.brand && product.brand.toLowerCase().includes(lowercasedSearch)) ||
+        // --- YAHAN TABDEELI KI GAYI HAI: Barcode search shamil kiya gaya hai ---
+        (product.barcode && product.barcode.includes(lowercasedSearch))
+      );
+    }
+
+    if (filterCategory) {
+      filtered = filtered.filter(product => product.category_id === filterCategory);
+    }
+
+    return filtered;
+  }, [products, searchText, filterCategory]);
+
+  const handleResetFilters = () => {
+    setSearchText('');
+    setFilterCategory(null);
+  };
+
   const mainColumns = [
     { 
       title: 'Product Name', dataIndex: 'name', key: 'name',
@@ -87,20 +116,61 @@ const Inventory = () => {
     { title: 'Category', dataIndex: 'category_name', key: 'category' },
     { title: 'Total Stock', dataIndex: 'quantity', key: 'quantity', render: (qty) => <Tag color={qty > 0 ? 'blue' : 'red'}>{qty ?? 0}</Tag> },
     { title: 'Sale Price Range', key: 'price_range', render: (_, record) => formatPriceRange(record.min_sale_price, record.max_sale_price) },
-    // --- YAHAN TABDEELI KI GAYI HAI ---
-    // 'Actions' column ko mukammal tor par hata diya gaya hai.
   ];
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <Title level={2}>Product Inventory</Title>
         <Button type="primary" size="large" onClick={() => setIsProductModalOpen(true)}>Add New Product Model</Button>
       </div>
+
+      <Card title="Filters & Search" style={{ marginBottom: '24px' }}>
+        <Row gutter={[16, 16]} align="bottom">
+          <Col xs={24} sm={12} md={10}>
+            <Text>Search by Name / Brand / Barcode</Text>
+            <Input 
+              // --- YAHAN TABDEELI KI GAYI HAI: Placeholder behtar banaya gaya hai ---
+              placeholder="Search or Scan Barcode..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              allowClear
+              style={{ marginTop: '8px' }}
+            />
+          </Col>
+          <Col xs={24} sm={12} md={8}>
+            <Text>Filter by Category</Text>
+            <Select
+              placeholder="All Categories"
+              style={{ width: '100%', marginTop: '8px' }}
+              value={filterCategory}
+              onChange={(value) => setFilterCategory(value)}
+              allowClear
+            >
+              {categories.map(cat => (
+                <Option key={cat.id} value={cat.id}>{cat.name}</Option>
+              ))}
+            </Select>
+          </Col>
+          <Col xs={24} sm={24} md={6}>
+            <Button 
+              onClick={handleResetFilters}
+              style={{ width: '100%' }}
+            >
+              Reset Filters
+            </Button>
+          </Col>
+        </Row>
+      </Card>
+
       <Table 
-        columns={mainColumns} dataSource={products} rowKey="id" loading={loading}
+        columns={mainColumns} 
+        dataSource={filteredProducts} 
+        rowKey="id" 
+        loading={loading}
         expandable={{ expandedRowRender: (record) => <ExpandedVariantsList productId={record.id} />, rowExpandable: (record) => record.quantity > 0 }}
       />
+
       <Modal title="Add a New Product Model" open={isProductModalOpen} onOk={productForm.submit} onCancel={() => setIsProductModalOpen(false)} okText="Save Model">
         <Form form={productForm} layout="vertical" onFinish={handleProductOk} style={{marginTop: '24px'}}>
           <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
@@ -121,7 +191,6 @@ const Inventory = () => {
           <Form.Item name="sale_price" label="Default Sale Price"><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item>
         </Form>
       </Modal>
-      {/* AddStockModal ke component ko yahan se hata diya gaya hai */}
     </>
   );
 };

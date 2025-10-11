@@ -1,8 +1,8 @@
-// src/components/SupplierDashboard.jsx (Updated with Search & Stats)
+// src/components/SupplierDashboard.jsx - MUKAMMAL THEEK SHUDA CODE
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select } from 'antd';
+import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme } from 'antd'; // theme ko yahan import karein
 import { PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
@@ -108,6 +108,9 @@ const SupplierLedger = ({ supplier, onRefresh }) => {
 
 // -- Main Dashboard Component --
 const SupplierDashboard = () => {
+    // 1. THEME TOKEN HASIL KAREIN
+    const { token } = theme.useToken();
+
     const [suppliers, setSuppliers] = useState([]);
     const [selectedSupplierId, setSelectedSupplierId] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -115,10 +118,7 @@ const SupplierDashboard = () => {
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [editingSupplier, setEditingSupplier] = useState(null);
     const [form] = Form.useForm();
-    
-    // NAYI TABDEELI SHURU -- Search ke liye state
     const [searchTerm, setSearchTerm] = useState('');
-    // NAYI TABDEELI KHATAM
 
     const fetchSuppliers = useCallback(async (selectIdAfterFetch = null) => {
         setLoading(true);
@@ -164,7 +164,6 @@ const SupplierDashboard = () => {
 
     const selectedSupplier = suppliers.find(s => s.id === selectedSupplierId);
 
-    // NAYI TABDEELI SHURU -- Search aur Statistics ke liye Calculations
     const filteredSuppliers = useMemo(() => {
         if (!searchTerm) return suppliers;
         return suppliers.filter(s => 
@@ -175,7 +174,6 @@ const SupplierDashboard = () => {
     const totalBalanceDue = useMemo(() => 
         suppliers.reduce((sum, s) => sum + (s.balance_due || 0), 0)
     , [suppliers]);
-    // NAYI TABDEELI KHATAM
 
     const renderSupplierDetails = () => {
         if (!selectedSupplierId || !selectedSupplier) return (
@@ -185,7 +183,7 @@ const SupplierDashboard = () => {
         );
         return (
             <Content style={{ padding: '0 24px' }}>
-                <Card variant="borderless">
+                <Card> {/* variant="borderless" ko hata diya taake card nazar aaye */}
                     <Flex justify="space-between" align="start">
                         <div>
                             <Title level={2} style={{ margin: 0 }}>{selectedSupplier.name}</Title>
@@ -211,7 +209,6 @@ const SupplierDashboard = () => {
         <Layout style={{ background: 'transparent' }}>
             <Title level={2} style={{ margin: '0 0 16px 0' }}>Suppliers Dashboard</Title>
             
-             {/* NAYI TABDEELI SHURU -- Summary Statistics Cards */}
             <Row gutter={16} style={{ marginBottom: '24px' }}>
                 <Col span={8}>
                     <Card><Statistic title="Total Suppliers" value={suppliers.length} /></Card>
@@ -220,12 +217,12 @@ const SupplierDashboard = () => {
                      <Card><Statistic title="Total Outstanding Balance" value={totalBalanceDue} prefix="Rs. " valueStyle={{ color: totalBalanceDue > 0 ? '#cf1322' : '#52c41a' }} /></Card>
                 </Col>
             </Row>
-             {/* NAYI TABDEELI KHATAM */}
              
-            <Layout style={{ background: '#141414' }}>
-                <Sider width={300} style={{ background: '#1c1c1c' }}>
-                    <div style={{ padding: '8px', borderBottom: '1px solid #303030' }}>
-                        {/* NAYI TABDEELI SHURU -- Search Bar aur Add Button ko Flexbox mein daala */}
+            {/* 2. HARDCODED BACKGROUND KO TOKEN SE BADAL DIYA */}
+            <Layout style={{ background: token.colorBgContainer, borderRadius: token.borderRadiusLG, overflow: 'hidden' }}>
+                {/* 3. HARDCODED BACKGROUND KO TOKEN SE BADAL DIYA */}
+                <Sider width={300} style={{ background: token.colorBgLayout }}>
+                    <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
                         <Flex gap="small">
                              <Input 
                                 placeholder="Search supplier..." 
@@ -236,14 +233,14 @@ const SupplierDashboard = () => {
                             />
                             <Button type="primary" icon={<PlusOutlined />} onClick={handleAddNew} />
                         </Flex>
-                        {/* NAYI TABDEELI KHATAM */}
                     </div>
                     {loading ? <div style={{textAlign: 'center', padding: '20px'}}><Spin/></div> :
                          <Menu
-                            mode="inline" theme="dark" selectedKeys={[String(selectedSupplierId)]}
+                            // 4. theme="dark" KO HATA DIYA
+                            mode="inline" 
+                            selectedKeys={[String(selectedSupplierId)]}
                             onClick={({ key }) => setSelectedSupplierId(Number(key))}
-                            style={{ height: 'calc(100vh - 310px)', overflowY: 'auto', borderRight: 0 }}
-                            // NAYI TABDEELI: `suppliers` ki jagah `filteredSuppliers` istemal karein
+                            style={{ height: 'calc(100vh - 310px)', overflowY: 'auto', borderRight: 0, background: 'transparent' }}
                             items={filteredSuppliers.map(s => ({
                                 key: s.id,
                                 label: (

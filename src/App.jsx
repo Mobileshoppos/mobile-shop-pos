@@ -1,4 +1,4 @@
-// src/App.jsx - FONT SIZE CONTROL CORRECTLY ADDED
+// src/App.jsx - MUKAMMAL UPDATED CODE
 
 import React, { useState, useEffect } from 'react';
 import { ConfigProvider, theme, Layout, Menu, App as AntApp, Switch } from 'antd';
@@ -29,19 +29,21 @@ import ExpenseCategories from './components/ExpenseCategories';
 import AppHeader from './components/Header';
 import Profile from './pages/Profile'; 
 import AuthPage from './pages/AuthPage'; 
-// import Suppliers from './components/Suppliers';
 import Purchases from './components/Purchases';
 import PurchaseDetails from './components/PurchaseDetails';
 import SupplierDashboard from './components/SupplierDashboard';
 import SalesHistory from './components/SalesHistory';
+import SettingsPage from './pages/SettingsPage';
 
-
-// Auth
+// Auth & Theme Contexts
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { CustomThemeProvider, useTheme } from './context/ThemeContext'; // useTheme ko yahan import karein
 import { supabase } from './supabaseClient';
+import { darkThemeTokens, lightThemeTokens } from './theme/themeConfig'; // Theme tokens ko import karein
 
 const { Sider, Content } = Layout;
 
+// MainLayout, menuItems, etc. mein koi tabdeeli nahi
 const menuItems = [
     { key: '/', icon: <HomeOutlined />, label: <Link to="/">Inventory</Link> },
     { key: '/pos', icon: <ShoppingCartOutlined />, label: <Link to="/pos">Point of Sale</Link> },
@@ -55,6 +57,7 @@ const menuItems = [
     { type: 'divider' },
     { key: '/expenses', icon: <DollarCircleOutlined />, label: <Link to="/expenses">Expenses</Link> },
     { key: '/expense-categories', icon: <AppstoreOutlined />, label: <Link to="/expense-categories">Expense Categories</Link> },
+    { key: '/settings', icon: <SettingOutlined />, label: <Link to="/settings">App Settings</Link> },
 ];
 
 const MainLayout = ({ isDarkMode, toggleTheme }) => {
@@ -196,73 +199,47 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route path="expense-categories" element={<ExpenseCategories />} />
         <Route path="*" element={<Navigate to="/" />} />
         <Route path="/sales-history" element={<SalesHistory />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>
   );
 };
 
-function App() {
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme) return savedTheme === 'dark';
-    return window.matchMedia && window.matchMedia('(pre-color-scheme: dark)').matches;
-  });
-
-  useEffect(() => {
-    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-  }, [isDarkMode]);
-
-  const toggleTheme = () => setIsDarkMode(prevMode => !prevMode);
-
-  const sharedComponents = {
-    Layout: {
-        siderBg: '#1F1F1F',
-        triggerBg: '#282828',
-        triggerColor: '#FFFFFF',
-    },
-    Menu: {
-        itemSelectedBg: '#3A3A3A',
-        itemSelectedColor: '#FFFFFF',
-        colorText: 'rgba(255, 255, 255, 0.65)',
-        darkItemBg: '#1F1F1F',
-        // YAHAN SIRF MENU KA FONT SIZE CONTROL HOGA
-        fontSize: 15,
-    }
-  };
+// NAYA COMPONENT: Yeh theme ko context se le kar Ant Design ko dega
+const ThemeAppliedLayout = () => {
+  // Ab tamam cheezein context se aa rahi hain
+  const { themeConfig, lightTheme, darkTheme, isDarkMode, toggleTheme } = useTheme(); 
 
   return (
     <ConfigProvider
       theme={{
         algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
-            fontFamily: "'Poppins', 'Montserrat', sans-serif",
-            borderRadiusLG: 12,
-            // YAHAN POORI APP KA FONT SIZE CONTROL HOGA
-            fontSize: 15,
-            ...(isDarkMode 
-                ? { 
-                    colorPrimary: '#3A3A3A',
-                    colorBgLayout: '#1F1F1F',
-                    colorBgContainer: '#1F1F1F',
-                } 
-                : { 
-                    colorPrimary: '#1677ff',
-                    colorBgLayout: '#f5f5f5',
-                    colorBgContainer: '#ffffff',
-                }
-            ),
+          ...themeConfig.token,
+          ...(isDarkMode ? darkTheme : lightTheme), // Yahan state se values aa rahi hain
         },
-        components: sharedComponents,
+        components: themeConfig.components,
       }}
     >
       <AntApp>
-        <BrowserRouter>
-          <AuthProvider>
-            <AppRoutes isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
-          </AuthProvider>
-        </BrowserRouter>
+        {/* isDarkMode aur toggleTheme ab context se pass ho rahe hain */}
+        <AppRoutes isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
       </AntApp>
     </ConfigProvider>
+  );
+};
+
+
+// PURANA APP COMPONENT AB BOHAT SAADA HO GAYA HAI
+function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <CustomThemeProvider>
+          <ThemeAppliedLayout />
+        </CustomThemeProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

@@ -119,6 +119,8 @@ const POS = () => {
     }
   };
 
+  // src/components/POS.jsx - FINAL UPDATED handleCompleteSale function
+
   const handleCompleteSale = async () => {
     if (cart.length === 0) return;
     if (paymentMethod === 'Unpaid' && !selectedCustomer) { message.error('Please select a customer for a credit (Pay Later) sale.'); return; }
@@ -131,64 +133,88 @@ const POS = () => {
       title: 'Confirm Sale',
       content: <pre style={{ whiteSpace: 'pre-wrap' }}>{confirmMessage}</pre>,
       onOk: async () => {
-        let saleDataForReceipt = null; // Receipt ke liye data yahan store karenge
+        let saleDataForReceipt = null;
         
-        // --- STAGE 1: DATABASE TRANSACTION ---
         try {
           setIsSubmitting(true);
           
-          // Sale record save karein
           const saleRecord = { customer_id: selectedCustomer, subtotal, discount: discountAmount, total_amount: grandTotal, amount_paid_at_sale: paymentMethod === 'Paid' ? grandTotal : amountPaid, payment_status: (paymentMethod === 'Unpaid' && (grandTotal - amountPaid > 0)) ? 'Unpaid' : 'Paid', user_id: user.id };
           const { data: saleData, error: saleError } = await supabase.from('sales').insert(saleRecord).select().single();
           if (saleError) throw saleError;
 
-          // Sale items save karein
-          const saleItems = cart.map(item => ({ sale_id: saleData.id, product_id: item.id, quantity: item.quantity, price_at_sale: item.sale_price, user_id: user.id }));
-          const { error: saleItemsError } = await supabase.from('sale_items').insert(saleItems);
-          if (saleItemsError) throw saleItemsError;
+          // ==========================================================
+          // NAYI LOGIC YAHAN SE SHURU HOTI HAI (Backend Task)
+          // ==========================================================
+          
+          const allSaleItemsToInsert = [];
+          const allInventoryIdsToUpdate = [];
 
-          // Inventory update karein (yeh hissa pehle jaisa hi hai)
-          for (const item of cart) {
-            const { data: availableItems, error: stockError } = await supabase.from('inventory').select('id').eq('product_id', item.id).eq('status', 'Available').eq('user_id', user.id).limit(item.quantity);
-            if (stockError) throw stockError;
-            if (availableItems.length < item.quantity) throw new Error(`Not enough stock for ${item.name}.`);
-            const inventoryIdsToUpdate = availableItems.map(invItem => invItem.id);
-            const { error: updateError } = await supabase.from('inventory').update({ status: 'Sold' }).in('id', inventoryIdsToUpdate);
-            if (updateError) throw updateError;
+          // Cart mein mojood har grouped item ke liye (e.g., "Charger", quantity: 20)
+          for (const cartItem of cart) {
+            
+            // Database se uss item ke utne pieces dhoondein jitni quantity hai
+            const { data: availableInventory, error: inventoryError } = await supabase
+              .from('inventory')
+              .select('id, product_id') // Sirf ID aur product_id select karein
+              .eq('product_id', cartItem.id)
+              .eq('status', 'Available')
+              .limit(cartItem.quantity);
+
+            // Agar zaroorat se kam stock hai, to error dein
+            if (inventoryError || availableInventory.length < cartItem.quantity) {
+              throw new Error(`Not enough stock for ${cartItem.name}. Required: ${cartItem.quantity}, Available: ${availableInventory.length}.`);
+            }
+
+            // Database se milne wale har physical item ke liye...
+            for (const invItem of availableInventory) {
+              // ...ek alag sale_item record tayyar karein
+              allSaleItemsToInsert.push({
+                sale_id: saleData.id,
+                inventory_id: invItem.id,       // Specific inventory item ID
+                product_id: invItem.product_id, // Reference ke liye product ID
+                quantity: 1,                    // Hamesha 1
+                price_at_sale: cartItem.sale_price,
+                user_id: user.id
+              });
+              // ...aur uss item ke ID ko 'Sold' mark karne ke liye list mein daalein
+              allInventoryIdsToUpdate.push(invItem.id);
+            }
           }
 
-          // Agar yahan tak sab theek hai, to sale kamiyab hai!
+          // Ab tamam sale_items records ko ek sath database mein daalein
+          const { error: saleItemsError } = await supabase.from('sale_items').insert(allSaleItemsToInsert);
+          if (saleItemsError) throw saleItemsError;
+
+          // Aur tamam inventory items ko ek sath 'Sold' mark karein
+          const { error: updateError } = await supabase.from('inventory').update({ status: 'Sold' }).in('id', allInventoryIdsToUpdate);
+          if (updateError) throw updateError;
+          
+          // ==========================================================
+          // NAYI LOGIC YAHAN KHATAM HOTI HAI
+          // ==========================================================
+
           message.success('Sale completed successfully!');
-          saleDataForReceipt = saleData; // Receipt ke liye data save kar lein
+          saleDataForReceipt = saleData;
 
         } catch (error) {
-          // Agar database mein koi masla ho to yahan error dikhayein
           message.error('Sale failed during database operation: ' + error.message);
           setIsSubmitting(false);
-          return; // Function ko yahin rok dein
+          return;
         }
 
-        // --- STAGE 2: RECEIPT GENERATION ---
+        // --- STAGE 2: RECEIPT GENERATION (Koi tabdeeli nahi) ---
         if (saleDataForReceipt) {
           try {
-            // Database se sale ki mukammal tafseel mangwayein
-            const { data: receiptDetails, error: rpcError } = await supabase.rpc('get_sale_details', {
-              p_sale_id: saleDataForReceipt.id
-            });
+            const { data: receiptDetails, error: rpcError } = await supabase.rpc('get_sale_details', { p_sale_id: saleDataForReceipt.id });
             if (rpcError) throw rpcError;
-
-            // Receipt generate karein
             generateSaleReceipt(receiptDetails);
-
           } catch (error) {
-            // Agar sirf receipt mein masla ho to warning dikhayein
             console.error("Receipt generation failed:", error);
             message.warning('Sale was saved, but printing the receipt failed. You can reprint it from Sales History.');
           }
         }
 
-        // --- STAGE 3: CLEANUP ---
-        // State ko reset karein
+        // --- STAGE 3: CLEANUP (Koi tabdeeli nahi) ---
         setCart([]);
         setSelectedCustomer(null);
         setPaymentMethod('Paid');
@@ -197,9 +223,7 @@ const POS = () => {
         setDiscountType('Amount');
         await getProducts();
         await getCustomers();
-        if (searchInputRef.current) {
-          searchInputRef.current.focus();
-        }
+        if (searchInputRef.current) { searchInputRef.current.focus(); }
         setIsSubmitting(false);
       }
     });

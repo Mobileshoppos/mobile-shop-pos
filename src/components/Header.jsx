@@ -1,7 +1,7 @@
-// src/components/Header.jsx - MODIFIED (SWITCH REMOVED)
+// src/components/Header.jsx - MUKAMMAL UPDATED CODE
 
 import React from 'react';
-import { Layout, Tag } from 'antd';
+import { Layout, Tag, theme } from 'antd'; // 1. 'theme' ko antd se import karein
 import { ShopOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 
@@ -16,10 +16,10 @@ const titleContainerStyle = {
   minWidth: 0, 
 };
 
-// Header se isDarkMode aur toggleTheme props hata diye gaye hain
 const AppHeader = () => {
   const { profile } = useAuth();
-  
+  const { token } = theme.useToken(); // 2. Theme ke colors hasil karne ke liye hook istemal karein
+
   const chipStyle = {
     display: 'flex',
     alignItems: 'center',
@@ -29,6 +29,9 @@ const AppHeader = () => {
     lineHeight: '1.2',
     border: 'none',
     transition: 'all 0.2s ease-in-out',
+    // 3. NAYI TABDEELI: Background color ab theme se aa raha hai
+    backgroundColor: token.colorPrimary,
+    color: token.colorTextLightSolid, // Text ka rang jo primary color par saaf nazar aaye
   };
 
   return (
@@ -40,7 +43,7 @@ const AppHeader = () => {
           title={profile?.shop_name || 'My Shop'}
         >
           <Tag 
-            color="blue" 
+            // 4. Yahan se 'color="blue"' hata diya gaya hai
             icon={<ShopOutlined />} 
             style={chipStyle}
           >
@@ -48,7 +51,6 @@ const AppHeader = () => {
           </Tag>
         </div>
 
-        {/* Yahan se Space aur Switch component hata diya gaya hai */}
       </div>
     </Header>
   );
