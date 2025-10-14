@@ -1,8 +1,8 @@
-// src/components/PurchaseDetails.jsx (Final version with Expandable Rows)
+// src/components/PurchaseDetails.jsx (Final Corrected Version with Proper Grouping)
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input } from 'antd';
+import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input, Space } from 'antd';
 import { ArrowLeftOutlined, DollarCircleOutlined, EditOutlined, RollbackOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
@@ -25,7 +25,6 @@ const PurchaseDetails = () => {
     const [purchase, setPurchase] = useState(null);
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
-    // ... baqi states waise hi rahengi ...
     const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
     const [paymentForm] = Form.useForm();
     const [isEditModalVisible, setIsEditModalVisible] = useState(false);
@@ -50,28 +49,27 @@ const PurchaseDetails = () => {
 
     useEffect(() => { fetchDetails(); }, [id, notification]);
 
-    // --- YAHAN TABDEELI KI GAYI HAI (Step 1) ---
-    // Yeh logic ab phones ko bhi group karegi
+    // --- YAHAN AAKHRI AUR AHEM TABDEELI KI GAYI HAI ---
+    // This logic now correctly groups items by ignoring the IMEI/Serial in the attributes.
     const displayItems = useMemo(() => {
         const grouped = {};
-
         items.forEach(item => {
-            // Har variant ke liye ek unique key banayein
-            const key = `${item.product_id}-${item.color || 'N/A'}-${item.condition}-${item.ram_rom || 'N/A'}-${item.pta_status || 'N/A'}-${item.purchase_price}`;
+            // Create a temporary copy of attributes to modify for the key
+            const tempAttributes = { ...(item.item_attributes || {}) };
+            
+            // Delete any potential IMEI/Serial keys so they don't affect grouping
+            delete tempAttributes['IMEI'];
+            delete tempAttributes['Serial / IMEI'];
+            delete tempAttributes['Serial Number'];
+
+            const attributesKey = JSON.stringify(tempAttributes);
+            const key = `${item.product_id}-${attributesKey}-${item.purchase_price}`;
 
             if (!grouped[key]) {
-                // Agar naya variant hai, to usay initialize karein
-                grouped[key] = {
-                    ...item,
-                    quantity: 0,
-                    imeis: [], // IMEI numbers ki list
-                    key: key,
-                };
+                grouped[key] = { ...item, quantity: 0, imeis: [], key: key };
             }
 
-            // Quantity barhayein
             grouped[key].quantity += 1;
-            // Agar IMEI hai to list mein shamil karein
             if (item.imei) {
                 grouped[key].imeis.push(item.imei);
             }
@@ -80,20 +78,26 @@ const PurchaseDetails = () => {
         return Object.values(grouped);
     }, [items]);
     
-    // --- YAHAN TABDEELI KI GAYI HAI (Step 2) ---
-    // IMEI/Serial column ko hata diya gaya hai kyunke woh ab expandable hissa hoga
     const itemColumns = [
         { title: 'Product', dataIndex: 'product_name', key: 'product_name' },
         { title: 'Quantity', dataIndex: 'quantity', key: 'quantity', align: 'center' },
-        { title: 'Color', dataIndex: 'color', key: 'color', render: (text) => text || 'N/A' },
-        { title: 'Condition', dataIndex: 'condition', key: 'condition' },
-        { title: 'RAM/ROM', dataIndex: 'ram_rom', key: 'ram_rom', render: (text) => text || 'N/A' },
-        { title: 'PTA Status', dataIndex: 'pta_status', key: 'pta_status', render: (text) => text || 'N/A' },
+        { 
+            title: 'Details', 
+            key: 'details',
+            render: (_, record) => (
+                <Space wrap>
+                    {record.item_attributes && Object.entries(record.item_attributes).map(([key, value]) => {
+                        if (!value || ['IMEI', 'Serial / IMEI', 'Serial Number'].includes(key)) return null;
+                        return <Tag key={key}>{`${key}: ${value}`}</Tag>;
+                    })}
+                </Space>
+            )
+        },
         { title: 'Purchase Price (Unit)', dataIndex: 'purchase_price', key: 'purchase_price', align: 'right', render: (val) => `Rs. ${val ? val.toLocaleString() : 0}` },
         { title: 'Subtotal', key: 'subtotal', align: 'right', render: (_, record) => `Rs. ${(record.quantity * record.purchase_price).toLocaleString()}` },
     ];
     
-    // ... baqi functions waise hi rahenge ...
+    // Baqi tamam functions (payment, edit, return) waise hi rahenge
     const showPaymentModal = () => { paymentForm.setFieldsValue({ amount: purchase.balance_due, payment_date: dayjs(), payment_method: 'Cash' }); setIsPaymentModalVisible(true); };
     const handlePaymentSubmit = async (values) => { try { if (values.amount > purchase.balance_due) { notification.warning({ message: 'Warning', description: 'Payment amount cannot be greater than the balance due.' }); return; } const paymentData = { amount: values.amount, payment_date: values.payment_date.format('YYYY-MM-DD'), payment_method: values.payment_method, notes: values.notes || null, supplier_id: purchase.supplier_id, purchase_id: purchase.id, }; await DataService.recordPurchasePayment(paymentData); notification.success({ message: 'Success', description: 'Payment recorded successfully!' }); setIsPaymentModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to record payment.' }); } };
     const showEditModal = () => { editForm.setFieldsValue({ notes: purchase.notes }); setEditingItems(items.map(item => ({ ...item }))); setIsEditModalVisible(true); };
@@ -112,7 +116,7 @@ const PurchaseDetails = () => {
             <Breadcrumb items={[ { title: <Link to="/purchases">Purchases</Link> }, { title: `Purchase #${id}` } ]} style={{ marginBottom: '16px' }}/>
             <Card>
                 <Row justify="space-between" align="middle">
-                    <Col><Title level={2} style={{ margin: 0 }}>Purchase #{purchase.id}</Title><Text type="secondary">Date: {new Date(purchase.purchase_date).toLocaleDateString()}</Text></Col>
+                    <Col><Title level={2} style={{ margin: 0 }}>Purchase #{purchase.id}</Title><Text type="secondary">Date: {new Date(purchase.purchase_date).toLocaleString()}</Text></Col>
                     <Col><Tag color={getStatusColor(purchase.status)} style={{ fontSize: '14px', padding: '6px 12px' }}>{purchase.status.replace('_', ' ').toUpperCase()}</Tag></Col>
                 </Row>
                 <Row gutter={16} style={{ marginTop: '24px' }}>
@@ -135,21 +139,11 @@ const PurchaseDetails = () => {
                 dataSource={displayItems}
                 rowKey="key"
                 pagination={false}
-                // --- YAHAN TABDEELI KI GAYI HAI (Step 3) ---
-                // Expandable feature ko shamil kiya gaya hai
                 expandable={{
                     expandedRowRender: (record) => {
-                        // Agar IMEI nahi hain to kuch na dikhayein
                         if (!record.imeis || record.imeis.length === 0) return null;
-                        
-                        // IMEI numbers ki list dikhayein
-                        return (
-                            <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                                {record.imeis.map(imei => <li key={imei}><Text code>{imei}</Text></li>)}
-                            </ul>
-                        );
+                        return (<ul style={{ margin: 0, paddingLeft: '20px' }}>{record.imeis.map(imei => <li key={imei}><Text code>{imei}</Text></li>)}</ul>);
                     },
-                    // Sirf un rows ko expandable banayein jin mein IMEI hain
                     rowExpandable: (record) => record.imeis && record.imeis.length > 0,
                 }}
             />

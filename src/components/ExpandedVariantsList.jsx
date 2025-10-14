@@ -1,7 +1,7 @@
-// src/components/ExpandedVariantsList.jsx
+// src/components/ExpandedVariantsList.jsx (Final Upgraded Version)
 
 import React, { useState, useEffect } from 'react';
-import { List, Spin, Tag, Space, Row, Col, Typography, App } from 'antd';
+import { List, Spin, Tag, Space, Row, Col, Typography, App, Empty } from 'antd';
 import { supabase } from '../supabaseClient';
 
 const { Text } = Typography;
@@ -15,7 +15,14 @@ const ExpandedVariantsList = ({ productId }) => {
     const fetchVariants = async () => {
       try {
         setLoading(true);
-        const { data, error } = await supabase.rpc('get_product_variants', { p_product_id: productId });
+        // --- YAHAN TABDEELI KI GAYI HAI ---
+        // Purane RPC function ke bajaye, seedha 'inventory' table se data fetch karein
+        const { data, error } = await supabase
+          .from('inventory')
+          .select('*')
+          .eq('product_id', productId)
+          .order('created_at', { ascending: false });
+        
         if (error) throw error;
         setVariants(data);
       } catch (error) {
@@ -30,15 +37,17 @@ const ExpandedVariantsList = ({ productId }) => {
   if (loading) {
     return <div style={{ padding: '24px', textAlign: 'center' }}><Spin /></div>;
   }
-
-  const tagOrder = ['condition', 'color', 'ram_rom', 'guaranty', 'pta_status'];
+  
+  if (!variants || variants.length === 0) {
+      return <div style={{ padding: '24px' }}><Empty description="No stock variants found for this product." /></div>;
+  }
 
   return (
     <List
       itemLayout="vertical"
       dataSource={variants}
       renderItem={(variant) => (
-        <List.Item key={JSON.stringify(variant.details)} style={{ borderBottom: '1px solid #f0f0f0', padding: '16px 8px' }}>
+        <List.Item key={variant.id} style={{ borderBottom: '1px solid #f0f0f0', padding: '16px 8px' }}>
           <Row align="top" gutter={[16, 8]}>
             <Col xs={24} sm={10} md={9}>
               <Space align="start">
@@ -50,16 +59,15 @@ const ExpandedVariantsList = ({ productId }) => {
               </Space>
             </Col>
             <Col xs={24} sm={14} md={15}>
+              {/* --- YAHAN BHI MUKAMMAL TABDEELI KI GAYI HAI --- */}
               <Space wrap>
-                {tagOrder.map(key => {
-                  const value = variant.details[key];
+                {/* Dynamically render tags from item_attributes */}
+                {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
                   if (!value) return null;
-                  let label = value;
-                  if (key === 'pta_status') {
-                    label = value === 'Not Approved' ? 'Non-PTA' : `PTA-${value}`;
-                  }
-                  return <Tag key={key}>{label}</Tag>;
+                  return <Tag key={key}>{`${key}: ${value}`}</Tag>;
                 })}
+                {/* Render IMEI tag if it exists */}
+                {variant.imei && <Tag color="purple" key="imei">{`IMEI: ${variant.imei}`}</Tag>}
               </Space>
             </Col>
           </Row>
