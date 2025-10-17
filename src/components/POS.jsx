@@ -1,4 +1,5 @@
-// src/components/POS.jsx (Final Version with Auto-Focus After Sale)
+// src/components/POS.jsx (Yeh aapka original, kaam karne wala code hai)
+// Hum isay starting point ke taur par istemal kareinge.
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -8,6 +9,8 @@ import { PlusOutlined, UserAddOutlined, DeleteOutlined } from '@ant-design/icons
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
+import { Tag } from 'antd';
+import SelectVariantModal from './SelectVariantModal';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -29,6 +32,8 @@ const POS = () => {
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState('Amount');
   const searchInputRef = useRef(null);
+  const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
+  const [productForVariantSelection, setProductForVariantSelection] = useState(null);
 
   const getProducts = async () => {
     try {
@@ -69,38 +74,128 @@ const POS = () => {
   }, [user, message]);
 
   const handleAddToCart = (product) => {
+    // This now opens the variant selection modal
     if (product.quantity <= 0) { message.warning('This product is out of stock!'); return; }
-    const existingItem = cart.find(item => item.id === product.id);
-    if (existingItem) {
-      if (existingItem.quantity >= product.quantity) { message.warning(`No more stock available for ${product.name}.`); return; }
-      setCart(cart.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item));
-    } else {
-      setCart([...cart, { ...product, sale_price: product.default_sale_price, quantity: 1 }]);
-    }
+    setProductForVariantSelection(product);
+    setIsVariantModalOpen(true);
   };
 
-  const handleSearch = (value) => {
-    const trimmedValue = value.trim();
-    if (!trimmedValue) {
-      setSearchTerm('');
+  // src/components/POS.jsx - FINAL, FINAL CORRECTED handleVariantsSelected function
+
+  const handleVariantsSelected = (selectedItems) => {
+    if (!selectedItems || selectedItems.length === 0) {
+      setIsVariantModalOpen(false);
       return;
     }
-    const productByBarcode = products.find(p => p.barcode === trimmedValue);
-    if (productByBarcode) {
-      handleAddToCart(productByBarcode);
-      setSearchTerm('');
-    } else {
-      setSearchTerm(trimmedValue);
-    }
+  
+    let newItemsAdded = false;
+    let quantityUpdated = false;
+    let alreadyInCart = false;
+
+    setCart(currentCart => {
+      let updatedCart = [...currentCart];
+
+      // Step 1: Incoming items ko alag alag karein (IMEI wale alag, Quantity wale alag)
+      const imeiItemsToAdd = selectedItems.filter(i => i.category_is_imei_based || i.imei);
+      const quantityItemsToAdd = selectedItems.filter(i => !i.category_is_imei_based && !i.imei);
+
+      // Step 2: IMEI wale items ko process karein (hamesha alag-alag)
+      imeiItemsToAdd.forEach(item => {
+        const isImeiAlreadyInCart = updatedCart.some(cartItem => cartItem.imei === item.imei);
+        if (!isImeiAlreadyInCart) {
+          updatedCart.push({ ...item, quantity: 1 });
+          newItemsAdded = true;
+        } else {
+          alreadyInCart = true;
+        }
+      });
+
+      // Step 3: Quantity wale items ko unke variant ke hisab se group karein
+      const groupedQuantityItems = {};
+      quantityItemsToAdd.forEach(item => {
+        if (!groupedQuantityItems[item.variant_id]) {
+          groupedQuantityItems[item.variant_id] = { item: item, count: 0 };
+        }
+        groupedQuantityItems[item.variant_id].count++;
+      });
+
+      // Step 4: Group kiye gaye quantity items ko cart mein add ya update karein
+      for (const variantId in groupedQuantityItems) {
+        const { item, count } = groupedQuantityItems[variantId];
+        const existingIndex = updatedCart.findIndex(ci => ci.variant_id === item.variant_id);
+
+        if (existingIndex > -1) {
+          const existingItem = updatedCart[existingIndex];
+          const updatedItem = { ...existingItem, quantity: existingItem.quantity + count };
+          updatedCart[existingIndex] = updatedItem; // Cart mein purane object ki jagah naya object daalein
+          quantityUpdated = true;
+        } else {
+          updatedCart.push({ ...item, quantity: count });
+          newItemsAdded = true;
+        }
+      }
+      
+      return updatedCart;
+    });
+
+    // Step 5: Aakhir mein, saaf suthre messages dikhayein
+    setTimeout(() => {
+      if (newItemsAdded) message.success(`New item(s) added to cart.`);
+      if (quantityUpdated) message.info(`Quantity updated for existing item(s).`);
+      if (alreadyInCart) message.warning(`Some items were already in the cart.`);
+    }, 100); // Thora sa delay taake state update ho jaye
+  
+    setIsVariantModalOpen(false);
+    setProductForVariantSelection(null);
   };
 
-  const handleCartItemUpdate = (productId, field, value) => {
+  const handleSearch = async (value) => {
+    const trimmedValue = value.trim();
+    // Search term ko live update karein takeh naam se filtering kaam karti rahe
+    setSearchTerm(trimmedValue);
+
+    // Agar value khali hai ya yeh ek action (Enter press) nahi hai, to action na lein
+    if (!trimmedValue) {
+        return;
+    }
+  
+    try {
+      // Step 1: Barcode se dhoondein
+      let { data: variantData, error: variantError } = await supabase.from('product_variants').select('*, products:product_id(name, brand)').eq('barcode', trimmedValue).eq('user_id', user.id).maybeSingle();
+      if (variantError) throw variantError;
+  
+      if (variantData) {
+        const itemToAdd = { ...variantData, product_name: variantData.products.name, variant_id: variantData.id };
+        handleVariantsSelected([itemToAdd]);
+        setSearchTerm(''); // Kamyab scan ke baad input khali karein
+        return; // Function ko yahin rok dein
+      }
+
+      // Step 2: Agar barcode na mile to IMEI se dhoondein
+      let { data: imeiData, error: imeiError } = await supabase.from('inventory').select('*, variants:product_variants(*, products:product_id(name, brand))').eq('imei', trimmedValue).eq('status', 'Available').maybeSingle();
+      if (imeiError) throw imeiError;
+
+      if (imeiData && imeiData.variants) {
+        const itemToAdd = { ...imeiData, ...imeiData.variants, product_name: imeiData.variants.products.name, variant_id: imeiData.variant_id };
+        handleVariantsSelected([itemToAdd]);
+        setSearchTerm(''); // Kamyab scan ke baad input khali karein
+        return; // Function ko yahin rok dein
+      }
+
+    } catch (error) {
+      message.error("Search failed: " + error.message);
+    }
+    // Agar barcode/IMEI na mile, to kuch na karein. Search term pehle hi set ho chuka hai naam se filtering ke liye.
+  };
+
+  const handleCartItemUpdate = (variantId, field, value) => {
     setCart(cart.map(item => {
-      if (item.id === productId) {
+      if (item.variant_id === variantId) {
+        // Stock check
         if (field === 'quantity') {
-          const productInStock = products.find(p => p.id === productId);
+          const productInStock = products.find(p => p.id === item.product_id);
           if (value > productInStock.quantity) {
-            message.warning(`Only ${productInStock.quantity} items available in stock.`);
+            message.warning(`No more stock for this product.`);
             return { ...item, quantity: productInStock.quantity };
           }
         }
@@ -118,8 +213,6 @@ const POS = () => {
         handleCartItemUpdate(productId, 'quantity', item.quantity - 1);
     }
   };
-
-  // src/components/POS.jsx - FINAL UPDATED handleCompleteSale function
 
   const handleCompleteSale = async () => {
     if (cart.length === 0) return;
@@ -142,57 +235,40 @@ const POS = () => {
           const { data: saleData, error: saleError } = await supabase.from('sales').insert(saleRecord).select().single();
           if (saleError) throw saleError;
 
-          // ==========================================================
-          // NAYI LOGIC YAHAN SE SHURU HOTI HAI (Backend Task)
-          // ==========================================================
-          
           const allSaleItemsToInsert = [];
           const allInventoryIdsToUpdate = [];
 
-          // Cart mein mojood har grouped item ke liye (e.g., "Charger", quantity: 20)
           for (const cartItem of cart) {
-            
-            // Database se uss item ke utne pieces dhoondein jitni quantity hai
             const { data: availableInventory, error: inventoryError } = await supabase
               .from('inventory')
-              .select('id, product_id') // Sirf ID aur product_id select karein
-              .eq('product_id', cartItem.id)
+              .select('id, product_id')
+              .eq('variant_id', cartItem.variant_id) // Search by variant_id
               .eq('status', 'Available')
               .limit(cartItem.quantity);
 
-            // Agar zaroorat se kam stock hai, to error dein
             if (inventoryError || availableInventory.length < cartItem.quantity) {
-              throw new Error(`Not enough stock for ${cartItem.name}. Required: ${cartItem.quantity}, Available: ${availableInventory.length}.`);
+              throw new Error(`Not enough stock for ${cartItem.product_name}. Required: ${cartItem.quantity}, Available: ${availableInventory.length}.`);
             }
 
-            // Database se milne wale har physical item ke liye...
             for (const invItem of availableInventory) {
-              // ...ek alag sale_item record tayyar karein
               allSaleItemsToInsert.push({
                 sale_id: saleData.id,
-                inventory_id: invItem.id,       // Specific inventory item ID
-                product_id: invItem.product_id, // Reference ke liye product ID
-                quantity: 1,                    // Hamesha 1
+                inventory_id: invItem.id,
+                product_id: invItem.product_id,
+                quantity: 1,
                 price_at_sale: cartItem.sale_price,
                 user_id: user.id
               });
-              // ...aur uss item ke ID ko 'Sold' mark karne ke liye list mein daalein
               allInventoryIdsToUpdate.push(invItem.id);
             }
           }
 
-          // Ab tamam sale_items records ko ek sath database mein daalein
           const { error: saleItemsError } = await supabase.from('sale_items').insert(allSaleItemsToInsert);
           if (saleItemsError) throw saleItemsError;
 
-          // Aur tamam inventory items ko ek sath 'Sold' mark karein
           const { error: updateError } = await supabase.from('inventory').update({ status: 'Sold' }).in('id', allInventoryIdsToUpdate);
           if (updateError) throw updateError;
           
-          // ==========================================================
-          // NAYI LOGIC YAHAN KHATAM HOTI HAI
-          // ==========================================================
-
           message.success('Sale completed successfully!');
           saleDataForReceipt = saleData;
 
@@ -202,7 +278,6 @@ const POS = () => {
           return;
         }
 
-        // --- STAGE 2: RECEIPT GENERATION (Koi tabdeeli nahi) ---
         if (saleDataForReceipt) {
           try {
             const { data: receiptDetails, error: rpcError } = await supabase.rpc('get_sale_details', { p_sale_id: saleDataForReceipt.id });
@@ -214,7 +289,6 @@ const POS = () => {
           }
         }
 
-        // --- STAGE 3: CLEANUP (Koi tabdeeli nahi) ---
         setCart([]);
         setSelectedCustomer(null);
         setPaymentMethod('Paid');
@@ -235,8 +309,8 @@ const POS = () => {
   const grandTotal = Math.max(0, subtotal - discountAmount);
   const handleAddCustomer = async (values) => { try { const { data, error } = await supabase.from('customers').insert([{ ...values, user_id: user.id }]).select().single(); if (error) throw error; message.success('Customer added successfully!'); setIsAddCustomerModalOpen(false); addForm.resetFields(); await getCustomers(); setSelectedCustomer(data.id); } catch (error) { message.error('Error adding customer: ' + error.message); } };
   
-  const handleFullRemoveFromCart = (productId) => {
-    setCart(cart.filter(item => item.id !== productId));
+  const handleFullRemoveFromCart = (variantId) => {
+    setCart(cart.filter(item => item.variant_id !== variantId));
   };
 
   const handleResetCart = () => { modal.confirm({ title: 'Reset Bill?', content: 'Are you sure you want to remove all items from the current bill?', okText: 'Yes, Reset', cancelText: 'No', onOk: () => { setCart([]); setDiscount(0); setAmountPaid(0); setSelectedCustomer(null); message.success('Bill has been reset.'); } }); };
@@ -288,37 +362,60 @@ const POS = () => {
               <List 
                 dataSource={cart} 
                 renderItem={(item) => { 
-                  const productInStock = products.find(p => p.id === item.id); 
+                  const productInStock = products.find(p => p.id === item.product_id); 
                   return (
                     <List.Item style={{ paddingInline: 0 }}> 
                       <div style={{ width: '100%' }}>
-                        <Row justify="space-between" align="middle">
-                          <Col><Text strong>{item.name}</Text></Col>
-                          <Col><Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleFullRemoveFromCart(item.id)} /></Col>
+                        <Row justify="space-between" align="top">
+                          <Col flex="auto">
+                            <Text strong>{item.product_name}</Text>
+                          <div style={{ marginTop: '4px' }}>
+  <Space wrap size={[0, 4]}>
+    {item.attributes && Object.entries(item.attributes).map(([key, value]) => {
+        // IMEI ko alag se dikhaenge, is liye yahan skip karein
+        if (!value || ['IMEI', 'Serial / IMEI', 'Serial Number'].includes(key)) return null;
+        return <Tag key={key}>{value}</Tag>
+    })}
+    {/* Agar IMEI hai to usay purple tag mein alag se dikhayein */}
+    {item.imei && <Tag color="purple">{item.imei}</Tag>}
+  </Space>
+</div>
+                          </Col>
+                          <Col><Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleFullRemoveFromCart(item.variant_id)} /></Col>
                         </Row>
                         
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-                          <InputNumber 
-                            size="small" 
-                            style={{ flex: 1 }}
-                            prefix="Rs. " 
-                            value={item.sale_price} 
-                            onChange={(value) => handleCartItemUpdate(item.id, 'sale_price', value || 0)} 
-                            min={0} 
-                          />
-                          <InputNumber 
-                            size="small" 
-                            style={{ width: '60px' }}
-                            value={item.quantity} 
-                            onChange={(value) => handleCartItemUpdate(item.id, 'quantity', value || 1)} 
-                            min={1} 
-                            max={productInStock?.quantity || item.quantity} 
-                          />
-                          <Text strong style={{ flex: 1, textAlign: 'right', minWidth: '80px' }}>
-                            Rs. {(item.sale_price * item.quantity).toFixed(2)}
-                          </Text>
-                        </div>
-
+                        {(item.category_is_imei_based || item.imei) ? (
+  // AGAR ITEM IMEI WALA HAI:
+  // To sirf Price aur Total dikhayein, quantity ka box nahi.
+  <Row justify="space-between" align="middle" style={{ marginTop: '8px' }}>
+    <Col><Text type="secondary">Price:</Text></Col>
+    <Col><Text strong>Rs. {item.sale_price.toLocaleString()}</Text></Col>
+  </Row>
+) : (
+  // AGAR ITEM IMEI WALA NAHI HAI (yani Quantity wala hai):
+  // To purana tareeqa istemal karein jis mein Price aur Quantity dono ke box hon.
+  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+    <InputNumber 
+      size="small" 
+      style={{ flex: 1 }}
+      prefix="Rs. " 
+      value={item.sale_price} 
+      onChange={(value) => handleCartItemUpdate(item.variant_id, 'sale_price', value || 0)} 
+      min={0} 
+    />
+    <InputNumber 
+      size="small" 
+      style={{ width: '60px' }}
+      value={item.quantity} 
+      onChange={(value) => handleCartItemUpdate(item.variant_id, 'quantity', value || 1)} 
+      min={1} 
+      max={products.find(p => p.id === item.product_id)?.quantity || item.quantity} 
+    />
+    <Text strong style={{ flex: 1, textAlign: 'right', minWidth: '80px' }}>
+      Rs. {(item.sale_price * item.quantity).toFixed(2)}
+    </Text>
+  </div>
+)}
                       </div>
                     </List.Item>
                   ); 
@@ -342,6 +439,8 @@ const POS = () => {
         </Col>
       </Row>
       <Modal title="Add a New Customer" open={isAddCustomerModalOpen} onCancel={() => setIsAddCustomerModalOpen(false)} onOk={() => addForm.submit()} okText="Save Customer"><Form form={addForm} layout="vertical" onFinish={handleAddCustomer}><Form.Item name="name" label="Full Name" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="phone_number" label="Phone Number" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="address" label="Address (Optional)"><Input.TextArea rows={3} /></Form.Item></Form></Modal>
+      {isVariantModalOpen && <SelectVariantModal visible={isVariantModalOpen} onCancel={() => setIsVariantModalOpen(false)} onOk={handleVariantsSelected} product={productForVariantSelection} />}
+      <Title level={2} style={{ marginBottom: '24px' }}>Point of Sale</Title>
     </>
   );
 };

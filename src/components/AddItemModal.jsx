@@ -1,7 +1,8 @@
-// src/components/AddItemModal.jsx (Final Version - Checks is_imei_based flag)
+// src/components/AddItemModal.jsx (Final Version with Barcode Field)
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Modal, Form, Input, InputNumber, Select, Typography, Row, Col, Divider } from 'antd';
+import { Modal, Form, Input, InputNumber, Select, Typography, Row, Col, Divider, Tooltip } from 'antd';
+import { BarcodeOutlined } from '@ant-design/icons';
 
 const { Option } = Select;
 const { Title } = Typography;
@@ -11,29 +12,20 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes }) => {
   const [imeis, setImeis] = useState(['']);
   const imeiInputRefs = useRef([]);
 
-  // Yeh flag ab seedha product ki category se ayega.
   const isImeiCategory = product?.category_is_imei_based;
 
   useEffect(() => {
     if (visible && product) {
-      // Set default values jo har form mein common hain
       const commonValues = {
         purchase_price: product.default_purchase_price || '',
         sale_price: product.default_sale_price || '',
       };
 
       if (isImeiCategory) {
-        form.setFieldsValue({
-            ...commonValues,
-            Condition: 'New', // Yeh default values tab kaam kareingi agar in naam ke attributes mojood hon.
-            'PTA Status': 'Approved'
-        });
+        form.setFieldsValue({ ...commonValues });
         setImeis(['']);
       } else {
-        form.setFieldsValue({
-            ...commonValues,
-            quantity: 1,
-        });
+        form.setFieldsValue({ ...commonValues, quantity: 1 });
       }
     }
   }, [visible, product, isImeiCategory, form]);
@@ -65,16 +57,17 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes }) => {
       const values = await form.validateFields();
       let finalItemsData = [];
 
+      // Aam attributes ko `item_attributes` object mein jama karein
+      const item_attributes = {};
+      attributes.forEach(attr => {
+          if (values[attr.attribute_name] !== undefined) {
+              item_attributes[attr.attribute_name] = values[attr.attribute_name];
+          }
+      });
+      
       if (isImeiCategory) {
         const finalImeis = imeis.map(imei => imei.trim()).filter(imei => imei);
         if (finalImeis.length === 0) throw new Error("Please enter at least one IMEI/Serial.");
-
-        const item_attributes = {};
-        attributes.forEach(attr => {
-            if (values[attr.attribute_name] !== undefined) {
-                item_attributes[attr.attribute_name] = values[attr.attribute_name];
-            }
-        });
 
         finalItemsData = finalImeis.map(imei => ({
             product_id: product.id,
@@ -82,18 +75,20 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes }) => {
             purchase_price: values.purchase_price,
             sale_price: values.sale_price,
             quantity: 1,
-            imei: imei, // IMEI ab bhi alag se save hoga
-            item_attributes: { ...item_attributes, IMEI: imei } // Aur behtar tracking ke liye attributes mein bhi save hoga
+            imei: imei,
+            item_attributes: { ...item_attributes, 'Serial / IMEI': imei },
+            barcode: null // IMEI items ka alag se barcode nahi hota
         }));
 
-      } else { // Normal Quantity-based Form
+      } else { // Quantity-based Form
         finalItemsData = [{
             product_id: product.id,
             name: product.name,
             purchase_price: values.purchase_price,
             sale_price: values.sale_price,
             quantity: values.quantity,
-            item_attributes: values.item_attributes || null
+            item_attributes: item_attributes,
+            barcode: values.barcode || null // Naya barcode field
         }];
       }
       
@@ -107,16 +102,13 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes }) => {
 
   const renderAttributeField = (attribute) => {
     const commonRules = [{ required: attribute.is_required }];
-    // IMEI-based form mein, hum fields ko top-level par rakhte hain for easy access
-    const fieldName = isImeiCategory ? attribute.attribute_name : ['item_attributes', attribute.attribute_name];
-    
-    // IMEI wala attribute form mein nahi dikhana, kyunke uske liye neeche alag se input box hain
-    if (isImeiCategory && attribute.attribute_name.toUpperCase() === 'IMEI') return null; 
+    // IMEI/Serial wale attribute ko form mein alag se nahi dikhana
+    if (isImeiCategory && ['IMEI', 'SERIAL / IMEI', 'SERIAL NUMBER'].includes(attribute.attribute_name.toUpperCase())) return null;
 
     switch (attribute.attribute_type) {
-      case 'number': return <Form.Item name={fieldName} label={attribute.attribute_name} rules={commonRules}><InputNumber style={{ width: '100%' }} /></Form.Item>;
-      case 'select': return <Form.Item name={fieldName} label={attribute.attribute_name} rules={commonRules}><Select>{(attribute.options || []).map(opt => <Option key={opt} value={opt}>{opt}</Option>)}</Select></Form.Item>;
-      default: return <Form.Item name={fieldName} label={attribute.attribute_name} rules={commonRules}><Input /></Form.Item>;
+      case 'number': return <Form.Item name={attribute.attribute_name} label={attribute.attribute_name} rules={commonRules}><InputNumber style={{ width: '100%' }} /></Form.Item>;
+      case 'select': return <Form.Item name={attribute.attribute_name} label={attribute.attribute_name} rules={commonRules}><Select>{(attribute.options || []).map(opt => <Option key={opt} value={opt}>{opt}</Option>)}</Select></Form.Item>;
+      default: return <Form.Item name={attribute.attribute_name} label={attribute.attribute_name} rules={commonRules}><Input /></Form.Item>;
     }
   };
 
@@ -151,7 +143,19 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes }) => {
                     <Col span={12}><Form.Item name="purchase_price" label="Purchase Price (per item)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item></Col>
                     <Col span={12}><Form.Item name="sale_price" label="Sale Price (per item)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item></Col>
                     <Col span={12}><Form.Item name="quantity" label="Quantity" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={1} /></Form.Item></Col>
+                    
+                    {/* --- YAHAN NAYA BARCODE FIELD ADD KIYA GAYA HAI --- */}
+                    <Col span={12}>
+                        <Form.Item 
+                          name="barcode" 
+                          label="Variant Barcode (Optional)"
+                          tooltip="Assign a unique barcode to this specific variant (e.g., 18W Adapter). You can scan it here."
+                        >
+                            <Input prefix={<BarcodeOutlined />} placeholder="Scan or type barcode" />
+                        </Form.Item>
+                    </Col>
                 </Row>
+                <Divider>Variant Attributes</Divider>
                 <Row gutter={16}>
                     {attributes.map(attr => <Col span={12} key={attr.id}>{renderAttributeField(attr)}</Col>)}
                 </Row>
