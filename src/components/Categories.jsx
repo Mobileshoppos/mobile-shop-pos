@@ -1,5 +1,3 @@
-// src/components/Categories.jsx (Updated with is_imei_based Toggle)
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Typography, Table, Button, Modal, Form, Input, App as AntApp,

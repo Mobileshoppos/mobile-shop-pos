@@ -1,5 +1,3 @@
-// src/components/SupplierDashboard.jsx - MUKAMMAL THEEK SHUDA CODE
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme } from 'antd'; // theme ko yahan import karein
@@ -10,9 +8,7 @@ import dayjs from 'dayjs';
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
-// -- SupplierLedger Component (koi tabdeeli nahi) --
 const SupplierLedger = ({ supplier, onRefresh }) => {
-    // ... (yeh poora component jaisa tha waisa hi rahega)
     const [ledgerData, setLedgerData] = useState([]);
     const [loading, setLoading] = useState(true);
     const { notification } = AntApp.useApp();
@@ -106,9 +102,7 @@ const SupplierLedger = ({ supplier, onRefresh }) => {
 };
 
 
-// -- Main Dashboard Component --
 const SupplierDashboard = () => {
-    // 1. THEME TOKEN HASIL KAREIN
     const { token } = theme.useToken();
 
     const [suppliers, setSuppliers] = useState([]);
@@ -236,7 +230,6 @@ const SupplierDashboard = () => {
                     </div>
                     {loading ? <div style={{textAlign: 'center', padding: '20px'}}><Spin/></div> :
                          <Menu
-                            // 4. theme="dark" KO HATA DIYA
                             mode="inline" 
                             selectedKeys={[String(selectedSupplierId)]}
                             onClick={({ key }) => setSelectedSupplierId(Number(key))}

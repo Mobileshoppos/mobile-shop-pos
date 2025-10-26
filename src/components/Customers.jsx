@@ -1,5 +1,3 @@
-// src/components/Customers.jsx (FINAL CORRECTED version with full details for Sales & Returns)
-
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox
@@ -137,11 +135,7 @@ const Customers = () => {
 
   const customerColumns = [ { title: 'Customer Name', dataIndex: 'name' }, { title: 'Phone', dataIndex: 'phone_number' }, { title: 'Balance', dataIndex: 'balance', align: 'right', render: (b) => <Text type={b > 0 ? 'danger' : 'success'}>Rs. {b?.toFixed(2) || '0.00'}</Text> }, { title: 'Actions', key: 'actions', render: (_, record) => (<Space><Button icon={<EyeOutlined />} onClick={() => handleViewLedger(record)}>Ledger</Button><Button icon={<DollarCircleOutlined />} onClick={() => showPaymentModal(record)} disabled={!record.balance || record.balance <= 0}>Pay</Button></Space>) }];
   
-  // ====================================================================
-  // === THIS IS THE FINAL CORRECTED RENDER FUNCTION FOR EXPANDED ROW ===
-  // ====================================================================
   const expandedRowRender = (record) => {
-    // Show FULL details for Sales
     if (record.type === 'sale') {
       const saleItemCols = [ { title: 'Product', dataIndex: ['products', 'name'] }, { title: 'Details', render: (_, item) => <Text type="secondary">{item.inventory.imei || `${item.inventory.color || ''} ${item.inventory.ram_rom || ''}`.trim() || 'N/A'}</Text> }, { title: 'Price', dataIndex: 'price_at_sale', align: 'right', render: p => `Rs. ${p.toFixed(2)}` }];
       return (
@@ -161,7 +155,6 @@ const Customers = () => {
         </Card>
       );
     }
-    // Show FULL details for Returns
     if (record.type === 'return') {
       const returnDetails = record.details.return_details;
       if (!returnDetails) return <Text type="secondary">Details not available.</Text>; // Safety check

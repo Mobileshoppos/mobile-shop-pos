@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card } from 'antd';
+import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Empty } from 'antd';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
-import ExpandedVariantsList from './ExpandedVariantsList';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -11,6 +10,112 @@ const formatPriceRange = (min, max) => {
   if (min === null || max === null) return 'N/A';
   if (min === max) return `Rs. ${min.toLocaleString()}`;
   return `Rs. ${min.toLocaleString()} - ${max.toLocaleString()}`;
+};
+
+const ProductVariantsSubTable = ({ productId }) => {
+  const [variants, setVariants] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { message } = App.useApp();
+
+  useEffect(() => {
+    const fetchAndGroupVariants = async () => {
+      try {
+        setLoading(true);
+        
+        const { data: inventoryItems, error } = await supabase
+          .from('inventory')
+          .select('*')
+          .eq('product_id', productId)
+          .eq('status', 'Available')
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        if (!inventoryItems) {
+            setVariants([]);
+            return;
+        }
+
+        const imeiBasedItems = [];
+        const quantityBasedItems = {};
+
+        for (const item of inventoryItems) {
+          if (item.imei) {
+            imeiBasedItems.push({
+                ...item,
+                display_quantity: 1 
+            });
+          } else {
+            const key = JSON.stringify(item.item_attributes);
+
+            if (!quantityBasedItems[key]) {
+              quantityBasedItems[key] = {
+                ...item,
+                display_quantity: item.quantity || 1, 
+              };
+            } else {
+              quantityBasedItems[key].display_quantity += item.quantity || 1;
+            }
+          }
+        }
+
+        const groupedQuantityItems = Object.values(quantityBasedItems);
+        
+        const finalVariants = [...imeiBasedItems, ...groupedQuantityItems];
+
+        setVariants(finalVariants);
+
+      } catch (error) {
+        message.error("Error fetching product variants: " + error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAndGroupVariants();
+  }, [productId, message]);
+
+  if (loading) {
+    return <div style={{ padding: '24px', textAlign: 'center' }}><Spin /></div>;
+  }
+  
+  if (!variants || variants.length === 0) {
+      return <div style={{ padding: '24px' }}><Empty description="No available stock found for this product." /></div>;
+  }
+
+  return (
+    <List
+      itemLayout="vertical"
+      dataSource={variants}
+      rowKey={(variant) => variant.imei || variant.id} 
+      renderItem={(variant) => (
+        <List.Item key={variant.id} style={{ borderBottom: '1px solid #f0f0f0', padding: '16px 8px' }}>
+          <Row align="top" gutter={[16, 8]}>
+            <Col xs={24} sm={10} md={9}>
+              <Space align="start">
+                {/* Hum apni nayi 'display_quantity' property istemal karenge */}
+                <Tag color="blue" style={{ fontSize: '14px', padding: '6px 10px', marginTop: '5px' }}>
+                  {variant.display_quantity} Units
+                </Tag>
+                <div>
+                  <Text strong>Sale Price:</Text> <Text>Rs. {variant.sale_price?.toLocaleString()}</Text><br/>
+                  <Text type="secondary">Purchase:</Text> <Text type="secondary">Rs. {variant.purchase_price?.toLocaleString()}</Text>
+                </div>
+              </Space>
+            </Col>
+            <Col xs={24} sm={14} md={15}>
+              <Space wrap>
+                {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
+                  if (!value) return null;
+                  return <Tag key={key}>{`${key}: ${value}`}</Tag>;
+                })}
+                {variant.imei && <Tag color="purple" key="imei">{`IMEI: ${variant.imei}`}</Tag>}
+              </Space>
+            </Col>
+          </Row>
+        </List.Item>
+      )}
+    />
+  );
 };
 
 const Inventory = () => {
@@ -244,7 +349,7 @@ const Inventory = () => {
         dataSource={products} 
         rowKey="id" 
         loading={loading}
-        expandable={{ expandedRowRender: (record) => <ExpandedVariantsList productId={record.id} />, rowExpandable: (record) => record.quantity > 0 }}
+        expandable={{ expandedRowRender: (record) => <ProductVariantsSubTable productId={record.id} />, rowExpandable: (record) => record.quantity > 0 }}
       />
 
       <Modal title="Add a New Product Model" open={isProductModalOpen} onOk={productForm.submit} onCancel={() => setIsProductModalOpen(false)} okText="Save Model">

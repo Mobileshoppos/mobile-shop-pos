@@ -1,5 +1,3 @@
-// src/components/SelectVariantModal.jsx (A New Component)
-
 import React, { useState, useEffect } from 'react';
 import { Modal, Table, Button, App, Tag, Space, InputNumber } from 'antd';
 import { supabase } from '../supabaseClient';
@@ -15,7 +13,6 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product }) => {
             const fetchVariants = async () => {
                 setLoading(true);
                 try {
-                    // Sirf 'Available' items fetch karein
                     const { data, error } = await supabase
                         .from('inventory')
                         .select('*')
@@ -24,7 +21,6 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product }) => {
 
                     if (error) throw error;
 
-                    // Variants ko group karein taake ek jaise items ek sath nazar ayein
                     const grouped = {};
                     data.forEach(item => {
                         const attributesKey = JSON.stringify(item.item_attributes || {});
@@ -52,14 +48,13 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product }) => {
         const itemsToAdd = [];
         selectedVariants.forEach(selection => {
             const variant = variants.find(v => v.key === selection.key);
-            // Get the required number of inventory IDs from the variant's list
             const inventoryIdsToSell = variant.inventory_ids.slice(0, selection.quantity);
             
             inventoryIdsToSell.forEach(invId => {
                 itemsToAdd.push({
                     ...variant,
-                    inventory_id: invId, // The specific ID of the item being sold
-                    quantity: 1, // Each item in cart is now an individual unit
+                    inventory_id: invId,
+                    quantity: 1,
                 });
             });
         });

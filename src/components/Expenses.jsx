@@ -1,5 +1,3 @@
-// src/components/Expenses.jsx (Mukammal naya aur theek kiya hua code)
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Typography,

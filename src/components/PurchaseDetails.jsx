@@ -1,5 +1,3 @@
-// src/components/PurchaseDetails.jsx (Final Corrected Version with Proper Grouping)
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input, Space } from 'antd';
@@ -49,15 +47,11 @@ const PurchaseDetails = () => {
 
     useEffect(() => { fetchDetails(); }, [id, notification]);
 
-    // --- YAHAN AAKHRI AUR AHEM TABDEELI KI GAYI HAI ---
-    // This logic now correctly groups items by ignoring the IMEI/Serial in the attributes.
     const displayItems = useMemo(() => {
         const grouped = {};
         items.forEach(item => {
-            // Create a temporary copy of attributes to modify for the key
             const tempAttributes = { ...(item.item_attributes || {}) };
             
-            // Delete any potential IMEI/Serial keys so they don't affect grouping
             delete tempAttributes['IMEI'];
             delete tempAttributes['Serial / IMEI'];
             delete tempAttributes['Serial Number'];
@@ -97,7 +91,6 @@ const PurchaseDetails = () => {
         { title: 'Subtotal', key: 'subtotal', align: 'right', render: (_, record) => `Rs. ${(record.quantity * record.purchase_price).toLocaleString()}` },
     ];
     
-    // Baqi tamam functions (payment, edit, return) waise hi rahenge
     const showPaymentModal = () => { paymentForm.setFieldsValue({ amount: purchase.balance_due, payment_date: dayjs(), payment_method: 'Cash' }); setIsPaymentModalVisible(true); };
     const handlePaymentSubmit = async (values) => { try { if (values.amount > purchase.balance_due) { notification.warning({ message: 'Warning', description: 'Payment amount cannot be greater than the balance due.' }); return; } const paymentData = { amount: values.amount, payment_date: values.payment_date.format('YYYY-MM-DD'), payment_method: values.payment_method, notes: values.notes || null, supplier_id: purchase.supplier_id, purchase_id: purchase.id, }; await DataService.recordPurchasePayment(paymentData); notification.success({ message: 'Success', description: 'Payment recorded successfully!' }); setIsPaymentModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to record payment.' }); } };
     const showEditModal = () => { editForm.setFieldsValue({ notes: purchase.notes }); setEditingItems(items.map(item => ({ ...item }))); setIsEditModalVisible(true); };

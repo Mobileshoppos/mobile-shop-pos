@@ -1,11 +1,9 @@
-// src/components/Purchases.jsx (Updated Code)
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Table, Tag, Typography, Button, App as AntApp, Flex } from 'antd';
-import { EyeOutlined, PlusOutlined } from '@ant-design/icons'; // <-- PlusOutlined ko import kiya gaya
+import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import DataService from '../DataService';
-import AddPurchaseForm from './AddPurchaseForm'; // <-- Hamara naya form import kiya gaya
+import AddPurchaseForm from './AddPurchaseForm';
 
 const { Title, Text } = Typography;
 
@@ -23,7 +21,6 @@ const Purchases = () => {
     const [loading, setLoading] = useState(true);
     const { notification } = AntApp.useApp();
     
-    // --- NAYI TABDEELIYAN (Step 1) ---
     const [isAddModalVisible, setIsAddModalVisible] = useState(false);
 
     const fetchPurchases = useCallback(async () => {
@@ -45,10 +42,9 @@ const Purchases = () => {
         fetchPurchases();
     }, [fetchPurchases]);
     
-    // --- NAYI TABDEELIYAN (Step 2) ---
     const handlePurchaseCreated = () => {
-        setIsAddModalVisible(false); // Modal ko band karein
-        fetchPurchases(); // List ko refresh karein
+        setIsAddModalVisible(false);
+        fetchPurchases();
     };
 
     const columns = [

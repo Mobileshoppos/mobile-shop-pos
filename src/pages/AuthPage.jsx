@@ -1,5 +1,3 @@
-// src/pages/AuthPage.jsx (Mukammal naya aur aakhri theek kiya hua code)
-
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout } from 'antd';
@@ -76,7 +74,6 @@ const AuthPage = () => {
   );
 
   return (
-    // --- TABDEELI: Hum ne Layout component istemal kiya hai jo theme se background khud le lega ---
     <Layout style={{ minHeight: '100vh' }}>
       <Content style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
         {/* --- TABDEELI: Card se saari hardcoded styles hata di hain --- */}

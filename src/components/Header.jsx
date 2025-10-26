@@ -1,7 +1,5 @@
-// src/components/Header.jsx - MUKAMMAL UPDATED CODE
-
 import React from 'react';
-import { Layout, Tag, theme } from 'antd'; // 1. 'theme' ko antd se import karein
+import { Layout, Tag, theme } from 'antd';
 import { ShopOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 
@@ -18,7 +16,7 @@ const titleContainerStyle = {
 
 const AppHeader = () => {
   const { profile } = useAuth();
-  const { token } = theme.useToken(); // 2. Theme ke colors hasil karne ke liye hook istemal karein
+  const { token } = theme.useToken();
 
   const chipStyle = {
     display: 'flex',
@@ -29,9 +27,8 @@ const AppHeader = () => {
     lineHeight: '1.2',
     border: 'none',
     transition: 'all 0.2s ease-in-out',
-    // 3. NAYI TABDEELI: Background color ab theme se aa raha hai
     backgroundColor: token.colorPrimary,
-    color: token.colorTextLightSolid, // Text ka rang jo primary color par saaf nazar aaye
+    color: token.colorTextLightSolid,
   };
 
   return (
@@ -43,7 +40,6 @@ const AppHeader = () => {
           title={profile?.shop_name || 'My Shop'}
         >
           <Tag 
-            // 4. Yahan se 'color="blue"' hata diya gaya hai
             icon={<ShopOutlined />} 
             style={chipStyle}
           >

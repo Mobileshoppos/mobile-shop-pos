@@ -1,10 +1,7 @@
-// src/components/SalesHistory.jsx (FINAL UPDATED CODE)
-
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Typography, Tag, App, Button, Tooltip } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
-// STEP 1: Apne receipt generator ko import karein
 import { generateSaleReceipt } from '../utils/receiptGenerator';
 
 const { Title } = Typography;
@@ -13,7 +10,6 @@ const SalesHistory = () => {
   const { message } = App.useApp();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
-  // STEP 2: Button ki loading state ke liye state banayein
   const [isPrinting, setIsPrinting] = useState(null);
 
   useEffect(() => {
@@ -36,18 +32,14 @@ const SalesHistory = () => {
     fetchSalesHistory();
   }, [message]);
 
-  // STEP 3: handleReprint function ko mukammal tor par update karein
   const handleReprint = async (saleId) => {
-    // Loading indicator show karein
     setIsPrinting(saleId); 
   
     try {
-      // Database function 'get_sale_details' ko call karein
       const { data, error } = await supabase.rpc('get_sale_details', {
         p_sale_id: saleId
       });
   
-      // Agar data laane mein error aaye to foran ruk jao
       if (error) {
         throw error;
       }
@@ -55,10 +47,8 @@ const SalesHistory = () => {
       generateSaleReceipt(data);
   
     } catch (error) {
-      // Agar upar kahin bhi masla ho to user ko error message dikhayein
       message.error('Could not print receipt: ' + error.message);
     } finally {
-      // Aakhir mein, loading indicator hata dein, chahe kaamiyab ho ya na ho
       setIsPrinting(null);
     }
   };
@@ -68,12 +58,11 @@ const SalesHistory = () => {
       title: '#',
       dataIndex: 'sale_id',
       key: 'sale_id',
-      fixed: 'left', // Sirf yeh column ab sticky hai
+      fixed: 'left',
       width: 60,
       align: 'center',
     },
     {
-      // Tajweez #2: Title ko bhi 2 lines mein kar diya gaya hai
       title: (
         <div>
           <div>Date</div>
@@ -82,7 +71,6 @@ const SalesHistory = () => {
       ),
       dataIndex: 'created_at',
       key: 'created_at',
-      // Tajweez #1: Is column se 'fixed' property hata di gayi hai
       width: 120,
       render: (text) => {
         const d = new Date(text);
@@ -164,7 +152,7 @@ const SalesHistory = () => {
           loading={loading}
           rowKey="sale_id"
           pagination={{ pageSize: 10 }}
-          scroll={{ x: 1300 }} // Yeh line add karein
+          scroll={{ x: 1300 }}
         />
       </Card>
     </>

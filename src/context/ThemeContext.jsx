@@ -1,5 +1,3 @@
-// src/context/ThemeContext.jsx - MUKAMMAL UPDATED CODE
-
 import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
 import { 
     themeConfig as initialThemeConfig,
@@ -7,7 +5,6 @@ import {
     darkThemeTokens as initialDarkTheme,
 } from '../theme/themeConfig';
 
-// Helper function to get items from localStorage
 const getFromStorage = (key, fallback) => {
     try {
         const item = window.localStorage.getItem(key);
@@ -21,7 +18,6 @@ const getFromStorage = (key, fallback) => {
 const ThemeContext = createContext();
 
 export const CustomThemeProvider = ({ children }) => {
-  // 1. Ab state initialize karte waqt localStorage se data load hoga
   const [themeConfig, setThemeConfig] = useState(() => getFromStorage('theme_config', initialThemeConfig));
   const [lightTheme, setLightTheme] = useState(() => getFromStorage('theme_light', initialLightTheme));
   const [darkTheme, setDarkTheme] = useState(() => getFromStorage('theme_dark', initialDarkTheme));
@@ -32,7 +28,6 @@ export const CustomThemeProvider = ({ children }) => {
     return window.matchMedia && window.matchMedia('(pre-color-scheme: dark)').matches;
   });
 
-  // 2. useEffect hooks: Jab bhi state badlegi, localStorage mein save ho jayegi
   useEffect(() => {
     localStorage.setItem('theme_config', JSON.stringify(themeConfig));
   }, [themeConfig]);

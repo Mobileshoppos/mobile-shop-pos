@@ -1,6 +1,3 @@
-// src/components/POS.jsx (Yeh aapka original, kaam karne wala code hai)
-// Hum isay starting point ke taur par istemal kareinge.
-
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider
@@ -74,13 +71,10 @@ const POS = () => {
   }, [user, message]);
 
   const handleAddToCart = (product) => {
-    // This now opens the variant selection modal
     if (product.quantity <= 0) { message.warning('This product is out of stock!'); return; }
     setProductForVariantSelection(product);
     setIsVariantModalOpen(true);
   };
-
-  // src/components/POS.jsx - FINAL, FINAL CORRECTED handleVariantsSelected function
 
   const handleVariantsSelected = (selectedItems) => {
     if (!selectedItems || selectedItems.length === 0) {
@@ -95,11 +89,9 @@ const POS = () => {
     setCart(currentCart => {
       let updatedCart = [...currentCart];
 
-      // Step 1: Incoming items ko alag alag karein (IMEI wale alag, Quantity wale alag)
       const imeiItemsToAdd = selectedItems.filter(i => i.category_is_imei_based || i.imei);
       const quantityItemsToAdd = selectedItems.filter(i => !i.category_is_imei_based && !i.imei);
 
-      // Step 2: IMEI wale items ko process karein (hamesha alag-alag)
       imeiItemsToAdd.forEach(item => {
         const isImeiAlreadyInCart = updatedCart.some(cartItem => cartItem.imei === item.imei);
         if (!isImeiAlreadyInCart) {
@@ -110,7 +102,6 @@ const POS = () => {
         }
       });
 
-      // Step 3: Quantity wale items ko unke variant ke hisab se group karein
       const groupedQuantityItems = {};
       quantityItemsToAdd.forEach(item => {
         if (!groupedQuantityItems[item.variant_id]) {
@@ -119,7 +110,6 @@ const POS = () => {
         groupedQuantityItems[item.variant_id].count++;
       });
 
-      // Step 4: Group kiye gaye quantity items ko cart mein add ya update karein
       for (const variantId in groupedQuantityItems) {
         const { item, count } = groupedQuantityItems[variantId];
         const existingIndex = updatedCart.findIndex(ci => ci.variant_id === item.variant_id);
@@ -127,7 +117,7 @@ const POS = () => {
         if (existingIndex > -1) {
           const existingItem = updatedCart[existingIndex];
           const updatedItem = { ...existingItem, quantity: existingItem.quantity + count };
-          updatedCart[existingIndex] = updatedItem; // Cart mein purane object ki jagah naya object daalein
+          updatedCart[existingIndex] = updatedItem;
           quantityUpdated = true;
         } else {
           updatedCart.push({ ...item, quantity: count });
@@ -138,12 +128,11 @@ const POS = () => {
       return updatedCart;
     });
 
-    // Step 5: Aakhir mein, saaf suthre messages dikhayein
     setTimeout(() => {
       if (newItemsAdded) message.success(`New item(s) added to cart.`);
       if (quantityUpdated) message.info(`Quantity updated for existing item(s).`);
       if (alreadyInCart) message.warning(`Some items were already in the cart.`);
-    }, 100); // Thora sa delay taake state update ho jaye
+    }, 100);
   
     setIsVariantModalOpen(false);
     setProductForVariantSelection(null);
@@ -151,47 +140,41 @@ const POS = () => {
 
   const handleSearch = async (value) => {
     const trimmedValue = value.trim();
-    // Search term ko live update karein takeh naam se filtering kaam karti rahe
     setSearchTerm(trimmedValue);
 
-    // Agar value khali hai ya yeh ek action (Enter press) nahi hai, to action na lein
     if (!trimmedValue) {
         return;
     }
   
     try {
-      // Step 1: Barcode se dhoondein
       let { data: variantData, error: variantError } = await supabase.from('product_variants').select('*, products:product_id(name, brand)').eq('barcode', trimmedValue).eq('user_id', user.id).maybeSingle();
       if (variantError) throw variantError;
   
       if (variantData) {
         const itemToAdd = { ...variantData, product_name: variantData.products.name, variant_id: variantData.id };
         handleVariantsSelected([itemToAdd]);
-        setSearchTerm(''); // Kamyab scan ke baad input khali karein
-        return; // Function ko yahin rok dein
+        setSearchTerm('');
+        return;
       }
 
-      // Step 2: Agar barcode na mile to IMEI se dhoondein
       let { data: imeiData, error: imeiError } = await supabase.from('inventory').select('*, variants:product_variants(*, products:product_id(name, brand))').eq('imei', trimmedValue).eq('status', 'Available').maybeSingle();
       if (imeiError) throw imeiError;
 
       if (imeiData && imeiData.variants) {
         const itemToAdd = { ...imeiData, ...imeiData.variants, product_name: imeiData.variants.products.name, variant_id: imeiData.variant_id };
         handleVariantsSelected([itemToAdd]);
-        setSearchTerm(''); // Kamyab scan ke baad input khali karein
-        return; // Function ko yahin rok dein
+        setSearchTerm('');
+        return;
       }
 
     } catch (error) {
       message.error("Search failed: " + error.message);
     }
-    // Agar barcode/IMEI na mile, to kuch na karein. Search term pehle hi set ho chuka hai naam se filtering ke liye.
   };
 
   const handleCartItemUpdate = (variantId, field, value) => {
     setCart(cart.map(item => {
       if (item.variant_id === variantId) {
-        // Stock check
         if (field === 'quantity') {
           const productInStock = products.find(p => p.id === item.product_id);
           if (value > productInStock.quantity) {
@@ -242,7 +225,7 @@ const POS = () => {
             const { data: availableInventory, error: inventoryError } = await supabase
               .from('inventory')
               .select('id, product_id')
-              .eq('variant_id', cartItem.variant_id) // Search by variant_id
+              .eq('variant_id', cartItem.variant_id)
               .eq('status', 'Available')
               .limit(cartItem.quantity);
 
@@ -372,7 +355,6 @@ const POS = () => {
                           <div style={{ marginTop: '4px' }}>
   <Space wrap size={[0, 4]}>
     {item.attributes && Object.entries(item.attributes).map(([key, value]) => {
-        // IMEI ko alag se dikhaenge, is liye yahan skip karein
         if (!value || ['IMEI', 'Serial / IMEI', 'Serial Number'].includes(key)) return null;
         return <Tag key={key}>{value}</Tag>
     })}
@@ -385,15 +367,11 @@ const POS = () => {
                         </Row>
                         
                         {(item.category_is_imei_based || item.imei) ? (
-  // AGAR ITEM IMEI WALA HAI:
-  // To sirf Price aur Total dikhayein, quantity ka box nahi.
   <Row justify="space-between" align="middle" style={{ marginTop: '8px' }}>
     <Col><Text type="secondary">Price:</Text></Col>
     <Col><Text strong>Rs. {item.sale_price.toLocaleString()}</Text></Col>
   </Row>
 ) : (
-  // AGAR ITEM IMEI WALA NAHI HAI (yani Quantity wala hai):
-  // To purana tareeqa istemal karein jis mein Price aur Quantity dono ke box hon.
   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
     <InputNumber 
       size="small" 

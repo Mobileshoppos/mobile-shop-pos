@@ -1,5 +1,3 @@
-// src/components/Reports.jsx (Mukammal naya aur theek kiya hua code)
-
 import React, { useState, useEffect } from 'react';
 import { Typography, Table, Card, App as AntApp, Row, Col, Statistic, Spin, DatePicker, Space, Button } from 'antd';
 import { supabase } from '../supabaseClient';
@@ -27,7 +25,6 @@ const Reports = () => {
   const [payableLoading, setPayableLoading] = useState(true);
   const [supplierReportData, setSupplierReportData] = useState([]);
   const [supplierReportLoading, setSupplierReportLoading] = useState(false);
-  // Set default date range to the last 30 days
   const [dateRange, setDateRange] = useState([dayjs().subtract(30, 'day'), dayjs()]);
 
   useEffect(() => {
@@ -35,8 +32,6 @@ const Reports = () => {
       const getStockData = async () => {
         try {
           setStockLoading(true);
-          // --- SAHI TABDEELI YAHAN HAI ---
-          // Hum ab purane view ke bajaye naye, mehfooz 'products_display_view' ka istemal kar rahe hain.
           let { data, error } = await supabase
             .from('products_display_view')
             .select('*')
@@ -54,7 +49,6 @@ const Reports = () => {
       const getSummaryData = async () => {
         try {
           setSummaryLoading(true);
-          // --- SECURITY FIX: Har query mein user_id ki shart lagayi gayi hai ---
           let { data: salesData, error: salesError } = await supabase.from('sales').select('total_amount').eq('user_id', user.id);
           if (salesError) throw salesError;
           const totalRevenue = salesData.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
@@ -187,7 +181,7 @@ const Reports = () => {
           ]}
           dataSource={payableData}
           loading={payableLoading}
-          rowKey="name" // Assuming supplier names are unique for this report
+          rowKey="name"
           pagination={false}
           summary={(data) => {
             const totalPayable = data.reduce((sum, item) => sum + item.balance_due, 0);

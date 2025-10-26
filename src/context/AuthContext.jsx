@@ -1,5 +1,3 @@
-// src/context/AuthContext.jsx - MODIFIED
-
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 
@@ -9,17 +7,14 @@ export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  
-  // NAYA IZAFA: Profile data ko store karne ke liye state
   const [profile, setProfile] = useState(null);
 
-  // NAYA IZAFA: Profile data fetch karne ka function
   const getProfile = useCallback(async (user) => {
     if (!user) return null;
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('shop_name, full_name') // Hum sirf zaroori data mangwayenge
+        .select('shop_name, full_name')
         .eq('user_id', user.id)
         .single();
       
@@ -38,17 +33,15 @@ export const AuthProvider = ({ children }) => {
       setSession(session);
       setUser(session?.user ?? null);
       
-      // NAYA IZAFA: Jab user login ho to uska profile fetch karein
       if (session?.user) {
         getProfile(session.user);
       } else {
-        setProfile(null); // Agar user logout ho to profile clear karein
+        setProfile(null);
       }
       
       setLoading(false);
     });
 
-    // Initial session check
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
@@ -69,7 +62,6 @@ export const AuthProvider = ({ children }) => {
   const value = {
     session,
     user,
-    // NAYA IZAFA: Profile aur usay refetch karne ka function context mein shamil karein
     profile,
     refetchProfile: () => getProfile(user), 
   };
