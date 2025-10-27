@@ -32,11 +32,28 @@ const Categories = () => {
     if (!user) return;
     try {
       setLoadingCategories(true);
-      let { data, error } = await supabase.from('categories').select('*').order('name');
+      
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .or(`user_id.eq.${user.id},user_id.is.null`)
+        .order('name');
+        
       if (error) throw error;
-      setCategories(data);
-    } catch (error) { message.error('Error fetching categories: ' + error.message); } 
-    finally { setLoadingCategories(false); }
+
+      const userCategoryNames = data.filter(c => c.user_id).map(c => c.name);
+      const visibleCategories = data.filter(c => {
+        if (c.user_id) return true;
+        return !userCategoryNames.includes(c.name);
+      });
+
+      setCategories(visibleCategories);
+
+    } catch (error) { 
+      message.error('Error fetching categories: ' + error.message); 
+    } finally { 
+      setLoadingCategories(false); 
+    }
   }, [user, message]);
 
   useEffect(() => { getCategories(); }, [getCategories]);
@@ -52,21 +69,57 @@ const Categories = () => {
     finally { setLoadingAttributes(false); }
   }, [message]);
 
-  const showCategoryModal = (category = null) => {
+  const cloneDefaultCategory = async (categoryToClone) => {
+    try {
+      message.loading('Customizing category...', 1);
+      const { data: newCategoryId, error } = await supabase.rpc('clone_category_for_user', { source_category_id: categoryToClone.id });
+      if (error) throw error;
+      
+      message.destroy();
+      message.success(`'${categoryToClone.name}' is now ready for customization.`);
+      
+      await getCategories();
+      const newCategoryData = { ...categoryToClone, id: newCategoryId, user_id: user.id };
+      
+      setSelectedCategory(newCategoryData);
+      await getAttributesForCategory(newCategoryId);
+      
+      return newCategoryData;
+
+    } catch (err) {
+      message.destroy();
+      message.error("Failed to customize category: " + err.message);
+      return null;
+    }
+  }
+
+  const showCategoryModal = async (category = null) => {
+    if (category && !category.user_id) {
+        const newClonedCategory = await cloneDefaultCategory(category);
+        if (newClonedCategory) {
+            setEditingCategory(newClonedCategory);
+            categoryForm.setFieldsValue({ name: newClonedCategory.name, is_imei_based: newClonedCategory.is_imei_based });
+            setIsCategoryModalOpen(true);
+        }
+        return;
+    }
+    
     setEditingCategory(category);
     if (category) {
       categoryForm.setFieldsValue({ name: category.name, is_imei_based: category.is_imei_based });
     } else {
       categoryForm.resetFields();
-      categoryForm.setFieldsValue({ is_imei_based: false }); // Default for new category
+      categoryForm.setFieldsValue({ is_imei_based: false });
     }
     setIsCategoryModalOpen(true);
   };
+
   const handleCategoryModalCancel = () => {
     setIsCategoryModalOpen(false);
     setEditingCategory(null);
     categoryForm.resetFields();
   };
+
   const handleCategoryModalOk = async (values) => {
     try {
       let error;
@@ -81,6 +134,7 @@ const Categories = () => {
       getCategories();
     } catch (error) { message.error('Error saving category: ' + error.message); }
   };
+
   const handleDeleteCategory = async (categoryId) => {
     try {
       const { error } = await supabase.from('categories').delete().eq('id', categoryId);
@@ -93,8 +147,14 @@ const Categories = () => {
       getCategories();
     } catch (error) { message.error('Error deleting category: ' + error.message); }
   };
-
-  const showAttributeModal = (attribute = null) => {
+  
+  const showAttributeModal = async (attribute = null) => {
+    let currentCategory = selectedCategory;
+    if (currentCategory && !currentCategory.user_id) {
+        currentCategory = await cloneDefaultCategory(currentCategory);
+        if (!currentCategory) return;
+    }
+    
     setEditingAttribute(attribute);
     if (attribute) {
       attributeForm.setFieldsValue({
@@ -107,11 +167,13 @@ const Categories = () => {
     }
     setIsAttributeModalOpen(true);
   };
+  
   const handleAttributeModalCancel = () => {
     setIsAttributeModalOpen(false);
     setEditingAttribute(null);
     attributeForm.resetFields();
   };
+
   const handleAttributeModalOk = async (values) => {
     try {
       let error;
@@ -131,7 +193,16 @@ const Categories = () => {
       getAttributesForCategory(selectedCategory.id);
     } catch (error) { message.error('Error saving attribute: ' + error.message); }
   };
+
   const handleDeleteAttribute = async (attributeId) => {
+    let currentCategory = selectedCategory;
+    if (currentCategory && !currentCategory.user_id) {
+        currentCategory = await cloneDefaultCategory(currentCategory);
+        if (!currentCategory) return;
+        message.info('Category is now customized. Click delete again to confirm.');
+        return;
+    }
+
     try {
         const { error } = await supabase.from('category_attributes').delete().eq('id', attributeId);
         if (error) throw error;
@@ -141,7 +212,11 @@ const Categories = () => {
   };
 
   const categoryColumns = [
-    { title: 'Category Name', dataIndex: 'name', key: 'name' },
+    { title: 'Category Name', dataIndex: 'name', key: 'name',
+      render: (text, record) => (
+        <span>{text} {!record.user_id && <Text type="secondary">(Default)</Text>}</span>
+      )
+    },
     { 
       title: 'Stock Type', dataIndex: 'is_imei_based', key: 'is_imei_based', align: 'center',
       render: (is_imei_based) => is_imei_based 
@@ -150,14 +225,18 @@ const Categories = () => {
     },
     {
       title: 'Actions', key: 'actions', width: 120, align: 'center',
-      render: (_, record) => record.user_id ? (
+      render: (_, record) => (
         <Space>
-          <Button size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); showCategoryModal(record); }} />
-          <Popconfirm title="Delete this category?" onConfirm={(e) => { e.stopPropagation(); handleDeleteCategory(record.id); }} onCancel={(e) => e.stopPropagation()} okText="Yes" cancelText="No">
-            <Button size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
-          </Popconfirm>
+          <Tooltip title={record.user_id ? "Edit Category Name" : "Customize this Category"}>
+            <Button size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); showCategoryModal(record); }} />
+          </Tooltip>
+          {record.user_id && (
+            <Popconfirm title="Delete this category?" onConfirm={(e) => { e.stopPropagation(); handleDeleteCategory(record.id); }} onCancel={(e) => e.stopPropagation()} okText="Yes" cancelText="No">
+              <Button size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
+            </Popconfirm>
+          )}
         </Space>
-      ) : <Tooltip title="Default categories cannot be edited."><Text type="secondary">Default</Text></Tooltip>,
+      ),
     },
   ];
 
@@ -216,7 +295,6 @@ const Categories = () => {
       <Modal title={editingCategory ? 'Edit Category' : 'Add New Category'} open={isCategoryModalOpen} onCancel={handleCategoryModalCancel} onOk={() => categoryForm.submit()} okText="Save">
         <Form form={categoryForm} layout="vertical" onFinish={handleCategoryModalOk} style={{ marginTop: '24px' }}>
           <Form.Item name="name" label="Category Name" rules={[{ required: true }]}><Input /></Form.Item>
-          {/* --- YAHAN NAYA SWITCH ADD KIYA GAYA HAI --- */}
           <Form.Item 
             name="is_imei_based" 
             label="Stock Tracking Type"
