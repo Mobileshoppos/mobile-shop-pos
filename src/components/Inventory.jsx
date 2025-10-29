@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Empty } from 'antd';
+import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty } from 'antd';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -92,7 +93,6 @@ const ProductVariantsSubTable = ({ productId }) => {
           <Row align="top" gutter={[16, 8]}>
             <Col xs={24} sm={10} md={9}>
               <Space align="start">
-                {/* Hum apni nayi 'display_quantity' property istemal karenge */}
                 <Tag color="blue" style={{ fontSize: '14px', padding: '6px 10px', marginTop: '5px' }}>
                   {variant.display_quantity} Units
                 </Tag>
@@ -104,11 +104,22 @@ const ProductVariantsSubTable = ({ productId }) => {
             </Col>
             <Col xs={24} sm={14} md={15}>
               <Space wrap>
+                {/* === CODE CHANGE START === */}
+                
+                {/* General attributes (sirf value dikhayein) */}
                 {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
-                  if (!value) return null;
-                  return <Tag key={key}>{`${key}: ${value}`}</Tag>;
+                  // Agar key 'imei' ya 'serial' hai to usko yahan na dikhayein taake duplicate na ho
+                  if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) {
+                    return null;
+                  }
+                  // Sirf value ko Tag mein dikhayein
+                  return <Tag key={key}>{value}</Tag>;
                 })}
-                {variant.imei && <Tag color="purple" key="imei">{`IMEI: ${variant.imei}`}</Tag>}
+
+                {/* IMEI/Serial ke liye alag se Tag (sirf value dikhayein) */}
+                {variant.imei && <Tag color="purple" key="imei">{variant.imei}</Tag>}
+
+                {/* === CODE CHANGE END === */}
               </Space>
             </Col>
           </Row>
@@ -118,9 +129,74 @@ const ProductVariantsSubTable = ({ productId }) => {
   );
 };
 
+const MobileProductList = ({ products, loading }) => {
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '50px' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  // Collapse component ke liye 'items' tayyar karne ka naya tareeqa
+  const getCollapseItems = (productId) => [
+    {
+      key: productId,
+      label: <Text strong>View Available Stock Details</Text>,
+      children: <ProductVariantsSubTable productId={productId} />,
+      style: { border: 'none' },
+    },
+  ];
+
+  return (
+    <List
+      grid={{ gutter: 16, xs: 1, sm: 2 }}
+      dataSource={products}
+      renderItem={(product) => (
+        <List.Item>
+          <Card 
+            // WARNING FIX #1: 'bordered' ki jagah 'variant' istemal kiya gaya hai
+            variant="outlined" 
+            title={
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text strong>{product.name}</Text>
+                <Tag color={product.quantity > 0 ? 'blue' : 'red'}>{product.quantity ?? 0} Stock</Tag>
+              </div>
+            }
+            style={{ width: '100%', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' }}
+          >
+            <Row gutter={[16, 16]}>
+              <Col span={24}>
+                {product.brand && <Tag>{product.brand}</Tag>}
+                <Tag color="geekblue">{product.category_name}</Tag>
+              </Col>
+              <Col span={24}>
+                <Text type="secondary">Sale Price:</Text><br />
+                <Text strong>{formatPriceRange(product.min_sale_price, product.max_sale_price)}</Text>
+              </Col>
+            </Row>
+
+            {/* Product Variants (Stock Details) */}
+            {product.quantity > 0 && (
+              // WARNING FIX #2: 'children' ke bajaye 'items' property istemal ki gayi hai
+              <Collapse 
+                items={getCollapseItems(product.id)}
+                bordered={false} 
+                expandIconPosition="end" 
+                style={{ marginTop: '16px', background: 'transparent' }}
+              />
+            )}
+          </Card>
+        </List.Item>
+      )}
+    />
+  );
+};
+
 const Inventory = () => {
   const { message } = App.useApp();
   const { user } = useAuth();
+  const isMobile = useMediaQuery('(max-width: 768px)');
   
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -283,9 +359,24 @@ const Inventory = () => {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <Title level={2}>Product Inventory</Title>
-        <Button type="primary" size="large" onClick={() => setIsProductModalOpen(true)}>Add New Product Model</Button>
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: isMobile ? 'column' : 'row', 
+        justifyContent: 'space-between', 
+        alignItems: isMobile ? 'flex-start' : 'center', 
+        marginBottom: '16px' 
+      }}>
+        <Title level={2} style={{ marginBottom: isMobile ? '16px' : '0' }}>
+          Product Inventory
+        </Title>
+        <Button 
+          type="primary" 
+          size="large" 
+          onClick={() => setIsProductModalOpen(true)} 
+          style={{ width: isMobile ? '100%' : 'auto' }}
+        >
+          Add New Product Model
+        </Button>
       </div>
 
       <Card title="Filters & Search" style={{ marginBottom: '24px' }}>
@@ -344,13 +435,17 @@ const Inventory = () => {
         </Row>
       </Card>
 
-      <Table 
-        columns={mainColumns} 
-        dataSource={products} 
-        rowKey="id" 
-        loading={loading}
-        expandable={{ expandedRowRender: (record) => <ProductVariantsSubTable productId={record.id} />, rowExpandable: (record) => record.quantity > 0 }}
-      />
+      {isMobile ? (
+        <MobileProductList products={products} loading={loading} />
+      ) : (
+        <Table 
+          columns={mainColumns} 
+          dataSource={products} 
+          rowKey="id" 
+          loading={loading}
+          expandable={{ expandedRowRender: (record) => <ProductVariantsSubTable productId={record.id} />, rowExpandable: (record) => record.quantity > 0 }}
+        />
+      )}
 
       <Modal title="Add a New Product Model" open={isProductModalOpen} onOk={productForm.submit} onCancel={() => setIsProductModalOpen(false)} okText="Save Model">
         <Form form={productForm} layout="vertical" onFinish={handleProductOk} style={{marginTop: '24px'}}>

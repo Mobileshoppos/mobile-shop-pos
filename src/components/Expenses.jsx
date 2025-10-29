@@ -17,12 +17,14 @@ import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import dayjs from 'dayjs';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
 const Expenses = () => {
   const { message } = AntApp.useApp();
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const { user } = useAuth();
   const [expenses, setExpenses] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -136,14 +138,13 @@ const Expenses = () => {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        {/* --- TABDEELI: Yahan se hardcoded 'color: white' hata diya hai --- */}
-        <Title level={2} style={{ margin: 0 }}>Manage Expenses</Title>
-        <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()}>
-          Add New Expense
-        </Button>
-      </div>
-      <Table columns={columns} dataSource={expenses} loading={loading} rowKey="id" />
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', gap: '16px' }}>
+  <Title level={2} style={{ margin: 0, width: '100%' }}>Manage Expenses</Title>
+  <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()} block={isMobile}>
+    Add New Expense
+  </Button>
+</div>
+      <Table columns={columns} dataSource={expenses} loading={loading} rowKey="id" scroll={{ x: true }} />
       
       <Modal title={editingExpense ? 'Edit Expense' : 'Add a New Expense'} open={isModalOpen} onCancel={handleCancel} onOk={() => form.submit()} okText="Save">
         <Form form={form} layout="vertical" onFinish={handleOk}>

@@ -4,6 +4,7 @@ import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert
 import { ArrowLeftOutlined, DollarCircleOutlined, EditOutlined, RollbackOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -19,6 +20,7 @@ const getStatusColor = (status) => {
 
 const PurchaseDetails = () => {
     const { id } = useParams();
+    const isMobile = useMediaQuery('(max-width: 768px)');
     const { notification } = AntApp.useApp();
     const [purchase, setPurchase] = useState(null);
     const [items, setItems] = useState([]);
@@ -108,22 +110,43 @@ const PurchaseDetails = () => {
         <div>
             <Breadcrumb items={[ { title: <Link to="/purchases">Purchases</Link> }, { title: `Purchase #${id}` } ]} style={{ marginBottom: '16px' }}/>
             <Card>
-                <Row justify="space-between" align="middle">
-                    <Col><Title level={2} style={{ margin: 0 }}>Purchase #{purchase.id}</Title><Text type="secondary">Date: {new Date(purchase.purchase_date).toLocaleString()}</Text></Col>
-                    <Col><Tag color={getStatusColor(purchase.status)} style={{ fontSize: '14px', padding: '6px 12px' }}>{purchase.status.replace('_', ' ').toUpperCase()}</Tag></Col>
-                </Row>
+                <Row justify="space-between" align="middle" style={{ flexDirection: isMobile ? 'column' : 'row', textAlign: isMobile ? 'center' : 'left' }}>
+    <Col style={{ marginBottom: isMobile ? '16px' : '0' }}>
+        <Title level={2} style={{ margin: 0 }}>Purchase #{purchase.id}</Title>
+        <Text type="secondary">Date: {new Date(purchase.purchase_date).toLocaleString()}</Text>
+    </Col>
+    <Col>
+        <Tag color={getStatusColor(purchase.status)} style={{ fontSize: '14px', padding: '6px 12px' }}>
+            {purchase.status.replace('_', ' ').toUpperCase()}
+        </Tag>
+    </Col>
+</Row>
                 <Row gutter={16} style={{ marginTop: '24px' }}>
-                    <Col span={8}><Statistic title="Supplier" value={purchase.suppliers?.name || 'N/A'} /></Col>
-                    <Col span={5}><Statistic title="Total Amount" value={purchase.total_amount} prefix="Rs. " /></Col>
-                    <Col span={5}><Statistic title="Amount Paid" value={purchase.amount_paid} prefix="Rs. " valueStyle={{ color: '#52c41a' }} /></Col>
-                    <Col span={6}><Statistic title="Balance Due" value={purchase.balance_due} prefix="Rs. " valueStyle={{ color: '#cf1322' }} /></Col>
-                </Row>
+    <Col span={isMobile ? 24 : 8} style={{ marginBottom: isMobile ? '16px' : '0' }}>
+        <Statistic title="Supplier" value={purchase.suppliers?.name || 'N/A'} />
+    </Col>
+    <Col span={isMobile ? 24 : 5} style={{ marginBottom: isMobile ? '16px' : '0' }}>
+        <Statistic title="Total Amount" value={purchase.total_amount} prefix="Rs. " />
+    </Col>
+    <Col span={isMobile ? 24 : 5} style={{ marginBottom: isMobile ? '16px' : '0' }}>
+        <Statistic title="Amount Paid" value={purchase.amount_paid} prefix="Rs. " valueStyle={{ color: '#52c41a' }} />
+    </Col>
+    <Col span={isMobile ? 24 : 6}>
+        <Statistic title="Balance Due" value={purchase.balance_due} prefix="Rs. " valueStyle={{ color: '#cf1322' }} />
+    </Col>
+</Row>
                 {purchase.notes && ( <div style={{ marginTop: '24px', padding: '12px', background: '#2c2c2c', borderRadius: '6px' }}><Text strong>Notes:</Text><br /><Text type="secondary">{purchase.notes}</Text></div> )}
-                <div style={{ marginTop: '24px', display: 'flex', gap: '8px' }}>
-                    <Button type="primary" icon={<DollarCircleOutlined />} onClick={showPaymentModal} disabled={purchase.balance_due <= 0}>Record a Payment</Button>
-                    <Button icon={<EditOutlined />} onClick={showEditModal} disabled={purchase.status === 'paid'}>Edit Purchase</Button>
-                    <Button danger icon={<RollbackOutlined />} onClick={showReturnModal}>Return Items</Button>
-                </div>
+                <div style={{ marginTop: '24px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '8px' }}>
+    <Button type="primary" block={isMobile} icon={<DollarCircleOutlined />} onClick={showPaymentModal} disabled={purchase.balance_due <= 0}>
+        Record a Payment
+    </Button>
+    <Button block={isMobile} icon={<EditOutlined />} onClick={showEditModal} disabled={purchase.status === 'paid'}>
+        Edit Purchase
+    </Button>
+    <Button danger block={isMobile} icon={<RollbackOutlined />} onClick={showReturnModal}>
+        Return Items
+    </Button>
+</div>
             </Card>
             
             <Title level={3} style={{ marginTop: '32px' }}>Items in this Purchase ({items.length})</Title>
@@ -132,6 +155,7 @@ const PurchaseDetails = () => {
                 dataSource={displayItems}
                 rowKey="key"
                 pagination={false}
+                scroll={{ x: true }}
                 expandable={{
                     expandedRowRender: (record) => {
                         if (!record.imeis || record.imeis.length === 0) return null;
@@ -145,7 +169,7 @@ const PurchaseDetails = () => {
             
             {/* Tamam Modals waise hi rahenge */}
             <Modal title="Record Payment" open={isPaymentModalVisible} onCancel={() => setIsPaymentModalVisible(false)} onOk={paymentForm.submit} okText="Save Payment"><Form form={paymentForm} layout="vertical" onFinish={handlePaymentSubmit} style={{marginTop: '24px'}}><Form.Item name="amount" label="Payment Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix="Rs. " min={0} /></Form.Item><Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="payment_method" label="Payment Method" rules={[{ required: true }]}><Select><Option value="Cash">Cash</Option><Option value="Bank Transfer">Bank Transfer</Option><Option value="Cheque">Cheque</Option><Option value="Other">Other</Option></Select></Form.Item><Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item></Form></Modal>
-            <Modal title={`Editing Purchase #${purchase.id}`} open={isEditModalVisible} onCancel={() => setIsEditModalVisible(false)} onOk={editForm.submit} okText="Save Changes" width={1000}><Form form={editForm} layout="vertical" onFinish={handleUpdateSubmit} style={{ marginTop: '24px' }}><Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item><Title level={5} style={{ marginTop: '16px' }}>Items in this Purchase</Title><Table columns={editItemColumns} dataSource={editingItems} rowKey="id" pagination={false} size="small" /></Form></Modal>
+            <Modal title={`Editing Purchase #${purchase.id}`} open={isEditModalVisible} onCancel={() => setIsEditModalVisible(false)} onOk={editForm.submit} okText="Save Changes" width={1000}><Form form={editForm} layout="vertical" onFinish={handleUpdateSubmit} style={{ marginTop: '24px' }}><Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item><Title level={5} style={{ marginTop: '16px' }}>Items in this Purchase</Title><Table columns={editItemColumns} dataSource={editingItems} rowKey="id" pagination={false} size="small" scroll={{ x: true }} /></Form></Modal>
             <Modal title="Return Items to Supplier" open={isReturnModalVisible} onCancel={() => setIsReturnModalVisible(false)} onOk={returnForm.submit} okText="Process Return" width={800} okButtonProps={{ danger: true }}><Form form={returnForm} layout="vertical" onFinish={handleReturnSubmit} style={{ marginTop: '24px' }}><Form.Item name="return_date" label="Return Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="notes" label="Reason for Return (Optional)"><Input.TextArea rows={2} placeholder="e.g., Damaged items, wrong model, etc." /></Form.Item><Title level={5} style={{ marginTop: '16px' }}>Select Items to Return</Title><Table rowSelection={{ type: 'checkbox', ...returnItemSelection }} columns={itemColumns} dataSource={items} rowKey="id" pagination={false} size="small" /></Form></Modal>
         </div>
     );

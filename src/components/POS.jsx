@@ -351,17 +351,24 @@ const POS = () => {
                       <div style={{ width: '100%' }}>
                         <Row justify="space-between" align="top">
                           <Col flex="auto">
-                            <Text strong>{item.product_name}</Text>
-                          <div style={{ marginTop: '4px' }}>
-  <Space wrap size={[0, 4]}>
-    {item.attributes && Object.entries(item.attributes).map(([key, value]) => {
-        if (!value || ['IMEI', 'Serial / IMEI', 'Serial Number'].includes(key)) return null;
-        return <Tag key={key}>{value}</Tag>
-    })}
-    {/* Agar IMEI hai to usay purple tag mein alag se dikhayein */}
-    {item.imei && <Tag color="purple">{item.imei}</Tag>}
-  </Space>
-</div>
+                            {/* === BUG FIX START === */}
+                            {/* item.product_name ke bajaye productInStock se naam hasil kiya gaya hai */}
+                            <Text strong>{productInStock ? productInStock.name : 'Unknown Product'}</Text>
+                            {/* === BUG FIX END === */}
+                            
+                            <div style={{ marginTop: '4px' }}>
+                              <Space wrap size={[0, 4]}>
+                                {/* General attributes (sirf value dikhayein) */}
+                                {item.item_attributes && Object.entries(item.item_attributes).map(([key, value]) => {
+                                  if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) {
+                                    return null;
+                                  }
+                                  return <Tag key={key}>{value}</Tag>;
+                                })}
+                                {/* IMEI/Serial ke liye alag se Tag (sirf value dikhayein) */}
+                                {item.imei && <Tag color="purple" key="imei">{item.imei}</Tag>}
+                              </Space>
+                            </div>
                           </Col>
                           <Col><Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleFullRemoveFromCart(item.variant_id)} /></Col>
                         </Row>
@@ -418,7 +425,6 @@ const POS = () => {
       </Row>
       <Modal title="Add a New Customer" open={isAddCustomerModalOpen} onCancel={() => setIsAddCustomerModalOpen(false)} onOk={() => addForm.submit()} okText="Save Customer"><Form form={addForm} layout="vertical" onFinish={handleAddCustomer}><Form.Item name="name" label="Full Name" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="phone_number" label="Phone Number" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="address" label="Address (Optional)"><Input.TextArea rows={3} /></Form.Item></Form></Modal>
       {isVariantModalOpen && <SelectVariantModal visible={isVariantModalOpen} onCancel={() => setIsVariantModalOpen(false)} onOk={handleVariantsSelected} product={productForVariantSelection} />}
-      <Title level={2} style={{ marginBottom: '24px' }}>Point of Sale</Title>
     </>
   );
 };

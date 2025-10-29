@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme } from 'antd'; // theme ko yahan import karein
-import { PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined } from '@ant-design/icons';
+import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
-const SupplierLedger = ({ supplier, onRefresh }) => {
+// PURANE 'SupplierLedger' FUNCTION KI JAGAH YEH NAYA CODE PASTE KAREIN
+
+const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
     const [ledgerData, setLedgerData] = useState([]);
     const [loading, setLoading] = useState(true);
     const { notification } = AntApp.useApp();
@@ -62,21 +65,61 @@ const SupplierLedger = ({ supplier, onRefresh }) => {
         { title: 'Debit', dataIndex: 'debit', key: 'debit', align: 'right', render: (val) => val ? `Rs. ${val.toLocaleString()}` : '-' },
         { title: 'Credit', dataIndex: 'credit', key: 'credit', align: 'right', render: (val) => val ? `Rs. ${val.toLocaleString()}` : '-' },
     ];
+    
     if (loading) return <div style={{ textAlign: 'center', padding: '50px' }}><Spin /></div>;
+    
     return (
         <div>
-            <Space style={{ marginBottom: 24 }}>
+            <Space style={{ marginBottom: 24 }} wrap>
                 <Button type="primary" icon={<DollarCircleOutlined />} onClick={showPaymentModal} disabled={!supplier || supplier.balance_due <= 0}> Record Payment </Button>
                 <Button danger icon={<MinusCircleOutlined />} onClick={showRefundModal} disabled={!supplier || supplier.credit_balance <= 0}> Record Refund </Button>
             </Space>
-            <Row gutter={16} style={{ marginBottom: '24px' }}>
-                <Col span={6}><Statistic title="Total Business" value={supplier?.total_purchases || 0} prefix="Rs. " /></Col>
-                <Col span={6}><Statistic title="Total Paid" value={supplier?.total_payments || 0} prefix="Rs. " /></Col>
-                <Col span={6}><Statistic title="Balance Due" value={supplier?.balance_due || 0} prefix="Rs. " valueStyle={{ color: '#cf1322' }} /></Col>
-                <Col span={6}><Statistic title="Your Credit" value={supplier?.credit_balance || 0} prefix="Rs. " valueStyle={{ color: '#52c41a' }} /></Col>
+
+            <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+                <Col xs={12} md={6}><Statistic title="Total Business" value={supplier?.total_purchases || 0} prefix="Rs. " /></Col>
+                <Col xs={12} md={6}><Statistic title="Total Paid" value={supplier?.total_payments || 0} prefix="Rs. " /></Col>
+                <Col xs={12} md={6}><Statistic title="Balance Due" value={supplier?.balance_due || 0} prefix="Rs. " valueStyle={{ color: '#cf1322' }} /></Col>
+                <Col xs={12} md={6}><Statistic title="Your Credit" value={supplier?.credit_balance || 0} prefix="Rs. " valueStyle={{ color: '#52c41a' }} /></Col>
             </Row>
+
             <Title level={4}>Transaction Ledger</Title>
-            <Table columns={ledgerColumns} dataSource={ledgerData} rowKey="key" pagination={{ pageSize: 10 }} size="small"/>
+            
+            {isMobile ? (
+                <List
+                    dataSource={ledgerData}
+                    rowKey="key"
+                    renderItem={(item) => (
+                        <List.Item style={{ padding: '8px 0' }}>
+                            <Card style={{ width: '100%' }} size="small">
+                                <Row justify="space-between" align="middle" gutter={8}>
+                                    <Col flex="auto">
+                                        <Tag color={item.type === 'Purchase' ? 'volcano' : 'green'}>{item.type}</Tag>
+                                        <div style={{ marginTop: '4px' }}>
+                                            <Text>{item.link ? <Link to={item.link}>{item.details}</Link> : item.details}</Text>
+                                        </div>
+                                        <Text type="secondary" style={{ fontSize: '12px' }}>{new Date(item.date).toLocaleString()}</Text>
+                                    </Col>
+                                    <Col style={{ textAlign: 'right' }}>
+    {item.debit > 0 && (
+        <Text type="danger" strong>
+            <ArrowDownOutlined /> Rs. {item.debit.toLocaleString()}
+        </Text>
+    )}
+    {item.credit > 0 && (
+        <Text type="success" strong>
+            <ArrowUpOutlined /> Rs. {item.credit.toLocaleString()}
+        </Text>
+    )}
+</Col>
+                                </Row>
+                            </Card>
+                        </List.Item>
+                    )}
+                />
+            ) : (
+                <Table columns={ledgerColumns} dataSource={ledgerData} rowKey="key" pagination={{ pageSize: 10 }} size="small"/>
+            )}
+
             <Modal title={`Record Payment for ${supplier?.name}`} open={isPaymentModalVisible} onCancel={() => setIsPaymentModalVisible(false)} onOk={paymentForm.submit} okText="Save Payment">
                 <Form form={paymentForm} layout="vertical" onFinish={handlePaymentSubmit} style={{marginTop: 24}}>
                     <Form.Item name="amount" label="Payment Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix="Rs. " min={0} /></Form.Item>
@@ -104,7 +147,8 @@ const SupplierLedger = ({ supplier, onRefresh }) => {
 
 const SupplierDashboard = () => {
     const { token } = theme.useToken();
-
+    const isMobile = useMediaQuery('(max-width: 768px)');
+    
     const [suppliers, setSuppliers] = useState([]);
     const [selectedSupplierId, setSelectedSupplierId] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -122,12 +166,12 @@ const SupplierDashboard = () => {
             
             if (selectIdAfterFetch) {
                 setSelectedSupplierId(selectIdAfterFetch);
-            } else if (data && data.length > 0 && !selectedSupplierId) {
+            } else if (!isMobile && data && data.length > 0 && !selectedSupplierId) {
                 setSelectedSupplierId(data[0].id);
             }
         } catch (error) { notification.error({ message: 'Error', description: 'Failed to fetch suppliers list.' });
         } finally { setLoading(false); }
-    }, [notification, selectedSupplierId]);
+    }, [notification, selectedSupplierId, isMobile]);
 
     useEffect(() => { fetchSuppliers(); }, []);
 
@@ -171,28 +215,38 @@ const SupplierDashboard = () => {
 
     const renderSupplierDetails = () => {
         if (!selectedSupplierId || !selectedSupplier) return (
-            <Content style={{ padding: '0 24px', minHeight: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Content style={{ padding: isMobile ? 0 : '0 24px', minHeight: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Empty description={suppliers.length > 0 ? "Select a supplier to see details." : "No suppliers found. Please add one."} />
             </Content>
         );
         return (
-            <Content style={{ padding: '0 24px' }}>
-                <Card> {/* variant="borderless" ko hata diya taake card nazar aaye */}
-                    <Flex justify="space-between" align="start">
-                        <div>
-                            <Title level={2} style={{ margin: 0 }}>{selectedSupplier.name}</Title>
+            <Content style={{ padding: isMobile ? 0 : '0 24px' }}>
+                <Card>
+                    {isMobile && (
+                        <Button
+                            type="text"
+                            icon={<ArrowLeftOutlined />}
+                            onClick={() => setSelectedSupplierId(null)}
+                            style={{ marginBottom: '16px', padding: 0, height: 'auto' }}
+                        >
+                            Back to Supplier List
+                        </Button>
+                    )}
+                    <Flex justify="space-between" align="start" wrap="wrap" gap="small">
+                        <div style={{ flex: 1, minWidth: '250px' }}>
+                            <Title level={isMobile ? 3 : 2} style={{ margin: 0 }}>{selectedSupplier.name}</Title>
                             <Text type="secondary">{selectedSupplier.contact_person} | {selectedSupplier.phone}</Text><br/>
                             <Text type="secondary">{selectedSupplier.address}</Text>
                         </div>
-                         <Space>
-                             <Button icon={<EditOutlined />} onClick={() => handleEdit(selectedSupplier)}>Edit Info</Button>
+                         <Space style={{ marginTop: isMobile ? '16px' : '0' }}>
+                             <Button icon={<EditOutlined />} onClick={() => handleEdit(selectedSupplier)}>Edit</Button>
                             <Popconfirm title={`Delete "${selectedSupplier.name}"?`} description="This cannot be undone." onConfirm={() => handleDelete(selectedSupplier.id)} okText="Yes, Delete" cancelText="No">
                                  <Button icon={<DeleteOutlined />} danger>Delete</Button>
                             </Popconfirm>
                         </Space>
                     </Flex>
                     <div style={{ marginTop: '32px' }}>
-                        <SupplierLedger supplier={selectedSupplier} onRefresh={() => fetchSuppliers(selectedSupplier.id)} />
+                        <SupplierLedger supplier={selectedSupplier} onRefresh={() => fetchSuppliers(selectedSupplier.id)} isMobile={isMobile} />
                     </div>
                 </Card>
             </Content>
@@ -203,51 +257,87 @@ const SupplierDashboard = () => {
         <Layout style={{ background: 'transparent' }}>
             <Title level={2} style={{ margin: '0 0 16px 0' }}>Suppliers Dashboard</Title>
             
-            <Row gutter={16} style={{ marginBottom: '24px' }}>
-                <Col span={8}>
+            <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+                <Col xs={24} sm={12}>
                     <Card><Statistic title="Total Suppliers" value={suppliers.length} /></Card>
                 </Col>
-                <Col span={8}>
+                <Col xs={24} sm={12}>
                      <Card><Statistic title="Total Outstanding Balance" value={totalBalanceDue} prefix="Rs. " valueStyle={{ color: totalBalanceDue > 0 ? '#cf1322' : '#52c41a' }} /></Card>
                 </Col>
             </Row>
-             
-            {/* 2. HARDCODED BACKGROUND KO TOKEN SE BADAL DIYA */}
-            <Layout style={{ background: token.colorBgContainer, borderRadius: token.borderRadiusLG, overflow: 'hidden' }}>
-                {/* 3. HARDCODED BACKGROUND KO TOKEN SE BADAL DIYA */}
-                <Sider width={300} style={{ background: token.colorBgLayout }}>
-                    <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
-                        <Flex gap="small">
-                             <Input 
-                                placeholder="Search supplier..." 
-                                prefix={<SearchOutlined />} 
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                style={{ flexGrow: 1 }}
-                            />
-                            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddNew} />
-                        </Flex>
-                    </div>
-                    {loading ? <div style={{textAlign: 'center', padding: '20px'}}><Spin/></div> :
-                         <Menu
-                            mode="inline" 
-                            selectedKeys={[String(selectedSupplierId)]}
-                            onClick={({ key }) => setSelectedSupplierId(Number(key))}
-                            style={{ height: 'calc(100vh - 310px)', overflowY: 'auto', borderRight: 0, background: 'transparent' }}
-                            items={filteredSuppliers.map(s => ({
-                                key: s.id,
-                                label: (
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <span>{s.name}</span>
+
+            {isMobile ? (
+                // --- MOBILE LAYOUT ---
+                selectedSupplierId ? (
+                    renderSupplierDetails()
+                ) : (
+                    <Card>
+                        <div style={{ padding: '8px 0 16px 0' }}>
+                            <Flex gap="small">
+                                <Input
+                                    placeholder="Search supplier..."
+                                    prefix={<SearchOutlined />}
+                                    value={searchTerm}
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                    style={{ flexGrow: 1 }}
+                                />
+                                <Button type="primary" icon={<PlusOutlined />} onClick={handleAddNew} />
+                            </Flex>
+                        </div>
+                        {loading ? <div style={{textAlign: 'center', padding: '20px'}}><Spin/></div> :
+                            <List
+                                dataSource={filteredSuppliers}
+                                renderItem={(s) => (
+                                    <List.Item
+                                        onClick={() => setSelectedSupplierId(Number(s.id))}
+                                        style={{ cursor: 'pointer', padding: '12px 8px' }}
+                                    >
+                                        <List.Item.Meta title={<Text>{s.name}</Text>} />
                                         {s.balance_due > 0 && <Tag color="red">Rs. {s.balance_due.toLocaleString()}</Tag>}
-                                    </div>
-                                )
-                            }))}
-                        />
-                    }
-                </Sider>
-                <Layout>{renderSupplierDetails()}</Layout>
-            </Layout>
+                                    </List.Item>
+                                )}
+                            />
+                        }
+                    </Card>
+                )
+            ) : (
+                // --- DESKTOP LAYOUT ---
+                <Layout style={{ background: token.colorBgContainer, borderRadius: token.borderRadiusLG, overflow: 'hidden' }}>
+                    <Sider width={300} style={{ background: token.colorBgLayout }}>
+                        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+                            <Flex gap="small">
+                                <Input
+                                    placeholder="Search supplier..."
+                                    prefix={<SearchOutlined />}
+                                    value={searchTerm}
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                    style={{ flexGrow: 1 }}
+                                />
+                                <Button type="primary" icon={<PlusOutlined />} onClick={handleAddNew} />
+                            </Flex>
+                        </div>
+                        {loading ? <div style={{textAlign: 'center', padding: '20px'}}><Spin/></div> :
+                            <Menu
+                                mode="inline"
+                                selectedKeys={[String(selectedSupplierId)]}
+                                onClick={({ key }) => setSelectedSupplierId(Number(key))}
+                                style={{ height: 'calc(100vh - 310px)', overflowY: 'auto', borderRight: 0, background: 'transparent' }}
+                                items={filteredSuppliers.map(s => ({
+                                    key: s.id,
+                                    label: (
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span>{s.name}</span>
+                                            {s.balance_due > 0 && <Tag color="red">Rs. {s.balance_due.toLocaleString()}</Tag>}
+                                        </div>
+                                    )
+                                }))}
+                            />
+                        }
+                    </Sider>
+                    <Layout>{renderSupplierDetails()}</Layout>
+                </Layout>
+            )}
+
             <Modal title={editingSupplier ? "Edit Supplier" : "Add New Supplier"} open={isModalVisible} onOk={handleModalOk} onCancel={() => setIsModalVisible(false)} okText="Save" destroyOnHidden>
                 <Form form={form} layout="vertical" name="supplier_form" style={{ marginTop: 24 }}>
                     <Form.Item name="name" label="Supplier Name" rules={[{ required: true }]}><Input /></Form.Item>

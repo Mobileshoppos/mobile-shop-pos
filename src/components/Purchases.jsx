@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Table, Tag, Typography, Button, App as AntApp, Flex } from 'antd';
+import { Table, Tag, Typography, Button, App as AntApp, Flex, List, Card, Row, Col } from 'antd';
 import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import DataService from '../DataService';
 import AddPurchaseForm from './AddPurchaseForm';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const { Title, Text } = Typography;
 
@@ -22,6 +23,7 @@ const Purchases = () => {
     const { notification } = AntApp.useApp();
     
     const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+    const isMobile = useMediaQuery('(max-width: 768px)');
 
     const fetchPurchases = useCallback(async () => {
         setLoading(true);
@@ -105,33 +107,85 @@ const Purchases = () => {
     return (
         <> {/* <-- Yahan Fragment istemal kiya gaya */}
             {/* --- NAYI TABDEELIYAN (Step 3) --- */}
-            <Flex justify="space-between" align="center" style={{ marginBottom: '24px' }}>
-                <Title level={2} style={{ margin: 0 }}>
-                    Purchase History
-                </Title>
-                <Button 
-                    type="primary" 
-                    icon={<PlusOutlined />} 
-                    size="large"
-                    onClick={() => setIsAddModalVisible(true)}
-                >
-                    Create New Purchase
-                </Button>
-            </Flex>
+            <Flex
+    justify="space-between"
+    align={isMobile ? 'flex-start' : 'center'}
+    style={{ marginBottom: '24px' }}
+    vertical={isMobile} // Yeh 'flex-direction: column' set kar dega agar mobile hai
+>
+    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0' }}>
+        Purchase History
+    </Title>
+    <Button 
+        type="primary" 
+        icon={<PlusOutlined />} 
+        size="large"
+        onClick={() => setIsAddModalVisible(true)}
+        style={{ width: isMobile ? '100%' : 'auto' }} // Mobile par poori width
+    >
+        Create New Purchase
+    </Button>
+</Flex>
 
-            <Table
-                columns={columns}
-                dataSource={purchases}
-                rowKey="id"
-                loading={loading}
-                scroll={{ x: true }}
-            />
+            {isMobile ? (
+    // === MOBILE VIEW (LIST) ===
+    <List
+        loading={loading}
+        dataSource={purchases}
+        renderItem={(purchase) => (
+            <List.Item style={{ padding: '0 0 16px 0' }}>
+                <Card style={{ width: '100%' }} styles={{ body: { padding: '16px' } }}>
+                    <Row justify="space-between" align="top" gutter={[8, 8]}>
+                        <Col flex="auto">
+                            <Text strong style={{ fontSize: '16px' }}>{purchase.supplier_name}</Text><br />
+                            <Text type="secondary">{new Date(purchase.purchase_date).toLocaleDateString()}</Text>
+                        </Col>
+                        <Col style={{ textAlign: 'right' }}>
+                            <Tag color={getStatusColor(purchase.status)}>
+                                {purchase.status.replace('_', ' ').toUpperCase()}
+                            </Tag>
+                        </Col>
+                    </Row>
+                    <Row justify="space-between" style={{ marginTop: '16px' }}>
+                        <Col>
+                            <Text type="secondary">Total Amount</Text><br />
+                            <Text>Rs. {purchase.total_amount.toLocaleString()}</Text>
+                        </Col>
+                        <Col style={{ textAlign: 'right' }}>
+                            <Text type="secondary">Balance Due</Text><br />
+                            <Text type={purchase.balance_due > 0 ? 'danger' : 'secondary'} strong>
+                                Rs. {purchase.balance_due.toLocaleString()}
+                            </Text>
+                        </Col>
+                    </Row>
+                    <div style={{ borderTop: '1px solid #f0f0f0', marginTop: '12px', paddingTop: '12px', textAlign: 'right' }}>
+                        <Link to={`/purchases/${purchase.id}`}>
+                            <Button icon={<EyeOutlined />}>
+                                View Details
+                            </Button>
+                        </Link>
+                    </div>
+                </Card>
+            </List.Item>
+        )}
+    />
+) : (
+    // === DESKTOP VIEW (TABLE) ===
+    <Table
+        columns={columns}
+        dataSource={purchases}
+        rowKey="id"
+        loading={loading}
+        scroll={{ x: true }}
+    />
+)}
 
             {/* --- NAYI TABDEELIYAN (Step 4) --- */}
             <AddPurchaseForm
                 visible={isAddModalVisible}
                 onCancel={() => setIsAddModalVisible(false)}
                 onPurchaseCreated={handlePurchaseCreated}
+                isMobile={isMobile}
             />
         </>
     );

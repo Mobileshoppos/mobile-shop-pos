@@ -6,12 +6,14 @@ import {
 import { PlusOutlined, EditOutlined, DeleteOutlined, MobileOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
 const Categories = () => {
   const { message } = AntApp.useApp();
+  const isMobile = useMediaQuery('(max-width: 992px)');
   const { user } = useAuth();
   
   const [categories, setCategories] = useState([]);
@@ -260,20 +262,21 @@ const Categories = () => {
   return (
     <>
       <Title level={2} style={{ margin: 0, marginBottom: '24px' }}>Manage Categories & Attributes</Title>
-      <Row gutter={24}>
-        <Col span={10}>
+      <Row gutter={[24, 24]}>
+        <Col span={isMobile ? 24 : 10}>
           <Card>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <Title level={4} style={{ margin: 0 }}>Product Categories</Title>
               <Button type="primary" icon={<PlusOutlined />} onClick={() => showCategoryModal()}>Add New</Button>
             </div>
             <Table columns={categoryColumns} dataSource={categories} loading={loadingCategories} rowKey="id" size="small"
+            scroll={{ x: true }}
               onRow={(record) => ({ onClick: () => { setSelectedCategory(record); getAttributesForCategory(record.id); }})}
               rowClassName={(record) => (selectedCategory?.id === record.id ? 'ant-table-row-selected' : '')}
             />
           </Card>
         </Col>
-        <Col span={14}>
+        <Col span={isMobile ? 24 : 14}>
           <Card>
             {selectedCategory ? (
               <div>
@@ -281,7 +284,7 @@ const Categories = () => {
                     <Title level={4} style={{ margin: 0 }}>Attributes for: <Text type="success">{selectedCategory.name}</Text></Title>
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => showAttributeModal()}>Add New</Button>
                 </div>
-                <Table columns={attributeColumns} dataSource={attributes} loading={loadingAttributes} rowKey="id" size="small" pagination={false} />
+                <Table columns={attributeColumns} dataSource={attributes} loading={loadingAttributes} rowKey="id" size="small" pagination={false} scroll={{ x: true }} />
               </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px' }}>
