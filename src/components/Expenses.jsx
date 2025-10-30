@@ -16,6 +16,7 @@ import {
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { formatCurrency } from '../utils/currencyFormatter';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
@@ -25,7 +26,7 @@ const { Option } = Select;
 const Expenses = () => {
   const { message } = AntApp.useApp();
   const isMobile = useMediaQuery('(max-width: 768px)');
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [expenses, setExpenses] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -120,7 +121,7 @@ const Expenses = () => {
     { title: 'Date', dataIndex: 'expense_date', key: 'expense_date', render: (date) => dayjs(date).format('DD MMM, YYYY') },
     { title: 'Title / Description', dataIndex: 'title', key: 'title' },
     { title: 'Category', dataIndex: 'expense_categories', key: 'category', render: (category) => category ? category.name : 'N/A' },
-    { title: 'Amount', dataIndex: 'amount', key: 'amount', align: 'right', render: (amount) => <Text strong>Rs. {Number(amount).toFixed(2)}</Text> },
+    { title: 'Amount', dataIndex: 'amount', key: 'amount', align: 'right', render: (amount) => <Text strong>{formatCurrency(amount, profile?.currency)}</Text> },
     {
       title: 'Actions',
       key: 'actions',
@@ -152,7 +153,7 @@ const Expenses = () => {
             <Input />
           </Form.Item>
           <Form.Item name="amount" label="Amount" rules={[{ required: true }]}>
-            <InputNumber style={{ width: '100%' }} prefix="Rs." min={1} />
+            <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={1} />
           </Form.Item>
           <Form.Item name="category_id" label="Category" rules={[{ required: true }]}>
             <Select placeholder="Select a category">

@@ -5,13 +5,15 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, Minus
 import DataService from '../DataService';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useAuth } from '../context/AuthContext';
+import { formatCurrency } from '../utils/currencyFormatter';
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
-// PURANE 'SupplierLedger' FUNCTION KI JAGAH YEH NAYA CODE PASTE KAREIN
 
 const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
+    const { profile } = useAuth();
     const [ledgerData, setLedgerData] = useState([]);
     const [loading, setLoading] = useState(true);
     const { notification } = AntApp.useApp();
@@ -62,8 +64,10 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
         { title: 'Date', dataIndex: 'date', key: 'date', render: (d) => new Date(d).toLocaleString() },
         { title: 'Type', dataIndex: 'type', key: 'type', render: (t) => <Tag color={t === 'Purchase' ? 'volcano' : 'green'}>{t}</Tag> },
         { title: 'Details', dataIndex: 'details', key: 'details', render: (text, record) => record.link ? <Link to={record.link}>{text}</Link> : text },
-        { title: 'Debit', dataIndex: 'debit', key: 'debit', align: 'right', render: (val) => val ? `Rs. ${val.toLocaleString()}` : '-' },
-        { title: 'Credit', dataIndex: 'credit', key: 'credit', align: 'right', render: (val) => val ? `Rs. ${val.toLocaleString()}` : '-' },
+        // YEH LINE TABDEEL HUI HAI
+        { title: 'Debit', dataIndex: 'debit', key: 'debit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
+        // YEH LINE BHI TABDEEL HUI HAI
+        { title: 'Credit', dataIndex: 'credit', key: 'credit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
     ];
     
     if (loading) return <div style={{ textAlign: 'center', padding: '50px' }}><Spin /></div>;
@@ -76,10 +80,10 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
             </Space>
 
             <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-                <Col xs={12} md={6}><Statistic title="Total Business" value={supplier?.total_purchases || 0} prefix="Rs. " /></Col>
-                <Col xs={12} md={6}><Statistic title="Total Paid" value={supplier?.total_payments || 0} prefix="Rs. " /></Col>
-                <Col xs={12} md={6}><Statistic title="Balance Due" value={supplier?.balance_due || 0} prefix="Rs. " valueStyle={{ color: '#cf1322' }} /></Col>
-                <Col xs={12} md={6}><Statistic title="Your Credit" value={supplier?.credit_balance || 0} prefix="Rs. " valueStyle={{ color: '#52c41a' }} /></Col>
+                <Col xs={12} md={6}><Statistic title="Total Business" value={supplier?.total_purchases || 0} formatter={() => formatCurrency(supplier?.total_purchases || 0, profile?.currency)} /></Col>
+                <Col xs={12} md={6}><Statistic title="Total Paid" value={supplier?.total_payments || 0} formatter={() => formatCurrency(supplier?.total_payments || 0, profile?.currency)} /></Col>
+                <Col xs={12} md={6}><Statistic title="Balance Due" value={supplier?.balance_due || 0} valueStyle={{ color: '#cf1322' }} formatter={() => formatCurrency(supplier?.balance_due || 0, profile?.currency)} /></Col>
+                <Col xs={12} md={6}><Statistic title="Your Credit" value={supplier?.credit_balance || 0} valueStyle={{ color: '#52c41a' }} formatter={() => formatCurrency(supplier?.credit_balance || 0, profile?.currency)} /></Col>
             </Row>
 
             <Title level={4}>Transaction Ledger</Title>
@@ -102,12 +106,12 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                                     <Col style={{ textAlign: 'right' }}>
     {item.debit > 0 && (
         <Text type="danger" strong>
-            <ArrowDownOutlined /> Rs. {item.debit.toLocaleString()}
+            <ArrowDownOutlined /> {formatCurrency(item.debit, profile?.currency)}
         </Text>
     )}
     {item.credit > 0 && (
         <Text type="success" strong>
-            <ArrowUpOutlined /> Rs. {item.credit.toLocaleString()}
+            <ArrowUpOutlined /> {formatCurrency(item.credit, profile?.currency)}
         </Text>
     )}
 </Col>
@@ -122,7 +126,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
 
             <Modal title={`Record Payment for ${supplier?.name}`} open={isPaymentModalVisible} onCancel={() => setIsPaymentModalVisible(false)} onOk={paymentForm.submit} okText="Save Payment">
                 <Form form={paymentForm} layout="vertical" onFinish={handlePaymentSubmit} style={{marginTop: 24}}>
-                    <Form.Item name="amount" label="Payment Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix="Rs. " min={0} /></Form.Item>
+                    <Form.Item name="amount" label="Payment Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} /></Form.Item>
                     <Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
                     <Form.Item name="payment_method" label="Payment Method" rules={[{ required: true }]}>
                         <Select><Select.Option value="Cash">Cash</Select.Option><Select.Option value="Bank Transfer">Bank Transfer</Select.Option></Select>
@@ -132,7 +136,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
             </Modal>
              <Modal title={`Record Refund from ${supplier?.name}`} open={isRefundModalVisible} onCancel={() => setIsRefundModalVisible(false)} onOk={refundForm.submit} okText="Save Refund">
                 <Form form={refundForm} layout="vertical" onFinish={handleRefundSubmit} style={{marginTop: 24}}>
-                    <Form.Item name="amount" label="Refund Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix="Rs. " min={0} max={supplier?.credit_balance} /></Form.Item>
+                    <Form.Item name="amount" label="Refund Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} max={supplier?.credit_balance} /></Form.Item>
                     <Form.Item name="refund_date" label="Refund Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
                     <Form.Item name="refund_method" label="Refund Method" rules={[{ required: true }]}>
                         <Select><Select.Option value="Cash">Cash</Select.Option><Select.Option value="Bank Transfer">Bank Transfer</Select.Option></Select>
@@ -147,6 +151,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
 
 const SupplierDashboard = () => {
     const { token } = theme.useToken();
+    const { profile } = useAuth();
     const isMobile = useMediaQuery('(max-width: 768px)');
     
     const [suppliers, setSuppliers] = useState([]);
@@ -262,7 +267,7 @@ const SupplierDashboard = () => {
                     <Card><Statistic title="Total Suppliers" value={suppliers.length} /></Card>
                 </Col>
                 <Col xs={24} sm={12}>
-                     <Card><Statistic title="Total Outstanding Balance" value={totalBalanceDue} prefix="Rs. " valueStyle={{ color: totalBalanceDue > 0 ? '#cf1322' : '#52c41a' }} /></Card>
+                     <Card><Statistic title="Total Outstanding Balance" value={totalBalanceDue} valueStyle={{ color: totalBalanceDue > 0 ? '#cf1322' : '#52c41a' }} formatter={() => formatCurrency(totalBalanceDue, profile?.currency)} /></Card>
                 </Col>
             </Row>
 
@@ -293,7 +298,7 @@ const SupplierDashboard = () => {
                                         style={{ cursor: 'pointer', padding: '12px 8px' }}
                                     >
                                         <List.Item.Meta title={<Text>{s.name}</Text>} />
-                                        {s.balance_due > 0 && <Tag color="red">Rs. {s.balance_due.toLocaleString()}</Tag>}
+                                        {s.balance_due > 0 && <Tag color="red">{formatCurrency(s.balance_due, profile?.currency)}</Tag>}
                                     </List.Item>
                                 )}
                             />
@@ -327,7 +332,7 @@ const SupplierDashboard = () => {
                                     label: (
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <span>{s.name}</span>
-                                            {s.balance_due > 0 && <Tag color="red">Rs. {s.balance_due.toLocaleString()}</Tag>}
+                                            {s.balance_due > 0 && <Tag color="red">{formatCurrency(s.balance_due, profile?.currency)}</Tag>}
                                         </div>
                                     )
                                 }))}

@@ -14,7 +14,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('shop_name, full_name')
+        .select('shop_name, full_name, currency') // Yahan 'currency' shamil kiya hai
         .eq('user_id', user.id)
         .single();
       
@@ -27,6 +27,31 @@ export const AuthProvider = ({ children }) => {
       setProfile(null);
     }
   }, []);
+
+  const updateProfile = async (updates) => {
+    if (!user) throw new Error("No user is logged in");
+
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('user_id', user.id)
+        .select() // select() zaroori hai taake updated data wapas miley
+        .single();
+      
+      if (error) throw error;
+      
+      setProfile(data); // Profile state ko naye data se update karein
+      return { success: true, data };
+
+    } catch (error) {
+      console.error('Error updating profile:', error.message);
+      return { success: false, error };
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -63,6 +88,7 @@ export const AuthProvider = ({ children }) => {
     session,
     user,
     profile,
+    updateProfile, // Naya function yahan shamil karein
     refetchProfile: () => getProfile(user), 
   };
 

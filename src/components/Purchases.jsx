@@ -5,6 +5,8 @@ import { Link } from 'react-router-dom';
 import DataService from '../DataService';
 import AddPurchaseForm from './AddPurchaseForm';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useAuth } from '../context/AuthContext';
+import { formatCurrency } from '../utils/currencyFormatter';
 
 const { Title, Text } = Typography;
 
@@ -18,6 +20,7 @@ const getStatusColor = (status) => {
 };
 
 const Purchases = () => {
+    const { profile } = useAuth();
     const [purchases, setPurchases] = useState([]);
     const [loading, setLoading] = useState(true);
     const { notification } = AntApp.useApp();
@@ -61,21 +64,21 @@ const Purchases = () => {
         },
         {
             title: 'Total Amount', dataIndex: 'total_amount', key: 'total_amount', align: 'right',
-            render: (amount) => `Rs. ${amount.toLocaleString()}`,
+            render: (amount) => formatCurrency(amount, profile?.currency),
             sorter: (a, b) => a.total_amount - b.total_amount,
         },
         {
             title: 'Amount Paid', dataIndex: 'amount_paid', key: 'amount_paid', align: 'right',
-            render: (amount) => `Rs. ${amount.toLocaleString()}`,
+            render: (amount) => formatCurrency(amount, profile?.currency),
             sorter: (a, b) => a.amount_paid - b.amount_paid,
         },
         {
             title: 'Balance Due', dataIndex: 'balance_due', key: 'balance_due', align: 'right',
             render: (amount) => (
-                <Text type={amount > 0 ? 'danger' : 'secondary'} strong>
-                    Rs. {amount.toLocaleString()}
-                </Text>
-            ),
+    <Text type={amount > 0 ? 'danger' : 'secondary'} strong>
+        {formatCurrency(amount, profile?.currency)}
+    </Text>
+),
             sorter: (a, b) => a.balance_due - b.balance_due,
         },
         {
@@ -149,13 +152,13 @@ const Purchases = () => {
                     <Row justify="space-between" style={{ marginTop: '16px' }}>
                         <Col>
                             <Text type="secondary">Total Amount</Text><br />
-                            <Text>Rs. {purchase.total_amount.toLocaleString()}</Text>
+                            <Text>{formatCurrency(purchase.total_amount, profile?.currency)}</Text>
                         </Col>
                         <Col style={{ textAlign: 'right' }}>
                             <Text type="secondary">Balance Due</Text><br />
                             <Text type={purchase.balance_due > 0 ? 'danger' : 'secondary'} strong>
-                                Rs. {purchase.balance_due.toLocaleString()}
-                            </Text>
+    {formatCurrency(purchase.balance_due, profile?.currency)}
+</Text>
                         </Col>
                     </Row>
                     <div style={{ borderTop: '1px solid #f0f0f0', marginTop: '12px', paddingTop: '12px', textAlign: 'right' }}>

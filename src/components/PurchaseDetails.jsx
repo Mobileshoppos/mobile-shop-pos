@@ -5,6 +5,8 @@ import { ArrowLeftOutlined, DollarCircleOutlined, EditOutlined, RollbackOutlined
 import DataService from '../DataService';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useAuth } from '../context/AuthContext';
+import { formatCurrency } from '../utils/currencyFormatter';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -19,6 +21,7 @@ const getStatusColor = (status) => {
 };
 
 const PurchaseDetails = () => {
+    const { profile } = useAuth();
     const { id } = useParams();
     const isMobile = useMediaQuery('(max-width: 768px)');
     const { notification } = AntApp.useApp();
@@ -89,8 +92,8 @@ const PurchaseDetails = () => {
                 </Space>
             )
         },
-        { title: 'Purchase Price (Unit)', dataIndex: 'purchase_price', key: 'purchase_price', align: 'right', render: (val) => `Rs. ${val ? val.toLocaleString() : 0}` },
-        { title: 'Subtotal', key: 'subtotal', align: 'right', render: (_, record) => `Rs. ${(record.quantity * record.purchase_price).toLocaleString()}` },
+        { title: 'Purchase Price (Unit)', dataIndex: 'purchase_price', key: 'purchase_price', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
+        { title: 'Subtotal', key: 'subtotal', align: 'right', render: (_, record) => formatCurrency(record.quantity * record.purchase_price, profile?.currency) },
     ];
     
     const showPaymentModal = () => { paymentForm.setFieldsValue({ amount: purchase.balance_due, payment_date: dayjs(), payment_method: 'Cash' }); setIsPaymentModalVisible(true); };
@@ -98,7 +101,7 @@ const PurchaseDetails = () => {
     const showEditModal = () => { editForm.setFieldsValue({ notes: purchase.notes }); setEditingItems(items.map(item => ({ ...item }))); setIsEditModalVisible(true); };
     const handleUpdateSubmit = async (values) => { try { const updatedData = { notes: values.notes, items: editingItems, }; await DataService.updatePurchase(id, updatedData); notification.success({ message: 'Success', description: 'Purchase updated successfully!' }); setIsEditModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to update purchase.' }); } };
     const handleItemChange = (itemId, field, value) => { setEditingItems(currentItems => currentItems.map(item => item.id === itemId ? { ...item, [field]: value } : item )); };
-    const editItemColumns = [ { title: 'Product', dataIndex: 'product_name', key: 'product_name' }, { title: 'Purchase Price', dataIndex: 'purchase_price', key: 'purchase_price', render: (text, record) => (<InputNumber defaultValue={text} style={{ width: '100%' }} prefix="Rs. " onChange={(value) => handleItemChange(record.id, 'purchase_price', value)} />) }, { title: 'Sale Price', dataIndex: 'sale_price', key: 'sale_price', render: (text, record) => (<InputNumber defaultValue={text} style={{ width: '100%' }} prefix="Rs. " onChange={(value) => handleItemChange(record.id, 'sale_price', value)} />) }, { title: 'IMEI/Serial', dataIndex: 'imei', key: 'imei', render: (text, record) => (<Input defaultValue={text} onChange={(e) => handleItemChange(record.id, 'imei', e.target.value)} />) }, ];
+    const editItemColumns = [ { title: 'Product', dataIndex: 'product_name', key: 'product_name' }, { title: 'Purchase Price', dataIndex: 'purchase_price', key: 'purchase_price', render: (text, record) => (<InputNumber defaultValue={text} style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} onChange={(value) => handleItemChange(record.id, 'purchase_price', value)} />) }, { title: 'Sale Price', dataIndex: 'sale_price', key: 'sale_price', render: (text, record) => (<InputNumber defaultValue={text} style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} onChange={(value) => handleItemChange(record.id, 'sale_price', value)} />) }, { title: 'IMEI/Serial', dataIndex: 'imei', key: 'imei', render: (text, record) => (<Input defaultValue={text} onChange={(e) => handleItemChange(record.id, 'imei', e.target.value)} />) }, ];
     const showReturnModal = () => { returnForm.setFieldsValue({ return_date: dayjs(), notes: '' }); setSelectedReturnItems([]); setIsReturnModalVisible(true); };
     const handleReturnSubmit = async (values) => { if (selectedReturnItems.length === 0) { notification.warning({ message: 'No Items Selected', description: 'Please select at least one item to return.' }); return; } try { const returnData = { purchase_id: id, item_ids: selectedReturnItems, return_date: values.return_date.format('YYYY-MM-DD'), notes: values.notes || null, }; await DataService.createPurchaseReturn(returnData); notification.success({ message: 'Success', description: 'Items returned successfully!' }); setIsReturnModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to process return.' }); } };
     const returnItemSelection = { onChange: (selectedRowKeys) => { setSelectedReturnItems(selectedRowKeys); }, };
@@ -126,13 +129,13 @@ const PurchaseDetails = () => {
         <Statistic title="Supplier" value={purchase.suppliers?.name || 'N/A'} />
     </Col>
     <Col span={isMobile ? 24 : 5} style={{ marginBottom: isMobile ? '16px' : '0' }}>
-        <Statistic title="Total Amount" value={purchase.total_amount} prefix="Rs. " />
+        <Statistic title="Total Amount" value={purchase.total_amount} formatter={() => formatCurrency(purchase.total_amount, profile?.currency)} />
     </Col>
     <Col span={isMobile ? 24 : 5} style={{ marginBottom: isMobile ? '16px' : '0' }}>
-        <Statistic title="Amount Paid" value={purchase.amount_paid} prefix="Rs. " valueStyle={{ color: '#52c41a' }} />
+        <Statistic title="Amount Paid" value={purchase.amount_paid} valueStyle={{ color: '#52c41a' }} formatter={() => formatCurrency(purchase.amount_paid, profile?.currency)} />
     </Col>
     <Col span={isMobile ? 24 : 6}>
-        <Statistic title="Balance Due" value={purchase.balance_due} prefix="Rs. " valueStyle={{ color: '#cf1322' }} />
+        <Statistic title="Balance Due" value={purchase.balance_due} valueStyle={{ color: '#cf1322' }} formatter={() => formatCurrency(purchase.balance_due, profile?.currency)} />
     </Col>
 </Row>
                 {purchase.notes && ( <div style={{ marginTop: '24px', padding: '12px', background: '#2c2c2c', borderRadius: '6px' }}><Text strong>Notes:</Text><br /><Text type="secondary">{purchase.notes}</Text></div> )}
@@ -168,7 +171,7 @@ const PurchaseDetails = () => {
             <Link to="/purchases"><Button style={{ marginTop: '24px' }} icon={<ArrowLeftOutlined />}>Back to Purchases List</Button></Link>
             
             {/* Tamam Modals waise hi rahenge */}
-            <Modal title="Record Payment" open={isPaymentModalVisible} onCancel={() => setIsPaymentModalVisible(false)} onOk={paymentForm.submit} okText="Save Payment"><Form form={paymentForm} layout="vertical" onFinish={handlePaymentSubmit} style={{marginTop: '24px'}}><Form.Item name="amount" label="Payment Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix="Rs. " min={0} /></Form.Item><Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="payment_method" label="Payment Method" rules={[{ required: true }]}><Select><Option value="Cash">Cash</Option><Option value="Bank Transfer">Bank Transfer</Option><Option value="Cheque">Cheque</Option><Option value="Other">Other</Option></Select></Form.Item><Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item></Form></Modal>
+            <Modal title="Record Payment" open={isPaymentModalVisible} onCancel={() => setIsPaymentModalVisible(false)} onOk={paymentForm.submit} okText="Save Payment"><Form form={paymentForm} layout="vertical" onFinish={handlePaymentSubmit} style={{marginTop: '24px'}}><Form.Item name="amount" label="Payment Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} /></Form.Item><Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="payment_method" label="Payment Method" rules={[{ required: true }]}><Select><Option value="Cash">Cash</Option><Option value="Bank Transfer">Bank Transfer</Option><Option value="Cheque">Cheque</Option><Option value="Other">Other</Option></Select></Form.Item><Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item></Form></Modal>
             <Modal title={`Editing Purchase #${purchase.id}`} open={isEditModalVisible} onCancel={() => setIsEditModalVisible(false)} onOk={editForm.submit} okText="Save Changes" width={1000}><Form form={editForm} layout="vertical" onFinish={handleUpdateSubmit} style={{ marginTop: '24px' }}><Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item><Title level={5} style={{ marginTop: '16px' }}>Items in this Purchase</Title><Table columns={editItemColumns} dataSource={editingItems} rowKey="id" pagination={false} size="small" scroll={{ x: true }} /></Form></Modal>
             <Modal title="Return Items to Supplier" open={isReturnModalVisible} onCancel={() => setIsReturnModalVisible(false)} onOk={returnForm.submit} okText="Process Return" width={800} okButtonProps={{ danger: true }}><Form form={returnForm} layout="vertical" onFinish={handleReturnSubmit} style={{ marginTop: '24px' }}><Form.Item name="return_date" label="Return Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="notes" label="Reason for Return (Optional)"><Input.TextArea rows={2} placeholder="e.g., Damaged items, wrong model, etc." /></Form.Item><Title level={5} style={{ marginTop: '16px' }}>Select Items to Return</Title><Table rowSelection={{ type: 'checkbox', ...returnItemSelection }} columns={itemColumns} dataSource={items} rowKey="id" pagination={false} size="small" /></Form></Modal>
         </div>

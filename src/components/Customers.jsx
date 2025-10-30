@@ -6,13 +6,14 @@ import { UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined } from
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { formatCurrency } from '../utils/currencyFormatter';
 
 const { Title, Text } = Typography;
 
 const Customers = () => {
   const { message, modal } = AntApp.useApp();
   const isMobile = useMediaQuery('(max-width: 768px)');
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -197,7 +198,7 @@ const Customers = () => {
       });
       if (creditError) throw creditError;
 
-      message.success(`Return successful! Rs. ${totalRefundAmount.toFixed(2)} credited.`);
+      message.success(`Return successful! ${formatCurrency(totalRefundAmount, profile?.currency)} credited.`);
       handleReturnCancel();
       await getCustomers();
       handleViewLedger(selectedCustomer);
@@ -211,8 +212,6 @@ const Customers = () => {
   
   const totalRefundAmount = useMemo(() => returnableItems.filter(i => selectedReturnItems.includes(i.sale_item_id)).reduce((sum, i) => sum + i.price_at_sale, 0), [selectedReturnItems, returnableItems]);
   
-  // Purana 'handleViewLedger' function delete kar ke yeh naya function paste karein
-
 const handleViewLedger = async (customer) => {
     setSelectedCustomer(customer);
     setIsLedgerModalOpen(true);
@@ -261,7 +260,7 @@ const handleViewLedger = async (customer) => {
     { title: 'Customer Name', dataIndex: 'name' },
     { title: 'Phone', dataIndex: 'phone_number' },
     { title: 'Address', dataIndex: 'address', render: (address) => address || <Text type="secondary">N/A</Text> },
-    { title: 'Balance', dataIndex: 'balance', align: 'right', render: (b) => <Text type={b > 0 ? 'danger' : 'success'}>Rs. {b?.toFixed(2) || '0.00'}</Text> },
+    { title: 'Balance', dataIndex: 'balance', align: 'right', render: (b) => <Text type={b > 0 ? 'danger' : 'success'}>{formatCurrency(b, profile?.currency)}</Text> },
     // Is hisse ko dhoond kar replace karein
     { 
       title: 'Actions', 
@@ -292,10 +291,9 @@ const handleViewLedger = async (customer) => {
       
       const attributes = Object.entries(item.inventory.item_attributes || {})
         .filter(([key]) => !key.toLowerCase().includes('imei') && !key.toLowerCase().includes('serial'))
-        .map(([, value]) => value) // Sirf value hasil karein
+        .map(([, value]) => value)
         .join(' ');
 
-      // Ab dedicated imei field ko saaf attributes ke saath jorein
       const details = [item.inventory.imei, attributes].filter(Boolean).join(' / ');
       
       return <Text type="secondary">{details || 'N/A'}</Text>;
@@ -305,16 +303,18 @@ const handleViewLedger = async (customer) => {
       const saleItemCols = [
         { title: 'Product', dataIndex: ['products', 'name'] },
         { title: 'Details', render: renderItemDetails },
-        { title: 'Price', dataIndex: 'price_at_sale', align: 'right', render: p => `Rs. ${p.toFixed(2)}` }
+        // --- YAHAN TABDEELI HUI HAI ---
+        { title: 'Price', dataIndex: 'price_at_sale', align: 'right', render: p => formatCurrency(p, profile?.currency) }
       ];
       return (
         <Card size="small" style={{ margin: '8px 0' }}>
           <Descriptions title={`Invoice #${record.details.id} Summary`} bordered size="small" column={1}>
-            <Descriptions.Item label="Subtotal">Rs. {(record.details.subtotal || 0).toFixed(2)}</Descriptions.Item>
-            <Descriptions.Item label="Discount">- Rs. {(record.details.discount || 0).toFixed(2)}</Descriptions.Item>
-            <Descriptions.Item label="Grand Total"><strong>Rs. {(record.details.total_amount || 0).toFixed(2)}</strong></Descriptions.Item>
-            <Descriptions.Item label="Amount Paid at Sale">Rs. {(record.details.amount_paid_at_sale || 0).toFixed(2)}</Descriptions.Item>
-            <Descriptions.Item label="New Udhaar from this Sale"><strong>Rs. {record.debit.toFixed(2)}</strong></Descriptions.Item>
+            {/* --- IN 5 JAGAHON PAR TABDEELI HUI HAI --- */}
+            <Descriptions.Item label="Subtotal">{formatCurrency(record.details.subtotal || 0, profile?.currency)}</Descriptions.Item>
+            <Descriptions.Item label="Discount">- {formatCurrency(record.details.discount || 0, profile?.currency)}</Descriptions.Item>
+            <Descriptions.Item label="Grand Total"><strong>{formatCurrency(record.details.total_amount || 0, profile?.currency)}</strong></Descriptions.Item>
+            <Descriptions.Item label="Amount Paid at Sale">{formatCurrency(record.details.amount_paid_at_sale || 0, profile?.currency)}</Descriptions.Item>
+            <Descriptions.Item label="New Udhaar from this Sale"><strong>{formatCurrency(record.debit, profile?.currency)}</strong></Descriptions.Item>
           </Descriptions>
           <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px'}}>
             <Title level={5} style={{ margin: 0 }}>Items in this Invoice</Title>
@@ -331,13 +331,15 @@ const handleViewLedger = async (customer) => {
       const returnItemCols = [
         { title: 'Product', dataIndex: ['products', 'name'] },
         { title: 'Details', render: renderItemDetails },
-        { title: 'Returned Price', dataIndex: 'price_at_return', align: 'right', render: p => `Rs. ${p.toFixed(2)}` }
+        // --- YAHAN TABDEELI HUI HAI ---
+        { title: 'Returned Price', dataIndex: 'price_at_return', align: 'right', render: p => formatCurrency(p, profile?.currency) }
       ];
       return (
         <Card size="small" style={{ margin: '8px 0' }}>
           <Descriptions title={`Return Details`} bordered size="small" column={1}>
             <Descriptions.Item label="Reason for Return">{returnDetails.reason || <Text type="secondary">No reason provided.</Text>}</Descriptions.Item>
-            <Descriptions.Item label="Total Credit Amount"><strong>Rs. {record.credit.toFixed(2)}</strong></Descriptions.Item>
+            {/* --- YAHAN TABDEELI HUI HAI --- */}
+            <Descriptions.Item label="Total Credit Amount"><strong>{formatCurrency(record.credit, profile?.currency)}</strong></Descriptions.Item>
           </Descriptions>
           <Title level={5} style={{ marginTop: '16px' }}>Items Returned in this Transaction</Title>
           <Table columns={returnItemCols} dataSource={returnDetails.sale_return_items} pagination={false} rowKey="id" style={{marginTop: '8px'}}/>
@@ -383,7 +385,7 @@ const handleViewLedger = async (customer) => {
                 <Col style={{ textAlign: 'right' }}>
                 <Text type="secondary">Balance</Text><br/>
                 <Text type={customer.balance > 0 ? 'danger' : 'success'} strong style={{ fontSize: '16px' }}>
-                    Rs. {customer.balance?.toFixed(2) || '0.00'}
+                    {formatCurrency(customer.balance, profile?.currency)}
                 </Text>
                 </Col>
             </Row>
@@ -430,13 +432,13 @@ const handleViewLedger = async (customer) => {
                                     <Text type="secondary">{new Date(record.date).toLocaleString()}</Text>
                                 </Col>
                                 <Col span={8} style={{ textAlign: 'right' }}>
-                                    {record.debit > 0 && <Text type="danger">- Rs. {record.debit.toFixed(2)}</Text>}
-                                    {record.credit > 0 && <Text type="success">+ Rs. {record.credit.toFixed(2)}</Text>}
+                                    {record.debit > 0 && <Text type="danger">- {formatCurrency(record.debit, profile?.currency)}</Text>}
+                                    {record.credit > 0 && <Text type="success">+ {formatCurrency(record.credit, profile?.currency)}</Text>}
                                 </Col>
                             </Row>
                             <div style={{ textAlign: 'right', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f0f0f0' }}>
                                 <Text type="secondary">Balance: </Text>
-                                <Text strong>Rs. {record.balance.toFixed(2)}</Text>
+                                <Text strong>{formatCurrency(record.balance, profile?.currency)}</Text>
                             </div>
                             {(record.type === 'sale' || record.type === 'return') && (
                                 <div style={{ marginTop: '10px' }}>
@@ -453,23 +455,25 @@ const handleViewLedger = async (customer) => {
                 rowKey="key"
                 expandable={{ expandedRowRender, rowExpandable: (record) => record.type === 'sale' || record.type === 'return' }}
                 columns={[
-                    { title: 'Date', dataIndex: 'date', render: d => new Date(d).toLocaleString() },
-                    { title: 'Description', dataIndex: 'description' },
-                    { title: 'Debit', dataIndex: 'debit', align: 'right', render: a => a > 0 ? <Text>Rs. {a.toFixed(2)}</Text> : '-' },
-                    { title: 'Credit', dataIndex: 'credit', align: 'right', render: a => a > 0 ? <Text type="success">Rs. {a.toFixed(2)}</Text> : '-' },
-                    { title: 'Balance', dataIndex: 'balance', align: 'right', render: a => <Text strong>Rs. {a.toFixed(2)}</Text> }
-                ]}
+    { title: 'Date', dataIndex: 'date', render: d => new Date(d).toLocaleString() },
+    { title: 'Description', dataIndex: 'description' },
+    { title: 'Debit', dataIndex: 'debit', align: 'right', render: a => a > 0 ? <Text>{formatCurrency(a, profile?.currency)}</Text> : '-' },
+    { title: 'Credit', dataIndex: 'credit', align: 'right', render: a => a > 0 ? <Text type="success">{formatCurrency(a, profile?.currency)}</Text> : '-' },
+    { title: 'Balance', dataIndex: 'balance', align: 'right', render: a => <Text strong>{formatCurrency(a, profile?.currency)}</Text> }
+]}
             />
         )
     )}
-</Modal> <Modal title={`Payment from: ${selectedCustomer?.name}`} open={isPaymentModalOpen} onCancel={handlePaymentCancel} onOk={() => paymentForm.submit()} okText="Confirm Payment"> <Title level={5}>Balance: <Text type="danger">Rs. {selectedCustomer?.balance?.toFixed(2) || '0.00'}</Text></Title> <Form form={paymentForm} layout="vertical" onFinish={handleReceivePayment}><Form.Item name="amount" label="Amount Received" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix="Rs." min={1} max={selectedCustomer?.balance} /></Form.Item></Form> </Modal> <Modal title={`Return for Invoice #${selectedSale?.id}`} open={isReturnModalOpen} onCancel={handleReturnCancel} onOk={() => returnForm.submit()} okText="Confirm Return" confirmLoading={isReturnSubmitting} okButtonProps={{ disabled: selectedReturnItems.length === 0 }}> <Checkbox.Group style={{ width: '100%' }} value={selectedReturnItems} onChange={setSelectedReturnItems}> <div style={{ maxHeight: '30vh', overflowY: 'auto' }}> {returnableItems.length > 0 ? returnableItems.map(item => (<Card size="small" key={item.sale_item_id} style={{ marginBottom: '8px' }}><Checkbox value={item.sale_item_id}><Space><Text strong>{item.product_name}</Text><Text type="secondary">({item.imei || 'Item'})</Text>-<Text>Rs. {item.price_at_sale.toFixed(2)}</Text></Space></Checkbox></Card>)) : <Text type="secondary">No items available.</Text>} </div> </Checkbox.Group> <Form form={returnForm} layout="vertical" onFinish={handleConfirmReturn} style={{ marginTop: '24px' }}> <Form.Item name="reason" label="Reason for Return"><Input.TextArea /></Form.Item> </Form> <Descriptions bordered><Descriptions.Item label="Total Credit"><Title level={4} style={{margin:0, color: '#52c41a'}}>Rs. {totalRefundAmount.toFixed(2)}</Title></Descriptions.Item></Descriptions> </Modal> <Modal
+</Modal> <Modal title={`Payment from: ${selectedCustomer?.name}`} open={isPaymentModalOpen} onCancel={handlePaymentCancel} onOk={() => paymentForm.submit()} okText="Confirm Payment"> <Title level={5}>Balance: <Text type="danger">{formatCurrency(selectedCustomer?.balance, profile?.currency)}</Text></Title> <Form form={paymentForm} layout="vertical" onFinish={handleReceivePayment}><Form.Item name="amount" label="Amount Received" rules={[{ required: true }]}>
+    <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={1} max={selectedCustomer?.balance} />
+</Form.Item></Form> </Modal> <Modal title={`Return for Invoice #${selectedSale?.id}`} open={isReturnModalOpen} onCancel={handleReturnCancel} onOk={() => returnForm.submit()} okText="Confirm Return" confirmLoading={isReturnSubmitting} okButtonProps={{ disabled: selectedReturnItems.length === 0 }}> <Checkbox.Group style={{ width: '100%' }} value={selectedReturnItems} onChange={setSelectedReturnItems}> <div style={{ maxHeight: '30vh', overflowY: 'auto' }}> {returnableItems.length > 0 ? returnableItems.map(item => (<Card size="small" key={item.sale_item_id} style={{ marginBottom: '8px' }}><Checkbox value={item.sale_item_id}><Space><Text strong>{item.product_name}</Text><Text type="secondary">({item.imei || 'Item'})</Text>-<Text>{formatCurrency(item.price_at_sale, profile?.currency)}</Text></Space></Checkbox></Card>)) : <Text type="secondary">No items available.</Text>} </div> </Checkbox.Group> <Form form={returnForm} layout="vertical" onFinish={handleConfirmReturn} style={{ marginTop: '24px' }}> <Form.Item name="reason" label="Reason for Return"><Input.TextArea /></Form.Item> </Form> <Descriptions bordered><Descriptions.Item label="Total Credit"><Title level={4} style={{margin:0, color: '#52c41a'}}>{formatCurrency(totalRefundAmount, profile?.currency)}</Title></Descriptions.Item></Descriptions> </Modal> <Modal
   title={`Settle Credit for: ${selectedCustomer?.name}`}
   open={isPayoutModalOpen}
   onCancel={handlePayoutCancel}
   onOk={() => payoutForm.submit()}
   okText="Confirm Payout"
 >
-  <Title level={5}>Credit Balance: <Text type="success">Rs. {Math.abs(selectedCustomer?.balance || 0).toFixed(2)}</Text></Title>
+  <Title level={5}>Credit Balance: <Text type="success">{formatCurrency(Math.abs(selectedCustomer?.balance || 0), profile?.currency)}</Text></Title>
   <Form form={payoutForm} layout="vertical" onFinish={handleConfirmPayout}>
     <Form.Item
       name="amount"
@@ -477,11 +481,11 @@ const handleViewLedger = async (customer) => {
       rules={[{ required: true }]}
     >
       <InputNumber 
-        style={{ width: '100%' }} 
-        prefix="Rs." 
-        min={1} 
-        max={Math.abs(selectedCustomer?.balance)} 
-      />
+    style={{ width: '100%' }} 
+    prefix={profile?.currency ? `${profile.currency} ` : ''}
+    min={1} 
+    max={Math.abs(selectedCustomer?.balance)} 
+/>
     </Form.Item>
     <Form.Item name="remarks" label="Remarks (Optional)">
       <Input.TextArea placeholder="e.g., Paid in cash" />

@@ -1,13 +1,14 @@
-// src/utils/receiptGenerator.js (BULLETPROOF VERSION)
+// src/utils/receiptGenerator.js (UPDATED CODE)
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { formatCurrency } from './currencyFormatter'; // formatCurrency ko import karein
 
 // Ek chota helper function jo null/undefined ko empty string bana dega
 const safeString = (value) => String(value || '');
 
-export const generateSaleReceipt = (saleDetails) => {
-  // Agar saleDetails hi null ho to foran ruk jao
+// Ab yeh function 'currency' bhi lega
+export const generateSaleReceipt = (saleDetails, currency = 'Rs.') => {
   if (!saleDetails) {
     console.error("generateSaleReceipt was called with null saleDetails.");
     return;
@@ -51,8 +52,9 @@ export const generateSaleReceipt = (saleDetails) => {
     body: bodyItems.map(item => [
       safeString(item?.name),
       safeString(item?.quantity),
-      `Rs. ${(item?.price_at_sale || 0).toFixed(2)}`,
-      `Rs. ${((item?.quantity || 0) * (item?.price_at_sale || 0)).toFixed(2)}`
+      // YEH LINES TABDEEL HUI HAIN
+      formatCurrency(item?.price_at_sale || 0, currency),
+      formatCurrency((item?.quantity || 0) * (item?.price_at_sale || 0), currency)
     ]),
     theme: 'grid',
     headStyles: { fillColor: [41, 128, 185], textColor: 255, halign: 'center' },
@@ -64,16 +66,18 @@ export const generateSaleReceipt = (saleDetails) => {
     }
   });
 
-  const finalY = doc.lastAutoTable.finalY || 70; // Fallback agar table na bane
+  const finalY = doc.lastAutoTable.finalY || 70;
+  
+  // YEH LINES BHI TABDEEL HUI HAIN
   const summaryRows = [
-    ['Subtotal:', `Rs. ${(subtotal || 0).toFixed(2)}`],
-    ['Discount:', `- Rs. ${(discount || 0).toFixed(2)}`],
-    ['Grand Total:', `Rs. ${(grandTotal || 0).toFixed(2)}`],
+    ['Subtotal:', formatCurrency(subtotal || 0, currency)],
+    ['Discount:', `- ${formatCurrency(discount || 0, currency)}`],
+    ['Grand Total:', formatCurrency(grandTotal || 0, currency)],
   ];
 
   if (paymentStatus === 'Unpaid') {
-    summaryRows.push(['Amount Paid:', `Rs. ${(amountPaid || 0).toFixed(2)}`]);
-    summaryRows.push(['Balance Due:', `Rs. ${((grandTotal || 0) - (amountPaid || 0)).toFixed(2)}`]);
+    summaryRows.push(['Amount Paid:', formatCurrency(amountPaid || 0, currency)]);
+    summaryRows.push(['Balance Due:', formatCurrency((grandTotal || 0) - (amountPaid || 0), currency)]);
   }
 
   autoTable(doc, {

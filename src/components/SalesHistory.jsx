@@ -3,10 +3,13 @@ import { Card, Table, Typography, Tag, App, Button, Tooltip } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
+import { useAuth } from '../context/AuthContext';
+import { formatCurrency } from '../utils/currencyFormatter';
 
 const { Title } = Typography;
 
 const SalesHistory = () => {
+  const { profile } = useAuth();
   const { message } = App.useApp();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +47,7 @@ const SalesHistory = () => {
         throw error;
       }
             
-      generateSaleReceipt(data);
+      generateSaleReceipt(data, profile?.currency);
   
     } catch (error) {
       message.error('Could not print receipt: ' + error.message);
@@ -98,13 +101,13 @@ const SalesHistory = () => {
       width: 120,
     },
     {
-      title: 'Total Amount',
-      dataIndex: 'total_amount',
-      key: 'total_amount',
-      render: (amount) => `Rs. ${amount.toFixed(2)}`,
-      align: 'right',
-      width: 150,
-    },
+  title: 'Total Amount',
+  dataIndex: 'total_amount',
+  key: 'total_amount',
+  render: (amount) => formatCurrency(amount, profile?.currency),
+  align: 'right',
+  width: 150,
+},
     {
       title: 'Payment Status',
       dataIndex: 'payment_status',

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Typography, Table, Card, App as AntApp, Row, Col, Statistic, Spin, DatePicker, Space, Button } from 'antd';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { formatCurrency } from '../utils/currencyFormatter';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
 
@@ -9,7 +10,7 @@ const { Title, Text } = Typography;
 
 const Reports = () => {
   const { message } = AntApp.useApp();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [products, setProducts] = useState([]);
   const [stockLoading, setStockLoading] = useState(true);
   
@@ -118,8 +119,8 @@ const Reports = () => {
     { title: 'Product Name', dataIndex: 'name', key: 'name' },
     { title: 'Brand', dataIndex: 'brand', key: 'brand' },
     { title: 'Stock Quantity', dataIndex: 'quantity', key: 'quantity', align: 'right' },
-    { title: 'Purchase Price', dataIndex: 'default_purchase_price', key: 'purchase_price', align: 'right', render: (price) => `Rs. ${price ? price.toFixed(2) : '0.00'}` },
-    { title: 'Total Value', key: 'total_value', align: 'right', render: (text, record) => { const totalValue = (record.quantity || 0) * (record.default_purchase_price || 0); return <Text strong>Rs. {totalValue.toFixed(2)}</Text>; }}
+    { title: 'Purchase Price', dataIndex: 'default_purchase_price', key: 'purchase_price', align: 'right', render: (price) => formatCurrency(price, profile?.currency) },
+    { title: 'Total Value', key: 'total_value', align: 'right', render: (text, record) => { const totalValue = (record.quantity || 0) * (record.default_purchase_price || 0); return <Text strong>{formatCurrency(totalValue, profile?.currency)}</Text>; }}
   ];
 
   const totalStockValue = products.reduce((sum, product) => sum + ((product.quantity || 0) * (product.default_purchase_price || 0)), 0);
@@ -132,18 +133,14 @@ const Reports = () => {
         <Title level={4}>Profit & Loss Summary</Title>
         {summaryLoading ? <div style={{ textAlign: 'center', padding: '48px' }}><Spin size="large" /></div> : (
           <Row gutter={[16, 24]}>
-            <Col xs={24} sm={12} md={6}><Statistic title="Total Revenue (Aamdani)" value={summaryData.totalRevenue} precision={2} prefix="Rs." /></Col>
-            <Col xs={24} sm={12} md={6}><Statistic title="Cost of Goods (Laagat)" value={summaryData.totalCost} precision={2} prefix="Rs." /></Col>
-            <Col xs={24} sm={12} md={6}><Statistic title="Gross Profit (Aamdani - Laagat)" value={summaryData.grossProfit} precision={2} prefix="Rs." /></Col>
-            <Col xs={24} sm={12} md={6}><Statistic title="Total Expenses (Kul Akhrajaat)" value={summaryData.totalExpenses} precision={2} prefix="Rs." valueStyle={{ color: '#cf1322' }} /></Col>
+            <Col xs={24} sm={12} md={6}><Statistic title="Total Revenue (Aamdani)" value={summaryData.totalRevenue} formatter={() => formatCurrency(summaryData.totalRevenue, profile?.currency)} /></Col>
+            <Col xs={24} sm={12} md={6}><Statistic title="Cost of Goods (Laagat)" value={summaryData.totalCost} formatter={() => formatCurrency(summaryData.totalCost, profile?.currency)} /></Col>
+            <Col xs={24} sm={12} md={6}><Statistic title="Gross Profit (Aamdani - Laagat)" value={summaryData.grossProfit} formatter={() => formatCurrency(summaryData.grossProfit, profile?.currency)} /></Col>
+            <Col xs={24} sm={12} md={6}><Statistic title="Total Expenses (Kul Akhrajaat)" value={summaryData.totalExpenses} valueStyle={{ color: '#cf1322' }} formatter={() => formatCurrency(summaryData.totalExpenses, profile?.currency)} /></Col>
             
             <Col xs={24}>
               <Card>
-                <Statistic 
-                  title={<Title level={4}>Net Profit (Asal Munafa)</Title>} 
-                  value={summaryData.netProfit} 
-                  precision={2} 
-                  prefix="Rs. " 
+                <Statistic title={<Title level={4}>Net Profit (Asal Munafa)</Title>} value={summaryData.netProfit} formatter={() => formatCurrency(summaryData.netProfit, profile?.currency)} 
                   valueStyle={{ 
                     color: summaryData.netProfit >= 0 ? '#3f8600' : '#cf1322', 
                     fontSize: '2.5rem' 
@@ -157,7 +154,7 @@ const Reports = () => {
 
       <Card>
         <Title level={4}>Current Stock Report</Title>
-        <Table columns={stockColumns} dataSource={products} loading={stockLoading} rowKey="id" pagination={false} scroll={{ y: '40vh' }} summary={() => (<Table.Summary.Row><Table.Summary.Cell index={0} colSpan={4}><Text strong style={{ float: 'right' }}>Grand Total Stock Value</Text></Table.Summary.Cell><Table.Summary.Cell index={1} align="right"><Title level={5}>Rs. {totalStockValue.toFixed(2)}</Title></Table.Summary.Cell></Table.Summary.Row>)} />
+        <Table columns={stockColumns} dataSource={products} loading={stockLoading} rowKey="id" pagination={false} scroll={{ y: '40vh' }} summary={() => (<Table.Summary.Row><Table.Summary.Cell index={0} colSpan={4}><Text strong style={{ float: 'right' }}>Grand Total Stock Value</Text></Table.Summary.Cell><Table.Summary.Cell index={1} align="right"><Title level={5}>{formatCurrency(totalStockValue, profile?.currency)}</Title></Table.Summary.Cell></Table.Summary.Row>)} />
       </Card>
 
       <Card style={{ marginTop: '24px' }}>
@@ -172,11 +169,7 @@ const Reports = () => {
               dataIndex: 'balance_due',
               key: 'balance_due',
               align: 'right',
-              render: (amount) => (
-                <Text type="danger" strong>
-                  {`Rs. ${amount.toLocaleString()}`}
-                </Text>
-              ),
+              render: (amount) => ( <Text type="danger" strong>{formatCurrency(amount, profile?.currency)}</Text> ),
             },
           ]}
           dataSource={payableData}
@@ -193,9 +186,7 @@ const Reports = () => {
                   </Text>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={1} align="right">
-                  <Title level={5} type="danger">
-                    Rs. {totalPayable.toLocaleString()}
-                  </Title>
+                  <Title level={5} type="danger">{formatCurrency(totalPayable, profile?.currency)}</Title>
                 </Table.Summary.Cell>
               </Table.Summary.Row>
             );
@@ -223,11 +214,7 @@ const Reports = () => {
               dataIndex: 'total_purchase_amount',
               key: 'total_purchase_amount',
               align: 'right',
-              render: (amount) => (
-                <Text strong>
-                  {`Rs. ${amount.toLocaleString()}`}
-                </Text>
-              ),
+              render: (amount) => ( <Text strong>{formatCurrency(amount, profile?.currency)}</Text> ),
             },
           ]}
           dataSource={supplierReportData}

@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Table, Button, App, Tag, Space, InputNumber } from 'antd';
 import { supabase } from '../supabaseClient';
+import { useAuth } from '../context/AuthContext';
+import { formatCurrency } from '../utils/currencyFormatter';
 
 const SelectVariantModal = ({ visible, onCancel, onOk, product }) => {
+    const { profile } = useAuth();
     const { message } = App.useApp();
     const [variants, setVariants] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -95,7 +98,7 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product }) => {
             )
         },
         { title: 'In Stock', dataIndex: 'stock', key: 'stock', align: 'center' },
-        { title: 'Sale Price', dataIndex: 'sale_price', key: 'sale_price', align: 'right', render: (price) => `Rs. ${price?.toLocaleString()}` },
+        { title: 'Sale Price', dataIndex: 'sale_price', key: 'sale_price', align: 'right', render: (price) => formatCurrency(price, profile?.currency) },
         {
             title: 'Quantity to Add',
             key: 'action',

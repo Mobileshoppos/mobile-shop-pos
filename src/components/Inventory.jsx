@@ -3,20 +3,22 @@ import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { formatCurrency } from '../utils/currencyFormatter';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-const formatPriceRange = (min, max) => {
+const formatPriceRange = (min, max, currency) => {
   if (min === null || max === null) return 'N/A';
-  if (min === max) return `Rs. ${min.toLocaleString()}`;
-  return `Rs. ${min.toLocaleString()} - ${max.toLocaleString()}`;
+  if (min === max) return formatCurrency(min, currency);
+  return `${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`;
 };
 
 const ProductVariantsSubTable = ({ productId }) => {
   const [variants, setVariants] = useState([]);
   const [loading, setLoading] = useState(true);
   const { message } = App.useApp();
+  const { profile } = useAuth();
 
   useEffect(() => {
     const fetchAndGroupVariants = async () => {
@@ -97,8 +99,8 @@ const ProductVariantsSubTable = ({ productId }) => {
                   {variant.display_quantity} Units
                 </Tag>
                 <div>
-                  <Text strong>Sale Price:</Text> <Text>Rs. {variant.sale_price?.toLocaleString()}</Text><br/>
-                  <Text type="secondary">Purchase:</Text> <Text type="secondary">Rs. {variant.purchase_price?.toLocaleString()}</Text>
+                  <Text strong>Sale Price:</Text> <Text>{formatCurrency(variant.sale_price, profile?.currency)}</Text><br/>
+<Text type="secondary">Purchase:</Text> <Text type="secondary">{formatCurrency(variant.purchase_price, profile?.currency)}</Text>
                 </div>
               </Space>
             </Col>
@@ -130,6 +132,7 @@ const ProductVariantsSubTable = ({ productId }) => {
 };
 
 const MobileProductList = ({ products, loading }) => {
+  const { profile } = useAuth();
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '50px' }}>
@@ -138,7 +141,6 @@ const MobileProductList = ({ products, loading }) => {
     );
   }
 
-  // Collapse component ke liye 'items' tayyar karne ka naya tareeqa
   const getCollapseItems = (productId) => [
     {
       key: productId,
@@ -155,7 +157,6 @@ const MobileProductList = ({ products, loading }) => {
       renderItem={(product) => (
         <List.Item>
           <Card 
-            // WARNING FIX #1: 'bordered' ki jagah 'variant' istemal kiya gaya hai
             variant="outlined" 
             title={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -172,13 +173,11 @@ const MobileProductList = ({ products, loading }) => {
               </Col>
               <Col span={24}>
                 <Text type="secondary">Sale Price:</Text><br />
-                <Text strong>{formatPriceRange(product.min_sale_price, product.max_sale_price)}</Text>
+                <Text strong>{formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}</Text>
               </Col>
             </Row>
 
-            {/* Product Variants (Stock Details) */}
             {product.quantity > 0 && (
-              // WARNING FIX #2: 'children' ke bajaye 'items' property istemal ki gayi hai
               <Collapse 
                 items={getCollapseItems(product.id)}
                 bordered={false} 
@@ -195,7 +194,7 @@ const MobileProductList = ({ products, loading }) => {
 
 const Inventory = () => {
   const { message } = App.useApp();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const isMobile = useMediaQuery('(max-width: 768px)');
   
   const [products, setProducts] = useState([]);
@@ -354,7 +353,7 @@ const Inventory = () => {
     },
     { title: 'Category', dataIndex: 'category_name', key: 'category' },
     { title: 'Total Stock', dataIndex: 'quantity', key: 'quantity', render: (qty) => <Tag color={qty > 0 ? 'blue' : 'red'}>{qty ?? 0}</Tag> },
-    { title: 'Sale Price Range', key: 'price_range', render: (_, record) => formatPriceRange(record.min_sale_price, record.max_sale_price) },
+    { title: 'Sale Price Range', key: 'price_range', render: (_, record) => formatPriceRange(record.min_sale_price, record.max_sale_price, profile?.currency) },
   ];
 
   return (
@@ -463,8 +462,24 @@ const Inventory = () => {
             </Form.Item>
           )}
           
-          <Form.Item name="purchase_price" label="Default Purchase Price"><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item>
-          <Form.Item name="sale_price" label="Default Sale Price"><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item>
+          <Form.Item name="purchase_price" label="Default Purchase Price">
+    <InputNumber
+        style={{ width: '100%' }}
+        // Is naye code se cursor ka masla hal ho jayega
+        prefix={profile?.currency ? `${profile.currency} ` : ''}
+        formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+        parser={(value) => value.replace(/,/g, '')}
+    />
+</Form.Item>
+<Form.Item name="sale_price" label="Default Sale Price">
+    <InputNumber
+        style={{ width: '100%' }}
+        // Is naye code se cursor ka masla hal ho jayega
+        prefix={profile?.currency ? `${profile.currency} ` : ''}
+        formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+        parser={(value) => value.replace(/,/g, '')}
+    />
+</Form.Item>
         </Form>
       </Modal>
     </>

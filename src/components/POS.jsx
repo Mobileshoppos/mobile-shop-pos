@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
 import { Tag } from 'antd';
 import SelectVariantModal from './SelectVariantModal';
+import { formatCurrency } from '../utils/currencyFormatter';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -203,7 +204,7 @@ const POS = () => {
     if (paymentMethod === 'Unpaid' && amountPaid > grandTotal) { message.error('Amount paid cannot be greater than the grand total.'); return; }
     
     const udhaarAmount = grandTotal - amountPaid;
-    const confirmMessage = `Subtotal: Rs. ${subtotal.toFixed(2)}\nDiscount: Rs. ${discountAmount.toFixed(2)}\n--------------------\nGrand Total: Rs. ${grandTotal.toFixed(2)}\n` + (paymentMethod === 'Unpaid' && udhaarAmount > 0 ? `Amount Paid: Rs. ${amountPaid.toFixed(2)}\nNew Udhaar: Rs. ${udhaarAmount.toFixed(2)}\n` : '') + `\nProceed?`;
+    const confirmMessage = `Subtotal: ${formatCurrency(subtotal, profile?.currency)}\nDiscount: ${formatCurrency(discountAmount, profile?.currency)}\n--------------------\nGrand Total: ${formatCurrency(grandTotal, profile?.currency)}\n` + (paymentMethod === 'Unpaid' && udhaarAmount > 0 ? `Amount Paid: ${formatCurrency(amountPaid, profile?.currency)}\nNew Udhaar: ${formatCurrency(udhaarAmount, profile?.currency)}\n` : '') + `\nProceed?`;
 
     modal.confirm({
       title: 'Confirm Sale',
@@ -265,7 +266,7 @@ const POS = () => {
           try {
             const { data: receiptDetails, error: rpcError } = await supabase.rpc('get_sale_details', { p_sale_id: saleDataForReceipt.id });
             if (rpcError) throw rpcError;
-            generateSaleReceipt(receiptDetails);
+            generateSaleReceipt(receiptDetails, profile?.currency);
           } catch (error) {
             console.error("Receipt generation failed:", error);
             message.warning('Sale was saved, but printing the receipt failed. You can reprint it from Sales History.');
@@ -340,7 +341,7 @@ const POS = () => {
               <Radio value={'Paid'}>Paid</Radio>
               <Radio value={'Unpaid'} disabled={!selectedCustomer}>Pay Later (Udhaar)</Radio>
             </Radio.Group>
-            {paymentMethod === 'Unpaid' && selectedCustomer && (<Form.Item label="Amount Paid Now (optional)"><InputNumber style={{ width: '100%' }} prefix="Rs. " min={0} max={grandTotal} value={amountPaid} onChange={(value) => setAmountPaid(value || 0)} /></Form.Item>)}
+            {paymentMethod === 'Unpaid' && selectedCustomer && (<Form.Item label="Amount Paid Now (optional)"><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} max={grandTotal} value={amountPaid} onChange={(value) => setAmountPaid(value || 0)} /></Form.Item>)}
             {cart.length === 0 ? <Empty description="Cart is empty" /> : 
               <List 
                 dataSource={cart} 
@@ -376,15 +377,11 @@ const POS = () => {
                         {(item.category_is_imei_based || item.imei) ? (
   <Row justify="space-between" align="middle" style={{ marginTop: '8px' }}>
     <Col><Text type="secondary">Price:</Text></Col>
-    <Col><Text strong>Rs. {item.sale_price.toLocaleString()}</Text></Col>
+    <Col><Text strong>{formatCurrency(item.sale_price, profile?.currency)}</Text></Col>
   </Row>
 ) : (
   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-    <InputNumber 
-      size="small" 
-      style={{ flex: 1 }}
-      prefix="Rs. " 
-      value={item.sale_price} 
+    <InputNumber size="small" style={{ flex: 1 }} prefix={profile?.currency ? `${profile.currency} ` : ''} value={item.sale_price} 
       onChange={(value) => handleCartItemUpdate(item.variant_id, 'sale_price', value || 0)} 
       min={0} 
     />
@@ -397,8 +394,8 @@ const POS = () => {
       max={products.find(p => p.id === item.product_id)?.quantity || item.quantity} 
     />
     <Text strong style={{ flex: 1, textAlign: 'right', minWidth: '80px' }}>
-      Rs. {(item.sale_price * item.quantity).toFixed(2)}
-    </Text>
+  {formatCurrency(item.sale_price * item.quantity, profile?.currency)}
+</Text>
   </div>
 )}
                       </div>
@@ -411,13 +408,13 @@ const POS = () => {
             <Divider />
             <Row gutter={16} style={{ marginBottom: '16px' }}>
               <Col span={14}><InputNumber style={{ width: '100%' }} placeholder="Total Bill Discount" value={discount} onChange={(val) => setDiscount(val || 0)} min={0} /></Col>
-              <Col span={10}><Radio.Group value={discountType} onChange={(e) => setDiscountType(e.target.value)}><Radio.Button value="Amount">Rs.</Radio.Button><Radio.Button value="Percentage">%</Radio.Button></Radio.Group></Col>
+              <Col span={10}><Radio.Group value={discountType} onChange={(e) => setDiscountType(e.target.value)}><Radio.Button value="Amount">{profile?.currency || 'Rs.'}</Radio.Button><Radio.Button value="Percentage">%</Radio.Button></Radio.Group></Col>
             </Row>
-            <Row justify="space-between"><Text>Subtotal</Text><Text>Rs. {subtotal.toFixed(2)}</Text></Row>
-            <Row justify="space-between"><Text>Discount</Text><Text style={{ color: '#ff4d4f' }}>- Rs. {discountAmount.toFixed(2)}</Text></Row>
+            <Row justify="space-between"><Text>Subtotal</Text><Text>{formatCurrency(subtotal, profile?.currency)}</Text></Row>
+            <Row justify="space-between"><Text>Discount</Text><Text style={{ color: '#ff4d4f' }}>- {formatCurrency(discountAmount, profile?.currency)}</Text></Row>
             <Divider style={{ margin: '8px 0' }}/>
             <Row justify="space-between" align="middle">
-              <Col><Statistic title={<Title level={5} style={{ margin: 0 }}>Grand Total</Title>} value={grandTotal} precision={2} prefix="Rs. " /></Col>
+              <Col><Statistic title={<Title level={5} style={{ margin: 0 }}>Grand Total</Title>} value={grandTotal} precision={2} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Col>
               <Col><Button type="primary" size="large" disabled={cart.length === 0 || isSubmitting} loading={isSubmitting} onClick={handleCompleteSale}>Complete Sale</Button></Col>
             </Row>
           </Card>

@@ -5,11 +5,14 @@ import {
 import { DeleteOutlined, BarcodeOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { supabase } from '../supabaseClient';
+import { useAuth } from '../context/AuthContext';
+import { formatCurrency } from '../utils/currencyFormatter';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
 const AddItemModal = ({ visible, onCancel, onOk, product, attributes }) => {
+  const { profile } = useAuth();
   const [form] = Form.useForm();
   const [imeis, setImeis] = useState(['']);
   const imeiInputRefs = useRef([]);
@@ -121,8 +124,8 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes }) => {
         {isImeiCategory ? (
             <>
                 <Row gutter={16}>
-                    <Col span={12}><Form.Item name="purchase_price" label="Purchase Price (per item)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item></Col>
-                    <Col span={12}><Form.Item name="sale_price" label="Sale Price (per item)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item></Col>
+                    <Col span={12}><Form.Item name="purchase_price" label="Purchase Price (per item)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    <Col span={12}><Form.Item name="sale_price" label="Sale Price (per item)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
                     {attributes.map(attr => <Col span={12} key={attr.id}>{renderAttributeField(attr)}</Col>)}
                 </Row>
                 <Divider />
@@ -139,8 +142,8 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes }) => {
         ) : (
             <>
                 <Row gutter={16}>
-                    <Col span={12}><Form.Item name="purchase_price" label="Purchase Price (per item)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item></Col>
-                    <Col span={12}><Form.Item name="sale_price" label="Sale Price (per item)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix="Rs." /></Form.Item></Col>
+                    <Col span={12}><Form.Item name="purchase_price" label="Purchase Price (per item)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    <Col span={12}><Form.Item name="sale_price" label="Sale Price (per item)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
                     <Col span={12}><Form.Item name="quantity" label="Quantity" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={1} /></Form.Item></Col>
                     
                     <Col span={12}>
@@ -165,6 +168,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes }) => {
 };
 
 const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
+  const { profile } = useAuth();
   const { message } = App.useApp();
   const [form] = Form.useForm();
   
@@ -290,9 +294,27 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
   const columns = [
     { title: 'Product', key: 'name', render: (_, record) => renderItemName(record) },
     { title: 'Qty', dataIndex: 'quantity', key: 'quantity', align: 'center' },
-    { title: 'Purchase Price', dataIndex: 'purchase_price', key: 'purchase_price', align: 'right', render: (price) => `Rs. ${price ? price.toLocaleString() : 0}` },
-    { title: 'Subtotal', key: 'subtotal', align: 'right', render: (_, record) => `Rs. ${((record.quantity || 0) * (record.purchase_price || 0)).toLocaleString()}` },
-    { title: 'Action', key: 'action', align: 'center', render: (_, record) => (<Button danger icon={<DeleteOutlined />} onClick={() => handleRemoveItem(record)} />)},
+    { 
+      title: 'Purchase Price', 
+      dataIndex: 'purchase_price', 
+      key: 'purchase_price', 
+      align: 'right', 
+      // YEH LINE TABDEEL HUI HAI
+      render: (price) => formatCurrency(price, profile?.currency) 
+    },
+    { 
+      title: 'Subtotal', 
+      key: 'subtotal', 
+      align: 'right', 
+      // YEH LINE BHI TABDEEL HUI HAI
+      render: (_, record) => formatCurrency((record.quantity || 0) * (record.purchase_price || 0), profile?.currency) 
+    },
+    { 
+      title: 'Action', 
+      key: 'action', 
+      align: 'center', 
+      render: (_, record) => (<Button danger icon={<DeleteOutlined />} onClick={() => handleRemoveItem(record)} />)
+    },
   ];
 
   return (
@@ -329,7 +351,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
               return (
                 <Table.Summary.Row>
                   <Table.Summary.Cell index={0} colSpan={3}><Text strong>Total Amount</Text></Table.Summary.Cell>
-                  <Table.Summary.Cell index={1} align="right"><Text strong type="danger">Rs. {total.toLocaleString()}</Text></Table.Summary.Cell>
+                  <Table.Summary.Cell index={1} align="right"><Text strong type="danger">{formatCurrency(total, profile?.currency)}</Text></Table.Summary.Cell>
                   <Table.Summary.Cell index={2}></Table.Summary.Cell>
                 </Table.Summary.Row>
               );
