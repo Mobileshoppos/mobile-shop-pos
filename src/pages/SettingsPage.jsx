@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useState, useEffect } from 'react';
-import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, message } from 'antd';
+import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App } from 'antd';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -13,6 +13,7 @@ import {
 const { Title, Text } = Typography;
 
 const SettingsPage = () => {
+  const { message } = App.useApp();
   const { profile, updateProfile } = useAuth();
   const [selectedCurrency, setSelectedCurrency] = useState('PKR');
   const [isSaving, setIsSaving] = useState(false);
@@ -34,18 +35,20 @@ const SettingsPage = () => {
 
   const handleCurrencySave = async (event) => {
     event.preventDefault();
-    if (!profile) return; // Agar profile load na ho to kuch na karein
+    if (!profile) return; 
 
     setIsSaving(true);
-    const { success } = await updateProfile({ currency: selectedCurrency });
 
-    if (success) {
+    const result = await updateProfile({ currency: selectedCurrency });
+
+    if (result && result.success) {
       message.success('Currency updated successfully!');
     } else {
       message.error('Failed to update currency. Please try again.');
     }
+
     setIsSaving(false);
-  };
+};
   const { themeConfig, lightTheme, darkTheme, isDarkMode, updateTheme } = useTheme();
 
   const handleFontSizeChange = (newValue) => {
@@ -70,7 +73,6 @@ const SettingsPage = () => {
     }
   };
   
-  // NAYA FUNCTION
   const handleBorderRadiusChange = (newValue) => {
     updateTheme({ token: { borderRadiusLG: newValue } });
   };
@@ -90,17 +92,15 @@ const SettingsPage = () => {
     {
       key: '1',
       label: 'General',
-      // ... General tab ka content waisa hi rahega
     },
     {
       key: '2',
       label: 'Colors',
-      // ... Colors tab ka content waisa hi rahega
     },
     {
       key: '3',
       label: 'Layout',
-      children: ( // LAYOUT TAB KA UPDATED CONTENT
+      children: ( 
         <>
           <Row align="middle" gutter={[16, 16]}>
             <Col xs={24} sm={6}>
@@ -132,9 +132,6 @@ const SettingsPage = () => {
       ),
     },
   ];
-
-  // NOTE: Aasani se parhne ke liye, maine upar tabItems ke andar ka code chota kar diya hai.
-  // Neeche poora component dobara de raha hoon.
 
   return (
     <div>
@@ -173,7 +170,7 @@ const SettingsPage = () => {
     </Col>
     <Col xs={24} sm={6}>
         <Button 
-    htmlType="button" // <-- YEH NAYI LINE SHAMIL KAREIN
+    htmlType="button"
     type="primary"
     onClick={(e) => handleCurrencySave(e)}
     loading={isSaving}

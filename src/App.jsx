@@ -35,15 +35,13 @@ import SupplierDashboard from './components/SupplierDashboard';
 import SalesHistory from './components/SalesHistory';
 import SettingsPage from './pages/SettingsPage';
 
-// Auth & Theme Contexts
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { CustomThemeProvider, useTheme } from './context/ThemeContext'; // useTheme ko yahan import karein
+import { CustomThemeProvider, useTheme } from './context/ThemeContext';
 import { supabase } from './supabaseClient';
-import { darkThemeTokens, lightThemeTokens } from './theme/themeConfig'; // Theme tokens ko import karein
+import { darkThemeTokens, lightThemeTokens } from './theme/themeConfig';
 
 const { Sider, Content } = Layout;
 
-// MainLayout, menuItems, etc. mein koi tabdeeli nahi
 const menuItems = [
     { key: '/', icon: <HomeOutlined />, label: <Link to="/">Inventory</Link> },
     { key: '/pos', icon: <ShoppingCartOutlined />, label: <Link to="/pos">Point of Sale</Link> },
@@ -205,9 +203,7 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
   );
 };
 
-// NAYA COMPONENT: Yeh theme ko context se le kar Ant Design ko dega
 const ThemeAppliedLayout = () => {
-  // Ab tamam cheezein context se aa rahi hain
   const { themeConfig, lightTheme, darkTheme, isDarkMode, toggleTheme } = useTheme(); 
 
   return (
@@ -216,7 +212,7 @@ const ThemeAppliedLayout = () => {
         algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
           ...themeConfig.token,
-          ...(isDarkMode ? darkTheme : lightTheme), // Yahan state se values aa rahi hain
+          ...(isDarkMode ? darkTheme : lightTheme),
         },
         components: themeConfig.components,
       }}
@@ -229,8 +225,6 @@ const ThemeAppliedLayout = () => {
   );
 };
 
-
-// PURANA APP COMPONENT AB BOHAT SAADA HO GAYA HAI
 function App() {
   return (
     <BrowserRouter>
