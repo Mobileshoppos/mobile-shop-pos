@@ -15,7 +15,8 @@ import {
   SunOutlined,
   MoonOutlined,
   TeamOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  CreditCardOutlined
 } from '@ant-design/icons';
 
 // Components & Pages
@@ -34,6 +35,7 @@ import PurchaseDetails from './components/PurchaseDetails';
 import SupplierDashboard from './components/SupplierDashboard';
 import SalesHistory from './components/SalesHistory';
 import SettingsPage from './pages/SettingsPage';
+import SubscriptionPage from './pages/SubscriptionPage';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CustomThemeProvider, useTheme } from './context/ThemeContext';
@@ -55,6 +57,7 @@ const menuItems = [
     { type: 'divider' },
     { key: '/expenses', icon: <DollarCircleOutlined />, label: <Link to="/expenses">Expenses</Link> },
     { key: '/expense-categories', icon: <AppstoreOutlined />, label: <Link to="/expense-categories">Expense Categories</Link> },
+    { key: '/subscription', icon: <CreditCardOutlined />, label: <Link to="/subscription">Subscription</Link> },
     { key: '/settings', icon: <SettingOutlined />, label: <Link to="/settings">App Settings</Link> },
 ];
 
@@ -198,6 +201,7 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route path="*" element={<Navigate to="/" />} />
         <Route path="/sales-history" element={<SalesHistory />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="subscription" element={<SubscriptionPage />} />
       </Route>
     </Routes>
   );

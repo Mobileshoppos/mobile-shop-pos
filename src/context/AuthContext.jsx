@@ -7,14 +7,15 @@ export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState(null);const [stockCount, setStockCount] = useState(0);
+  const [isStockLoading, setIsStockLoading] = useState(true);
 
   const getProfile = useCallback(async (user) => {
     if (!user) return null;
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('shop_name, full_name, currency')
+        .select('shop_name, full_name, currency, subscription_tier, subscription_expires_at')
         .eq('user_id', user.id)
         .single();
       
@@ -27,6 +28,17 @@ export const AuthProvider = ({ children }) => {
       setProfile(null);
     }
   }, []);
+
+  const fetchStockCount = useCallback(async () => {
+    const { data, error } = await supabase.rpc('get_current_user_stock_count');
+    if (error) {
+        console.error('Error fetching stock count:', error.message);
+        setStockCount(0);
+    } else {
+        setStockCount(data);
+    }
+    setIsStockLoading(false);
+}, []);
 
   const updateProfile = async (updates) => {
     if (!user) throw new Error("No user is logged in");
@@ -57,6 +69,7 @@ export const AuthProvider = ({ children }) => {
       
       if (session?.user) {
         getProfile(session.user);
+        fetchStockCount();
       } else {
         setProfile(null);
       }
@@ -70,6 +83,7 @@ export const AuthProvider = ({ children }) => {
       setUser(session?.user ?? null);
       if (session?.user) {
         await getProfile(session.user);
+        fetchStockCount();
       }
       setLoading(false);
     };
@@ -81,12 +95,17 @@ export const AuthProvider = ({ children }) => {
     };
   }, [getProfile]);
 
+  const isPro = profile?.subscription_tier === 'pro';
   const value = {
     session,
     user,
     profile,
     updateProfile,
     refetchProfile: () => getProfile(user), 
+    isPro,
+    stockCount,
+    isStockLoading,
+    refetchStockCount: fetchStockCount,
   };
 
   return (

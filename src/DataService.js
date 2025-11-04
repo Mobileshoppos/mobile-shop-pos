@@ -1,12 +1,7 @@
-// src/DataService.js (Final Update for Purchase Details)
-
 import { supabase } from './supabaseClient';
 
 const DataService = {
 
-  // =================================================================
-  // INVENTORY & PRODUCT FUNCTIONS
-  // =================================================================
   async getInventoryData() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { return { productsData: [], categoriesData: [] }; }
@@ -36,11 +31,7 @@ const DataService = {
     return true;
   },
   
-  // ... baqi functions waise hi rahenge ...
   
-  // =================================================================
-  // SUPPLIER FUNCTIONS
-  // =================================================================
   async getSuppliers() {
     const { data, error } = await supabase.from('suppliers_with_balance').select('*').order('name', { ascending: true });
     if (error) { console.error('DataService Error:', error); throw error; }
@@ -104,9 +95,6 @@ const DataService = {
     return data;
   },
   
-  // =================================================================
-  // PURCHASE & PAYMENT FUNCTIONS
-  // =================================================================
   async getPurchaseDetails(purchaseId) {
     const { data: purchaseData, error: purchaseError } = await supabase.from('purchases').select('*, suppliers(name)').eq('id', purchaseId).single();
     if (purchaseError) { console.error('DataService Error:', purchaseError); throw purchaseError; }
@@ -114,8 +102,6 @@ const DataService = {
     const { data: itemsData, error: itemsError } = await supabase.from('inventory').select('*, products(name, brand)').eq('purchase_id', purchaseId);
     if (itemsError) { console.error('DataService Error:', itemsError); throw itemsError; }
     
-    // --- YAHAN TABDEELI KI GAYI HAI ---
-    // Data ko component ke liye saaf (flatten) karein
     const formattedItems = (itemsData || []).map(item => ({
         ...item,
         product_name: item.products ? item.products.name : 'Product Not Found',
@@ -132,9 +118,30 @@ const DataService = {
   },
 
   async createNewPurchase(purchasePayload) {
-    const { data, error } = await supabase.rpc('create_new_purchase', purchasePayload);
-    if (error) { console.error('DataService Error:', error); throw error; }
-    return data;
+    // RPC call ko try...catch block mein wrap karein
+    try {
+      const { data, error } = await supabase.rpc('create_new_purchase', purchasePayload);
+      
+      // Agar Supabase se koi error aaye to usay check karein
+      if (error) {
+        throw error; // Error ko catch block mein bhejein
+      }
+
+      return data;
+
+    } catch (error) {
+      // Yahan hum error ko pakar rahe hain
+      console.error('DataService Error in createNewPurchase:', error);
+
+      // Check karein ke kya error RLS policy ki wajah se hai
+      if (error.message && error.message.includes('violates row-level security policy')) {
+        // Agar haan, to ek custom, saaf suthra error message banayein
+        throw new Error('Stock limit reached. You cannot add more items on the free plan. Please upgrade to Pro.');
+      }
+      
+      // Agar koi aur error hai, to usay waisa hi aage bhej dein
+      throw error;
+    }
   },
 
   async recordPurchasePayment(paymentData) {

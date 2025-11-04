@@ -170,6 +170,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes }) => {
 const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
   const { profile } = useAuth();
   const { message } = App.useApp();
+  const { refetchStockCount } = useAuth();
   const [form] = Form.useForm();
   
   const [suppliers, setSuppliers] = useState([]);
@@ -272,6 +273,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
       
       await DataService.createNewPurchase(purchasePayload);
       message.success("Purchase invoice created successfully!");
+      refetchStockCount();
       onPurchaseCreated();
     } catch (error) {
       if (error.name !== 'ValidationError') { message.error("Failed to save purchase: " + error.message); }
