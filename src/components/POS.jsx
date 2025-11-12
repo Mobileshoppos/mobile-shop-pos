@@ -6,6 +6,7 @@ import { PlusOutlined, UserAddOutlined, DeleteOutlined } from '@ant-design/icons
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
+import { printThermalReceipt } from '../utils/thermalPrinter';
 import { Tag } from 'antd';
 import SelectVariantModal from './SelectVariantModal';
 import { formatCurrency } from '../utils/currencyFormatter';
@@ -15,7 +16,7 @@ const { Search } = Input;
 
 const POS = () => {
   const { message, modal } = App.useApp();
-  const { user, profile } = useAuth();
+  const { user, profile, refetchStockCount } = useAuth();
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -263,15 +264,28 @@ const POS = () => {
         }
 
         if (saleDataForReceipt) {
-          try {
-            const { data: receiptDetails, error: rpcError } = await supabase.rpc('get_sale_details', { p_sale_id: saleDataForReceipt.id });
-            if (rpcError) throw rpcError;
-            generateSaleReceipt(receiptDetails, profile?.currency);
-          } catch (error) {
-            console.error("Receipt generation failed:", error);
-            message.warning('Sale was saved, but printing the receipt failed. You can reprint it from Sales History.');
-          }
+  // Use a small timeout to allow the confirm modal to close before the blocking print dialog opens.
+  setTimeout(() => {
+    (async () => {
+      try {
+        const { data: receiptDetails, error: rpcError } = await supabase.rpc('get_sale_details', { p_sale_id: saleDataForReceipt.id });
+        if (rpcError) throw rpcError;
+
+        // Check user's preferred receipt format from profile
+        if (profile?.receipt_format === 'thermal') {
+          printThermalReceipt(receiptDetails, profile?.currency);
+        } else {
+          // Default to PDF if not set or set to pdf
+          generateSaleReceipt(receiptDetails, profile?.currency);
         }
+
+      } catch (error) {
+        console.error("Receipt generation failed:", error);
+        message.warning('Sale was saved, but printing the receipt failed. You can reprint it from Sales History.');
+      }
+    })();
+  }, 100); // 100ms delay is enough for the UI to update
+}
 
         setCart([]);
         setSelectedCustomer(null);
@@ -280,6 +294,7 @@ const POS = () => {
         setDiscount(0);
         setDiscountType('Amount');
         await getProducts();
+        refetchStockCount();
         await getCustomers();
         if (searchInputRef.current) { searchInputRef.current.focus(); }
         setIsSubmitting(false);

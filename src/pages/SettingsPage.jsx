@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useState, useEffect } from 'react';
-import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App } from 'antd';
+import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio } from 'antd';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -17,6 +17,7 @@ const SettingsPage = () => {
   const { profile, updateProfile } = useAuth();
   const [selectedCurrency, setSelectedCurrency] = useState('PKR');
   const [isSaving, setIsSaving] = useState(false);
+  const [receiptFormat, setReceiptFormat] = useState('pdf');
 
   const currencyOptions = [
     { value: 'PKR', label: 'PKR - Pakistani Rupee' },
@@ -28,26 +29,37 @@ const SettingsPage = () => {
   ];
 
   useEffect(() => {
-    if (profile && profile.currency) {
+  if (profile) {
+    if (profile.currency) {
       setSelectedCurrency(profile.currency);
     }
-  }, [profile]);
-
-  const handleCurrencySave = async (event) => {
-    event.preventDefault();
-    if (!profile) return; 
-
-    setIsSaving(true);
-
-    const result = await updateProfile({ currency: selectedCurrency });
-
-    if (result && result.success) {
-      message.success('Currency updated successfully!');
-    } else {
-      message.error('Failed to update currency. Please try again.');
+    if (profile.receipt_format) {
+      setReceiptFormat(profile.receipt_format);
     }
+  }
+}, [profile]);
 
-    setIsSaving(false);
+  const handleGeneralSettingsSave = async (event) => {
+  event.preventDefault();
+  if (!profile) return;
+
+  setIsSaving(true);
+
+  // Prepare the data to update
+  const updates = {
+    currency: selectedCurrency,
+    receipt_format: receiptFormat,
+  };
+
+  const result = await updateProfile(updates);
+
+  if (result && result.success) {
+    message.success('Settings updated successfully!');
+  } else {
+    message.error('Failed to update settings. Please try again.');
+  }
+
+  setIsSaving(false);
 };
   const { themeConfig, lightTheme, darkTheme, isDarkMode, updateTheme } = useTheme();
 
@@ -158,26 +170,45 @@ const SettingsPage = () => {
             Used for all transactions and reports.
         </Text>
     </Col>
-    <Col xs={24} sm={8}>
+    <Col xs={24} sm={18}>
         <Select
             style={{ width: '100%' }}
             value={selectedCurrency}
-            onChange={(value) => {
-    setSelectedCurrency(value);
-}}
+            onChange={(value) => setSelectedCurrency(value)}
             options={currencyOptions}
         />
     </Col>
-    <Col xs={24} sm={6}>
+</Row>
+<Divider />
+            <Row align="middle" gutter={[16, 16]}>
+                <Col xs={24} sm={6}>
+                    <Text strong>Default Receipt Format</Text>
+                    <Text type="secondary" style={{ display: 'block' }}>
+                        Choose between standard PDF or thermal printer receipts.
+                    </Text>
+                </Col>
+                <Col xs={24} sm={18}>
+                    <Radio.Group 
+                        onChange={(e) => setReceiptFormat(e.target.value)} 
+                        value={receiptFormat}
+                    >
+                        <Radio value={'pdf'}>PDF Document</Radio>
+                        <Radio value={'thermal'}>Thermal Receipt</Radio>
+                    </Radio.Group>
+                </Col>
+            </Row>
+            <Divider />
+<Row>
+    <Col>
         <Button 
-    htmlType="button"
-    type="primary"
-    onClick={(e) => handleCurrencySave(e)}
-    loading={isSaving}
-    disabled={!profile || selectedCurrency === profile.currency}
->
-    Save
-</Button>
+            htmlType="button"
+            type="primary"
+            onClick={(e) => handleGeneralSettingsSave(e)}
+            loading={isSaving}
+            disabled={!profile || (selectedCurrency === profile.currency && receiptFormat === profile.receipt_format)}
+        >
+            Save General Settings
+        </Button>
     </Col>
 </Row>
                 <Divider />

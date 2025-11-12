@@ -11,23 +11,23 @@ export const AuthProvider = ({ children }) => {
   const [isStockLoading, setIsStockLoading] = useState(true);
 
   const getProfile = useCallback(async (user) => {
-    if (!user) return null;
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('shop_name, full_name, currency, subscription_tier, subscription_expires_at')
-        .eq('user_id', user.id)
-        .single();
-      
-      if (error && error.code !== 'PGRST116') throw error;
-      
-      setProfile(data);
-      return data;
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-      setProfile(null);
-    }
-  }, []);
+  if (!user) return null;
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*') // <--- Yahan tabdeeli ki gayi hai
+      .eq('user_id', user.id)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    
+    setProfile(data);
+    return data;
+  } catch (error) {
+    console.error('Error fetching profile:', error);
+    setProfile(null);
+  }
+}, []);
 
   const fetchStockCount = useCallback(async () => {
     const { data, error } = await supabase.rpc('get_current_user_stock_count');
