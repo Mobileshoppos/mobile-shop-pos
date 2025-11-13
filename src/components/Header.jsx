@@ -1,8 +1,8 @@
 import React from 'react';
-import { Layout, Tag, theme, Tooltip, Button } from 'antd';
-import { ShopOutlined, CrownOutlined } from '@ant-design/icons';
+import { Layout, Tag, theme, Tooltip, Button, Badge, Space } from 'antd';
+import { ShopOutlined, CrownOutlined, BellOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const { Header } = Layout;
 
@@ -18,7 +18,7 @@ const titleContainerStyle = {
 const AppHeader = () => {
   // Qadam 3.2: Hum ab tamam data AuthContext se le rahe hain.
   // Stock count ab yahan se aayega, is liye live update hoga.
-  const { profile, isPro, stockCount } = useAuth();
+  const { profile, isPro, stockCount, lowStockCount } = useAuth();
   
   const { token } = theme.useToken();
   const navigate = useNavigate(); // Page tabdeel karne ke liye
@@ -53,18 +53,32 @@ const AppHeader = () => {
           </Tag>
         </div>
 
-        {/* Subscription Status - Yeh naya aur behtar button hai */}
-        <Tooltip title="Manage Subscription" placement="bottom">
-          <Button 
-            type={isPro ? 'primary' : 'default'} 
-            ghost={isPro}
-            icon={isPro ? <CrownOutlined /> : null}
-            onClick={() => navigate('/subscription')} // Click karne par page tabdeel hoga
-            danger={!isPro && stockCount >= 50} // Limit poori hone par laal (red) ho jayega
-          >
-            {isPro ? 'PRO PLAN' : `Stock: ${stockCount} / 50`}
-          </Button>
-        </Tooltip>
+        {/* Right side icons */}
+        <Space align="center" size="middle">
+          
+          {lowStockCount > 0 && (
+            <Tooltip title={`${lowStockCount} items are low in stock`} placement="bottom">
+              <Link to="/?low_stock=true" style={{ padding: '5px' }}>
+                <Badge count={lowStockCount} size="small">
+                  <BellOutlined style={{ fontSize: '18px', color: token.colorText }} />
+                </Badge>
+              </Link>
+            </Tooltip>
+          )}
+
+          {/* Subscription Status - YEH AAPKA PEHLE WALA BUTTON HAI */}
+          <Tooltip title="Manage Subscription" placement="bottom">
+            <Button 
+              type={isPro ? 'primary' : 'default'} 
+              ghost={isPro}
+              icon={isPro ? <CrownOutlined /> : null}
+              onClick={() => navigate('/subscription')}
+              danger={!isPro && stockCount >= 50}
+            >
+              {isPro ? 'PRO PLAN' : `Stock: ${stockCount} / 50`}
+            </Button>
+          </Tooltip>
+        </Space>
 
       </div>
     </Header>

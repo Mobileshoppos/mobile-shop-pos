@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty } from 'antd';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -193,6 +194,9 @@ const MobileProductList = ({ products, loading }) => {
 };
 
 const Inventory = () => {
+  const [searchParams] = useSearchParams(); // YEH LINE ADD KAREIN
+  const showLowStockOnly = searchParams.get('low_stock') === 'true';
+  const location = useLocation();
   const { message } = App.useApp();
   const { user, profile } = useAuth();
   const isMobile = useMediaQuery('(max-width: 768px)');
@@ -258,31 +262,43 @@ const Inventory = () => {
     setLoading(true);
     const searchHandler = setTimeout(async () => {
       try {
-        const { data: variants, error: rpcError } = await supabase.rpc('search_product_variants', {
-          search_query: searchText,
-          filter_attributes: activeFilters
-        });
-        if (rpcError) throw rpcError;
+        let finalProducts = [];
 
-        const matchingProductIds = [...new Set(variants.map(v => v.product_id))];
+        if (showLowStockOnly) {
+          // *** NAYI LOGIC: Sirf low stock products fetch karein ***
+          const { data, error } = await supabase.rpc('get_low_stock_products');
+          if (error) throw error;
+          finalProducts = data;
 
-        let query = supabase.from('products_display_view').select('*');
+        } else {
+          // *** PURANI LOGIC: Search aur filter ke hisab se products fetch karein ***
+          const { data: variants, error: rpcError } = await supabase.rpc('search_product_variants', {
+            search_query: searchText,
+            filter_attributes: activeFilters
+          });
+          if (rpcError) throw rpcError;
 
-        if (searchText || Object.keys(activeFilters).length > 0) {
-          if (matchingProductIds.length === 0) {
-            setProducts([]);
-            setLoading(false);
-            return;
+          const matchingProductIds = [...new Set(variants.map(v => v.product_id))];
+
+          let query = supabase.from('products_display_view').select('*');
+
+          if (searchText || Object.keys(activeFilters).length > 0) {
+            if (matchingProductIds.length === 0) {
+              setProducts([]);
+              setLoading(false);
+              return;
+            }
+            query = query.in('id', matchingProductIds);
           }
-          query = query.in('id', matchingProductIds);
+          
+          if (filterCategory) {
+            query = query.eq('category_id', filterCategory);
+          }
+          
+          const { data, error: selectError } = await query.order('name', { ascending: true });
+          if (selectError) throw selectError;
+          finalProducts = data;
         }
-        
-        if (filterCategory) {
-          query = query.eq('category_id', filterCategory);
-        }
-        
-        const { data: finalProducts, error: selectError } = await query.order('name', { ascending: true });
-        if (selectError) throw selectError;
 
         setProducts(finalProducts);
 
@@ -296,7 +312,7 @@ const Inventory = () => {
 
     return () => clearTimeout(searchHandler);
 
-  }, [user, searchText, filterCategory, activeFilters, message]);
+  }, [user, searchText, filterCategory, activeFilters, message, showLowStockOnly, location]);
 
   const handleAdvancedFilterChange = (name, value) => {
     setActiveFilters(prev => {
@@ -366,7 +382,7 @@ const Inventory = () => {
         marginBottom: '16px' 
       }}>
         <Title level={2} style={{ marginBottom: isMobile ? '16px' : '0' }}>
-          Product Inventory
+          {showLowStockOnly ? 'Low Stock Products' : 'Product Inventory'}
         </Title>
         <Button 
           type="primary" 

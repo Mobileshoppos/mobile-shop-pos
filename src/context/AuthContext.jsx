@@ -9,6 +9,8 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);const [stockCount, setStockCount] = useState(0);
   const [isStockLoading, setIsStockLoading] = useState(true);
+  const [lowStockCount, setLowStockCount] = useState(0);
+  const [isLowStockLoading, setIsLowStockLoading] = useState(true);
 
   const getProfile = useCallback(async (user) => {
   if (!user) return null;
@@ -39,6 +41,24 @@ export const AuthProvider = ({ children }) => {
     }
     setIsStockLoading(false);
 }, []);
+
+const fetchLowStockCount = useCallback(async () => {
+    if (!profile || !profile.low_stock_alerts_enabled) {
+        setLowStockCount(0);
+        setIsLowStockLoading(false);
+        return;
+    }
+
+    const { data, error } = await supabase.rpc('get_low_stock_product_count');
+    
+    if (error) {
+        console.error('Error fetching low stock count:', error.message);
+        setLowStockCount(0);
+    } else {
+        setLowStockCount(data);
+    }
+    setIsLowStockLoading(false);
+  }, [profile]);
 
   const updateProfile = async (updates) => {
     if (!user) throw new Error("No user is logged in");
@@ -95,6 +115,13 @@ export const AuthProvider = ({ children }) => {
     };
   }, [getProfile]);
 
+  useEffect(() => {
+    // Yeh effect sirf tab chalega jab profile load ya update hoga.
+    if (profile) {
+      fetchLowStockCount();
+    }
+  }, [profile, fetchLowStockCount]);
+
   const isPro = profile?.subscription_tier === 'pro';
   const value = {
     session,
@@ -106,6 +133,9 @@ export const AuthProvider = ({ children }) => {
     stockCount,
     isStockLoading,
     refetchStockCount: fetchStockCount,
+    lowStockCount, // YEH LINE ADD KAREIN
+    isLowStockLoading, // YEH LINE ADD KAREIN
+    refetchLowStockCount: fetchLowStockCount, // YEH LINE ADD KAREIN
   };
 
   return (

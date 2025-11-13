@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useState, useEffect } from 'react';
-import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio } from 'antd';
+import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio, Switch } from 'antd';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -18,6 +18,8 @@ const SettingsPage = () => {
   const [selectedCurrency, setSelectedCurrency] = useState('PKR');
   const [isSaving, setIsSaving] = useState(false);
   const [receiptFormat, setReceiptFormat] = useState('pdf');
+  const [lowStockAlerts, setLowStockAlerts] = useState(true);
+  const [lowStockThreshold, setLowStockThreshold] = useState(5);
 
   const currencyOptions = [
     { value: 'PKR', label: 'PKR - Pakistani Rupee' },
@@ -29,15 +31,21 @@ const SettingsPage = () => {
   ];
 
   useEffect(() => {
-  if (profile) {
-    if (profile.currency) {
-      setSelectedCurrency(profile.currency);
+    if (profile) {
+      if (profile.currency) {
+        setSelectedCurrency(profile.currency);
+      }
+      if (profile.receipt_format) {
+        setReceiptFormat(profile.receipt_format);
+      }
+      if (profile.low_stock_alerts_enabled !== null && profile.low_stock_alerts_enabled !== undefined) {
+        setLowStockAlerts(profile.low_stock_alerts_enabled);
+      }
+      if (profile.low_stock_threshold) {
+        setLowStockThreshold(profile.low_stock_threshold);
+      }
     }
-    if (profile.receipt_format) {
-      setReceiptFormat(profile.receipt_format);
-    }
-  }
-}, [profile]);
+  }, [profile]);
 
   const handleGeneralSettingsSave = async (event) => {
   event.preventDefault();
@@ -49,6 +57,8 @@ const SettingsPage = () => {
   const updates = {
     currency: selectedCurrency,
     receipt_format: receiptFormat,
+    low_stock_alerts_enabled: lowStockAlerts,
+    low_stock_threshold: lowStockThreshold,
   };
 
   const result = await updateProfile(updates);
@@ -197,6 +207,50 @@ const SettingsPage = () => {
                     </Radio.Group>
                 </Col>
             </Row>
+                        <Divider />
+            <Row align="middle" gutter={[16, 16]}>
+                <Col xs={24} sm={6}>
+                    <Text strong>Low Stock Alerts</Text>
+                    <Text type="secondary" style={{ display: 'block' }}>
+                        Get notified for low quantity items.
+                    </Text>
+                </Col>
+                <Col xs={24} sm={18}>
+                    <Switch 
+                        checked={lowStockAlerts} 
+                        onChange={setLowStockAlerts} 
+                    />
+                </Col>
+            </Row>
+
+            <Row align="middle" gutter={[16, 16]} style={{ marginTop: '16px' }}>
+                <Col xs={24} sm={6}>
+                    <Text strong>Alert Threshold</Text>
+                    <Text type="secondary" style={{ display: 'block' }}>
+                        Quantity at which to trigger alert.
+                    </Text>
+                </Col>
+                <Col xs={16} sm={12}>
+                    <Slider 
+                        min={1} 
+                        max={50} 
+                        step={1} 
+                        onChange={setLowStockThreshold} 
+                        value={lowStockThreshold}
+                        disabled={!lowStockAlerts}
+                    />
+                </Col>
+                <Col xs={8} sm={6}>
+                    <InputNumber 
+                        min={1} 
+                        max={50} 
+                        style={{ width: '100%' }} 
+                        value={lowStockThreshold} 
+                        onChange={setLowStockThreshold}
+                        disabled={!lowStockAlerts}
+                    />
+                </Col>
+            </Row>
             <Divider />
 <Row>
     <Col>
@@ -205,7 +259,12 @@ const SettingsPage = () => {
             type="primary"
             onClick={(e) => handleGeneralSettingsSave(e)}
             loading={isSaving}
-            disabled={!profile || (selectedCurrency === profile.currency && receiptFormat === profile.receipt_format)}
+            disabled={!profile || (
+                selectedCurrency === profile.currency && 
+                receiptFormat === profile.receipt_format &&
+                lowStockAlerts === profile.low_stock_alerts_enabled &&
+                lowStockThreshold === profile.low_stock_threshold
+            )}
         >
             Save General Settings
         </Button>

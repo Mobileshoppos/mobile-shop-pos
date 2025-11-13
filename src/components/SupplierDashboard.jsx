@@ -163,6 +163,16 @@ const SupplierDashboard = () => {
     const [form] = Form.useForm();
     const [searchTerm, setSearchTerm] = useState('');
 
+    useEffect(() => {
+    if (isModalVisible) { // Agar modal khula hua hai
+        if (editingSupplier) { // Aur hum kisi supplier ko edit kar rahe hain
+            form.setFieldsValue(editingSupplier); // To uska data form mein daal do
+        } else { // Warna (yaani naya supplier add kar rahe hain)
+            form.resetFields(); // Form ko bilkul saaf kar do
+        }
+    }
+}, [isModalVisible, editingSupplier, form]);
+
     const fetchSuppliers = useCallback(async (selectIdAfterFetch = null) => {
         setLoading(true);
         try {
@@ -180,8 +190,8 @@ const SupplierDashboard = () => {
 
     useEffect(() => { fetchSuppliers(); }, []);
 
-    const handleAddNew = () => { setEditingSupplier(null); form.resetFields(); setIsModalVisible(true); };
-    const handleEdit = (supplier) => { setEditingSupplier(supplier); form.setFieldsValue(supplier); setIsModalVisible(true); };
+    const handleAddNew = () => { setEditingSupplier(null); setIsModalVisible(true); };
+    const handleEdit = (supplier) => { setEditingSupplier(supplier); setIsModalVisible(true); };
     const handleDelete = async (supplierId) => {
         try {
             await DataService.deleteSupplier(supplierId);
