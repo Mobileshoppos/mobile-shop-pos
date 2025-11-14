@@ -17,6 +17,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     // authentication token ko khud-ba-khud detect karke shamil kar de.
     // Iske bina, RLS policies kaam nahi kartin.
     autoRefreshToken: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: true,
   },
 })

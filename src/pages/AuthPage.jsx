@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout } from 'antd';
+import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout, Modal } from 'antd';
 import { LockOutlined, MailOutlined } from '@ant-design/icons';
 
 const { Title } = Typography;
@@ -9,6 +9,8 @@ const { Content } = Layout;
 const AuthPage = () => {
   const { message } = AntApp.useApp();
   const [loading, setLoading] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleLogin = async (values) => {
     try {
@@ -40,6 +42,22 @@ const AuthPage = () => {
       setLoading(false);
     }
   };
+
+  const handlePasswordResetRequest = async (values) => {
+    try {
+      setResetLoading(true);
+      const { error } = await supabase.auth.resetPasswordForEmail(values.email, {
+        redirectTo: `${window.location.origin}/update-password`,
+      });
+      if (error) throw error;
+      message.success('Password reset link has been sent to your email.');
+      setIsModalVisible(false);
+    } catch (error) {
+      message.error(error.message);
+    } finally {
+      setResetLoading(false);
+    }
+  };
   
   const loginForm = (
     <Form onFinish={handleLogin} layout="vertical">
@@ -48,6 +66,11 @@ const AuthPage = () => {
       </Form.Item>
       <Form.Item name="password" label="Password" rules={[{ required: true, message: 'Please enter your password!' }]}>
         <Input.Password prefix={<LockOutlined />} placeholder="Password" />
+      </Form.Item>
+      <Form.Item>
+        <Button type="link" onClick={() => setIsModalVisible(true)} style={{ float: 'right', padding: 0 }}>
+          Forgot Password?
+        </Button>
       </Form.Item>
       <Form.Item>
         <Button type="primary" htmlType="submit" loading={loading} block size="large">
@@ -85,6 +108,28 @@ const AuthPage = () => {
             <Tabs.TabPane tab="Sign Up" key="2">{signupForm}</Tabs.TabPane>
           </Tabs>
         </Card>
+        <Modal
+          title="Reset Your Password"
+          open={isModalVisible}
+          onCancel={() => setIsModalVisible(false)}
+          footer={null} // Hum form ka apna button istemal karenge
+        >
+          <p>Enter your email address below, and we'll send you a link to reset your password.</p>
+          <Form onFinish={handlePasswordResetRequest} layout="vertical" style={{ marginTop: '20px' }}>
+            <Form.Item 
+              name="email" 
+              label="Email" 
+              rules={[{ required: true, type: 'email', message: 'Please enter a valid email!' }]}
+            >
+              <Input prefix={<MailOutlined />} placeholder="your@email.com" />
+            </Form.Item>
+            <Form.Item>
+              <Button type="primary" htmlType="submit" loading={resetLoading} block>
+                Send Reset Link
+              </Button>
+            </Form.Item>
+          </Form>
+        </Modal>
       </Content>
     </Layout>
   );

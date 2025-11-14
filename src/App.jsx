@@ -36,6 +36,7 @@ import SupplierDashboard from './components/SupplierDashboard';
 import SalesHistory from './components/SalesHistory';
 import SettingsPage from './pages/SettingsPage';
 import SubscriptionPage from './pages/SubscriptionPage';
+import UpdatePasswordPage from './pages/UpdatePasswordPage';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CustomThemeProvider, useTheme } from './context/ThemeContext';
@@ -181,11 +182,25 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
 };
 
 const AppRoutes = ({ isDarkMode, toggleTheme }) => {
-  const { session } = useAuth();
-  if (!session) return <Routes><Route path="*" element={<AuthPage />} /></Routes>;
+  const { session, isPasswordRecovery } = useAuth();
 
+  // Agar user login nahi hai, to use sirf Auth aur Password Update page tak rasai dein
+  if (!session || isPasswordRecovery) {
+    return (
+      <Routes>
+        <Route path="/update-password" element={<UpdatePasswordPage />} />
+        {/* Agar user /update-password ke alawa kisi aur page par jane ki koshish kare, to use AuthPage par bhej dein */}
+        <Route path="*" element={<AuthPage />} />
+      </Routes>
+    );
+  }
+
+  // Agar user login hai, to use poori application dikhayein
   return (
     <Routes>
+      {/* Hum ne /update-password route yahan bhi shamil kiya hai taake agar session ban'ne mein thori der ho to bhi page sahi kaam kare */}
+      <Route path="/update-password" element={<UpdatePasswordPage />} />
+      
       <Route path="/" element={<MainLayout isDarkMode={isDarkMode} toggleTheme={toggleTheme} />}>
         <Route index element={<Inventory />} />
         <Route path="pos" element={<POS />} />
@@ -198,10 +213,10 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route path="profile" element={<Profile />} />
         <Route path="expenses" element={<Expenses />} />
         <Route path="expense-categories" element={<ExpenseCategories />} />
-        <Route path="*" element={<Navigate to="/" />} />
-        <Route path="/sales-history" element={<SalesHistory />} />
+        <Route path="sales-history" element={<SalesHistory />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="subscription" element={<SubscriptionPage />} />
+        <Route path="*" element={<Navigate to="/" />} />
       </Route>
     </Routes>
   );

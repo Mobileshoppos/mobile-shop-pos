@@ -7,7 +7,9 @@ export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState(null);const [stockCount, setStockCount] = useState(0);
+  const [profile, setProfile] = useState(null);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const [stockCount, setStockCount] = useState(0);
   const [isStockLoading, setIsStockLoading] = useState(true);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [isLowStockLoading, setIsLowStockLoading] = useState(true);
@@ -83,19 +85,30 @@ const fetchLowStockCount = useCallback(async () => {
 };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        getProfile(session.user);
-        fetchStockCount();
-      } else {
-        setProfile(null);
-      }
-      
-      setLoading(false);
-    });
+    // Yahan _event ko event naam de rahe hain taake istemal kar sakein
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+  
+  if (event === 'PASSWORD_RECOVERY') {
+    setSession(session);
+    setUser(session?.user ?? null);
+    setIsPasswordRecovery(true); // <-- YEH LINE SHAMIL KI GAYI HAI
+    setLoading(false);
+    return;
+  }
+
+  setIsPasswordRecovery(false); // <-- YEH LINE BHI SHAMIL KI GAYI HAI
+  setSession(session);
+  setUser(session?.user ?? null);
+  
+  if (session?.user) {
+    getProfile(session.user);
+    fetchStockCount();
+  } else {
+    setProfile(null);
+  }
+  
+  setLoading(false);
+});
 
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -136,6 +149,7 @@ const fetchLowStockCount = useCallback(async () => {
     lowStockCount, // YEH LINE ADD KAREIN
     isLowStockLoading, // YEH LINE ADD KAREIN
     refetchLowStockCount: fetchLowStockCount, // YEH LINE ADD KAREIN
+    isPasswordRecovery,
   };
 
   return (
