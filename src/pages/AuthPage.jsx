@@ -102,7 +102,7 @@ const AuthPage = () => {
         {/* --- TABDEELI: Card se saari hardcoded styles hata di hain --- */}
         <Card style={{ width: 400, maxWidth: '100%' }}>
           {/* --- TABDEELI: Title se hardcoded color hata diya hai --- */}
-          <Title level={3} style={{ textAlign: 'center' }}>Mobile Shop POS</Title>
+          <Title level={3} style={{ textAlign: 'center' }}>SadaPos</Title>
           <Tabs defaultActiveKey="1" centered>
             <Tabs.TabPane tab="Login" key="1">{loginForm}</Tabs.TabPane>
             <Tabs.TabPane tab="Sign Up" key="2">{signupForm}</Tabs.TabPane>
