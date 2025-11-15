@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
-import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty } from 'antd';
+import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider } from 'antd';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -15,125 +15,63 @@ const formatPriceRange = (min, max, currency) => {
   return `${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`;
 };
 
-const ProductVariantsSubTable = ({ productId }) => {
-  const [variants, setVariants] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const { message } = App.useApp();
+const ProductList = ({ products, loading }) => {
   const { profile } = useAuth();
+  
+  const memoizedProducts = React.useMemo(() => {
+    if (!products) return [];
 
-  useEffect(() => {
-    const fetchAndGroupVariants = async () => {
-      try {
-        setLoading(true);
-        
-        const { data: inventoryItems, error } = await supabase
-          .from('inventory')
-          .select('*')
-          .eq('product_id', productId)
-          .eq('status', 'Available')
-          .order('created_at', { ascending: false });
-        
-        if (error) throw error;
-        if (!inventoryItems) {
-            setVariants([]);
-            return;
+    const createStableAttributeKey = (attributes) => {
+      if (!attributes || typeof attributes !== 'object') return '{}';
+      
+      const filteredAttributes = {};
+      Object.keys(attributes).forEach(key => {
+        const lowerKey = key.toLowerCase();
+        if (!lowerKey.includes('imei') && !lowerKey.includes('serial')) {
+          filteredAttributes[key] = attributes[key];
         }
+      });
 
-        const imeiBasedItems = [];
-        const quantityBasedItems = {};
-
-        for (const item of inventoryItems) {
-          if (item.imei) {
-            imeiBasedItems.push({
-                ...item,
-                display_quantity: 1 
-            });
-          } else {
-            const key = JSON.stringify(item.item_attributes);
-
-            if (!quantityBasedItems[key]) {
-              quantityBasedItems[key] = {
-                ...item,
-                display_quantity: item.quantity || 1, 
-              };
-            } else {
-              quantityBasedItems[key].display_quantity += item.quantity || 1;
-            }
-          }
-        }
-
-        const groupedQuantityItems = Object.values(quantityBasedItems);
-        
-        const finalVariants = [...imeiBasedItems, ...groupedQuantityItems];
-
-        setVariants(finalVariants);
-
-      } catch (error) {
-        message.error("Error fetching product variants: " + error.message);
-      } finally {
-        setLoading(false);
+      const sortedKeys = Object.keys(filteredAttributes).sort();
+      const sortedAttributes = {};
+      for (const key of sortedKeys) {
+        sortedAttributes[key] = filteredAttributes[key];
       }
+      return JSON.stringify(sortedAttributes);
     };
 
-    fetchAndGroupVariants();
-  }, [productId, message]);
+    const getGroupedVariants = (variants) => {
+      if (!variants) return [];
+      const itemsMap = new Map();
 
-  if (loading) {
-    return <div style={{ padding: '24px', textAlign: 'center' }}><Spin /></div>;
-  }
-  
-  if (!variants || variants.length === 0) {
-      return <div style={{ padding: '24px' }}><Empty description="No available stock found for this product." /></div>;
-  }
+      for (const variant of variants) {
+        const attributesKey = createStableAttributeKey(variant.item_attributes);
+        const key = `${attributesKey}-${variant.sale_price}-${variant.purchase_price}`;
 
-  return (
-    <List
-      itemLayout="vertical"
-      dataSource={variants}
-      rowKey={(variant) => variant.imei || variant.id} 
-      renderItem={(variant) => (
-        <List.Item key={variant.id} style={{ borderBottom: '1px solid #f0f0f0', padding: '16px 8px' }}>
-          <Row align="top" gutter={[16, 8]}>
-            <Col xs={24} sm={10} md={9}>
-              <Space align="start">
-                <Tag color="blue" style={{ fontSize: '14px', padding: '6px 10px', marginTop: '5px' }}>
-                  {variant.display_quantity} Units
-                </Tag>
-                <div>
-                  <Text strong>Sale Price:</Text> <Text>{formatCurrency(variant.sale_price, profile?.currency)}</Text><br/>
-<Text type="secondary">Purchase:</Text> <Text type="secondary">{formatCurrency(variant.purchase_price, profile?.currency)}</Text>
-                </div>
-              </Space>
-            </Col>
-            <Col xs={24} sm={14} md={15}>
-              <Space wrap>
-                {/* === CODE CHANGE START === */}
-                
-                {/* General attributes (sirf value dikhayein) */}
-                {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
-                  // Agar key 'imei' ya 'serial' hai to usko yahan na dikhayein taake duplicate na ho
-                  if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) {
-                    return null;
-                  }
-                  // Sirf value ko Tag mein dikhayein
-                  return <Tag key={key}>{value}</Tag>;
-                })}
+        if (itemsMap.has(key)) {
+          const existing = itemsMap.get(key);
+          existing.display_quantity += 1;
+          if (variant.imei) {
+            existing.imeis.push(variant.imei);
+          }
+        } else {
+          itemsMap.set(key, {
+            ...variant,
+            display_quantity: 1,
+            imeis: variant.imei ? [variant.imei] : [],
+          });
+        }
+      }
+      return Array.from(itemsMap.values());
+    };
 
-                {/* IMEI/Serial ke liye alag se Tag (sirf value dikhayein) */}
-                {variant.imei && <Tag color="purple" key="imei">{variant.imei}</Tag>}
+    return products.map(product => ({
+      ...product,
+      groupedVariants: getGroupedVariants(product.variants),
+    }));
 
-                {/* === CODE CHANGE END === */}
-              </Space>
-            </Col>
-          </Row>
-        </List.Item>
-      )}
-    />
-  );
-};
+  }, [products]);
 
-const MobileProductList = ({ products, loading }) => {
-  const { profile } = useAuth();
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '50px' }}>
@@ -142,49 +80,120 @@ const MobileProductList = ({ products, loading }) => {
     );
   }
 
-  const getCollapseItems = (productId) => [
-    {
-      key: productId,
-      label: <Text strong>View Available Stock Details</Text>,
-      children: <ProductVariantsSubTable productId={productId} />,
-      style: { border: 'none' },
-    },
-  ];
+  if (!memoizedProducts || memoizedProducts.length === 0) {
+    return (
+      <div style={{ marginTop: '40px' }}>
+        <Empty description="No products found matching your filters." />
+      </div>
+    );
+  }
+
+  const renderVariantHeader = (variant) => (
+    <Row align="top" gutter={[16, 8]}>
+      <Col xs={24} sm={10} md={9}>
+        <Space align="start">
+          <Tag color="blue" style={{ fontSize: '14px', padding: '6px 10px', marginTop: '5px' }}>
+            {variant.display_quantity} Units
+          </Tag>
+          <div>
+            <Text strong>Sale:</Text> <Text>{formatCurrency(variant.sale_price, profile?.currency)}</Text><br/>
+            <Text type="secondary">Purchase:</Text> <Text type="secondary">{formatCurrency(variant.purchase_price, profile?.currency)}</Text>
+          </div>
+        </Space>
+      </Col>
+      <Col xs={24} sm={14} md={15}>
+        <Space wrap>
+          {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
+            if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) return null;
+            return <Tag key={key}>{value}</Tag>;
+          })}
+        </Space>
+      </Col>
+    </Row>
+  );
 
   return (
     <List
-      grid={{ gutter: 16, xs: 1, sm: 2 }}
-      dataSource={products}
+      grid={{ gutter: 16, xs: 1, sm: 1, md: 2, lg: 2, xl: 3 }}
+      dataSource={memoizedProducts}
+      rowKey="id"
       renderItem={(product) => (
         <List.Item>
           <Card 
             variant="outlined" 
+            // *** YAHAN TABDEELI KI GAYI HAI: Header ko behtar banaya gaya ***
             title={
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text strong>{product.name}</Text>
-                <Tag color={product.quantity > 0 ? 'blue' : 'red'}>{product.quantity ?? 0} Stock</Tag>
-              </div>
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <Title level={5} style={{ margin: 0 }}>{product.name}</Title>
+                  <Tag color={product.quantity > 0 ? 'blue' : 'red'} style={{ margin: 0 }}>{product.quantity ?? 0} Stock</Tag>
+                </div>
+                <Row gutter={[16, 8]} align="middle">
+                  <Col xs={24} sm={14} md={16}>
+                      <Space wrap>
+                          {product.brand && <Tag>{product.brand}</Tag>}
+                          <Tag color="geekblue">{product.category_name}</Tag>
+                      </Space>
+                  </Col>
+                  <Col xs={24} sm={10} md={8} style={{ textAlign: 'right' }}>
+                      <Title level={5} style={{ margin: 0 }}>{formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}</Title>
+                  </Col>
+                </Row>
+              </>
             }
-            style={{ width: '100%', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' }}
+            styles={{ 
+              header: { 
+                backgroundColor: 'rgba(255, 255, 255, 0.02)', // Header ka halka sa mukhtalif color
+                borderBottom: '1px solid rgba(255, 255, 255, 0.1)' // Neeche halki line
+              },
+              body: { padding: '0 24px 16px 24px' } 
+            }}
+            // *** END OF CHANGE ***
+            style={{ width: '100%', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)', border: '1px solid rgba(255, 255, 255, 0.1)' }}
           >
-            <Row gutter={[16, 16]}>
-              <Col span={24}>
-                {product.brand && <Tag>{product.brand}</Tag>}
-                <Tag color="geekblue">{product.category_name}</Tag>
-              </Col>
-              <Col span={24}>
-                <Text type="secondary">Sale Price:</Text><br />
-                <Text strong>{formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}</Text>
-              </Col>
-            </Row>
+            {/* Ab header mein price range show ho rahi hai, to yahan se hata diya hai */}
 
-            {product.quantity > 0 && (
-              <Collapse 
-                items={getCollapseItems(product.id)}
-                bordered={false} 
-                expandIconPosition="end" 
-                style={{ marginTop: '16px', background: 'transparent' }}
-              />
+            {product.groupedVariants.length > 0 && (
+              <>
+                <Divider style={{ margin: 0 }} />
+                <List
+                  itemLayout="vertical"
+                  dataSource={product.groupedVariants}
+                  rowKey={(variant) => `${variant.id}-${variant.imeis.join(',')}`}
+                  renderItem={(variant, index) => {
+                     const isLastItem = index === product.groupedVariants.length - 1;
+                     const itemStyle = { padding: 0, margin: 0, border: 'none' };
+
+                    if (variant.imeis && variant.imeis.length > 0) {
+                      const collapseItems = [{
+                        key: variant.id,
+                        label: renderVariantHeader(variant),
+                        children: (
+                          <div style={{ padding: '8px 16px' }}>
+                            <Text type="secondary" style={{ wordWrap: 'break-word' }}>
+                              {variant.imeis.sort().join(', ')}
+                            </Text>
+                          </div>
+                        ),
+                        style: { padding: '16px 0', borderBottom: isLastItem ? 'none' : '1px solid #f0f0f0' }
+                      }];
+                      return (
+                        <List.Item style={itemStyle}>
+                          <Collapse items={collapseItems} ghost expandIconPosition="end" style={{ padding: 0 }} />
+                        </List.Item>
+                      );
+                    }
+                    
+                    return (
+                       <List.Item style={itemStyle}>
+                         <div style={{ padding: '16px 0', borderBottom: isLastItem ? 'none' : '1px solid #f0f0f0' }}>
+                            {renderVariantHeader(variant)}
+                         </div>
+                       </List.Item>
+                    );
+                  }}
+                />
+              </>
             )}
           </Card>
         </List.Item>
@@ -194,7 +203,7 @@ const MobileProductList = ({ products, loading }) => {
 };
 
 const Inventory = () => {
-  const [searchParams] = useSearchParams(); // YEH LINE ADD KAREIN
+  const [searchParams] = useSearchParams();
   const showLowStockOnly = searchParams.get('low_stock') === 'true';
   const location = useLocation();
   const { message } = App.useApp();
@@ -205,26 +214,35 @@ const Inventory = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [advancedFilters, setAdvancedFilters] = useState([]);
-  const [activeFilters, setActiveFilters] = useState({});
+  // NOTE: Iska naam activeFilters se filterAttributes kar rahe hain behtar wazahat ke liye
+  const [filterAttributes, setFilterAttributes] = useState({}); 
   
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [productForm] = Form.useForm();
   
   const [searchText, setSearchText] = useState('');
   const [filterCategory, setFilterCategory] = useState(null);
+
+  // === NAYI STATE VARIABLES START ===
+  const [priceRange, setPriceRange] = useState([null, null]); // Default: No price filter
+  const [sortBy, setSortBy] = useState('name_asc'); // Default sort
+  // === NAYI STATE VARIABLES END ===
   
   const selectedCategoryId = Form.useWatch('category_id', productForm);
 
   useEffect(() => {
     if (!user) return;
 
+    // Yeh function dropdowns aur advanced filters ke liye data fetch karta hai
     const fetchDropdownData = async () => {
       try {
+        // Step 1: Categories fetch karein
         const { data: categoriesData, error: categoriesError } = await supabase.rpc('get_user_categories_with_settings');
         if (categoriesError) throw categoriesError;
         const visibleCategories = categoriesData.filter(cat => cat.is_visible);
         setCategories(visibleCategories);
 
+        // Step 2: Agar koi category select ho, to uske advanced filters fetch karein
         if (filterCategory) {
           const { data: attributes, error: attributesError } = await supabase
             .from('category_attributes')
@@ -259,48 +277,32 @@ const Inventory = () => {
 
     fetchDropdownData();
 
-    setLoading(true);
+    // Yeh products fetch karne wala main logic hai
     const searchHandler = setTimeout(async () => {
+      setLoading(true);
       try {
         let finalProducts = [];
 
         if (showLowStockOnly) {
-          // *** NAYI LOGIC: Sirf low stock products fetch karein ***
           const { data, error } = await supabase.rpc('get_low_stock_products');
           if (error) throw error;
           finalProducts = data;
-
         } else {
-          // *** PURANI LOGIC: Search aur filter ke hisab se products fetch karein ***
-          const { data: variants, error: rpcError } = await supabase.rpc('search_product_variants', {
-            search_query: searchText,
-            filter_attributes: activeFilters
+          // Naya "all-in-one" function istemal karein
+          const { data, error } = await supabase.rpc('get_inventory_details', {
+            p_search_query: searchText,
+            p_category_id: filterCategory,
+            p_filter_attributes: filterAttributes,
+            p_min_price: priceRange[0],
+            p_max_price: priceRange[1],
+            p_sort_by: sortBy
           });
-          if (rpcError) throw rpcError;
 
-          const matchingProductIds = [...new Set(variants.map(v => v.product_id))];
-
-          let query = supabase.from('products_display_view').select('*');
-
-          if (searchText || Object.keys(activeFilters).length > 0) {
-            if (matchingProductIds.length === 0) {
-              setProducts([]);
-              setLoading(false);
-              return;
-            }
-            query = query.in('id', matchingProductIds);
-          }
-          
-          if (filterCategory) {
-            query = query.eq('category_id', filterCategory);
-          }
-          
-          const { data, error: selectError } = await query.order('name', { ascending: true });
-          if (selectError) throw selectError;
+          if (error) throw error;
           finalProducts = data;
         }
-
-        setProducts(finalProducts);
+        
+        setProducts(finalProducts || []);
 
       } catch (error) {
         message.error("Error fetching products: " + error.message);
@@ -312,10 +314,10 @@ const Inventory = () => {
 
     return () => clearTimeout(searchHandler);
 
-  }, [user, searchText, filterCategory, activeFilters, message, showLowStockOnly, location]);
+  }, [user, searchText, filterCategory, filterAttributes, priceRange, sortBy, message, showLowStockOnly, location]);
 
   const handleAdvancedFilterChange = (name, value) => {
-    setActiveFilters(prev => {
+    setFilterAttributes(prev => { // setActiveFilters ki jagah setFilterAttributes
       const newFilters = { ...prev };
       if (value) {
         newFilters[name] = value;
@@ -329,7 +331,9 @@ const Inventory = () => {
   const handleResetFilters = () => {
     setSearchText('');
     setFilterCategory(null);
-    setActiveFilters({});
+    setFilterAttributes({}); // setActiveFilters ki jagah setFilterAttributes
+    setPriceRange([null, null]); // Price range ko bhi reset karein
+    setSortBy('name_asc'); // Sorting ko bhi reset karein
   };
 
   const handleProductOk = async (values) => {
@@ -360,18 +364,6 @@ const Inventory = () => {
   
   const isSmartPhoneCategorySelected = categories.find(c => c.id === selectedCategoryId)?.name === 'Smart Phones & Tablets';
 
-  const mainColumns = [
-    { 
-      title: 'Product Name', dataIndex: 'name', key: 'name',
-      render: (name, record) => (
-        <div><Text strong>{name}</Text>{record.brand && <div style={{ marginTop: '4px' }}><Tag>{record.brand}</Tag></div>}</div>
-      )
-    },
-    { title: 'Category', dataIndex: 'category_name', key: 'category' },
-    { title: 'Total Stock', dataIndex: 'quantity', key: 'quantity', render: (qty) => <Tag color={qty > 0 ? 'blue' : 'red'}>{qty ?? 0}</Tag> },
-    { title: 'Sale Price Range', key: 'price_range', render: (_, record) => formatPriceRange(record.min_sale_price, record.max_sale_price, profile?.currency) },
-  ];
-
   return (
     <>
       <div style={{ 
@@ -394,12 +386,13 @@ const Inventory = () => {
         </Button>
       </div>
 
-      <Card title="Filters & Search" style={{ marginBottom: '24px' }}>
-        <Row gutter={[16, 16]} align="bottom">
+      <Card style={{ marginBottom: '24px' }}>
+        <Row gutter={[16, 24]} align="bottom">
+          {/* Search and Category Filters (wahi rahenge) */}
           <Col xs={24} sm={12} md={10}>
-            <Text>Search by Name / Brand / IMEI</Text>
+            <Text>Search by Name / Brand / IMEI / Tags</Text>
             <Input 
-              placeholder="Search or Scan IMEI..."
+              placeholder="Search or Scan..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               allowClear
@@ -422,11 +415,59 @@ const Inventory = () => {
           </Col>
           <Col xs={24} sm={24} md={6}>
             <Button onClick={handleResetFilters} style={{ width: '100%' }}>
-              Reset Filters
+              Reset All Filters
             </Button>
           </Col>
 
-          {/* Advanced Filters Section */}
+          <Col span={24}><Divider style={{ margin: '0' }} /></Col>
+
+          {/* === NAYE FILTERS AUR SORTING UI START === */}
+          <Col xs={24} md={14}>
+            <Text>Filter by Sale Price</Text>
+            <Row align="middle" gutter={8} style={{ marginTop: '8px' }}>
+              <Col xs={12} sm={11}>
+                <InputNumber
+                  placeholder="Minimum Price"
+                  value={priceRange[0]}
+                  onChange={(value) => setPriceRange([value, priceRange[1]])}
+                  min={0}
+                  prefix={profile?.currency ? `${profile.currency} ` : ''}
+                  style={{ width: '100%' }}
+                  formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={(value) => value.replace(/,/g, '')}
+                />
+              </Col>
+              <Col xs={12} sm={11}>
+                <InputNumber
+                  placeholder="Maximum Price"
+                  value={priceRange[1]}
+                  onChange={(value) => setPriceRange([priceRange[0], value])}
+                  min={0}
+                  prefix={profile?.currency ? `${profile.currency} ` : ''}
+                  style={{ width: '100%' }}
+                  formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={(value) => value.replace(/,/g, '')}
+                />
+              </Col>
+            </Row>
+          </Col>
+          <Col xs={24} md={10}>
+              <Text>Sort By</Text>
+              <Select
+                  value={sortBy}
+                  onChange={(value) => setSortBy(value)}
+                  style={{ width: '100%', marginTop: '8px' }}
+              >
+                  <Option value="name_asc">Name (A-Z)</Option>
+                  <Option value="price_asc">Price: Low to High</Option>
+                  <Option value="price_desc">Price: High to Low</Option>
+                  <Option value="quantity_desc">Stock: High to Low</Option>
+                  <Option value="quantity_asc">Stock: Low to High</Option>
+              </Select>
+          </Col>
+          {/* === NAYE FILTERS AUR SORTING UI END === */}
+          
+          {/* Advanced Filters Section (wahi rahega, sirf value update hogi) */}
           {advancedFilters.length > 0 && (
              <Col xs={24}><Title level={5} style={{marginTop: 16, marginBottom: 0}}>Advanced Filters</Title></Col>
           )}
@@ -439,7 +480,7 @@ const Inventory = () => {
                 style={{ width: '100%', marginTop: '8px' }}
                 allowClear
                 onChange={(value) => handleAdvancedFilterChange(filter.attribute_name, value)}
-                value={activeFilters[filter.attribute_name]}
+                value={filterAttributes[filter.attribute_name]}
               >
                 {(filter.options || []).map(option => (
                   <Option key={option} value={option}>{option}</Option>
@@ -450,17 +491,7 @@ const Inventory = () => {
         </Row>
       </Card>
 
-      {isMobile ? (
-        <MobileProductList products={products} loading={loading} />
-      ) : (
-        <Table 
-          columns={mainColumns} 
-          dataSource={products} 
-          rowKey="id" 
-          loading={loading}
-          expandable={{ expandedRowRender: (record) => <ProductVariantsSubTable productId={record.id} />, rowExpandable: (record) => record.quantity > 0 }}
-        />
-      )}
+      <ProductList products={products} loading={loading} />
 
       <Modal title="Add a New Product Model" open={isProductModalOpen} onOk={productForm.submit} onCancel={() => setIsProductModalOpen(false)} okText="Save Model">
         <Form form={productForm} layout="vertical" onFinish={handleProductOk} style={{marginTop: '24px'}}>
