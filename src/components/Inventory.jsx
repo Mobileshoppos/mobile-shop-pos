@@ -121,7 +121,7 @@ const ProductList = ({ products, loading }) => {
       dataSource={memoizedProducts}
       rowKey="id"
       renderItem={(product) => (
-        <List.Item>
+        <List.Item style={{ width: '100%' }}>
           <Card 
             variant="outlined" 
             // *** YAHAN TABDEELI KI GAYI HAI: Header ko behtar banaya gaya ***
