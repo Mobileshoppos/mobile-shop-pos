@@ -131,17 +131,21 @@ const ProductList = ({ products, loading }) => {
                   <Title level={5} style={{ margin: 0 }}>{product.name}</Title>
                   <Tag color={product.quantity > 0 ? 'blue' : 'red'} style={{ margin: 0 }}>{product.quantity ?? 0} Stock</Tag>
                 </div>
-                <Row gutter={[16, 8]} align="middle">
-                  <Col xs={24} sm={14} md={16}>
-                      <Space wrap>
-                          {product.brand && <Tag>{product.brand}</Tag>}
-                          <Tag color="geekblue">{product.category_name}</Tag>
-                      </Space>
-                  </Col>
-                  <Col xs={24} sm={10} md={8} style={{ textAlign: 'right' }}>
-                      <Title level={5} style={{ margin: 0 }}>{formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}</Title>
-                  </Col>
-                </Row>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+  {/* Left Side: Tags */}
+  <div style={{ flex: '1 1 auto' }}>
+    <Space wrap>
+        {product.brand && <Tag>{product.brand}</Tag>}
+        <Tag color="geekblue">{product.category_name}</Tag>
+    </Space>
+  </div>
+  {/* Right Side: Price */}
+  <div style={{ flex: '0 0 auto', whiteSpace: 'nowrap' }}>
+    <Title level={5} style={{ margin: 0, textAlign: 'right' }}>
+      {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
+    </Title>
+  </div>
+</div>
               </>
             }
             styles={{ 
