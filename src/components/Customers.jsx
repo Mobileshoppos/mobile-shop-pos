@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col
+  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider
 } from 'antd';
 import { UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
@@ -29,6 +29,10 @@ const Customers = () => {
   const [selectedReturnItems, setSelectedReturnItems] = useState([]);
   const [isReturnSubmitting, setIsReturnSubmitting] = useState(false);
   const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
+  const [isInvoiceSearchModalOpen, setIsInvoiceSearchModalOpen] = useState(false);
+  const [invoiceSearchForm] = Form.useForm();
+  const [searchedSale, setSearchedSale] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
   const [payoutForm] = Form.useForm();
   
   const [addForm] = Form.useForm();
@@ -92,7 +96,6 @@ const Customers = () => {
     payoutForm.resetFields();
   };
 
-  // Yeh function form submit hone par data save karega
   const handleConfirmPayout = async (values) => {
     try {
       const { error } = await supabase.from('credit_payouts').insert([
@@ -112,6 +115,52 @@ const Customers = () => {
       message.error('Failed to settle credit: ' + error.message);
     }
   };
+
+  const handleSearchInvoice = async (values) => {
+  try {
+    setIsSearching(true);
+    setSearchedSale(null); // Purani search clear karein
+
+    const { data: saleData, error } = await supabase
+      .from('sales')
+      .select(`
+        id,
+        created_at,
+        total_amount,
+        customer_id,
+        customer:customers(id, name, phone_number),
+        sale_items:sale_items(
+          id,
+          price_at_sale,
+          product:products(name),
+          inventory:inventory(imei, item_attributes)
+        )
+      `)
+      .eq('id', values.invoiceId)
+      .single();
+
+    if (error) {
+      // Agar 'single()' ko result na mile to woh error deta hai
+      message.error(`Invoice ID #${values.invoiceId} not found.`);
+      throw error;
+    }
+
+    if (saleData) {
+      setSearchedSale(saleData);
+    }
+
+  } catch (error) {
+    console.error("Invoice search failed:", error.message);
+  } finally {
+    setIsSearching(false);
+  }
+};
+
+const handleCloseInvoiceSearchModal = () => {
+  setIsInvoiceSearchModalOpen(false);
+  invoiceSearchForm.resetFields();
+  setSearchedSale(null);
+};
   
   const openReturnModal = async (sale) => {
     try {
@@ -168,7 +217,7 @@ const Customers = () => {
         .from('sale_returns')
         .insert({
           sale_id: selectedSale.id,
-          customer_id: selectedCustomer.id,
+          customer_id: selectedSale.customer_id,
           total_refund_amount: totalRefundAmount,
           reason: values.reason,
           user_id: user.id 
@@ -191,7 +240,7 @@ const Customers = () => {
       if (riError) throw riError;
 
       const { error: creditError } = await supabase.from('customer_payments').insert({
-        customer_id: selectedCustomer.id,
+        customer_id: selectedSale.customer_id,
         amount_paid: -totalRefundAmount,
         user_id: user.id,
         remarks: `Refund for Invoice #${selectedSale.id}`
@@ -201,7 +250,9 @@ const Customers = () => {
       message.success(`Return successful! ${formatCurrency(totalRefundAmount, profile?.currency)} credited.`);
       handleReturnCancel();
       await getCustomers();
-      handleViewLedger(selectedCustomer);
+      if (selectedCustomer) {
+  handleViewLedger(selectedCustomer);
+}
 
     } catch (error) {
       message.error("Failed to process return: " + error.message);
@@ -359,6 +410,17 @@ const handleViewLedger = async (customer) => {
     <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0' }}>
         Customer Management
     </Title>
+    <Space direction={isMobile ? 'vertical' : 'horizontal'} style={{ width: isMobile ? '100%' : 'auto' }}>
+    <Button
+        type="primary"
+        ghost // Yeh button ko thora alag dikhayega
+        icon={<SwapOutlined />} // Return ka icon
+        size="large"
+        onClick={() => setIsInvoiceSearchModalOpen(true)} // Naye popup ko kholega
+        style={{ width: isMobile ? '100%' : 'auto' }}
+    >
+        Return by Invoice
+    </Button>
     <Button
         type="primary"
         icon={<UserAddOutlined />}
@@ -368,6 +430,7 @@ const handleViewLedger = async (customer) => {
     >
         Add Customer
     </Button>
+</Space>
 </div> {isMobile ? (
     <List
         loading={loading}
@@ -491,7 +554,98 @@ const handleViewLedger = async (customer) => {
       <Input.TextArea placeholder="e.g., Paid in cash" />
     </Form.Item>
   </Form>
-</Modal> </> );
+</Modal>
+<Modal
+    title="Find Sale to Return Items"
+    open={isInvoiceSearchModalOpen}
+    onCancel={handleCloseInvoiceSearchModal}
+    footer={null} // Hum apne custom buttons istemal karenge
+    destroyOnClose // Jab modal band ho to andar ki states ko destroy kar de
+  >
+    {!searchedSale ? (
+      // STAGE 1: JAB SALE TALASH KI JA RAHI HO
+      <Form form={invoiceSearchForm} onFinish={handleSearchInvoice} layout="vertical">
+        <Form.Item
+          name="invoiceId"
+          label="Enter Invoice ID"
+          rules={[{ required: true, message: 'Please enter the invoice number from the receipt!' }]}
+        >
+          <InputNumber style={{ width: '100%' }} placeholder="e.g., 152" min={1} />
+        </Form.Item>
+        <Form.Item>
+          <Button type="primary" htmlType="submit" loading={isSearching} block>
+            {isSearching ? 'Searching...' : 'Find Sale'}
+          </Button>
+        </Form.Item>
+      </Form>
+    ) : (
+      // STAGE 2: JAB SALE MIL GAYI HO
+      <div>
+        <Descriptions title={`Invoice #${searchedSale.id}`} bordered column={1} size="small">
+          <Descriptions.Item label="Customer">
+            {searchedSale.customer ? searchedSale.customer.name : 'Walk-in Customer'}
+          </Descriptions.Item>
+          <Descriptions.Item label="Date">
+            {new Date(searchedSale.created_at).toLocaleString()}
+          </Descriptions.Item>
+          <Descriptions.Item label="Total Amount">
+            <strong>{formatCurrency(searchedSale.total_amount, profile?.currency)}</strong>
+          </Descriptions.Item>
+        </Descriptions>
+
+        <Title level={5} style={{ marginTop: '24px' }}>Items in this Sale</Title>
+        <List
+          dataSource={searchedSale.sale_items}
+          renderItem={item => {
+              const attributes = Object.entries(item.inventory?.item_attributes || {})
+                .map(([, value]) => value)
+                .join(' ');
+              const details = [item.inventory?.imei, attributes].filter(Boolean).join(' / ');
+
+            return (
+              <List.Item>
+                <List.Item.Meta
+                  title={item.product.name}
+                  description={details || 'Standard Item'}
+                />
+                <div>{formatCurrency(item.price_at_sale, profile?.currency)}</div>
+              </List.Item>
+            );
+          }}
+          style={{ maxHeight: '20vh', overflowY: 'auto' }}
+        />
+        
+        <Divider />
+
+        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+            <Button onClick={() => setSearchedSale(null)}>
+                Search Again
+            </Button>
+            <Button 
+    type="primary" 
+    icon={<SwapOutlined />}
+    // Button ko sirf tab enable karein jab sale mein items hon
+    disabled={!searchedSale.sale_items || searchedSale.sale_items.length === 0}
+    onClick={() => {
+        // Step 1: Search ke popup ko band karein
+        handleCloseInvoiceSearchModal();
+
+        // Step 2: Customer ki maloomat set karein (return modal ke liye zaroori hai)
+        // Hum searchedSale se customer ka data istemal kar rahe hain
+        setSelectedCustomer(searchedSale.customer);
+
+        // Step 3: Aapke mojooda return function ko sale ki details ke sath call karein
+        openReturnModal(searchedSale);
+    }}
+>
+    Proceed to Return
+</Button>
+        </Space>
+      </div>
+    )}
+</Modal>
+ </> 
+ );
 };
 
 export default Customers;

@@ -216,7 +216,7 @@ const POS = () => {
         try {
           setIsSubmitting(true);
           
-          const saleRecord = { customer_id: selectedCustomer, subtotal, discount: discountAmount, total_amount: grandTotal, amount_paid_at_sale: paymentMethod === 'Paid' ? grandTotal : amountPaid, payment_status: (paymentMethod === 'Unpaid' && (grandTotal - amountPaid > 0)) ? 'Unpaid' : 'Paid', user_id: user.id };
+          const saleRecord = { customer_id: selectedCustomer || 1, subtotal, discount: discountAmount, total_amount: grandTotal, amount_paid_at_sale: paymentMethod === 'Paid' ? grandTotal : amountPaid, payment_status: (paymentMethod === 'Unpaid' && (grandTotal - amountPaid > 0)) ? 'Unpaid' : 'Paid', user_id: user.id };
           const { data: saleData, error: saleError } = await supabase.from('sales').insert(saleRecord).select().single();
           if (saleError) throw saleError;
 

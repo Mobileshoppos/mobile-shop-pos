@@ -80,36 +80,74 @@ const Reports = () => {
   }, [dateRange, user, message]); // Yeh sirf dateRange ya user change hone par chalega
 
   const getSummaryData = async (startDate, endDate) => {
-    try {
-      setSummaryLoading(true);
-      let { data: salesData, error: salesError } = await supabase.from('sales').select('total_amount').eq('user_id', user.id).gte('created_at', startDate).lte('created_at', endDate);
-      if (salesError) throw salesError;
-      const totalRevenue = salesData.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+  try {
+    setSummaryLoading(true);
+    // Step 1: Revenue from sales (Yeh hissa pehle se theek hai)
+    let { data: salesData, error: salesError } = await supabase.from('sales').select('total_amount').eq('user_id', user.id).gte('created_at', startDate).lte('created_at', endDate);
+    if (salesError) throw salesError;
+    const totalRevenueFromSales = salesData.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+    
+    // Step 2: Returns ka data hasil karein (user_id ke sath) aur unki IDs bhi lein
+    let { data: returnsData, error: returnsError } = await supabase
+      .from('sale_returns')
+      .select('id, total_refund_amount') // Hum 'id' bhi le rahe hain
+      .eq('user_id', user.id)
+      .gte('created_at', startDate)
+      .lte('created_at', endDate);
+    if (returnsError) throw returnsError;
+
+    const totalRefunds = returnsData.reduce((sum, ret) => sum + (ret.total_refund_amount || 0), 0);
+    const totalRevenue = totalRevenueFromSales - totalRefunds;
+
+    // Step 3: Bechi gayi cheezon ki laagat (Yeh hissa pehle se theek hai)
+    let { data: saleItems, error: itemsError } = await supabase.from('sale_items').select('quantity, inventory(purchase_price)').eq('user_id', user.id).gte('created_at', startDate).lte('created_at', endDate);
+    if (itemsError) throw itemsError;
+    let totalCostOfGoodsSold = 0;
+    for (const item of saleItems) {
+      if (item.inventory) {
+        totalCostOfGoodsSold += item.quantity * (item.inventory.purchase_price || 0);
+      }
+    }
+    
+    // Step 4: Wapas aayi cheezon ki laagat (YAHAN PAR ASAL TABDEELI HAI)
+    let totalCostOfReturns = 0;
+    const returnIds = returnsData.map(r => r.id); // User ke returns ki IDs ki list banayein
+
+    // Agar user ke koi returns hain, to hi unke items dhoondein
+    if (returnIds.length > 0) {
+      let { data: returnedItems, error: returnedItemsError } = await supabase
+        .from('sale_return_items')
+        .select('inventory(purchase_price)')
+        // Ab hum 'return_id' se filter kar rahe hain, jo is table mein mojood hai
+        .in('return_id', returnIds); 
+        
+      if (returnedItemsError) throw returnedItemsError;
       
-      let { data: saleItems, error: itemsError } = await supabase.from('sale_items').select('quantity, inventory(purchase_price)').eq('user_id', user.id).gte('created_at', startDate).lte('created_at', endDate);
-      if (itemsError) throw itemsError;
-      let totalCost = 0;
-      for (const item of saleItems) {
+      for (const item of returnedItems) {
         if (item.inventory) {
-          totalCost += item.quantity * (item.inventory.purchase_price || 0);
+          totalCostOfReturns += (item.inventory.purchase_price || 0);
         }
       }
-      
-      let { data: expensesData, error: expensesError } = await supabase.from('expenses').select('amount').eq('user_id', user.id).gte('expense_date', startDate).lte('expense_date', endDate);
-      if (expensesError) throw expensesError;
-      const totalExpenses = expensesData.reduce((sum, expense) => sum + (expense.amount || 0), 0);
-
-      const grossProfit = totalRevenue - totalCost;
-      const netProfit = grossProfit - totalExpenses;
-      
-      setSummaryData({ totalRevenue, totalCost, grossProfit, totalExpenses, netProfit });
-
-    } catch (error) {
-      message.error('Error fetching summary data: ' + error.message);
-    } finally {
-      setSummaryLoading(false);
     }
-  };
+
+    const totalCost = totalCostOfGoodsSold - totalCostOfReturns;
+
+    // Baqi hissa pehle ki tarah theek kaam karega
+    let { data: expensesData, error: expensesError } = await supabase.from('expenses').select('amount').eq('user_id', user.id).gte('expense_date', startDate).lte('expense_date', endDate);
+    if (expensesError) throw expensesError;
+    const totalExpenses = expensesData.reduce((sum, expense) => sum + (expense.amount || 0), 0);
+
+    const grossProfit = totalRevenue - totalCost;
+    const netProfit = grossProfit - totalExpenses;
+    
+    setSummaryData({ totalRevenue, totalCost, grossProfit, totalExpenses, netProfit });
+
+  } catch (error) {
+    message.error('Error fetching summary data: ' + error.message);
+  } finally {
+    setSummaryLoading(false);
+  }
+};
 
   const getPayableData = async () => {
         try {
