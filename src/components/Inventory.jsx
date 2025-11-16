@@ -89,28 +89,31 @@ const ProductList = ({ products, loading }) => {
   }
 
   const renderVariantHeader = (variant) => (
-    <Row align="top" gutter={[16, 8]}>
-      <Col xs={24} sm={10} md={9}>
-        <Space align="start">
-          <Tag color="blue" style={{ fontSize: '14px', padding: '6px 10px', marginTop: '5px' }}>
-            {variant.display_quantity} Units
-          </Tag>
-          <div>
-            <Text strong>Sale:</Text> <Text>{formatCurrency(variant.sale_price, profile?.currency)}</Text><br/>
-            <Text type="secondary">Purchase:</Text> <Text type="secondary">{formatCurrency(variant.purchase_price, profile?.currency)}</Text>
-          </div>
-        </Space>
-      </Col>
-      <Col xs={24} sm={14} md={15}>
-        <Space wrap>
-          {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
-            if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) return null;
-            return <Tag key={key}>{value}</Tag>;
-          })}
-        </Space>
-      </Col>
-    </Row>
-  );
+  <Row align="middle" justify="space-between" gutter={[16, 8]} style={{ width: '100%' }}>
+    {/* Left Side: Price & Quantity */}
+    <Col xs={24} sm={12} md={11}>
+      <Space align="center" wrap>
+        <Tag color="blue" style={{ fontSize: '14px', padding: '6px 10px' }}>
+          {variant.display_quantity} Units
+        </Tag>
+        <div>
+          <Text strong>Sale:</Text> <Text>{formatCurrency(variant.sale_price, profile?.currency)}</Text><br/>
+          <Text type="secondary">Purchase:</Text> <Text type="secondary">{formatCurrency(variant.purchase_price, profile?.currency)}</Text>
+        </div>
+      </Space>
+    </Col>
+    
+    {/* Right Side: Attributes (Tags) */}
+    <Col xs={24} sm={12} md={13}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-start' }}>
+        {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
+          if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) return null;
+          return <Tag key={key}>{value}</Tag>;
+        })}
+      </div>
+    </Col>
+  </Row>
+);
 
   return (
     <List
