@@ -132,14 +132,13 @@ const ProductList = ({ products, loading }) => {
                   <Tag color={product.quantity > 0 ? 'blue' : 'red'} style={{ margin: 0 }}>{product.quantity ?? 0} Stock</Tag>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-  {/* Left Side: Tags */}
-  <div style={{ flex: '1 1 auto' }}>
-    <Space wrap>
-        {product.brand && <Tag>{product.brand}</Tag>}
-        <Tag color="geekblue">{product.category_name}</Tag>
-    </Space>
+  {/* Left Side: Tags - Ab yeh Space component ke baghair hai */}
+  <div style={{ flex: '1 1 auto', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+      {product.brand && <Tag>{product.brand}</Tag>}
+      <Tag color="geekblue">{product.category_name}</Tag>
   </div>
-  {/* Right Side: Price */}
+  
+  {/* Right Side: Price - Yeh waisa hi rahega */}
   <div style={{ flex: '0 0 auto', whiteSpace: 'nowrap' }}>
     <Title level={5} style={{ margin: 0, textAlign: 'right' }}>
       {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
