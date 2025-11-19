@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider
+  Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip
 } from 'antd';
-import { PlusOutlined, UserAddOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
@@ -17,7 +17,6 @@ const { Search } = Input;
 const POS = () => {
   const { message, modal } = App.useApp();
   const { user, profile, refetchStockCount } = useAuth();
-  const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -33,44 +32,57 @@ const POS = () => {
   const searchInputRef = useRef(null);
   const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
   const [productForVariantSelection, setProductForVariantSelection] = useState(null);
-
-  const getProducts = async () => {
-    try {
-      let { data, error } = await supabase
-        .from('products_display_view') 
-        .select('*')
-        .order('name', { ascending: true });
-      
-      if (error) throw error;
-      setProducts(data);
-    } catch (error) {
-      message.error('Error fetching products: ' + error.message);
-    }
-  };
-
-  const getCustomers = async () => {
-    try {
-      let { data, error } = await supabase.from('customers_with_balance').select('*').order('name', { ascending: true });
-      if (error) throw error;
-      setCustomers(data);
-    } catch (error)      {
-      message.error('Error fetching customers: ' + error.message);
-    }
-  };
+  const [allProducts, setAllProducts] = useState([]);
+  const [displayedProducts, setDisplayedProducts] = useState([]);
+  const [popularCategories, setPopularCategories] = useState([]);
+  const [activeCategoryId, setActiveCategoryId] = useState(null);
+  const [topSellingProducts, setTopSellingProducts] = useState([]);
 
   useEffect(() => {
-    if (user) {
-      const initialLoad = async () => {
-        setLoading(true);
-        await Promise.all([getProducts(), getCustomers()]);
-        setLoading(false);
-        if (searchInputRef.current) {
-          searchInputRef.current.focus();
-        }
-      };
-      initialLoad();
+  if (!user) return;
+
+  const initialLoad = async () => {
+    setLoading(true);
+    try {
+      // Ek saath 4 cheezein database se mangwayein
+      const [
+        { data: allProductsData, error: allProductsError },
+        { data: customersData, error: customersError },
+        { data: topSellingData, error: topSellingError },
+        { data: popularCategoriesData, error: popularCategoriesError }
+      ] = await Promise.all([
+        supabase.from('products_display_view').select('*').order('name', { ascending: true }),
+        supabase.from('customers_with_balance').select('*').order('name', { ascending: true }),
+        supabase.rpc('get_top_selling_products_for_pos'),
+        supabase.rpc('get_popular_categories_for_pos', { p_limit: 4 })
+      ]);
+
+      // Har cheez ka error check karein
+      if (allProductsError) throw allProductsError;
+      if (customersError) throw customersError;
+      if (topSellingError) throw topSellingError;
+      if (popularCategoriesError) throw popularCategoriesError;
+
+      setAllProducts(allProductsData || []);
+      setCustomers(customersData || []);
+      setPopularCategories(popularCategoriesData || []);
+      setTopSellingProducts(topSellingData || []);
+      
+      setDisplayedProducts(topSellingData || []); 
+
+    } catch (error) {
+      message.error("Error loading initial data: " + error.message);
+    } finally {
+      setLoading(false);
+      if (searchInputRef.current) {
+        searchInputRef.current.focus();
+      }
     }
-  }, [user, message]);
+  };
+
+  initialLoad();
+
+}, [user, message]);
 
   const handleAddToCart = (product) => {
     if (product.quantity <= 0) { message.warning('This product is out of stock!'); return; }
@@ -140,15 +152,16 @@ const POS = () => {
     setProductForVariantSelection(null);
   };
 
-  const handleSearch = async (value) => {
-    const trimmedValue = value.trim();
-    setSearchTerm(trimmedValue);
+// === NAYA AUR MUKAMMAL SEARCH FUNCTION START ===
+const handleSearch = async (value, source = 'input') => {
+  const trimmedValue = value ? value.trim() : '';
+  setSearchTerm(value || ''); // Search box mein text dikhayein
 
-    if (!trimmedValue) {
-        return;
-    }
-  
+  // Source 'search' ka matlab hai ke 'Enter' dabaya gaya hai (Barcode/IMEI)
+  if (source === 'search' && trimmedValue) {
+    setLoading(true);
     try {
+      // Barcode se talash karein
       let { data: variantData, error: variantError } = await supabase.from('product_variants').select('*, products:product_id(name, brand)').eq('barcode', trimmedValue).eq('user_id', user.id).maybeSingle();
       if (variantError) throw variantError;
   
@@ -156,29 +169,53 @@ const POS = () => {
         const itemToAdd = { ...variantData, product_name: variantData.products.name, variant_id: variantData.id };
         handleVariantsSelected([itemToAdd]);
         setSearchTerm('');
+        setDisplayedProducts(topSellingProducts); // List ko top selling par reset karein
         return;
       }
-
+  
+      // IMEI se talash karein
       let { data: imeiData, error: imeiError } = await supabase.from('inventory').select('*, variants:product_variants(*, products:product_id(name, brand))').eq('imei', trimmedValue).eq('status', 'Available').maybeSingle();
       if (imeiError) throw imeiError;
-
+  
       if (imeiData && imeiData.variants) {
         const itemToAdd = { ...imeiData, ...imeiData.variants, product_name: imeiData.variants.products.name, variant_id: imeiData.variant_id };
         handleVariantsSelected([itemToAdd]);
         setSearchTerm('');
+        setDisplayedProducts(topSellingProducts); // List ko top selling par reset karein
         return;
       }
 
+      message.warning(`No product found for: ${trimmedValue}`);
+
     } catch (error) {
-      message.error("Search failed: " + error.message);
+      message.error("Barcode/IMEI search failed: " + error.message);
+    } finally {
+      setLoading(false);
     }
-  };
+    return;
+  }
+
+  // Agar 'Enter' nahi dabaya gaya (sirf typing ho rahi hai)
+  setActiveCategoryId(null); // Category filter reset ho jaye
+
+  if (trimmedValue === '') {
+    setDisplayedProducts(topSellingProducts); // BUG FIX: Infinite loop ke bajaye state se reset karein
+  } else {
+    const lowercasedValue = trimmedValue.toLowerCase();
+    const filtered = allProducts.filter(product => 
+      (product.name.toLowerCase().includes(lowercasedValue)) ||
+      (product.brand && product.brand.toLowerCase().includes(lowercasedValue)) ||
+      (product.category_name && product.category_name.toLowerCase().includes(lowercasedValue))
+    );
+    setDisplayedProducts(filtered);
+  }
+};
 
   const handleCartItemUpdate = (variantId, field, value) => {
     setCart(cart.map(item => {
       if (item.variant_id === variantId) {
         if (field === 'quantity') {
-          const productInStock = products.find(p => p.id === item.product_id);
+          const productInStock = allProducts.find(p => p.id === item.product_id);
           if (value > productInStock.quantity) {
             message.warning(`No more stock for this product.`);
             return { ...item, quantity: productInStock.quantity };
@@ -264,18 +301,15 @@ const POS = () => {
         }
 
         if (saleDataForReceipt) {
-  // Use a small timeout to allow the confirm modal to close before the blocking print dialog opens.
   setTimeout(() => {
     (async () => {
       try {
         const { data: receiptDetails, error: rpcError } = await supabase.rpc('get_sale_details', { p_sale_id: saleDataForReceipt.id });
         if (rpcError) throw rpcError;
 
-        // Check user's preferred receipt format from profile
         if (profile?.receipt_format === 'thermal') {
           printThermalReceipt(receiptDetails, profile?.currency);
         } else {
-          // Default to PDF if not set or set to pdf
           generateSaleReceipt(receiptDetails, profile?.currency);
         }
 
@@ -284,7 +318,7 @@ const POS = () => {
         message.warning('Sale was saved, but printing the receipt failed. You can reprint it from Sales History.');
       }
     })();
-  }, 100); // 100ms delay is enough for the UI to update
+  }, 100);
 }
 
         setCart([]);
@@ -293,16 +327,13 @@ const POS = () => {
         setAmountPaid(0);
         setDiscount(0);
         setDiscountType('Amount');
-        await getProducts();
         refetchStockCount();
-        await getCustomers();
         if (searchInputRef.current) { searchInputRef.current.focus(); }
         setIsSubmitting(false);
       }
     });
   };
 
-  const filteredProducts = products.filter(product => product.name.toLowerCase().includes(searchTerm.toLowerCase()));
   const subtotal = cart.reduce((sum, item) => sum + (item.sale_price * item.quantity), 0);
   let discountAmount = discountType === 'Amount' ? discount : (subtotal * discount) / 100;
   const grandTotal = Math.max(0, subtotal - discountAmount);
@@ -320,16 +351,80 @@ const POS = () => {
       <Row gutter={24}>
         <Col xs={24} md={14}>
           <Card>
-            <Search 
-              placeholder="Search by name or scan barcode..." 
-              onChange={(e) => handleSearch(e.target.value)} 
-              value={searchTerm}
-              style={{ marginBottom: '16px' }}
-              ref={searchInputRef}
-            />
-            <List 
-              loading={loading} 
-              dataSource={filteredProducts} 
+            <Search
+  placeholder="Search or Scan Barcode & Press Enter"
+  onChange={(e) => handleSearch(e.target.value, 'input')}
+  onSearch={(value) => handleSearch(value, 'search')}
+  allowClear
+  value={searchTerm}
+  style={{ marginBottom: '16px' }}
+  ref={searchInputRef}
+/>
+
+<div style={{ margin: '16px 0' }}>
+  <Space wrap>
+    <Tooltip title="Top Selling">
+  <Button
+    type={!activeCategoryId ? 'primary' : 'default'}
+    icon={<StarOutlined />}
+    onClick={() => {
+  setActiveCategoryId(null);
+  setSearchTerm('');
+  setDisplayedProducts(topSellingProducts);
+}}
+  />
+</Tooltip>
+    {popularCategories.map(cat => (
+      <Button
+        key={cat.category_id}
+        type={activeCategoryId === cat.category_id ? 'primary' : 'default'}
+        onClick={() => {
+          setActiveCategoryId(cat.category_id);
+          const filtered = allProducts.filter(p => p.category_id === cat.category_id);
+          setDisplayedProducts(filtered);
+          setSearchTerm('');
+        }}
+      >
+        {cat.category_name}
+      </Button>
+    ))}
+    <Select
+      placeholder="All Categories"
+      value={activeCategoryId}
+      onChange={(value) => {
+        if (!value) {
+          setActiveCategoryId(null);
+          handleSearch('');
+        } else {
+          setActiveCategoryId(value);
+          const filtered = allProducts.filter(p => p.category_id === value);
+          setDisplayedProducts(filtered);
+        }
+        setSearchTerm('');
+      }}
+      style={{ width: 150 }}
+      allowClear
+    >
+      {allProducts
+        .reduce((acc, current) => {
+          if (!acc.find(item => item.category_id === current.category_id)) {
+            acc.push({ category_id: current.category_id, category_name: current.category_name });
+          }
+          return acc;
+        }, [])
+        .sort((a,b) => a.category_name.localeCompare(b.category_name))
+        .map(cat => (
+          <Select.Option key={cat.category_id} value={cat.category_id}>
+            {cat.category_name}
+          </Select.Option>
+        ))
+      }
+    </Select>
+  </Space>
+</div>
+<Divider style={{ margin: '0 0 16px 0' }} />
+
+            <List loading={loading} dataSource={displayedProducts} 
               renderItem={(product) => (
                 <List.Item>
                   <List.Item.Meta title={<Text>{product.name}</Text>} description={`Brand: ${product.brand} - Stock: ${product.quantity}`} />
@@ -354,14 +449,14 @@ const POS = () => {
             </Form.Item>
             <Radio.Group onChange={(e) => setPaymentMethod(e.target.value)} value={paymentMethod} style={{ marginBottom: '16px' }}>
               <Radio value={'Paid'}>Paid</Radio>
-              <Radio value={'Unpaid'} disabled={!selectedCustomer}>Pay Later (Udhaar)</Radio>
+              <Radio value={'Unpaid'} disabled={!selectedCustomer}>Pay Later (Credit)</Radio>
             </Radio.Group>
             {paymentMethod === 'Unpaid' && selectedCustomer && (<Form.Item label="Amount Paid Now (optional)"><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} max={grandTotal} value={amountPaid} onChange={(value) => setAmountPaid(value || 0)} /></Form.Item>)}
             {cart.length === 0 ? <Empty description="Cart is empty" /> : 
               <List 
                 dataSource={cart} 
                 renderItem={(item) => { 
-                  const productInStock = products.find(p => p.id === item.product_id); 
+                  const productInStock = allProducts.find(p => p.id === item.product_id); 
                   return (
                     <List.Item style={{ paddingInline: 0 }}> 
                       <div style={{ width: '100%' }}>
@@ -406,7 +501,7 @@ const POS = () => {
       value={item.quantity} 
       onChange={(value) => handleCartItemUpdate(item.variant_id, 'quantity', value || 1)} 
       min={1} 
-      max={products.find(p => p.id === item.product_id)?.quantity || item.quantity} 
+      max={allProducts.find(p => p.id === item.product_id)?.quantity || item.quantity} 
     />
     <Text strong style={{ flex: 1, textAlign: 'right', minWidth: '80px' }}>
   {formatCurrency(item.sale_price * item.quantity, profile?.currency)}

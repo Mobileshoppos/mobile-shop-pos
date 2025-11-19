@@ -1,4 +1,0 @@
--- supabase/migrations/20250928052415_remove_amount_check_from_payments.sql
-
-ALTER TABLE public.supplier_payments
-DROP CONSTRAINT supplier_payments_amount_check;
