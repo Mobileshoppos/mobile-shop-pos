@@ -3,6 +3,7 @@ import { Modal, Table, Button, App, Tag, Space, InputNumber } from 'antd';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
+import { db } from '../db';
 
 const SelectVariantModal = ({ visible, onCancel, onOk, product }) => {
     const { profile } = useAuth();
@@ -16,13 +17,13 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product }) => {
             const fetchVariants = async () => {
                 setLoading(true);
                 try {
-                    const { data, error } = await supabase
-                        .from('inventory')
-                        .select('*')
-                        .eq('product_id', product.id)
-                        .eq('status', 'Available');
-
-                    if (error) throw error;
+                    // *** NAYA CODE (Local DB) ***
+                    const data = await db.inventory
+                        .where('product_id').equals(product.id)
+                        .filter(item => item.status === 'Available' || item.status === 'available') // Case safety
+                        .toArray();
+                    
+                    // Error check ki zaroorat nahi kyunke Dexie empty array dega agar kuch na mila
 
                     const grouped = {};
                     data.forEach(item => {
@@ -56,6 +57,7 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product }) => {
             inventoryIdsToSell.forEach(invId => {
                 itemsToAdd.push({
                     ...variant,
+                    product_name: product.name, // <--- YEH LINE ADD KI HAI (Naam fix karne ke liye)
                     inventory_id: invId,
                     quantity: 1,
                 });
@@ -123,7 +125,7 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product }) => {
             okText="Add Selected to Cart"
             okButtonProps={{ disabled: selectedVariants.length === 0 }}
             width={800}
-            destroyOnClose
+            destroyOnClose={true}
         >
             <Table
                 columns={columns}

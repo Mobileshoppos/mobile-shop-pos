@@ -5,8 +5,10 @@ import { supabase } from '../supabaseClient';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
+import { db } from '../db';
+import { printThermalReceipt } from '../utils/thermalPrinter';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 const SalesHistory = () => {
   const { profile } = useAuth();
@@ -19,12 +21,33 @@ const SalesHistory = () => {
     const fetchSalesHistory = async () => {
       try {
         setLoading(true);
-        const { data, error } = await supabase
-          .from('sales_history_view')
-          .select('*');
+        
+        // 1. Saari Sales Local DB se layein
+        const localSales = await db.sales.toArray();
+        
+        // 2. Har Sale ke liye Customer ka naam aur Items ki ginti karein
+        const formattedSales = await Promise.all(localSales.map(async (sale) => {
+            const customer = await db.customers.get(sale.customer_id);
+            
+            // Items ginnay ke liye
+            const items = await db.sale_items.where('sale_id').equals(sale.id).toArray();
+            const totalItems = items.reduce((sum, i) => sum + (i.quantity || 0), 0);
 
-        if (error) throw error;
-        setSales(data);
+            return {
+                sale_id: sale.id, // UUID
+                created_at: sale.created_at || sale.sale_date,
+                customer_name: customer ? customer.name : 'Walk-in Customer',
+                total_items: totalItems,
+                total_amount: sale.total_amount,
+                payment_status: sale.payment_status,
+                salesperson_name: 'Admin' // Offline mein user name fetch karna complex ho sakta hai, filhal Admin rakhein
+            };
+        }));
+
+        // 3. Date ke hisaab se sort karein (Newest first)
+        formattedSales.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        setSales(formattedSales);
       } catch (error) {
         message.error('Error fetching sales history: ' + error.message);
       } finally {
@@ -39,17 +62,51 @@ const SalesHistory = () => {
     setIsPrinting(saleId); 
   
     try {
-      const { data, error } = await supabase.rpc('get_sale_details', {
-        p_sale_id: saleId
-      });
-  
-      if (error) {
-        throw error;
-      }
+      // 1. Sale dhoondein
+      const sale = await db.sales.get(saleId);
+      if (!sale) throw new Error("Sale not found locally");
+
+      // 2. Customer dhoondein
+      const customer = await db.customers.get(sale.customer_id);
+
+      // 3. Items aur unke Product Names dhoondein
+      const saleItems = await db.sale_items.where('sale_id').equals(saleId).toArray();
+      
+      const itemsWithNames = await Promise.all(saleItems.map(async (item) => {
+          const product = await db.products.get(item.product_id);
+          return {
+              name: product ? product.name : 'Unknown Item', // Receipt generator ko 'name' chahiye
+              quantity: item.quantity,
+              price_at_sale: item.price_at_sale,
+              total: item.quantity * item.price_at_sale
+          };
+      }));
+
+      // 4. Receipt Data Tayyar Karein
+      const receiptData = {
+          shopName: profile?.shop_name || 'My Shop',
+          shopAddress: profile?.address || '',
+          shopPhone: profile?.phone || '',
+          saleId: sale.id, // Ab yeh Number hai, poora bhejein
+          saleDate: sale.created_at || sale.sale_date,
+          customerName: customer ? customer.name : 'Walk-in Customer',
+          items: itemsWithNames,
+          subtotal: sale.subtotal,
+          discount: sale.discount,
+          grandTotal: sale.total_amount,
+          amountPaid: sale.amount_paid_at_sale,
+          paymentStatus: sale.payment_status
+      };
             
-      generateSaleReceipt(data, profile?.currency);
+      // 5. Print Karein (Thermal ya Standard)
+      if (profile?.receipt_format === 'thermal') {
+          printThermalReceipt(receiptData, profile?.currency);
+      } else {
+          generateSaleReceipt(receiptData, profile?.currency);
+      }
   
     } catch (error) {
+      console.error(error);
       message.error('Could not print receipt: ' + error.message);
     } finally {
       setIsPrinting(null);
@@ -62,8 +119,10 @@ const SalesHistory = () => {
       dataIndex: 'sale_id',
       key: 'sale_id',
       fixed: 'left',
-      width: 60,
+      width: 90, // Thora chora karein
       align: 'center',
+      // Ab ID Number hai (e.g., 1732336800123), to hum slice nahi karenge
+      render: (text) => <Text code>{text}</Text>
     },
     {
       title: (

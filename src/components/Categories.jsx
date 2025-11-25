@@ -4,9 +4,10 @@ import {
   Space, Popconfirm, Tooltip, Row, Col, Card, Empty, Select, Switch, Tag
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, MobileOutlined, AppstoreOutlined } from '@ant-design/icons';
-import { supabase } from '../supabaseClient';
+import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { supabase } from '../supabaseClient';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -31,32 +32,17 @@ const Categories = () => {
   const attributeType = Form.useWatch('attribute_type', attributeForm);
 
   const getCategories = useCallback(async () => {
-    if (!user) return;
     try {
       setLoadingCategories(true);
-      
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .or(`user_id.eq.${user.id},user_id.is.null`)
-        .order('name');
-        
-      if (error) throw error;
-
-      const userCategoryNames = data.filter(c => c.user_id).map(c => c.name);
-      const visibleCategories = data.filter(c => {
-        if (c.user_id) return true;
-        return !userCategoryNames.includes(c.name);
-      });
-
-      setCategories(visibleCategories);
-
+      // DataService se categories layein
+      const data = await DataService.getProductCategories();
+      setCategories(data);
     } catch (error) { 
       message.error('Error fetching categories: ' + error.message); 
     } finally { 
       setLoadingCategories(false); 
     }
-  }, [user, message]);
+  }, [message]);
 
   useEffect(() => { getCategories(); }, [getCategories]);
 
@@ -64,8 +50,8 @@ const Categories = () => {
     if (!categoryId) return;
     try {
       setLoadingAttributes(true);
-      const { data, error } = await supabase.from('category_attributes').select('*').eq('category_id', categoryId).order('created_at');
-      if (error) throw error;
+      // DataService se attributes layein
+      const data = await DataService.getCategoryAttributes(categoryId);
       setAttributes(data);
     } catch (error) { message.error("Failed to fetch attributes: " + error.message); } 
     finally { setLoadingAttributes(false); }
@@ -90,7 +76,7 @@ const Categories = () => {
 
     } catch (err) {
       message.destroy();
-      message.error("Failed to customize category: " + err.message);
+      message.error("Internet connection is required to customize this category.");
       return null;
     }
   }
@@ -124,14 +110,16 @@ const Categories = () => {
 
   const handleCategoryModalOk = async (values) => {
     try {
-      let error;
       if (editingCategory) {
-        ({ error } = await supabase.from('categories').update(values).eq('id', editingCategory.id));
+        // Update (Offline)
+        await DataService.updateProductCategory(editingCategory.id, values);
+        message.success('Category updated successfully!');
       } else {
-        ({ error } = await supabase.from('categories').insert([{ ...values, user_id: user.id }]));
+        // Add (Offline)
+        const newCat = { ...values, user_id: user.id };
+        await DataService.addProductCategory(newCat);
+        message.success('Category added successfully!');
       }
-      if (error) throw error;
-      message.success(`Category ${editingCategory ? 'updated' : 'added'} successfully!`);
       handleCategoryModalCancel();
       getCategories();
     } catch (error) { message.error('Error saving category: ' + error.message); }
@@ -139,15 +127,15 @@ const Categories = () => {
 
   const handleDeleteCategory = async (categoryId) => {
     try {
-      const { error } = await supabase.from('categories').delete().eq('id', categoryId);
-      if (error) throw error;
+      // Delete (Offline)
+      await DataService.deleteProductCategory(categoryId);
       message.success('Category deleted successfully!');
       if (selectedCategory?.id === categoryId) {
         setSelectedCategory(null);
         setAttributes([]);
       }
       getCategories();
-    } catch (error) { message.error('Error deleting category: ' + error.message); }
+    } catch (error) { message.error(error.message); }
   };
   
   const showAttributeModal = async (attribute = null) => {
@@ -178,36 +166,30 @@ const Categories = () => {
 
   const handleAttributeModalOk = async (values) => {
     try {
-      let error;
       const payload = {
         ...values,
         category_id: selectedCategory.id,
         options: values.attribute_type === 'select' && values.options ? values.options.split(',').map(opt => opt.trim()) : null,
       };
+
       if (editingAttribute) {
-        ({ error } = await supabase.from('category_attributes').update(payload).eq('id', editingAttribute.id));
+        // Update Attribute (Offline)
+        await DataService.updateCategoryAttribute(editingAttribute.id, payload);
+        message.success('Attribute updated successfully!');
       } else {
-        ({ error } = await supabase.from('category_attributes').insert([payload]));
+        // Add Attribute (Offline)
+        await DataService.addCategoryAttribute(payload);
+        message.success('Attribute added successfully!');
       }
-      if (error) throw error;
-      message.success(`Attribute ${editingAttribute ? 'updated' : 'added'} successfully!`);
       handleAttributeModalCancel();
       getAttributesForCategory(selectedCategory.id);
     } catch (error) { message.error('Error saving attribute: ' + error.message); }
   };
 
   const handleDeleteAttribute = async (attributeId) => {
-    let currentCategory = selectedCategory;
-    if (currentCategory && !currentCategory.user_id) {
-        currentCategory = await cloneDefaultCategory(currentCategory);
-        if (!currentCategory) return;
-        message.info('Category is now customized. Click delete again to confirm.');
-        return;
-    }
-
     try {
-        const { error } = await supabase.from('category_attributes').delete().eq('id', attributeId);
-        if (error) throw error;
+        // Delete Attribute (Offline)
+        await DataService.deleteCategoryAttribute(attributeId);
         message.success('Attribute deleted successfully!');
         getAttributesForCategory(selectedCategory.id);
     } catch (error) { message.error('Error deleting attribute: ' + error.message); }

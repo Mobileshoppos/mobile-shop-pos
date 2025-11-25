@@ -48,29 +48,31 @@ const SettingsPage = () => {
   }, [profile]);
 
   const handleGeneralSettingsSave = async (event) => {
-  event.preventDefault();
-  if (!profile) return;
+    event.preventDefault();
+    if (!profile) return;
 
-  setIsSaving(true);
+    setIsSaving(true);
 
-  // Prepare the data to update
-  const updates = {
-    currency: selectedCurrency,
-    receipt_format: receiptFormat,
-    low_stock_alerts_enabled: lowStockAlerts,
-    low_stock_threshold: lowStockThreshold,
+    // Prepare the data to update
+    const updates = {
+      currency: selectedCurrency,
+      receipt_format: receiptFormat,
+      low_stock_alerts_enabled: lowStockAlerts,
+      low_stock_threshold: lowStockThreshold,
+    };
+
+    // Hum AuthContext ka function use kar rahe hain (jo ab Offline-Aware hai)
+    const result = await updateProfile(updates);
+
+    if (result && result.success) {
+      message.success('Settings updated successfully!');
+    } else {
+      // Agar internet nahi hoga to AuthContext khud error message bhejega
+      message.error(result?.error?.message || 'Failed to update settings.');
+    }
+
+    setIsSaving(false);
   };
-
-  const result = await updateProfile(updates);
-
-  if (result && result.success) {
-    message.success('Settings updated successfully!');
-  } else {
-    message.error('Failed to update settings. Please try again.');
-  }
-
-  setIsSaving(false);
-};
   const { themeConfig, lightTheme, darkTheme, isDarkMode, updateTheme } = useTheme();
 
   const handleFontSizeChange = (newValue) => {

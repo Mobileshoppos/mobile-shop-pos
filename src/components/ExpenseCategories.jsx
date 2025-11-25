@@ -12,7 +12,7 @@ import {
   Tooltip
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { supabase } from '../supabaseClient';
+import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
@@ -29,22 +29,19 @@ const ExpenseCategories = () => {
   const [form] = Form.useForm();
 
   const getCategories = useCallback(async () => {
-    if (!user) return;
     try {
       setLoading(true);
-      let { data, error } = await supabase
-        .from('expense_categories')
-        .select('*')
-        .order('name', { ascending: true });
-      
-      if (error) throw error;
+      // DataService se categories layein (Local DB)
+      const data = await DataService.getExpenseCategories();
+      // Naam ke hisaab se sort karein
+      data.sort((a, b) => a.name.localeCompare(b.name));
       setCategories(data);
     } catch (error) {
       message.error('Error fetching categories: ' + error.message);
     } finally {
       setLoading(false);
     }
-  }, [user, message]);
+  }, [message]);
 
   useEffect(() => {
     getCategories();
@@ -65,12 +62,16 @@ const ExpenseCategories = () => {
   const handleOk = async (values) => {
     try {
       if (editingCategory) {
-        const { error } = await supabase.from('expense_categories').update({ name: values.name }).eq('id', editingCategory.id);
-        if (error) throw error;
+        // Update (Offline)
+        await DataService.updateExpenseCategory(editingCategory.id, values.name);
         message.success('Category updated successfully!');
       } else {
-        const { error } = await supabase.from('expense_categories').insert([{ name: values.name, user_id: user.id }]);
-        if (error) throw error;
+        // Add (Offline)
+        // User ID hum DataService mein handle nahi kar rahe kyunke local DB mein zaroori nahi, 
+        // lekin Supabase ke liye hum user_id sync context mein bhejte hain ya yahan pass kar sakte hain.
+        // Behtar hai yahan pass kar dein agar available hai.
+        const newCat = { name: values.name, user_id: user.id };
+        await DataService.addExpenseCategory(newCat);
         message.success('Category added successfully!');
       }
       handleCancel();
@@ -80,21 +81,16 @@ const ExpenseCategories = () => {
     }
   };
   
-const handleDelete = async (categoryId) => {
+ const handleDelete = async (categoryId) => {
     try {
-      const { error } = await supabase.from('expense_categories').delete().eq('id', categoryId);
-      if (error) throw error;
+      // Delete (Offline)
+      await DataService.deleteExpenseCategory(categoryId);
       message.success('Category deleted successfully!');
       getCategories();
     } catch (error) {
-      if (error.code === '23503') {
-        message.error('This category cannot be deleted as it is currently in use by one or more expenses.');
-      } else {
-        message.error('An unexpected error occurred while deleting the category.');
-        console.error('Deletion Error:', error); // Yeh line aapko console mein asal error dikhaye gi
-      }
+      message.error(error.message);
     }
-};
+  };
 
   const columns = [
     {

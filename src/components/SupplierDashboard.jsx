@@ -7,6 +7,8 @@ import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
+import { db } from '../db';
+import { useSync } from '../context/SyncContext';
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -15,6 +17,8 @@ const { Title, Text } = Typography;
 const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
     const { profile } = useAuth();
     const [ledgerData, setLedgerData] = useState([]);
+    // NAYA: Stats save karne ke liye state
+    const [calculatedStats, setCalculatedStats] = useState(null); 
     const [loading, setLoading] = useState(true);
     const { notification } = AntApp.useApp();
     const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
@@ -25,7 +29,12 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
     const fetchLedger = useCallback(async () => {
         if (!supplier?.id) return; setLoading(true);
         try {
-            const { purchases, payments } = await DataService.getSupplierLedgerDetails(supplier.id);
+            // CHANGE: Hum 'supplier' bhi nikaal rahe hain jisme ab calculated totals hain
+            const { supplier: calculatedSup, purchases, payments } = await DataService.getSupplierLedgerDetails(supplier.id);
+            
+            // NAYA: State update karein
+            setCalculatedStats(calculatedSup);
+
             const combinedData = [
                 ...(purchases || []).map(p => ({
                     key: `pur-${p.id}`, date: p.purchase_date, type: 'Purchase', details: `Purchase #${p.id}`, debit: p.total_amount, credit: 0, link: `/purchases/${p.id}`
@@ -44,7 +53,13 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
     const showPaymentModal = () => { paymentForm.setFieldsValue({ amount: supplier.balance_due > 0 ? supplier.balance_due : undefined, payment_date: dayjs(), payment_method: 'Cash', notes: null }); setIsPaymentModalVisible(true); };
     const handlePaymentSubmit = async (values) => {
         try {
-            const paymentData = { supplier_id: supplier.id, ...values };
+            // Date ko sahi format (ISO String) mein convert karein
+            const formattedValues = {
+                ...values,
+                payment_date: values.payment_date ? values.payment_date.toISOString() : new Date().toISOString()
+            };
+
+            const paymentData = { supplier_id: supplier.id, ...formattedValues };
             await DataService.recordBulkSupplierPayment(paymentData);
             notification.success({ message: 'Success', description: 'Payment recorded!' });
             setIsPaymentModalVisible(false); onRefresh();
@@ -53,7 +68,13 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
     const showRefundModal = () => { refundForm.setFieldsValue({ amount: supplier.credit_balance > 0 ? supplier.credit_balance : undefined, refund_date: dayjs(), refund_method: 'Cash', notes: 'Credit settlement' }); setIsRefundModalVisible(true); };
     const handleRefundSubmit = async (values) => {
         try {
-            const refundData = { supplier_id: supplier.id, ...values };
+            // Date ko sahi format (ISO String) mein convert karein
+            const formattedValues = {
+                ...values,
+                refund_date: values.refund_date ? values.refund_date.toISOString() : new Date().toISOString()
+            };
+
+            const refundData = { supplier_id: supplier.id, ...formattedValues };
             await DataService.recordSupplierRefund(refundData);
             notification.success({ message: 'Success', description: 'Refund recorded!' });
             setIsRefundModalVisible(false); onRefresh();
@@ -61,7 +82,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
     };
 
     const ledgerColumns = [
-        { title: 'Date', dataIndex: 'date', key: 'date', render: (d) => new Date(d).toLocaleString() },
+        { title: 'Date', dataIndex: 'date', key: 'date', render: (d) => new Date(d).toLocaleDateString() },
         { title: 'Type', dataIndex: 'type', key: 'type', render: (t) => <Tag color={t === 'Purchase' ? 'volcano' : 'green'}>{t}</Tag> },
         { title: 'Details', dataIndex: 'details', key: 'details', render: (text, record) => record.link ? <Link to={record.link}>{text}</Link> : text },
         // YEH LINE TABDEEL HUI HAI
@@ -80,8 +101,8 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
             </Space>
 
             <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-                <Col xs={12} md={6}><Statistic title="Total Business" value={supplier?.total_purchases || 0} formatter={() => formatCurrency(supplier?.total_purchases || 0, profile?.currency)} /></Col>
-                <Col xs={12} md={6}><Statistic title="Total Paid" value={supplier?.total_payments || 0} formatter={() => formatCurrency(supplier?.total_payments || 0, profile?.currency)} /></Col>
+                <Col xs={12} md={6}><Statistic title="Total Business" value={calculatedStats?.total_purchases || 0} formatter={() => formatCurrency(calculatedStats?.total_purchases || 0, profile?.currency)} /></Col>
+<Col xs={12} md={6}><Statistic title="Total Paid" value={calculatedStats?.total_payments || 0} formatter={() => formatCurrency(calculatedStats?.total_payments || 0, profile?.currency)} /></Col>
                 <Col xs={12} md={6}><Statistic title="Balance Due" value={supplier?.balance_due || 0} valueStyle={{ color: '#cf1322' }} formatter={() => formatCurrency(supplier?.balance_due || 0, profile?.currency)} /></Col>
                 <Col xs={12} md={6}><Statistic title="Your Credit" value={supplier?.credit_balance || 0} valueStyle={{ color: '#52c41a' }} formatter={() => formatCurrency(supplier?.credit_balance || 0, profile?.currency)} /></Col>
             </Row>
@@ -101,7 +122,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                                         <div style={{ marginTop: '4px' }}>
                                             <Text>{item.link ? <Link to={item.link}>{item.details}</Link> : item.details}</Text>
                                         </div>
-                                        <Text type="secondary" style={{ fontSize: '12px' }}>{new Date(item.date).toLocaleString()}</Text>
+                                        <Text type="secondary" style={{ fontSize: '12px' }}>{new Date(item.date).toLocaleDateString()}</Text>
                                     </Col>
                                     <Col style={{ textAlign: 'right' }}>
     {item.debit > 0 && (
@@ -151,6 +172,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
 
 const SupplierDashboard = () => {
     const { token } = theme.useToken();
+    const { processSyncQueue } = useSync();
     const { profile } = useAuth();
     const isMobile = useMediaQuery('(max-width: 768px)');
     
@@ -215,7 +237,7 @@ const SupplierDashboard = () => {
         } catch (error) {}
     };
 
-    const selectedSupplier = suppliers.find(s => s.id === selectedSupplierId);
+    const selectedSupplier = suppliers.find(s => String(s.id) === String(selectedSupplierId));
 
     const filteredSuppliers = useMemo(() => {
         if (!searchTerm) return suppliers;
@@ -304,7 +326,7 @@ const SupplierDashboard = () => {
                                 dataSource={filteredSuppliers}
                                 renderItem={(s) => (
                                     <List.Item
-                                        onClick={() => setSelectedSupplierId(Number(s.id))}
+                                        onClick={() => setSelectedSupplierId(s.id)}
                                         style={{ cursor: 'pointer', padding: '12px 8px' }}
                                     >
                                         <List.Item.Meta title={<Text>{s.name}</Text>} />
@@ -335,7 +357,7 @@ const SupplierDashboard = () => {
                             <Menu
                                 mode="inline"
                                 selectedKeys={[String(selectedSupplierId)]}
-                                onClick={({ key }) => setSelectedSupplierId(Number(key))}
+                                onClick={({ key }) => setSelectedSupplierId(key)}
                                 style={{ height: 'calc(100vh - 310px)', overflowY: 'auto', borderRight: 0, background: 'transparent' }}
                                 items={filteredSuppliers.map(s => ({
                                     key: s.id,

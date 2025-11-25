@@ -7,6 +7,9 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { formatCurrency } from '../utils/currencyFormatter';
+import { db } from '../db';
+import { useSync } from '../context/SyncContext';
+import DataService from '../DataService';
 
 const { Title, Text } = Typography;
 
@@ -14,6 +17,7 @@ const Customers = () => {
   const { message, modal } = AntApp.useApp();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { user, profile } = useAuth();
+  const { processSyncQueue } = useSync();
   
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,24 +46,50 @@ const Customers = () => {
   const getCustomers = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.from('customers_with_balance').select('*').order('name', { ascending: true });
-      if (error) throw error;
-      setCustomers(data);
-    } catch (error) { message.error('Error fetching customers: ' + error.message); } 
-    finally { setLoading(false); }
+      // Local DB se customers uthayein
+      const data = await db.customers.toArray();
+      // Naam ke hisaab se sort karein
+      setCustomers(data.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (error) { 
+      message.error('Error fetching customers: ' + error.message); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   useEffect(() => { if (user) getCustomers(); }, [user]);
 
   const handleAddCustomer = async (values) => {
     try {
-      const { error } = await supabase.from('customers').insert([{ ...values, user_id: user.id }]);
-      if (error) throw error;
+      // 1. Naya Customer Object banayein
+      const newCustomer = { 
+          ...values, 
+          id: crypto.randomUUID(), // ID khud generate karein
+          user_id: user.id, 
+          balance: 0 
+      };
+
+      // 2. Local DB mein save karein
+      await db.customers.add(newCustomer);
+      
+      // 3. Sync Queue mein daalein
+      await db.sync_queue.add({
+          table_name: 'customers',
+          action: 'create',
+          data: newCustomer
+      });
+
       message.success('Customer added successfully!');
       setIsAddModalOpen(false);
       addForm.resetFields();
+      
+      // List update karein aur upload trigger karein
       await getCustomers();
-    } catch (error) { message.error('Error adding customer: ' + error.message); }
+      processSyncQueue();
+
+    } catch (error) { 
+      message.error('Error adding customer: ' + error.message); 
+    }
   };
 
   const showPaymentModal = (customer) => {
@@ -71,13 +101,42 @@ const Customers = () => {
   
   const handleReceivePayment = async (values) => {
     try {
-      const { error } = await supabase.from('customer_payments').insert([{ customer_id: selectedCustomer.id, amount_paid: values.amount, user_id: user.id }]);
-      if (error) throw error;
+      const paymentData = { 
+          id: crypto.randomUUID(),
+          customer_id: selectedCustomer.id, 
+          amount_paid: values.amount, 
+          user_id: user.id,
+          created_at: new Date().toISOString()
+      };
+
+      // 1. Local DB mein save karein (TAAKE LEDGER MEIN FORAN AAYE)
+      await db.customer_payments.add(paymentData);
+      
+      // 2. Sync Queue mein daalein
+      await db.sync_queue.add({
+          table_name: 'customer_payments',
+          action: 'create',
+          data: paymentData
+      });
+
+      // 3. Balance Update (UI)
+      const currentCustomer = await db.customers.get(selectedCustomer.id);
+      if (currentCustomer) {
+          const newBalance = (currentCustomer.balance || 0) - values.amount;
+          await db.customers.update(selectedCustomer.id, { balance: newBalance });
+          
+          setCustomers(prev => prev.map(c => 
+              c.id === selectedCustomer.id ? { ...c, balance: newBalance } : c
+          ));
+      }
+
       message.success('Payment received successfully!');
       handlePaymentCancel();
-      await getCustomers();
-      if (isLedgerModalOpen) handleViewLedger(selectedCustomer);
-    } catch (error) { message.error('Failed to receive payment: ' + error.message); }
+      processSyncQueue();
+
+    } catch (error) { 
+        message.error('Failed to receive payment: ' + error.message); 
+    }
   };
 
   // >> YEH TEEN NAYE FUNCTIONS PASTE KAREIN <<
@@ -98,63 +157,101 @@ const Customers = () => {
 
   const handleConfirmPayout = async (values) => {
     try {
-      const { error } = await supabase.from('credit_payouts').insert([
-        { 
+      const payoutData = { 
+          id: crypto.randomUUID(),
           customer_id: selectedCustomer.id, 
           amount_paid: values.amount, 
           remarks: values.remarks,
-          user_id: user.id 
-        }
-      ]);
-      if (error) throw error;
+          user_id: user.id,
+          created_at: new Date().toISOString()
+      };
+
+      // 1. Local DB mein save karein
+      await db.credit_payouts.add(payoutData);
+      
+      // 2. Sync Queue mein daalein
+      await db.sync_queue.add({
+          table_name: 'credit_payouts',
+          action: 'create',
+          data: payoutData
+      });
+
+      // 3. Balance Update (UI & Local DB)
+      // Payout ka matlab hai hum ne customer ko paise diye, to uska balance barh jayega (ya negative balance kam ho jayega)
+      const currentCustomer = await db.customers.get(selectedCustomer.id);
+      if (currentCustomer) {
+          const newBalance = (currentCustomer.balance || 0) + values.amount;
+          await db.customers.update(selectedCustomer.id, { balance: newBalance });
+          
+          setCustomers(prev => prev.map(c => 
+              c.id === selectedCustomer.id ? { ...c, balance: newBalance } : c
+          ));
+      }
+
       message.success('Credit settled successfully!');
       handlePayoutCancel();
-      await getCustomers();
-      if (isLedgerModalOpen) handleViewLedger(selectedCustomer);
+      processSyncQueue();
+
     } catch (error) {
       message.error('Failed to settle credit: ' + error.message);
     }
   };
 
   const handleSearchInvoice = async (values) => {
-  try {
-    setIsSearching(true);
-    setSearchedSale(null); // Purani search clear karein
+    try {
+      setIsSearching(true);
+      setSearchedSale(null); 
 
-    const { data: saleData, error } = await supabase
-      .from('sales')
-      .select(`
-        id,
-        created_at,
-        total_amount,
-        customer_id,
-        customer:customers(id, name, phone_number),
-        sale_items:sale_items(
-          id,
-          price_at_sale,
-          product:products(name),
-          inventory:inventory(imei, item_attributes)
-        )
-      `)
-      .eq('id', values.invoiceId)
-      .single();
+      // User jo number likhega (e.g., 75)
+      const searchInput = values.invoiceId; 
+      let saleData = null;
 
-    if (error) {
-      // Agar 'single()' ko result na mile to woh error deta hai
-      message.error(`Invoice ID #${values.invoiceId} not found.`);
-      throw error;
+      // 1. Seedha Number se dhoondein
+      const searchId = Number(searchInput);
+      if (isNaN(searchId)) {
+          message.error("Please enter a valid numeric Invoice ID");
+          setIsSearching(false);
+          return;
+      }
+      saleData = await db.sales.get(searchId);
+
+      if (!saleData) {
+        message.error(`Invoice ID #${searchInput} not found locally.`);
+        setIsSearching(false);
+        return;
+      }
+
+      // 2. Details Jama Karein
+      const customer = await db.customers.get(saleData.customer_id);
+      const saleItems = await db.sale_items.where('sale_id').equals(saleData.id).toArray();
+
+      const itemsWithDetails = await Promise.all(saleItems.map(async (item) => {
+          const product = await db.products.get(item.product_id);
+          const inventory = await db.inventory.get(item.inventory_id);
+          
+          return {
+              ...item,
+              product: product || { name: 'Unknown Product' },
+              inventory: inventory || {}
+          };
+      }));
+
+      const fullSaleObject = {
+          ...saleData,
+          // Hum saleData se ID utha rahe hain (jo ke 1 hogi)
+          customer: customer || { id: saleData.customer_id, name: 'Walk-in Customer' },
+          sale_items: itemsWithDetails
+      };
+
+      setSearchedSale(fullSaleObject);
+
+    } catch (error) {
+      console.error("Invoice search failed:", error);
+      message.error("Search failed: " + error.message);
+    } finally {
+      setIsSearching(false);
     }
-
-    if (saleData) {
-      setSearchedSale(saleData);
-    }
-
-  } catch (error) {
-    console.error("Invoice search failed:", error.message);
-  } finally {
-    setIsSearching(false);
-  }
-};
+  };
 
 const handleCloseInvoiceSearchModal = () => {
   setIsInvoiceSearchModalOpen(false);
@@ -166,32 +263,47 @@ const handleCloseInvoiceSearchModal = () => {
     try {
       setIsReturnModalOpen(true);
       setSelectedSale(sale);
-      // BUG FIX: 'color', 'ram_rom' ki jagah 'item_attributes' manga gaya hai
-      const { data: soldItems, error: siError } = await supabase
-        .from('sale_items')
-        .select(`id, price_at_sale, product_id, inventory(id, imei, item_attributes), products(name)`)
-        .eq('sale_id', sale.id);
 
-      if (siError) throw siError;
-      
-      const { data: returnedItems, error: riError } = await supabase.rpc('get_returned_items_for_sale', { p_sale_id: sale.id });
-      if (riError) throw riError;
+      // 1. Sale Items layein
+      const soldItems = await db.sale_items.where('sale_id').equals(sale.id).toArray();
 
-      const returnedInvIds = returnedItems.map(item => item.inventory_id);
-      const availableItems = soldItems.filter(item => item.inventory && !returnedInvIds.includes(item.inventory.id));
+      // 2. Pehle se Return kiye gaye items layein
+      // Hamein sale_returns table se is sale ke returns dhoondne honge
+      const previousReturns = await db.sale_returns.where('sale_id').equals(sale.id).toArray();
+      const previousReturnIds = previousReturns.map(r => r.id);
       
-      // BUG FIX: item_attributes ko data mein shamil kiya gaya hai
-      setReturnableItems(availableItems.map(item => ({
-        sale_item_id: item.id,
-        inventory_id: item.inventory.id,
-        product_id: item.product_id,
-        product_name: item.products.name,
-        imei: item.inventory.imei,
-        item_attributes: item.inventory.item_attributes, // Naya data
-        price_at_sale: item.price_at_sale
-      })));
+      // Phir un returns ke items dhoondne honge
+      let returnedInventoryIds = [];
+      if (previousReturnIds.length > 0) {
+          const returnedItems = await db.sale_return_items
+              .filter(item => previousReturnIds.includes(item.return_id))
+              .toArray();
+          returnedInventoryIds = returnedItems.map(i => i.inventory_id);
+      }
+
+      // 3. Sirf wo items dikhayein jo abhi tak return nahi hue
+      const availableItems = soldItems.filter(item => !returnedInventoryIds.includes(item.inventory_id));
+
+      // 4. Details Jorein (Product Name, IMEI etc)
+      const itemsWithDetails = await Promise.all(availableItems.map(async (item) => {
+          const product = await db.products.get(item.product_id);
+          const inventory = await db.inventory.get(item.inventory_id);
+          
+          return {
+            sale_item_id: item.id, // Sale Item ID zaroori hai return ke liye
+            inventory_id: item.inventory_id,
+            product_id: item.product_id,
+            product_name: product ? product.name : 'Unknown Product',
+            imei: inventory ? inventory.imei : '',
+            item_attributes: inventory ? inventory.item_attributes : {},
+            price_at_sale: item.price_at_sale
+          };
+      }));
+
+      setReturnableItems(itemsWithDetails);
 
     } catch (error) {
+      console.error(error);
       message.error("Error preparing return: " + error.message);
       setIsReturnModalOpen(false);
     }
@@ -213,46 +325,86 @@ const handleCloseInvoiceSearchModal = () => {
     try {
       setIsReturnSubmitting(true);
       
-      const { data: returnRecord, error: rError } = await supabase
-        .from('sale_returns')
-        .insert({
+      // 1. Return Record Banayein
+      const returnId = crypto.randomUUID();
+      const returnRecord = {
+          id: returnId,
           sale_id: selectedSale.id,
           customer_id: selectedSale.customer_id,
           total_refund_amount: totalRefundAmount,
           reason: values.reason,
-          user_id: user.id 
-        })
-        .select()
-        .single();
+          user_id: user.id,
+          created_at: new Date().toISOString()
+      };
 
-      if (rError) throw rError;
-
+      // 2. Return Items Banayein
       const itemsToInsert = returnableItems
         .filter(i => selectedReturnItems.includes(i.sale_item_id))
         .map(i => ({
-          return_id: returnRecord.id,
+          id: crypto.randomUUID(),
+          return_id: returnId,
           inventory_id: i.inventory_id,
           product_id: i.product_id,
           price_at_return: i.price_at_sale
         }));
-      
-      const { error: riError } = await supabase.from('sale_return_items').insert(itemsToInsert);
-      if (riError) throw riError;
 
-      const { error: creditError } = await supabase.from('customer_payments').insert({
+      // 3. Payment (Credit) Record Banayein
+      const paymentId = crypto.randomUUID();
+      const paymentRecord = {
+        id: paymentId,
         customer_id: selectedSale.customer_id,
-        amount_paid: -totalRefundAmount,
+        amount_paid: -totalRefundAmount, // Negative amount for credit
         user_id: user.id,
-        remarks: `Refund for Invoice #${selectedSale.id}`
+        remarks: `Refund for Invoice #${selectedSale.id}`,
+        created_at: new Date().toISOString()
+      };
+
+      // --- NAYA CODE START (Inventory & Sync Fix) ---
+
+      // 4. Local DB mein Save karein
+      await db.sale_returns.add(returnRecord);
+      if (db.sale_return_items) await db.sale_return_items.bulkAdd(itemsToInsert);
+      await db.customer_payments.add(paymentRecord);
+
+      // 5. Inventory ko wapis 'Available' karein (Local)
+      const inventoryIdsToUpdate = itemsToInsert.map(i => i.inventory_id);
+      for (const invId of inventoryIdsToUpdate) {
+          await db.inventory.update(invId, { status: 'available' });
+      }
+
+      // 6. Balance Update (UI & Local DB)
+      const currentCustomer = await db.customers.get(selectedSale.customer_id);
+      if (currentCustomer) {
+          const newBalance = (currentCustomer.balance || 0) - totalRefundAmount;
+          await db.customers.update(selectedSale.customer_id, { balance: newBalance });
+          
+          setCustomers(prev => prev.map(c => 
+              c.id === selectedSale.customer_id ? { ...c, balance: newBalance } : c
+          ));
+      }
+
+      // 7. Sync Queue mein daalein (Ab hum poora return data bhejenge)
+      await db.sync_queue.add({
+          table_name: 'sale_returns',
+          action: 'create_full_return', // Naya Action
+          data: {
+              return_record: returnRecord,
+              items: itemsToInsert,
+              payment_record: paymentRecord,
+              inventory_ids: inventoryIdsToUpdate
+          }
       });
-      if (creditError) throw creditError;
+
+      // --- NAYA CODE END ---
 
       message.success(`Return successful! ${formatCurrency(totalRefundAmount, profile?.currency)} credited.`);
       handleReturnCancel();
-      await getCustomers();
+      
       if (selectedCustomer) {
-  handleViewLedger(selectedCustomer);
-}
+          handleViewLedger(selectedCustomer);
+      }
+      
+      processSyncQueue();
 
     } catch (error) {
       message.error("Failed to process return: " + error.message);
@@ -263,44 +415,91 @@ const handleCloseInvoiceSearchModal = () => {
   
   const totalRefundAmount = useMemo(() => returnableItems.filter(i => selectedReturnItems.includes(i.sale_item_id)).reduce((sum, i) => sum + i.price_at_sale, 0), [selectedReturnItems, returnableItems]);
   
-const handleViewLedger = async (customer) => {
+  const handleViewLedger = async (customer) => {
     setSelectedCustomer(customer);
     setIsLedgerModalOpen(true);
     try {
         setLedgerLoading(true);
 
-        // Step 1: Purana data haasil karein (sales, payments, returns)
-        const { data: sales, error: sError } = await supabase.from('sales').select(`*, sale_items(*, inventory(*), products(*))`).eq('customer_id', customer.id);
-        if (sError) throw sError;
-        const { data: payments, error: pError } = await supabase.from('customer_payments').select(`*`).eq('customer_id', customer.id);
-        if (pError) throw pError;
-        const { data: returns, error: rError } = await supabase.from('sale_returns').select(`*, sale_return_items(*, inventory(*), products(*))`).eq('customer_id', customer.id);
-        if(rError) throw rError;
-
-        // --- NAYA STEP: Payouts ka data bhi haasil karein ---
-        const { data: payouts, error: poError } = await supabase.from('credit_payouts').select('*').eq('customer_id', customer.id);
-        if (poError) throw poError;
-
-        // Step 2: Data ko aam transactions mein tabdeel karein
-        const salesTx = sales.map(s => ({ type: 'sale', date: s.created_at, description: `Sale (Invoice #${s.id})`, debit: (s.total_amount || 0) - (s.amount_paid_at_sale || 0), credit: 0, details: s }));
-        const paymentsTx = payments.map(p => ({ type: p.amount_paid > 0 ? 'payment' : 'return', date: p.created_at, description: p.amount_paid > 0 ? 'Payment Received' : `Return Credit (Ref. Invoice #${p.remarks?.split('#')[1] || ''})`, debit: 0, credit: Math.abs(p.amount_paid), details: { ...p, return_details: returns.find(r => r.sale_id === parseInt(p.remarks?.split('#')[1])) } }));
+        // 1. Sales layein
+        const sales = await db.sales.where('customer_id').equals(customer.id).toArray();
         
-        // --- NAYA STEP: Payouts ko bhi transactions banayein ---
-        const payoutsTx = payouts.map(p => ({ type: 'payout', date: p.created_at, description: 'Credit Payout', debit: p.amount_paid, credit: 0, details: p }));
+        // 2. Payments layein
+        const payments = await db.customer_payments.where('customer_id').equals(customer.id).toArray();
 
-        // Step 3: Tamam transactions ko milayein aur date ke hisab se sort karein
+        // 3. Returns layein
+        const returns = await db.sale_returns.where('customer_id').equals(customer.id).toArray();
+
+        // 4. Payouts layein
+        let payouts = [];
+        if (db.credit_payouts) {
+             payouts = await db.credit_payouts.where('customer_id').equals(customer.id).toArray();
+        }
+
+        // *** MAGIC STEP: Sales ke Items + Products + Inventory Details dhoondein ***
+        const salesWithDetails = await Promise.all(sales.map(async (sale) => {
+            // Is sale ke items dhoondein
+            const items = await db.sale_items.where('sale_id').equals(sale.id).toArray();
+            
+            // Har item ka Product Name aur Inventory Details dhoondein
+            const itemsWithFullDetails = await Promise.all(items.map(async (item) => {
+                const product = await db.products.get(item.product_id);
+                
+                // *** YEH LINE NAYI HAI (Inventory Details ke liye) ***
+                const inventoryItem = await db.inventory.get(item.inventory_id);
+
+                return { 
+                    ...item, 
+                    products: product || { name: 'Unknown Product' },
+                    inventory: inventoryItem || {} // <--- Yeh "N/A" ko khatam karega
+                };
+            }));
+
+            return { ...sale, sale_items: itemsWithFullDetails };
+        }));
+        // *************************************************************************
+
+        // Data ko format karein
+        const salesTx = salesWithDetails.map(s => ({ 
+            type: 'sale', 
+            date: s.created_at || s.sale_date, 
+            description: `Sale (Invoice #${s.id})`, 
+            debit: (s.total_amount || 0) - (s.amount_paid_at_sale || 0), 
+            credit: 0, 
+            details: s 
+        }));
+
+        const paymentsTx = payments.map(p => ({
+            type: p.amount_paid > 0 ? 'payment' : 'return',
+            date: p.created_at,
+            description: p.amount_paid > 0 ? 'Payment Received' : `Return Credit`,
+            debit: 0,
+            credit: Math.abs(p.amount_paid),
+            details: p
+        }));
+
+        const payoutsTx = payouts.map(p => ({
+            type: 'payout',
+            date: p.created_at,
+            description: 'Credit Payout',
+            debit: p.amount_paid,
+            credit: 0,
+            details: p
+        }));
+
+        // Sab ko milayein aur sort karein
         const allTx = [...salesTx, ...paymentsTx, ...payoutsTx].sort((a, b) => new Date(a.date) - new Date(b.date));
         
-        // Step 4: Running balance calculate karein
         let runningBalance = 0;
         const finalLedger = allTx.map(tx => {
             runningBalance += tx.debit - tx.credit;
-            return { ...tx, balance: runningBalance, key: `${tx.type}-${tx.details.id}-${tx.date}` };
+            return { ...tx, balance: runningBalance, key: `${tx.type}-${tx.details.id}` };
         });
 
         setLedgerData(finalLedger.reverse());
 
     } catch (error) {
+        console.error(error);
         message.error('Error fetching ledger: ' + error.message);
     } finally {
         setLedgerLoading(false);

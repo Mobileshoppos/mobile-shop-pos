@@ -19,7 +19,6 @@ import {
   CreditCardOutlined
 } from '@ant-design/icons';
 
-// Components & Pages
 import Inventory from './components/Inventory';
 import POS from './components/POS';
 import Reports from './components/Reports';
@@ -37,8 +36,8 @@ import SalesHistory from './components/SalesHistory';
 import SettingsPage from './pages/SettingsPage';
 import SubscriptionPage from './pages/SubscriptionPage';
 import UpdatePasswordPage from './pages/UpdatePasswordPage';
-
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SyncProvider, useSync } from './context/SyncContext';
 import { CustomThemeProvider, useTheme } from './context/ThemeContext';
 import { supabase } from './supabaseClient';
 import { darkThemeTokens, lightThemeTokens } from './theme/themeConfig';
@@ -63,6 +62,12 @@ const menuItems = [
 ];
 
 const MainLayout = ({ isDarkMode, toggleTheme }) => {
+  const { syncAllData } = useSync();
+  
+  useEffect(() => {
+    syncAllData();
+  }, []); 
+
   const location = useLocation();
   const { token } = theme.useToken();
   const [collapsed, setCollapsed] = useState(true);
@@ -248,9 +253,11 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <CustomThemeProvider>
-          <ThemeAppliedLayout />
-        </CustomThemeProvider>
+        <SyncProvider>
+          <CustomThemeProvider>
+            <ThemeAppliedLayout />
+          </CustomThemeProvider>
+        </SyncProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -10,10 +10,6 @@ import { printThermalReceipt } from '../utils/thermalPrinter';
 import { Tag } from 'antd';
 import SelectVariantModal from './SelectVariantModal';
 import { formatCurrency } from '../utils/currencyFormatter';
-import { db } from '../db';
-import { useSync } from '../context/SyncContext';
-import DataService from '../DataService';
-import { generateInvoiceId } from '../utils/idGenerator';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -21,7 +17,6 @@ const { Search } = Input;
 const POS = () => {
   const { message, modal } = App.useApp();
   const { user, profile, refetchStockCount } = useAuth();
-  const { processSyncQueue } = useSync();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -46,27 +41,34 @@ const POS = () => {
   useEffect(() => {
   if (!user) return;
 
-  // NAYA initialLoad (Offline-First)
   const initialLoad = async () => {
     setLoading(true);
     try {
-      // 1. Customers Local DB se layein
-      const customersData = await db.customers.toArray();
-      setCustomers(customersData.sort((a, b) => a.name.localeCompare(b.name)));
+      // Ek saath 4 cheezein database se mangwayein
+      const [
+        { data: allProductsData, error: allProductsError },
+        { data: customersData, error: customersError },
+        { data: topSellingData, error: topSellingError },
+        { data: popularCategoriesData, error: popularCategoriesError }
+      ] = await Promise.all([
+        supabase.from('products_display_view').select('*').order('name', { ascending: true }),
+        supabase.from('customers_with_balance').select('*').order('name', { ascending: true }),
+        supabase.rpc('get_top_selling_products_for_pos'),
+        supabase.rpc('get_popular_categories_for_pos', { p_limit: 4 })
+      ]);
 
-      // 2. Products Local DB se layein (Wohi DataService jo Inventory mein use kiya tha)
-      const { productsData } = await DataService.getInventoryData();
-      setAllProducts(productsData);
+      // Har cheez ka error check karein
+      if (allProductsError) throw allProductsError;
+      if (customersError) throw customersError;
+      if (topSellingError) throw topSellingError;
+      if (popularCategoriesError) throw popularCategoriesError;
+
+      setAllProducts(allProductsData || []);
+      setCustomers(customersData || []);
+      setPopularCategories(popularCategoriesData || []);
+      setTopSellingProducts(topSellingData || []);
       
-      // 3. Categories Local DB se layein
-      const categoriesData = await db.categories.toArray();
-      // Pehle 4 categories ko "Popular" bana lein
-      const popCats = categoriesData.slice(0, 4).map(c => ({ category_id: c.id, category_name: c.name }));
-      setPopularCategories(popCats);
-
-      // 4. Filhal "Top Selling" mein hum saare products dikhayenge (Offline mein calculation mushkil hai)
-      setDisplayedProducts(productsData);
-      setTopSellingProducts(productsData); 
+      setDisplayedProducts(topSellingData || []); 
 
     } catch (error) {
       message.error("Error loading initial data: " + error.message);
@@ -151,74 +153,63 @@ const POS = () => {
   };
 
 // === NAYA AUR MUKAMMAL SEARCH FUNCTION START ===
-// NAYA handleSearch (Offline-First)
-  const handleSearch = async (value, source = 'input') => {
-    const trimmedValue = value ? value.trim() : '';
-    setSearchTerm(value || ''); 
+const handleSearch = async (value, source = 'input') => {
+  const trimmedValue = value ? value.trim() : '';
+  setSearchTerm(value || ''); // Search box mein text dikhayein
 
-    // Jab Enter dabaya jaye (Barcode ya IMEI Search)
-    if (source === 'search' && trimmedValue) {
-      setLoading(true);
-      try {
-        // 1. Pehle Products list mein Barcode check karein (Yeh list pehle se loaded hai)
-        const productByBarcode = allProducts.find(p => p.barcode === trimmedValue);
-        
-        if (productByBarcode) {
-             // Agar product mil gaya, to cart mein add karne ke liye modal kholein
-             handleAddToCart(productByBarcode);
-             setSearchTerm('');
-             setDisplayedProducts(topSellingProducts);
-             return;
-        }
-
-        // 2. Agar Product nahi mila, to Inventory Items (IMEI) mein dhoondein
-        // Hamein Local DB ke 'inventory' table mein check karna hai
-        const inventoryItem = await db.inventory.where('imei').equals(trimmedValue).first();
-        
-        // Sirf wo item uthayein jo 'available' ho
-        if (inventoryItem && inventoryItem.status === 'available') {
-             // Item mil gaya, ab iski parent product details (Naam, Brand) chahiye
-             const parentProduct = allProducts.find(p => p.id === inventoryItem.product_id);
-             
-             if (parentProduct) {
-                 const itemToAdd = {
-                     ...inventoryItem,
-                     product_name: parentProduct.name,
-                     variant_id: inventoryItem.variant_id || inventoryItem.id,
-                     sale_price: inventoryItem.sale_price || parentProduct.sale_price
-                 };
-                 handleVariantsSelected([itemToAdd]);
-                 setSearchTerm('');
-                 setDisplayedProducts(topSellingProducts);
-                 return;
-             }
-        }
-
-        message.warning(`No product found for: ${trimmedValue}`);
-
-      } catch (error) {
-        message.error("Search failed: " + error.message);
-      } finally {
-        setLoading(false);
+  // Source 'search' ka matlab hai ke 'Enter' dabaya gaya hai (Barcode/IMEI)
+  if (source === 'search' && trimmedValue) {
+    setLoading(true);
+    try {
+      // Barcode se talash karein
+      let { data: variantData, error: variantError } = await supabase.from('product_variants').select('*, products:product_id(name, brand)').eq('barcode', trimmedValue).eq('user_id', user.id).maybeSingle();
+      if (variantError) throw variantError;
+  
+      if (variantData) {
+        const itemToAdd = { ...variantData, product_name: variantData.products.name, variant_id: variantData.id };
+        handleVariantsSelected([itemToAdd]);
+        setSearchTerm('');
+        setDisplayedProducts(topSellingProducts); // List ko top selling par reset karein
+        return;
       }
-      return;
-    }
+  
+      // IMEI se talash karein
+      let { data: imeiData, error: imeiError } = await supabase.from('inventory').select('*, variants:product_variants(*, products:product_id(name, brand))').eq('imei', trimmedValue).eq('status', 'Available').maybeSingle();
+      if (imeiError) throw imeiError;
+  
+      if (imeiData && imeiData.variants) {
+        const itemToAdd = { ...imeiData, ...imeiData.variants, product_name: imeiData.variants.products.name, variant_id: imeiData.variant_id };
+        handleVariantsSelected([itemToAdd]);
+        setSearchTerm('');
+        setDisplayedProducts(topSellingProducts); // List ko top selling par reset karein
+        return;
+      }
 
-    // Normal Typing Search (Naam se dhoondna) - Yeh pehle jaisa hi hai
-    setActiveCategoryId(null); 
+      message.warning(`No product found for: ${trimmedValue}`);
 
-    if (trimmedValue === '') {
-      setDisplayedProducts(topSellingProducts); 
-    } else {
-      const lowercasedValue = trimmedValue.toLowerCase();
-      const filtered = allProducts.filter(product => 
-        (product.name.toLowerCase().includes(lowercasedValue)) ||
-        (product.brand && product.brand.toLowerCase().includes(lowercasedValue)) ||
-        (product.category_name && product.category_name.toLowerCase().includes(lowercasedValue))
-      );
-      setDisplayedProducts(filtered);
+    } catch (error) {
+      message.error("Barcode/IMEI search failed: " + error.message);
+    } finally {
+      setLoading(false);
     }
-  };
+    return;
+  }
+
+  // Agar 'Enter' nahi dabaya gaya (sirf typing ho rahi hai)
+  setActiveCategoryId(null); // Category filter reset ho jaye
+
+  if (trimmedValue === '') {
+    setDisplayedProducts(topSellingProducts); // BUG FIX: Infinite loop ke bajaye state se reset karein
+  } else {
+    const lowercasedValue = trimmedValue.toLowerCase();
+    const filtered = allProducts.filter(product => 
+      (product.name.toLowerCase().includes(lowercasedValue)) ||
+      (product.brand && product.brand.toLowerCase().includes(lowercasedValue)) ||
+      (product.category_name && product.category_name.toLowerCase().includes(lowercasedValue))
+    );
+    setDisplayedProducts(filtered);
+  }
+};
 
   const handleCartItemUpdate = (variantId, field, value) => {
     setCart(cart.map(item => {
@@ -245,7 +236,6 @@ const POS = () => {
     }
   };
 
-  // FINAL handleCompleteSale (With Debugging)
   const handleCompleteSale = async () => {
     if (cart.length === 0) return;
     if (paymentMethod === 'Unpaid' && !selectedCustomer) { message.error('Please select a customer for a credit (Pay Later) sale.'); return; }
@@ -263,148 +253,81 @@ const POS = () => {
         try {
           setIsSubmitting(true);
           
-          // *** FINAL LOGIC: 6-Digit Device-Safe ID ***
-          // Hum naya utility function use kar rahe hain jo Device ID aur Random Number
-          // mila kar hamesha unique 6-digit ID banayega.
-          const saleId = await generateInvoiceId(db);
-          // ********************************************
-
-          const saleDate = new Date().toISOString();
-
-          const saleRecord = { 
-              id: saleId, // Ab yeh Number hai (e.g., 75)
-              customer_id: selectedCustomer || 1, 
-              subtotal, 
-              discount: discountAmount, 
-              total_amount: grandTotal, 
-              amount_paid_at_sale: paymentMethod === 'Paid' ? grandTotal : amountPaid, 
-              payment_status: (paymentMethod === 'Unpaid' && (grandTotal - amountPaid > 0)) ? 'Unpaid' : 'Paid', 
-              user_id: user.id,
-              created_at: saleDate
-          };
+          const saleRecord = { customer_id: selectedCustomer || 1, subtotal, discount: discountAmount, total_amount: grandTotal, amount_paid_at_sale: paymentMethod === 'Paid' ? grandTotal : amountPaid, payment_status: (paymentMethod === 'Unpaid' && (grandTotal - amountPaid > 0)) ? 'Unpaid' : 'Paid', user_id: user.id };
+          const { data: saleData, error: saleError } = await supabase.from('sales').insert(saleRecord).select().single();
+          if (saleError) throw saleError;
 
           const allSaleItemsToInsert = [];
-          const inventoryIdsToUpdate = [];
+          const allInventoryIdsToUpdate = [];
 
           for (const cartItem of cart) {
-            if (cartItem.imei) {
-                const inventoryId = cartItem.inventory_id || cartItem.id;
-                allSaleItemsToInsert.push({
-                    id: crypto.randomUUID(), // Items ki ID UUID hi rahegi (Internal use)
-                    sale_id: saleId,
-                    inventory_id: inventoryId,
-                    product_id: cartItem.product_id,
-                    quantity: 1,
-                    price_at_sale: cartItem.sale_price,
-                    user_id: user.id
-                });
-                inventoryIdsToUpdate.push(inventoryId);
-            } else {
-                const availableItems = await db.inventory
-                    .where('product_id').equals(cartItem.product_id)
-                    .filter(item => (item.status || '').toLowerCase() === 'available') 
-                    .limit(cartItem.quantity)
-                    .toArray();
+            const { data: availableInventory, error: inventoryError } = await supabase
+              .from('inventory')
+              .select('id, product_id')
+              .eq('variant_id', cartItem.variant_id)
+              .eq('status', 'Available')
+              .limit(cartItem.quantity);
 
-                if (availableItems.length < cartItem.quantity) {
-                     throw new Error(`Not enough stock locally for ${cartItem.product_name}.`);
-                }
+            if (inventoryError || availableInventory.length < cartItem.quantity) {
+              throw new Error(`Not enough stock for ${cartItem.product_name}. Required: ${cartItem.quantity}, Available: ${availableInventory.length}.`);
+            }
 
-                for (const invItem of availableItems) {
-                    allSaleItemsToInsert.push({
-                        id: crypto.randomUUID(),
-                        sale_id: saleId,
-                        inventory_id: invItem.id,
-                        product_id: invItem.product_id,
-                        quantity: 1,
-                        price_at_sale: cartItem.sale_price,
-                        user_id: user.id
-                    });
-                    inventoryIdsToUpdate.push(invItem.id);
-                }
+            for (const invItem of availableInventory) {
+              allSaleItemsToInsert.push({
+                sale_id: saleData.id,
+                inventory_id: invItem.id,
+                product_id: invItem.product_id,
+                quantity: 1,
+                price_at_sale: cartItem.sale_price,
+                user_id: user.id
+              });
+              allInventoryIdsToUpdate.push(invItem.id);
             }
           }
 
-          // Save Locally
-          await db.sales.add(saleRecord);
-          if (db.sale_items) await db.sale_items.bulkAdd(allSaleItemsToInsert);
-          
-          for (const id of inventoryIdsToUpdate) {
-              await db.inventory.update(id, { status: 'sold' });
-          }
+          const { error: saleItemsError } = await supabase.from('sale_items').insert(allSaleItemsToInsert);
+          if (saleItemsError) throw saleItemsError;
 
-          // Balance Update
-          if (paymentMethod === 'Unpaid' && selectedCustomer) {
-              const customer = await db.customers.get(selectedCustomer);
-              if (customer) {
-                  const newBalance = (customer.balance || 0) + udhaarAmount;
-                  await db.customers.update(selectedCustomer, { balance: newBalance });
-              }
-          }
-
-          // Add to Sync Queue
-          await db.sync_queue.add({
-              table_name: 'sales',
-              action: 'create_full_sale',
-              data: {
-                  sale: saleRecord,
-                  items: allSaleItemsToInsert,
-                  inventory_ids: inventoryIdsToUpdate
-              }
-          });
+          const { error: updateError } = await supabase.from('inventory').update({ status: 'Sold' }).in('id', allInventoryIdsToUpdate);
+          if (updateError) throw updateError;
           
-          message.success(`Sale #${saleId} completed successfully!`);
-          saleDataForReceipt = saleRecord;
-          
-          processSyncQueue();
+          message.success('Sale completed successfully!');
+          saleDataForReceipt = saleData;
 
         } catch (error) {
-          console.error("Sale Error:", error);
-          message.error('Sale failed: ' + error.message);
+          message.error('Sale failed during database operation: ' + error.message);
           setIsSubmitting(false);
           return;
         }
 
-        // Print Receipt
         if (saleDataForReceipt) {
-             const receiptData = {
-                 ...saleDataForReceipt,
-                 shopName: profile?.shop_name || 'My Shop',
-                 shopAddress: profile?.address || '',
-                 shopPhone: profile?.phone || '',
-                 saleId: saleDataForReceipt.id, // Ab yeh Number hai (e.g., 75)
-                 items: cart.map(c => ({
-                     name: c.product_name,
-                     quantity: c.quantity,
-                     price_at_sale: c.sale_price,
-                     total: c.quantity * c.sale_price
-                 })),
-                 customerName: customers.find(c => c.id === saleDataForReceipt.customer_id)?.name || 'Walk-in Customer',
-                 saleDate: new Date().toISOString(),
-                 amountPaid: saleDataForReceipt.amount_paid_at_sale,
-                 paymentStatus: saleDataForReceipt.payment_status,
-                 grandTotal: saleDataForReceipt.total_amount
-             };
+  setTimeout(() => {
+    (async () => {
+      try {
+        const { data: receiptDetails, error: rpcError } = await supabase.rpc('get_sale_details', { p_sale_id: saleDataForReceipt.id });
+        if (rpcError) throw rpcError;
 
-             if (profile?.receipt_format === 'thermal') {
-                printThermalReceipt(receiptData, profile?.currency);
-             } else {
-                generateSaleReceipt(receiptData, profile?.currency);
-             }
+        if (profile?.receipt_format === 'thermal') {
+          printThermalReceipt(receiptDetails, profile?.currency);
+        } else {
+          generateSaleReceipt(receiptDetails, profile?.currency);
         }
 
-        // Reset
+      } catch (error) {
+        console.error("Receipt generation failed:", error);
+        message.warning('Sale was saved, but printing the receipt failed. You can reprint it from Sales History.');
+      }
+    })();
+  }, 100);
+}
+
         setCart([]);
         setSelectedCustomer(null);
         setPaymentMethod('Paid');
         setAmountPaid(0);
         setDiscount(0);
         setDiscountType('Amount');
-        
-        const { productsData } = await DataService.getInventoryData();
-        setAllProducts(productsData);
-        setDisplayedProducts(productsData);
-
+        refetchStockCount();
         if (searchInputRef.current) { searchInputRef.current.focus(); }
         setIsSubmitting(false);
       }
@@ -414,45 +337,27 @@ const POS = () => {
   const subtotal = cart.reduce((sum, item) => sum + (item.sale_price * item.quantity), 0);
   let discountAmount = discountType === 'Amount' ? discount : (subtotal * discount) / 100;
   const grandTotal = Math.max(0, subtotal - discountAmount);
-
-  // NAYA handleAddCustomer (Offline-First)
   const handleAddCustomer = async (values) => {
-    try {
-      // 1. Naya Customer Object banayein
-      const newCustomer = { 
-          ...values, 
-          id: crypto.randomUUID(), // ID khud generate karein
-          user_id: user.id, 
-          balance: 0 
-      };
+  try {
+    // Hum ne '.select()' ko '.select("*, balance:customers_with_balance(balance)")' se badal diya hai
+    const { data, error } = await supabase.from('customers').insert([{ ...values, user_id: user.id }]).select().single();
+    if (error) throw error;
 
-      // 2. Local DB mein save karein
-      await db.customers.add(newCustomer);
-      
-      // 3. Sync Queue mein daalein (Taake internet aane par upload ho)
-      await db.sync_queue.add({
-          table_name: 'customers',
-          action: 'create',
-          data: newCustomer
-      });
+    message.success('Customer added successfully!');
+    setIsAddCustomerModalOpen(false);
+    addForm.resetFields();
 
-      message.success('Customer added successfully!');
-      setIsAddCustomerModalOpen(false);
-      addForm.resetFields();
+    // BUG FIX: getCustomers() ke bajaye, naye customer ko seedha state mein shamil karein
+    setCustomers(currentCustomers => 
+      [...currentCustomers, data].sort((a, b) => a.name.localeCompare(b.name))
+    );
 
-      // 4. Dropdown list ko update karein
-      setCustomers(currentCustomers => 
-        [...currentCustomers, newCustomer].sort((a, b) => a.name.localeCompare(b.name))
-      );
-      setSelectedCustomer(newCustomer.id);
-      
-      // 5. Upload Trigger karein (Agar internet hua to foran chala jayega)
-      processSyncQueue();
+    setSelectedCustomer(data.id);
 
-    } catch (error) {
-      message.error('Error adding customer: ' + error.message);
-    }
-  };
+  } catch (error) {
+    message.error('Error adding customer: ' + error.message);
+  }
+};
   
   const handleFullRemoveFromCart = (variantId) => {
     setCart(cart.filter(item => item.variant_id !== variantId));

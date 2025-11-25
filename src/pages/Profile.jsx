@@ -70,37 +70,19 @@ const ChangePasswordForm = () => {
 };
 
 const Profile = () => {
-  const { user, refetchProfile } = useAuth(); // NAYA IZAFA: refetchProfile function hasil karein
-  const [loading, setLoading] = useState(true);
+  const { user, profile, updateProfile } = useAuth();
   const [saving, setSaving] = useState(false);
-  const [profileData, setProfileData] = useState(null);
   const { message } = AntApp.useApp();
-
-  useEffect(() => {
-    const getProfile = async () => {
-      if (!user) { setLoading(false); return; }
-      setLoading(true);
-      try {
-        const { data, error } = await supabase.from('profiles').select('full_name, shop_name, phone_number, address').eq('user_id', user.id).single();
-        if (error && error.code !== 'PGRST116') throw error;
-        setProfileData(data || { full_name: '', shop_name: '', phone_number: '', address: '' });
-      } catch (error) {
-        message.error('Error loading profile: ' + error.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    getProfile();
-  }, [user, message]);
 
   const handleUpdateProfile = async (values) => {
     setSaving(true);
     try {
-      if (!user) throw new Error("No user found to update profile.");
-      const { error } = await supabase.from('profiles').upsert({ ...values, user_id: user.id }, { onConflict: 'user_id' });
-      if (error) throw error;
+      // Hum ab direct AuthContext ka function use karenge
+      const { success, error } = await updateProfile(values);
+      
+      if (!success) throw error;
+      
       message.success('Profile updated successfully!');
-      await refetchProfile(); // NAYA IZAFA: Profile save hone ke baad context ko update karein
     } catch (error) {
       console.error("Profile update failed:", error);
       message.error('Error updating profile: ' + error.message);
@@ -113,11 +95,18 @@ const Profile = () => {
     <Card>
       <Title level={3}>Profile and Shop Information</Title>
       <p>Keep your shop and personal details up to date.</p>
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '50px' }}><Spin size="large" /><p style={{ marginTop: '16px' }}>Loading Profile...</p></div>
+      
+      {/* Agar profile abhi load nahi hua to Spin dikhayein */}
+      {!profile ? (
+        <div style={{ textAlign: 'center', padding: '50px' }}><Spin size="large" /></div>
       ) : (
         <>
-          <ProfileForm initialValues={profileData} onSave={handleUpdateProfile} saving={saving} />
+          <ProfileForm 
+            initialValues={profile} 
+            onSave={handleUpdateProfile} 
+            saving={saving} 
+            key={JSON.stringify(profile)} 
+          />
           <ChangePasswordForm />
         </>
       )}

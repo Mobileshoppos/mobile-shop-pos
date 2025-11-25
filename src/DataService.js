@@ -1,72 +1,193 @@
 import { supabase } from './supabaseClient';
+import { db } from './db';
 
 const DataService = {
 
+  // src/DataService.js - Final getInventoryData
   async getInventoryData() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { return { productsData: [], categoriesData: [] }; }
-
-    const { data: productsData, error: productsError } = await supabase
-      .from('products_with_quantity')
-      .select('*, categories(name)')
-      .eq('user_id', user.id)
-      .order('name', { ascending: true });
-      
-    if (productsError) { console.error('DataService Error:', productsError); throw productsError; }
-
-    const formattedProducts = productsData.map(product => ({
-      ...product,
-      category_name: product.categories ? product.categories.name : null,
-    }));
-
-    const { data: categoriesData, error: categoriesError } = await supabase.rpc('get_user_categories_with_settings');
-    if (categoriesError) { console.error('DataService Error:', categoriesError); throw categoriesError; }
+    // 1. Sab cheezein Local DB se layein
+    const products = await db.products.toArray();
+    const categories = await db.categories.toArray();
     
-    return { productsData: formattedProducts, categoriesData };
+    // Inventory se wo items layein jo BIKAY NAHI hain (Available)
+    const allInventoryItems = await db.inventory.toArray();
+    
+    const availableItems = allInventoryItems.filter(item => {
+        const status = (item.status || '').toLowerCase();
+        return status === 'available'; 
+    });
+
+    // 2. Categories Map
+    const categoryMap = {};
+    categories.forEach(cat => { categoryMap[cat.id] = cat.name; });
+
+    // 3. Inventory Items ko Product ID ke hisaab se group karein
+    const variantsMap = {};
+    const stockCountMap = {}; 
+
+    availableItems.forEach(item => {
+        // Variants group karna
+        if (!variantsMap[item.product_id]) {
+            variantsMap[item.product_id] = [];
+        }
+        variantsMap[item.product_id].push(item);
+
+        // Stock ginnana
+        if (!stockCountMap[item.product_id]) {
+            stockCountMap[item.product_id] = 0;
+        }
+        stockCountMap[item.product_id]++;
+    });
+
+    // 4. Products ko format karein
+    const formattedProducts = products.map(product => {
+      const catName = categoryMap[product.category_id] || 'Uncategorized';
+      const productVariants = variantsMap[product.id] || [];
+
+      // --- NAYA CODE: Average Purchase Price Calculation ---
+      // Hum dekhenge ke stock mein jo items pare hain, unki khareed qeemat kya thi
+      let totalPurchaseVal = 0;
+      let count = 0;
+      productVariants.forEach(v => {
+          if (v.purchase_price) {
+              totalPurchaseVal += Number(v.purchase_price);
+              count++;
+          }
+      });
+      // Agar stock hai to average nikaalo, warna 0
+      const avgPurchasePrice = count > 0 ? (totalPurchaseVal / count) : 0;
+      // -----------------------------------------------------
+
+      // Sale Price Calculation
+      let minPrice = product.min_sale_price;
+      let maxPrice = product.max_sale_price;
+
+      if (productVariants.length > 0) {
+          const prices = productVariants.map(v => v.sale_price).filter(p => p > 0);
+          if (prices.length > 0) {
+              minPrice = Math.min(...prices);
+              maxPrice = Math.max(...prices);
+          }
+      }
+
+      const finalMinPrice = minPrice ?? product.sale_price ?? 0;
+      const finalMaxPrice = maxPrice ?? product.sale_price ?? 0;
+
+      // Stock Count
+      const realTimeStock = stockCountMap[product.id] || 0;
+
+      return {
+        ...product,
+        category_name: catName,
+        categories: { name: catName },
+        min_sale_price: finalMinPrice,
+        max_sale_price: finalMaxPrice,
+        
+        // Yeh wo field hai jo Reports dhoond raha tha
+        avg_purchase_price: avgPurchasePrice, 
+        
+        quantity: realTimeStock, 
+        variants: productVariants 
+      };
+    });
+
+    return { productsData: formattedProducts, categoriesData: categories };
   },
 
   async addProduct(productData) {
-    const { error } = await supabase.from('products').insert([productData]);
-    if (error) { console.error('DataService Error:', error); throw error; }
-    return true;
-  },
+  // 1. Agar ID nahi hai, to hum khud ek unique ID banayenge (UUID)
+  if (!productData.id) {
+    productData.id = crypto.randomUUID();
+  }
+
+  // 2. Local DB mein save karein (hum 'put' use karenge jo zyada mehfooz hai)
+  await db.products.put(productData);
+  
+  // 3. Sync Queue mein daalein taake internet aane par upload ho sake
+  await db.sync_queue.add({
+    table_name: 'products',
+    action: 'create',
+    data: productData
+  });
+
+  return true;
+},
   
   
   async getSuppliers() {
-    const { data, error } = await supabase.from('suppliers_with_balance').select('*').order('name', { ascending: true });
-    if (error) { console.error('DataService Error:', error); throw error; }
-    return data;
+    const suppliers = await db.suppliers.toArray();
+    return suppliers.sort((a, b) => a.name.localeCompare(b.name));
   },
 
   async addSupplier(supplierData) {
-    const { data, error } = await supabase.from('suppliers').insert([supplierData]).select().single();
-    if (error) { console.error('DataService Error:', error); throw error; }
-    return data;
+    const newSupplier = { ...supplierData, id: crypto.randomUUID(), balance_due: 0, credit_balance: 0 };
+    
+    await db.suppliers.add(newSupplier);
+    
+    await db.sync_queue.add({
+        table_name: 'suppliers',
+        action: 'create',
+        data: newSupplier
+    });
+    
+    return newSupplier;
   },
 
   async updateSupplier(id, updatedData) {
-    const { data, error } = await supabase.from('suppliers').update(updatedData).eq('id', id).select().single();
-    if (error) { console.error('DataService Error:', error); throw error; }
-    return data;
+    await db.suppliers.update(id, updatedData);
+    
+    await db.sync_queue.add({
+        table_name: 'suppliers',
+        action: 'update',
+        data: { id, ...updatedData }
+    });
+    
+    return { id, ...updatedData };
   },
 
   async deleteSupplier(id) {
-    const { error } = await supabase.from('suppliers').delete().eq('id', id);
-    if (error) { console.error('DataService Error:', error); throw error; }
+    await db.suppliers.delete(id);
+    
+    await db.sync_queue.add({
+        table_name: 'suppliers',
+        action: 'delete',
+        data: { id }
+    });
+    
     return true;
   },
 
   async getSupplierLedgerDetails(supplierId) {
-    const { data: supplierData, error: supplierError } = await supabase.from('suppliers').select('*, credit_balance').eq('id', supplierId).single();
-    if (supplierError) { console.error('DataService Error:', supplierError); throw supplierError; }
+    // 1. Supplier dhoondein
+    let supplier = null;
+    if (!isNaN(supplierId)) {
+        supplier = await db.suppliers.get(parseInt(supplierId));
+    } else {
+        supplier = await db.suppliers.get(supplierId);
+    }
 
-    const { data: purchasesData, error: purchasesError } = await supabase.from('purchases').select('*').eq('supplier_id', supplierId).order('purchase_date', { ascending: false });
-    if (purchasesError) { console.error('DataService Error:', purchasesError); throw purchasesError; }
+    // 2. Purchases dhoondein
+    const purchases = await db.purchases.where('supplier_id').equals(supplierId).toArray();
 
-    const { data: paymentsData, error: paymentsError } = await supabase.from('supplier_payments').select('*').eq('supplier_id', supplierId).order('payment_date', { ascending: false });
-    if (paymentsError) { console.error('DataService Error:', paymentsError); throw paymentsError; }
+    // 3. Payments dhoondein
+    let payments = [];
+    if (db.supplier_payments) {
+        payments = await db.supplier_payments.where('supplier_id').equals(supplierId).toArray();
+    }
 
-    return { supplier: supplierData, purchases: purchasesData || [], payments: paymentsData || [] };
+    // --- NAYA CODE: Khud Hisaab Lagayein (Calculation) ---
+    // Hum database ke purane number par bharosa nahi karenge, khud total karenge
+    const calculatedTotalBusiness = purchases.reduce((sum, p) => sum + (p.total_amount || 0), 0);
+    const calculatedTotalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    // Supplier object mein yeh naye numbers jor dein
+    const supplierWithStats = {
+        ...supplier,
+        total_purchases: calculatedTotalBusiness,
+        total_payments: calculatedTotalPaid
+    };
+
+    return { supplier: supplierWithStats, purchases, payments };
   },
 
   async getAccountsPayable() {
@@ -96,122 +217,707 @@ const DataService = {
   },
   
   async getPurchaseDetails(purchaseId) {
-    const { data: purchaseData, error: purchaseError } = await supabase.from('purchases').select('*, suppliers(name)').eq('id', purchaseId).single();
-    if (purchaseError) { console.error('DataService Error:', purchaseError); throw purchaseError; }
+    // 1. Purchase dhoondein
+    let purchase = null;
+    if (!isNaN(purchaseId)) {
+        purchase = await db.purchases.get(parseInt(purchaseId));
+    } else {
+        purchase = await db.purchases.get(purchaseId);
+    }
+
+    if (!purchase) throw new Error("Purchase not found locally");
+
+    // 2. Supplier dhoondein
+    const supplier = await db.suppliers.get(purchase.supplier_id);
     
-    const { data: itemsData, error: itemsError } = await supabase.from('inventory').select('*, products(name, brand)').eq('purchase_id', purchaseId);
-    if (itemsError) { console.error('DataService Error:', itemsError); throw itemsError; }
-    
-    const formattedItems = (itemsData || []).map(item => ({
-        ...item,
-        product_name: item.products ? item.products.name : 'Product Not Found',
-        product_brand: item.products ? item.products.brand : '',
+    // 3. Items dhoondein (CORRECTION: Inventory table se dhoondein)
+    // Asal items 'inventory' table mein hotay hain jahan purchase_id match kare
+    const itemsData = await db.inventory.where('purchase_id').equals(purchase.id).toArray();
+
+    // 4. Product Names jorein
+    const formattedItems = await Promise.all(itemsData.map(async (item) => {
+        const product = await db.products.get(item.product_id);
+        return {
+            ...item,
+            product_name: product ? product.name : 'Unknown Product',
+            product_brand: product ? product.brand : '',
+            // Edit/Return forms ke liye zaroori fields
+            purchase_price: item.purchase_price,
+            sale_price: item.sale_price,
+            imei: item.imei,
+            item_attributes: item.item_attributes
+        };
     }));
 
-    return { purchase: purchaseData, items: formattedItems };
+    return { 
+        purchase: { ...purchase, suppliers: supplier || { name: 'Unknown Supplier' } }, 
+        items: formattedItems 
+    };
   },
 
   async getPurchases() {
-    const { data, error } = await supabase.from('purchases').select(`id, purchase_date, total_amount, status, amount_paid, balance_due, suppliers ( name )`).order('purchase_date', { ascending: false });
-    if (error) { console.error('DataService Error:', error); throw error; }
-    return (data || []).map(p => ({ ...p, supplier_name: p.suppliers ? p.suppliers.name : 'N/A' }));
+    // 1. Purchases aur Suppliers Local DB se layein
+    const purchases = await db.purchases.toArray();
+    const suppliers = await db.suppliers.toArray();
+    
+    // Supplier Map banayein
+    const supplierMap = {};
+    suppliers.forEach(s => { supplierMap[s.id] = s.name; });
+
+    // Data jorein
+    return purchases.map(p => ({
+      ...p,
+      supplier_name: supplierMap[p.supplier_id] || 'Unknown Supplier'
+    })).sort((a, b) => new Date(b.purchase_date) - new Date(a.purchase_date));
   },
 
-  async createNewPurchase(purchasePayload) {
-    // RPC call ko try...catch block mein wrap karein
-    try {
-      const { data, error } = await supabase.rpc('create_new_purchase', purchasePayload);
-      
-      // Agar Supabase se koi error aaye to usay check karein
-      if (error) {
-        throw error; // Error ko catch block mein bhejein
-      }
+async createNewPurchase(purchasePayload) {
+  // 1. Purchase ID khud banayein
+  const purchaseId = crypto.randomUUID();
+  const userId = (await supabase.auth.getUser()).data.user?.id;
 
-      return data;
+  // 2. Purchase Object banayein
+  const purchaseData = {
+    id: purchaseId,
+    user_id: userId,
+    supplier_id: purchasePayload.p_supplier_id,
+    purchase_date: new Date().toISOString(),
+    total_amount: purchasePayload.p_inventory_items.reduce((sum, item) => sum + (item.quantity * item.purchase_price), 0),
+    amount_paid: 0,
+    balance_due: purchasePayload.p_inventory_items.reduce((sum, item) => sum + (item.quantity * item.purchase_price), 0),
+    status: 'received', // Filhal hum maan rahe hain ke maal mil gaya
+    notes: purchasePayload.p_notes
+  };
 
-    } catch (error) {
-      // Yahan hum error ko pakar rahe hain
-      console.error('DataService Error in createNewPurchase:', error);
+  // 3. Items Object banayein
+  const itemsData = purchasePayload.p_inventory_items.map(item => ({
+    id: crypto.randomUUID(),
+    purchase_id: purchaseId,
+    product_id: item.product_id,
+    quantity: item.quantity,
+    purchase_price: item.purchase_price,
+    sale_price: item.sale_price,
+    imei: item.imei || null,
+    item_attributes: item.item_attributes,
+    barcode: item.barcode || null
+  }));
 
-      // Check karein ke kya error RLS policy ki wajah se hai
-      if (error.message && error.message.includes('violates row-level security policy')) {
-        // Agar haan, to ek custom, saaf suthra error message banayein
-        throw new Error('Stock limit reached. You cannot add more items on the free plan. Please upgrade to Pro.');
-      }
-      
-      // Agar koi aur error hai, to usay waisa hi aage bhej dein
-      throw error;
+  // 4. Local DB mein save karein
+  await db.purchases.add(purchaseData);
+  // Note: Hum ne 'purchase_items' table db.js mein banaya tha, wahan bhi save karein
+  if (db.purchase_items) {
+      await db.purchase_items.bulkAdd(itemsData);
+  }
+
+  // --- NEW CODE: Update Supplier Balance Locally ---
+  // Purchase add hote hi hum supplier ka balance update karenge taake UI foran change ho
+  const supplier = await db.suppliers.get(purchasePayload.p_supplier_id);
+  if (supplier) {
+      const newBalance = (supplier.balance_due || 0) + purchaseData.total_amount;
+      const newTotalPurchases = (supplier.total_purchases || 0) + purchaseData.total_amount;
+
+      await db.suppliers.update(purchasePayload.p_supplier_id, {
+          balance_due: newBalance,
+          total_purchases: newTotalPurchases
+      });
+  }
+
+  // 5. Sync Queue mein daalein (Poora payload ek sath)
+  await db.sync_queue.add({
+    table_name: 'purchases', // Hum isay special handle karenge
+    action: 'create_full_purchase', // Special action name
+    data: {
+      purchase: purchaseData,
+      items: itemsData
     }
+  });
+
+  return purchaseData;
+},
+
+async addCustomer(customerData) {
+    if (!customerData.id) customerData.id = crypto.randomUUID();
+    
+    // Local Save
+    await db.customers.put(customerData);
+    
+    // Queue
+    await db.sync_queue.add({
+      table_name: 'customers',
+      action: 'create',
+      data: customerData
+    });
+    
+    return customerData;
+  },
+
+  async processSale(salePayload) {
+    // 1. IDs generate karein
+    const saleId = crypto.randomUUID();
+    const saleDate = new Date().toISOString();
+
+    // 2. Sale Record banayein
+    const saleData = {
+      id: saleId,
+      user_id: salePayload.user_id,
+      customer_id: salePayload.customer_id,
+      subtotal: salePayload.subtotal,
+      discount: salePayload.discount,
+      total_amount: salePayload.total_amount,
+      amount_paid_at_sale: salePayload.amount_paid_at_sale,
+      payment_status: salePayload.payment_status,
+      sale_date: saleDate,
+      created_at: saleDate
+    };
+
+    // 3. Sale Items banayein
+    const saleItemsData = salePayload.items.map(item => ({
+      id: crypto.randomUUID(),
+      sale_id: saleId,
+      inventory_id: item.inventory_id,
+      product_id: item.product_id,
+      quantity: 1, // POS mein usually 1 item 1 row hoti hai agar unique ho
+      price_at_sale: item.price_at_sale,
+      user_id: salePayload.user_id
+    }));
+
+    // 4. Inventory IDs ki list (jo bik chuki hain)
+    const soldInventoryIds = salePayload.items.map(i => i.inventory_id);
+
+    // --- LOCAL DB OPERATIONS ---
+    
+    // A. Sale Save karein
+    await db.sales.add(saleData);
+    if (db.sale_items) await db.sale_items.bulkAdd(saleItemsData);
+
+    // B. Inventory ka status 'Sold' karein (Taake wo foran list se gayab ho jaye)
+    await db.inventory.where('id').anyOf(soldInventoryIds).modify({ status: 'Sold' });
+
+    // C. Sync Queue mein dalein
+    await db.sync_queue.add({
+      table_name: 'sales',
+      action: 'create_full_sale',
+      data: {
+        sale: saleData,
+        items: saleItemsData,
+        inventory_ids: soldInventoryIds
+      }
+    });
+
+    return saleData;
   },
 
   async recordPurchasePayment(paymentData) {
-    const { error } = await supabase.rpc('record_purchase_payment', {
-        p_supplier_id: paymentData.supplier_id,
-        p_purchase_id: paymentData.purchase_id,
-        p_amount: paymentData.amount,
-        p_payment_method: paymentData.payment_method,
-        p_payment_date: paymentData.payment_date,
-        p_notes: paymentData.notes
+    // 1. Queue mein daalein (Upload ke liye)
+    await db.sync_queue.add({
+        table_name: 'supplier_payments',
+        action: 'create_purchase_payment',
+        data: paymentData
     });
-    if (error) { 
-      console.error('DataService Error:', error); 
-      throw error; 
+
+    // 2. *** LOCAL DB UPDATE (Offline UI ke liye) ***
+    const purchase = await db.purchases.get(paymentData.purchase_id);
+    
+    if (purchase) {
+        const newAmountPaid = (purchase.amount_paid || 0) + paymentData.amount;
+        const newBalance = purchase.total_amount - newAmountPaid;
+        
+        // Status bhi update karein
+        let newStatus = 'unpaid';
+        if (newBalance <= 0) newStatus = 'paid';
+        else if (newAmountPaid > 0) newStatus = 'partially_paid';
+
+        // Database mein save karein
+        await db.purchases.update(paymentData.purchase_id, {
+            amount_paid: newAmountPaid,
+            balance_due: newBalance,
+            status: newStatus
+        });
     }
+
     return true;
   },
+
   async updatePurchase(purchaseId, updatedData) {
-    const { error } = await supabase.rpc('update_purchase', {
-      p_purchase_id: purchaseId,
-      p_notes: updatedData.notes,
-      p_inventory_items: updatedData.items,
+    // Local DB update karein
+    await db.purchases.update(purchaseId, { notes: updatedData.notes });
+    
+    // Queue mein daalein
+    await db.sync_queue.add({
+        table_name: 'purchases',
+        action: 'update',
+        data: { id: purchaseId, ...updatedData }
     });
-    if (error) {
-      console.error('DataService Error:', error);
-      throw error;
-    }
     return true;
   },
+
   async recordBulkSupplierPayment(paymentData) {
-    const { error } = await supabase.rpc('record_bulk_supplier_payment', {
-        p_supplier_id: paymentData.supplier_id,
-        p_amount: paymentData.amount,
-        p_payment_method: paymentData.payment_method,
-        p_payment_date: paymentData.payment_date,
-        p_notes: paymentData.notes
-    });
-    if (error) { 
-      console.error('DataService Error:', error); 
-      throw error; 
+    // 1. Ek aarzi (temporary) ID banayein
+    const localId = crypto.randomUUID();
+    const paymentWithId = { ...paymentData, id: localId };
+
+    // 2. Local DB mein save karein (Taake Ledger mein foran nazar aaye)
+    if (db.supplier_payments) {
+        await db.supplier_payments.add(paymentWithId);
     }
+
+    // 3. Queue mein daalein (Upload ke liye)
+    await db.sync_queue.add({
+        table_name: 'supplier_payments',
+        action: 'create_bulk_payment',
+        data: paymentWithId // Hum ID bhi bhej rahe hain taake baad mein delete kar sakein
+    });
+
+    // 4. Supplier ka Balance aur Total Paid update karein
+    const supplier = await db.suppliers.get(paymentData.supplier_id);
+    if (supplier) {
+        const newBalance = (supplier.balance_due || 0) - paymentData.amount;
+        // Total Paid ko bhi update karein taake stats sahi rahein
+        const newTotalPaid = (supplier.total_payments || 0) + paymentData.amount;
+        
+        await db.suppliers.update(paymentData.supplier_id, { 
+            balance_due: newBalance,
+            total_payments: newTotalPaid
+        });
+    }
+
     return true;
   },
+
   async createPurchaseReturn(returnData) {
-    const { error } = await supabase.rpc('process_purchase_return', {
-      p_purchase_id: returnData.purchase_id,
-      p_item_ids: returnData.item_ids,
-      p_return_date: returnData.return_date,
-      p_notes: returnData.notes,
+    // Queue mein daalein
+    await db.sync_queue.add({
+        table_name: 'purchase_returns',
+        action: 'create',
+        data: returnData
     });
-    if (error) {
-      console.error('DataService Error:', error);
-      throw error;
-    }
     return true;
   },
+
   async recordSupplierRefund(refundData) {
-    const { error } = await supabase.rpc('record_supplier_refund', {
-      p_supplier_id: refundData.supplier_id,
-      p_amount: refundData.amount,
-      p_refund_method: refundData.refund_method,
-      p_refund_date: refundData.refund_date,
-      p_notes: refundData.notes,
+    // Queue mein daalein
+    await db.sync_queue.add({
+        table_name: 'supplier_refunds',
+        action: 'create_refund',
+        data: refundData
     });
-    if (error) {
-      console.error('DataService Error:', error);
-      throw error;
-    }
     return true;
   },
+
+// --- REPORTS SECTION (OFFLINE COMPATIBLE) ---
+
+  // 1. Accounts Payable (Jin suppliers ke paise dene hain)
+  async getAccountsPayable() {
+    // Local suppliers se data layein
+    const suppliers = await db.suppliers.toArray();
+    
+    // Sirf wo suppliers jin ka balance 0 se zyada hai
+    const payable = suppliers
+      .filter(s => (s.balance_due || 0) > 0)
+      .map(s => ({
+        name: s.name,
+        contact_person: s.contact_person || '',
+        phone: s.phone || '',
+        balance_due: s.balance_due || 0
+      }))
+      .sort((a, b) => b.balance_due - a.balance_due); // Zayada udhaar wale upar
+
+    return payable;
+  },
+
+  // 2. Supplier Purchase Report (Date range ke hisaab se)
+  async getSupplierPurchaseReport(startDateStr, endDateStr) {
+    const start = new Date(startDateStr).getTime();
+    const end = new Date(endDateStr).getTime();
+
+    // Local purchases layein
+    const allPurchases = await db.purchases.toArray();
+    const suppliers = await db.suppliers.toArray();
+    const supplierMap = {};
+    suppliers.forEach(s => supplierMap[s.id] = s.name);
+
+    // Date filter karein
+    const filteredPurchases = allPurchases.filter(p => {
+      const pDate = new Date(p.purchase_date).getTime();
+      return pDate >= start && pDate <= end;
+    });
+
+    // Supplier wise group karein
+    const report = {};
+    
+    filteredPurchases.forEach(p => {
+      const sName = supplierMap[p.supplier_id] || 'Unknown';
+      if (!report[sName]) {
+        report[sName] = { supplier_name: sName, purchase_count: 0, total_purchase_amount: 0 };
+      }
+      report[sName].purchase_count += 1;
+      report[sName].total_purchase_amount += (p.total_amount || 0);
+    });
+
+    return Object.values(report);
+  },
+
+  // 3. Profit & Loss Summary (Sab se ahem function)
+  async getProfitLossSummary(startDateStr, endDateStr) {
+    const start = new Date(startDateStr).getTime();
+    const end = new Date(endDateStr).getTime();
+
+    // A. Revenue (Sales)
+    const allSales = await db.sales.toArray();
+    const filteredSales = allSales.filter(s => {
+      const d = new Date(s.sale_date || s.created_at).getTime();
+      return d >= start && d <= end;
+    });
+    const totalRevenueFromSales = filteredSales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
+
+    // B. Returns (Refunds)
+    const allReturns = await db.sale_returns.toArray();
+    const filteredReturns = allReturns.filter(r => {
+      const d = new Date(r.created_at).getTime();
+      return d >= start && d <= end;
+    });
+    const totalRefunds = filteredReturns.reduce((sum, r) => sum + (r.total_refund_amount || 0), 0);
+    
+    // Net Revenue
+    const totalRevenue = totalRevenueFromSales - totalRefunds;
+
+    // C. Cost of Goods Sold (COGS) - Bechi gayi cheezon ki khareed qeemat
+    // Hamein sale_items aur inventory ko check karna hoga
+    let totalCostOfGoodsSold = 0;
+    
+    // Jin sales ko filter kiya hai, unke items dhoondein
+    const saleIds = filteredSales.map(s => s.id);
+    const saleItems = await db.sale_items.where('sale_id').anyOf(saleIds).toArray();
+    
+    // Ab har item ki inventory dhoond kar uski purchase_price layein
+    // Performance ke liye pehle inventory items ko memory mein layein
+    const inventoryIds = saleItems.map(i => i.inventory_id);
+    const inventoryItems = await db.inventory.where('id').anyOf(inventoryIds).toArray();
+    const inventoryMap = {};
+    inventoryItems.forEach(inv => { inventoryMap[inv.id] = inv; });
+
+    saleItems.forEach(item => {
+      const inv = inventoryMap[item.inventory_id];
+      if (inv) {
+        totalCostOfGoodsSold += (inv.purchase_price || 0);
+      }
+    });
+
+    // D. Cost of Returns (Wapis aayi cheezon ki khareed qeemat minus karein)
+    let totalCostOfReturns = 0;
+    const returnIds = filteredReturns.map(r => r.id);
+    if (returnIds.length > 0) {
+        const returnItems = await db.sale_return_items.where('return_id').anyOf(returnIds).toArray();
+        const returnInvIds = returnItems.map(i => i.inventory_id);
+        const returnInventory = await db.inventory.where('id').anyOf(returnInvIds).toArray();
+        
+        returnInventory.forEach(inv => {
+            totalCostOfReturns += (inv.purchase_price || 0);
+        });
+    }
+
+    const totalCost = totalCostOfGoodsSold - totalCostOfReturns;
+
+    // E. Expenses
+    const allExpenses = await db.expenses.toArray();
+    const filteredExpenses = allExpenses.filter(e => {
+      const d = new Date(e.expense_date).getTime();
+      return d >= start && d <= end;
+    });
+    const totalExpenses = filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+    // F. Final Calculation
+    const grossProfit = totalRevenue - totalCost;
+    const netProfit = grossProfit - totalExpenses;
+
+    return {
+      totalRevenue,
+      totalCost,
+      grossProfit,
+      totalExpenses,
+      netProfit
+    };
+  },
+
+  // 4. Chart Data (Graph ke liye)
+  async getDashboardCharts(startDateStr, endDateStr) {
+    const start = new Date(startDateStr).getTime();
+    const end = new Date(endDateStr).getTime();
+
+    // Sales aur Expenses layein
+    const allSales = await db.sales.toArray();
+    const filteredSales = allSales.filter(s => {
+        const d = new Date(s.sale_date || s.created_at).getTime();
+        return d >= start && d <= end;
+    });
+
+    // Date wise grouping
+    const dailyMap = {};
+
+    filteredSales.forEach(s => {
+        // Date format: YYYY-MM-DD
+        const dateKey = new Date(s.sale_date || s.created_at).toISOString().split('T')[0];
+        if (!dailyMap[dateKey]) dailyMap[dateKey] = 0;
+        dailyMap[dateKey] += (s.total_amount || 0);
+    });
+
+    // Chart format mein convert karein
+    const chartData = Object.keys(dailyMap).map(date => ({
+        date: date,
+        value: dailyMap[date],
+        category: 'Revenue'
+    })).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    return chartData;
+  },
+
+  // 5. Expense Chart Data (Pie Chart ke liye)
+  async getExpenseChartData(startDateStr, endDateStr) {
+    const start = new Date(startDateStr).getTime();
+    const end = new Date(endDateStr).getTime();
+
+    const allExpenses = await db.expenses.toArray();
+    const filteredExpenses = allExpenses.filter(e => {
+        const d = new Date(e.expense_date).getTime();
+        return d >= start && d <= end;
+    });
+
+    // Categories ke naam chahiye honge
+    const categories = await db.expense_categories.toArray();
+    const catMap = {};
+    categories.forEach(c => catMap[c.id] = c.name);
+
+    // Grouping
+    const groupMap = {};
+    filteredExpenses.forEach(e => {
+        const catName = catMap[e.category_id] || 'Uncategorized';
+        if (!groupMap[catName]) groupMap[catName] = 0;
+        groupMap[catName] += (e.amount || 0);
+    });
+
+    return Object.keys(groupMap).map(key => ({
+        category: key,
+        amount: groupMap[key]
+    }));
+  },
+
+// --- EXPENSES SECTION ---
+
+  async getExpenses() {
+    // 1. Expenses aur Categories Local DB se layein
+    const expenses = await db.expenses.orderBy('expense_date').reverse().toArray();
+    const categories = await db.expense_categories.toArray();
+
+    // 2. Category ka naam jorne ke liye Map banayein
+    const catMap = {};
+    categories.forEach(c => { catMap[c.id] = c.name; });
+
+    // 3. Data format karein (Ant Design table ke liye)
+    return expenses.map(e => ({
+      ...e,
+      expense_categories: { name: catMap[e.category_id] || 'Uncategorized' }
+    }));
+  },
+
+  async getExpenseCategories() {
+    return await db.expense_categories.toArray();
+  },
+
+  async addExpense(expenseData) {
+    // ID aur User ID set karein
+    if (!expenseData.id) expenseData.id = crypto.randomUUID();
+    
+    // Local Save
+    await db.expenses.add(expenseData);
+    
+    // Queue for Upload
+    await db.sync_queue.add({
+      table_name: 'expenses',
+      action: 'create',
+      data: expenseData
+    });
+    return expenseData;
+  },
+
+  async updateExpense(id, updates) {
+    // Local Update
+    await db.expenses.update(id, updates);
+    
+    // Queue for Upload
+    await db.sync_queue.add({
+      table_name: 'expenses',
+      action: 'update',
+      data: { id, ...updates }
+    });
+    return true;
+  },
+
+  async deleteExpense(id) {
+    // Local Delete
+    await db.expenses.delete(id);
+    
+    // Queue for Upload
+    await db.sync_queue.add({
+      table_name: 'expenses',
+      action: 'delete',
+      data: { id }
+    });
+    return true;
+  },
+
+  // --- EXPENSE CATEGORIES SECTION ---
+
+  async addExpenseCategory(categoryData) {
+    // ID generate karein
+    if (!categoryData.id) categoryData.id = crypto.randomUUID();
+    
+    // Local DB mein save karein
+    await db.expense_categories.add(categoryData);
+    
+    // Upload Queue mein dalein
+    await db.sync_queue.add({
+      table_name: 'expense_categories', // Note: Supabase table name
+      action: 'create',
+      data: categoryData
+    });
+    return categoryData;
+  },
+
+  async updateExpenseCategory(id, name) {
+    // Local Update
+    await db.expense_categories.update(id, { name });
+    
+    // Queue
+    await db.sync_queue.add({
+      table_name: 'expense_categories',
+      action: 'update',
+      data: { id, name }
+    });
+    return true;
+  },
+
+  async deleteExpenseCategory(id) {
+    // Pehle check karein ke kya yeh category kisi expense mein use ho rahi hai?
+    const usedCount = await db.expenses.where('category_id').equals(id).count();
+    if (usedCount > 0) {
+        throw new Error("This category cannot be deleted as it is currently in use.");
+    }
+
+    // Local Delete
+    await db.expense_categories.delete(id);
+    
+    // Queue
+    await db.sync_queue.add({
+      table_name: 'expense_categories',
+      action: 'delete',
+      data: { id }
+    });
+    return true;
+  },
+
+  // --- PRODUCT CATEGORIES & ATTRIBUTES SECTION ---
+
+  async getProductCategories() {
+    // 1. Local Categories layein
+    const categories = await db.categories.orderBy('name').toArray();
+    
+    // 2. Default Categories (Jinka user_id null ho) aur User ki Categories alag karein
+    // Note: Local DB mein shayad 'null' user_id wale records na hon agar sync ne unhein download nahi kiya.
+    // Lekin hum ne SyncContext mein 'or' condition laga di thi, to ab wo bhi honge.
+    
+    return categories;
+  },
+
+  async addProductCategory(categoryData) {
+    if (!categoryData.id) categoryData.id = crypto.randomUUID();
+    
+    await db.categories.add(categoryData);
+    
+    await db.sync_queue.add({
+      table_name: 'categories',
+      action: 'create',
+      data: categoryData
+    });
+    return categoryData;
+  },
+
+  async updateProductCategory(id, updates) {
+    await db.categories.update(id, updates);
+    
+    await db.sync_queue.add({
+      table_name: 'categories',
+      action: 'update',
+      data: { id, ...updates }
+    });
+    return true;
+  },
+
+  async deleteProductCategory(id) {
+    // Check karein ke kya yeh category kisi product mein use ho rahi hai?
+    const usedCount = await db.products.where('category_id').equals(id).count();
+    if (usedCount > 0) {
+        throw new Error("This category cannot be deleted as it is assigned to products.");
+    }
+
+    await db.categories.delete(id);
+    
+    await db.sync_queue.add({
+      table_name: 'categories',
+      action: 'delete',
+      data: { id }
+    });
+    return true;
+  },
+
+  // --- ATTRIBUTES ---
+
+  async getCategoryAttributes(categoryId) {
+    // Attributes layein jo is category ke hain
+    const attrs = await db.category_attributes
+        .where('category_id')
+        .equals(categoryId)
+        .toArray();
+    
+    // Created At ke hisaab se sort karein (agar field hai)
+    return attrs.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  },
+
+  async addCategoryAttribute(attrData) {
+    if (!attrData.id) attrData.id = crypto.randomUUID();
+    if (!attrData.created_at) attrData.created_at = new Date().toISOString();
+
+    await db.category_attributes.add(attrData);
+    
+    await db.sync_queue.add({
+      table_name: 'category_attributes',
+      action: 'create',
+      data: attrData
+    });
+    return attrData;
+  },
+
+  async updateCategoryAttribute(id, updates) {
+    await db.category_attributes.update(id, updates);
+    
+    await db.sync_queue.add({
+      table_name: 'category_attributes',
+      action: 'update',
+      data: { id, ...updates }
+    });
+    return true;
+  },
+
+  async deleteCategoryAttribute(id) {
+    await db.category_attributes.delete(id);
+    
+    await db.sync_queue.add({
+      table_name: 'category_attributes',
+      action: 'delete',
+      data: { id }
+    });
+    return true;
+  }
+
 };
 
 export default DataService;

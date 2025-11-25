@@ -5,6 +5,9 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { formatCurrency } from '../utils/currencyFormatter';
+import DataService from '../DataService';
+import { useSync } from '../context/SyncContext';
+import { db } from '../db';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -210,6 +213,7 @@ const ProductList = ({ products, loading }) => {
 
 const Inventory = () => {
   const [searchParams] = useSearchParams();
+  const { processSyncQueue } = useSync();
   const showLowStockOnly = searchParams.get('low_stock') === 'true';
   const location = useLocation();
   const { message } = App.useApp();
@@ -239,76 +243,108 @@ const Inventory = () => {
   useEffect(() => {
     if (!user) return;
 
-    // Yeh function dropdowns aur advanced filters ke liye data fetch karta hai
     const fetchDropdownData = async () => {
       try {
-        // Step 1: Categories fetch karein
-        const { data: categoriesData, error: categoriesError } = await supabase.rpc('get_user_categories_with_settings');
-        if (categoriesError) throw categoriesError;
-        const visibleCategories = categoriesData.filter(cat => cat.is_visible);
-        setCategories(visibleCategories);
+        // 1. Categories: Pehle Local DB se koshish karein
+        const localCategories = await db.categories.toArray();
+        
+        if (localCategories.length > 0) {
+            // Agar local data hai to wo use karein
+            const visibleCategories = localCategories.filter(cat => cat.is_visible !== false); // Handle missing is_visible
+            setCategories(visibleCategories);
+        } else if (navigator.onLine) {
+            // Agar local khali hai aur internet hai, tabhi Supabase par jayein
+            const { data: categoriesData, error: categoriesError } = await supabase.rpc('get_user_categories_with_settings');
+            if (!categoriesError && categoriesData) {
+                const visibleCategories = categoriesData.filter(cat => cat.is_visible);
+                setCategories(visibleCategories);
+            }
+        }
 
-        // Step 2: Agar koi category select ho, to uske advanced filters fetch karein
-        if (filterCategory) {
+        // 2. Advanced Filters: Sirf tab chalayein jab Internet ho
+        if (filterCategory && navigator.onLine) {
           const { data: attributes, error: attributesError } = await supabase
             .from('category_attributes')
             .select('attribute_name')
             .eq('category_id', filterCategory);
-          if (attributesError) throw attributesError;
-
-          const filtersPromises = attributes.map(async (attr) => {
-            const { data: options, error: rpcError } = await supabase.rpc('get_distinct_attribute_values', {
-              p_category_id: filterCategory,
-              p_attribute_name: attr.attribute_name
-            });
-            if (rpcError) throw rpcError;
             
-            return {
-              attribute_name: attr.attribute_name,
-              options: options || []
-            };
-          });
+          if (!attributesError && attributes) {
+            const filtersPromises = attributes.map(async (attr) => {
+              const { data: options } = await supabase.rpc('get_distinct_attribute_values', {
+                p_category_id: filterCategory,
+                p_attribute_name: attr.attribute_name
+              });
+              return { attribute_name: attr.attribute_name, options: options || [] };
+            });
 
-          const resolvedFilters = await Promise.all(filtersPromises);
-          setAdvancedFilters(resolvedFilters.filter(f => f.options.length > 0));
-
+            const resolvedFilters = await Promise.all(filtersPromises);
+            setAdvancedFilters(resolvedFilters.filter(f => f.options.length > 0));
+          }
         } else {
+          // Agar offline hain to filters khali rakhein (Error se bachne ke liye)
           setAdvancedFilters([]);
         }
 
       } catch (error) {
-        message.error('Error fetching filter data: ' + error.message);
+        console.log('Offline: Filters skipped or loaded from cache');
       }
     };
 
     fetchDropdownData();
 
-    // Yeh products fetch karne wala main logic hai
+    // NAYA Search Handler (Offline-First)
     const searchHandler = setTimeout(async () => {
       setLoading(true);
       try {
-        let finalProducts = [];
-
-        if (showLowStockOnly) {
-          const { data, error } = await supabase.rpc('get_low_stock_products');
-          if (error) throw error;
-          finalProducts = data;
-        } else {
-          // Naya "all-in-one" function istemal karein
-          const { data, error } = await supabase.rpc('get_inventory_details', {
-            p_search_query: searchText,
-            p_category_id: filterCategory,
-            p_filter_attributes: filterAttributes,
-            p_min_price: priceRange[0],
-            p_max_price: priceRange[1],
-            p_sort_by: sortBy
-          });
-
-          if (error) throw error;
-          finalProducts = data;
-        }
+        // 1. Sara data Local DB se layein
+        const { productsData } = await DataService.getInventoryData();
         
-        setProducts(finalProducts || []);
+        let filteredProducts = productsData;
+
+        // 2. Search Filter (Javascript mein)
+        if (searchText) {
+          const lowerSearch = searchText.toLowerCase();
+          filteredProducts = filteredProducts.filter(p => 
+            (p.name && p.name.toLowerCase().includes(lowerSearch)) ||
+            (p.brand && p.brand.toLowerCase().includes(lowerSearch)) ||
+            (p.barcode && p.barcode.includes(lowerSearch))
+          );
+        }
+
+        // 3. Category Filter
+        if (filterCategory) {
+          filteredProducts = filteredProducts.filter(p => p.category_id === filterCategory);
+        }
+
+        // 4. Price Filter
+        if (priceRange[0] !== null) {
+          filteredProducts = filteredProducts.filter(p => p.sale_price >= priceRange[0]);
+        }
+        if (priceRange[1] !== null) {
+          filteredProducts = filteredProducts.filter(p => p.sale_price <= priceRange[1]);
+        }
+
+        // 5. Data Formatting (N/A issue fix karne ke liye)
+        const formattedForUI = filteredProducts.map(p => ({
+          ...p,
+          // Agar min/max price nahi hai to sale_price use karein
+          min_sale_price: p.min_sale_price || p.sale_price,
+          max_sale_price: p.max_sale_price || p.sale_price,
+          quantity: p.quantity || 0,
+          variants: p.variants || [] // Variants agar nahi hain to khali array
+        }));
+
+        // 6. Sorting
+        formattedForUI.sort((a, b) => {
+          if (sortBy === 'name_asc') return a.name.localeCompare(b.name);
+          if (sortBy === 'price_asc') return (a.min_sale_price || 0) - (b.min_sale_price || 0);
+          if (sortBy === 'price_desc') return (b.min_sale_price || 0) - (a.min_sale_price || 0);
+          if (sortBy === 'quantity_desc') return (b.quantity || 0) - (a.quantity || 0);
+          if (sortBy === 'quantity_asc') return (a.quantity || 0) - (b.quantity || 0);
+          return 0;
+        });
+
+        setProducts(formattedForUI);
 
       } catch (error) {
         message.error("Error fetching products: " + error.message);
@@ -342,24 +378,33 @@ const Inventory = () => {
     setSortBy('name_asc'); // Sorting ko bhi reset karein
   };
 
+  // NAYA handleProductOk Function
   const handleProductOk = async (values) => {
     try {
       const productData = {
         ...values,
         barcode: values.barcode || null,
-        user_id: user.id
+        user_id: user.id,
+        // UI ke liye zaroori fields set karein taake "N/A" na aaye
+        quantity: 0, 
+        min_sale_price: values.sale_price,
+        max_sale_price: values.sale_price
       };
-      const { error } = await supabase.from('products').insert([productData]);
-      if (error) {
-        if (error.code === '23505') {
-            throw new Error('This barcode is already assigned to another product.');
-        }
-        throw error;
-      }
+
+      // 1. DataService ke zariye Local DB mein save karein
+      await DataService.addProduct(productData);
+      
       message.success('Product Model added successfully!');
       setIsProductModalOpen(false);
       productForm.resetFields();
       
+      // 2. Foran Sync System ko jagayein (Upload shuru karein)
+      // Hum await nahi lagayenge taake UI na rukay
+      processSyncQueue().then(() => {
+        console.log("Upload triggered");
+      });
+
+      // 3. List ko refresh karein (Search text ko halka sa hila kar)
       setSearchText(prev => prev ? prev + ' ' : ' ');
       setTimeout(() => setSearchText(prev => prev.trim()), 10);
 

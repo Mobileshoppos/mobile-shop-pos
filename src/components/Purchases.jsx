@@ -52,6 +52,17 @@ const Purchases = () => {
         fetchPurchases();
     };
 
+    const handleOpenAddModal = () => {
+        if (!navigator.onLine) {
+            notification.error({
+                message: 'Offline',
+                description: 'You need an internet connection to add new stock.',
+            });
+            return;
+        }
+        setIsAddModalVisible(true);
+    };
+
     const columns = [
         {
             title: 'Date', dataIndex: 'purchase_date', key: 'purchase_date',
@@ -123,7 +134,7 @@ const Purchases = () => {
         type="primary" 
         icon={<PlusOutlined />} 
         size="large"
-        onClick={() => setIsAddModalVisible(true)}
+        onClick={handleOpenAddModal}
         style={{ width: isMobile ? '100%' : 'auto' }} // Mobile par poori width
     >
         Create New Purchase

@@ -7,6 +7,8 @@ import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
+import { db } from '../db';
+import { useSync } from '../context/SyncContext';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -22,6 +24,7 @@ const getStatusColor = (status) => {
 
 const PurchaseDetails = () => {
     const { profile } = useAuth();
+    const { processSyncQueue, isSyncing } = useSync();
     const { id } = useParams();
     const isMobile = useMediaQuery('(max-width: 768px)');
     const { notification } = AntApp.useApp();
@@ -50,7 +53,12 @@ const PurchaseDetails = () => {
         }
     };
 
-    useEffect(() => { fetchDetails(); }, [id, notification]);
+    useEffect(() => { 
+        // Agar sync chal raha hai to ruk jayein, jab khatam ho to fetch karein
+        if (!isSyncing) {
+            fetchDetails(); 
+        }
+    }, [id, notification, isSyncing]); // <--- isSyncing dependency mein add kiya
 
     const displayItems = useMemo(() => {
         const grouped = {};

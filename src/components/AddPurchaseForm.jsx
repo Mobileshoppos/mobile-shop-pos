@@ -7,6 +7,7 @@ import DataService from '../DataService';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
+import { useSync } from '../context/SyncContext';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -171,6 +172,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
   const { profile } = useAuth();
   const { message } = App.useApp();
   const { refetchStockCount } = useAuth();
+  const { syncAllData } = useSync();
   const [form] = Form.useForm();
   
   const [suppliers, setSuppliers] = useState([]);
@@ -271,7 +273,12 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
         p_inventory_items: purchaseItems.map(({ name, brand, categories, category_is_imei_based, ...item }) => item)
       };
       
-      await DataService.createNewPurchase(purchasePayload);
+      // 1. Seedha Online Save karein
+      const { error } = await supabase.rpc('create_new_purchase', purchasePayload);
+      if (error) throw error;
+
+      // 2. Foran naya data download karein (Taake Inventory update ho jaye)
+      await syncAllData();
       message.success("Purchase invoice created successfully!");
       refetchStockCount();
       onPurchaseCreated();

@@ -14,7 +14,7 @@ import {
   Popconfirm
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { supabase } from '../supabaseClient';
+import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import dayjs from 'dayjs';
@@ -35,19 +35,11 @@ const Expenses = () => {
   const [form] = Form.useForm();
 
   const getData = useCallback(async () => {
-    if (!user) return;
     try {
       setLoading(true);
-      let { data: expensesData, error: expensesError } = await supabase
-        .from('expenses')
-        .select('*, expense_categories ( name )')
-        .order('expense_date', { ascending: false });
-      if (expensesError) throw expensesError;
-      
-      let { data: categoriesData, error: categoriesError } = await supabase
-        .from('expense_categories')
-        .select('*');
-      if (categoriesError) throw categoriesError;
+      // Ab hum DataService se data le rahe hain
+      const expensesData = await DataService.getExpenses();
+      const categoriesData = await DataService.getExpenseCategories();
 
       setExpenses(expensesData);
       setCategories(categoriesData);
@@ -56,7 +48,7 @@ const Expenses = () => {
     } finally {
       setLoading(false);
     }
-  }, [user, message]);
+  }, [message]);
 
   useEffect(() => {
     getData();
@@ -91,12 +83,12 @@ const Expenses = () => {
       };
 
       if (editingExpense) {
-        const { error } = await supabase.from('expenses').update(expenseData).eq('id', editingExpense.id);
-        if (error) throw error;
+        // Update Expense (Offline)
+        await DataService.updateExpense(editingExpense.id, expenseData);
         message.success('Expense updated successfully!');
       } else {
-        const { error } = await supabase.from('expenses').insert([expenseData]);
-        if (error) throw error;
+        // Add Expense (Offline)
+        await DataService.addExpense(expenseData);
         message.success('Expense added successfully!');
       }
       handleCancel();
@@ -108,8 +100,8 @@ const Expenses = () => {
   
   const handleDelete = async (expenseId) => {
     try {
-      const { error } = await supabase.from('expenses').delete().eq('id', expenseId);
-      if (error) throw error;
+      // Delete Expense (Offline)
+      await DataService.deleteExpense(expenseId);
       message.success('Expense deleted successfully!');
       getData();
     } catch (error) {
