@@ -1,4 +1,4 @@
-// vite.config.js - MUKAMMAL UPDATED CODE
+// vite.config.js - FIXED SIZE LIMIT
 
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -11,7 +11,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // FIX: Limit ko 2MB se barha kar 5MB kar diya hai taake Netlify fail na ho
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
       },
       manifest: {
         name: 'SadaPOS - Mobile Shop App',
