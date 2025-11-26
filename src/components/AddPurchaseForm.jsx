@@ -8,6 +8,7 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { useSync } from '../context/SyncContext';
+import { db } from '../db';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -207,22 +208,88 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
     }
   }, []);
 
+  // Updated useEffect to handle "Cash Purchase" default supplier
   useEffect(() => {
     if (visible) {
       setLoading(true);
-      Promise.all([DataService.getSuppliers(), getProductsWithCategory()])
-        .then(([suppliersData, productsData]) => {
-          setSuppliers(suppliersData || []);
+      
+      const loadData = async () => {
+        try {
+          // 1. Pehle Local Data Load karein
+          const [suppliersData, productsData] = await Promise.all([
+            DataService.getSuppliers(),
+            getProductsWithCategory()
+          ]);
+
+          let allSuppliers = suppliersData || [];
+          
+          // 2. Check: Kya Local DB mein "Cash Purchase" hai?
+          let cashSupplier = allSuppliers.find(s => s.name.toLowerCase() === 'cash purchase');
+
+          // 3. Agar Local nahi mila, to Server check karein (Agar Online hain)
+          if (!cashSupplier && navigator.onLine) {
+            
+            // Sirf check kar rahe hain, bana nahi rahe
+            const { data: serverSupplier } = await supabase
+                .from('suppliers')
+                .select('*')
+                .ilike('name', 'Cash Purchase')
+                .maybeSingle();
+
+            if (serverSupplier) {
+                // CASE A: Server par mil gaya!
+                // Hum isay Local DB mein 'put' karenge taake agli baar mil jaye.
+                // NOTE: Hum DataService.addSupplier use NAHI karenge, kyunke wo Queue mein daal dega.
+                // Hum direct DB mein save karenge taake duplicate na bane.
+                
+                await db.suppliers.put(serverSupplier);
+                
+                // List update karein
+                allSuppliers = await DataService.getSuppliers();
+                cashSupplier = serverSupplier;
+            } 
+          }
+
+          // 4. Agar ab bhi nahi mila (Na Local, Na Server), tab naya banayein
+          if (!cashSupplier) {
+             // CASE B: Bilkul naya hai.
+             // Ab hum DataService use karenge taake yeh Queue mein lag jaye
+             // aur Swap Logic ke zariye baad mein Server par sync ho jaye.
+             
+             const newSupplierData = { 
+                name: 'Cash Purchase', 
+                address: 'Market / Walk-in', 
+                phone: '' 
+             };
+             
+             // Yeh function Queue handle karega
+             const createdSupplier = await DataService.addSupplier(newSupplierData);
+             
+             cashSupplier = createdSupplier;
+             allSuppliers = [...allSuppliers, createdSupplier];
+          }
+
+          // 5. State update aur Default Selection
+          setSuppliers(allSuppliers);
           setProducts(productsData || []);
-        })
-        .catch((err) => { 
-          message.error(err.message || "Failed to load initial data for purchase form."); 
-        })
-        .finally(() => { setLoading(false); });
-    } else {
-      form.resetFields();
-      setPurchaseItems([]);
-    }
+
+          if (cashSupplier) {
+            // Hum thora sa intezaar (100ms) karenge taake Form screen par aa jaye
+            setTimeout(() => {
+                form.setFieldsValue({ supplier_id: cashSupplier.id });
+            }, 100);
+          }
+
+        } catch (err) {
+          message.error(err.message || "Failed to load initial data.");
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      loadData();
+
+    } 
   }, [visible, form, message, getProductsWithCategory]);
 
   const handleAddItemClick = async () => {
@@ -329,7 +396,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
   return (
     <>
       <Modal
-        title="Create New Purchase Invoice" open={visible} onCancel={onCancel} width={1000}
+        title="Create New Purchase Invoice" open={visible} onCancel={onCancel} width={1000} destroyOnHidden={true}
         footer={[ <Button key="back" onClick={onCancel}>Cancel</Button>, <Button key="submit" type="primary" loading={isSubmitting} onClick={handleSavePurchase}>Save Purchase</Button> ]}
       >
         <Form form={form} layout="vertical" style={{ marginTop: '24px' }}>

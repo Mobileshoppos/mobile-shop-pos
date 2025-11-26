@@ -1,6 +1,12 @@
 import React from 'react';
 import { Layout, Tag, theme, Tooltip, Button, Badge, Space } from 'antd';
-import { ShopOutlined, CrownOutlined, BellOutlined } from '@ant-design/icons';
+import { 
+  ShopOutlined, 
+  CrownOutlined, 
+  BellOutlined,
+  MenuUnfoldOutlined, // Naya Icon (Menu kholne ke liye)
+  MenuFoldOutlined    // Naya Icon (Menu band karne ke liye)
+} from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -15,13 +21,12 @@ const titleContainerStyle = {
   minWidth: 0, 
 };
 
-const AppHeader = () => {
-  // Qadam 3.2: Hum ab tamam data AuthContext se le rahe hain.
-  // Stock count ab yahan se aayega, is liye live update hoga.
+// Hum ne yahan 'collapsed' aur 'setCollapsed' receive kiya hai App.jsx se
+const AppHeader = ({ collapsed, setCollapsed }) => {
   const { profile, isPro, stockCount, lowStockCount } = useAuth();
   
   const { token } = theme.useToken();
-  const navigate = useNavigate(); // Page tabdeel karne ke liye
+  const navigate = useNavigate();
 
   const chipStyle = {
     display: 'flex',
@@ -37,24 +42,41 @@ const AppHeader = () => {
   };
 
   return (
-    <Header style={{ padding: '0 24px', background: 'none' }}>
+    <Header style={{ padding: '0 16px', background: 'none' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '100%' }}>
         
-        {/* Shop Name - Is mein koi tabdeeli nahi */}
-        <div 
-          style={titleContainerStyle}
-          title={profile?.shop_name || 'My Shop'}
-        >
-          <Tag 
-            icon={<ShopOutlined />} 
-            style={chipStyle}
-          >
-            {profile?.shop_name || 'My Shop'}
-          </Tag>
+        {/* Left Side: Menu Button + Shop Name */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+            
+            {/* YEH HAI WO NAYA BUTTON */}
+            <Button
+              type="text"
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={() => setCollapsed(!collapsed)}
+              style={{
+                fontSize: '16px',
+                width: 40,
+                height: 40,
+                color: token.colorText
+              }}
+            />
+
+            {/* Shop Name */}
+            <div 
+              style={titleContainerStyle}
+              title={profile?.shop_name || 'My Shop'}
+            >
+              <Tag 
+                icon={<ShopOutlined />} 
+                style={chipStyle}
+              >
+                {profile?.shop_name || 'My Shop'}
+              </Tag>
+            </div>
         </div>
 
-        {/* Right side icons */}
-        <Space align="center" size="middle">
+        {/* Right Side: Icons & Subscription Button */}
+        <Space align="center" size="small">
           
           {lowStockCount > 0 && (
             <Tooltip title={`${lowStockCount} items are low in stock`} placement="bottom">
@@ -66,7 +88,6 @@ const AppHeader = () => {
             </Tooltip>
           )}
 
-          {/* Subscription Status - YEH AAPKA PEHLE WALA BUTTON HAI */}
           <Tooltip title="Manage Subscription" placement="bottom">
             <Button 
               type={isPro ? 'primary' : 'default'} 
@@ -74,8 +95,9 @@ const AppHeader = () => {
               icon={isPro ? <CrownOutlined /> : null}
               onClick={() => navigate('/subscription')}
               danger={!isPro && stockCount >= 50}
+              size="middle"
             >
-              {isPro ? 'PRO PLAN' : `Stock: ${stockCount} / 50`}
+              {isPro ? 'PRO' : `Stock: ${stockCount}/50`}
             </Button>
           </Tooltip>
         </Space>

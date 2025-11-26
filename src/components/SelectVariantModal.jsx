@@ -125,7 +125,7 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product }) => {
             okText="Add Selected to Cart"
             okButtonProps={{ disabled: selectedVariants.length === 0 }}
             width={800}
-            destroyOnClose={true}
+            destroyOnHidden={true}
         >
             <Table
                 columns={columns}

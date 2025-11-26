@@ -1,23 +1,8 @@
 // src/App.jsx - MUKAMMAL UPDATED CODE
 
 import React, { useState, useEffect } from 'react';
-import { ConfigProvider, theme, Layout, Menu, App as AntApp, Switch } from 'antd';
+import { ConfigProvider, theme, Layout, App as AntApp } from 'antd';
 import { BrowserRouter, Routes, Route, Link, Outlet, useLocation, Navigate } from 'react-router-dom';
-import { 
-  HomeOutlined, 
-  ShoppingCartOutlined, 
-  PieChartOutlined, 
-  UserOutlined, 
-  LogoutOutlined, 
-  AppstoreOutlined,
-  DollarCircleOutlined,
-  SettingOutlined,
-  SunOutlined,
-  MoonOutlined,
-  TeamOutlined,
-  HistoryOutlined,
-  CreditCardOutlined
-} from '@ant-design/icons';
 
 import Inventory from './components/Inventory';
 import POS from './components/POS';
@@ -41,25 +26,9 @@ import { SyncProvider, useSync } from './context/SyncContext';
 import { CustomThemeProvider, useTheme } from './context/ThemeContext';
 import { supabase } from './supabaseClient';
 import { darkThemeTokens, lightThemeTokens } from './theme/themeConfig';
+import SideMenu from './components/SideMenu';
 
-const { Sider, Content } = Layout;
-
-const menuItems = [
-    { key: '/', icon: <HomeOutlined />, label: <Link to="/">Inventory</Link> },
-    { key: '/pos', icon: <ShoppingCartOutlined />, label: <Link to="/pos">Point of Sale</Link> },
-    { key: '/reports', icon: <PieChartOutlined />, label: <Link to="/reports">Reports</Link> },
-    { key: '/sales-history', icon: <HistoryOutlined />, label: <Link to="/sales-history">Sales History</Link> },
-    { key: '/customers', icon: <UserOutlined />, label: <Link to="/customers">Customers</Link> },
-    { key: '/suppliers', icon: <TeamOutlined />, label: <Link to="/suppliers">Suppliers</Link> },
-    { key: '/purchases', icon: <DollarCircleOutlined />, label: <Link to="/purchases">Purchases</Link> },
-    { key: '/categories', icon: <AppstoreOutlined />, label: <Link to="/categories">Product Categories</Link> },
-    { key: '/profile', icon: <SettingOutlined />, label: <Link to="/profile">Profile Settings</Link> },
-    { type: 'divider' },
-    { key: '/expenses', icon: <DollarCircleOutlined />, label: <Link to="/expenses">Expenses</Link> },
-    { key: '/expense-categories', icon: <AppstoreOutlined />, label: <Link to="/expense-categories">Expense Categories</Link> },
-    { key: '/subscription', icon: <CreditCardOutlined />, label: <Link to="/subscription">Subscription</Link> },
-    { key: '/settings', icon: <SettingOutlined />, label: <Link to="/settings">App Settings</Link> },
-];
+const { Content } = Layout;
 
 const MainLayout = ({ isDarkMode, toggleTheme }) => {
   const { syncAllData } = useSync();
@@ -84,74 +53,16 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const handleMenuItemClick = () => {
-    if (isMobile) {
-      setCollapsed(true);
-    }
-  };
-  
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
-
-  const processedMenuItems = menuItems.map(item => {
-    if (item.type === 'divider') return item;
-    return { ...item, onClick: handleMenuItemClick };
-  });
-
-  const menuItemsWithLogout = [
-    ...processedMenuItems,
-    { type: 'divider' }, 
-    { key: 'logout', icon: <LogoutOutlined />, danger: true, label: 'Logout', onClick: () => {
-      handleLogout();
-      handleMenuItemClick();
-    }},
-  ];
-
-  const siderStyle = {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    ...(isMobile && {
-        position: 'fixed',
-        height: '100vh',
-        zIndex: 1000,
-    }),
-  };
-
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider 
-        breakpoint="lg" 
-        collapsedWidth={isMobile ? "0" : "80"}
-        theme="dark"
-        collapsible
-        collapsed={collapsed}
-        onCollapse={(value) => setCollapsed(value)}
-        style={siderStyle}
-      >
-        <div>
-            <Menu 
-              theme="dark" 
-              mode="inline" 
-              selectedKeys={[location.pathname]} 
-              items={menuItemsWithLogout} 
-              style={{ 
-                marginTop: '16px',
-                background: 'transparent',
-              }} 
-            />
-        </div>
-        
-        <div style={{ padding: '16px', textAlign: 'center' }}>
-            <Switch
-                checkedChildren={<MoonOutlined />}
-                unCheckedChildren={<SunOutlined />}
-                checked={isDarkMode}
-                onChange={toggleTheme}
-            />
-        </div>
-      </Sider>
+
+     <SideMenu 
+        collapsed={collapsed} 
+        setCollapsed={setCollapsed} 
+        isMobile={isMobile} 
+        isDarkMode={isDarkMode} 
+        toggleTheme={toggleTheme} 
+      />
 
       {isMobile && !collapsed && (
         <div 
@@ -175,7 +86,7 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
             borderRadius: token.borderRadiusLG,
             minHeight: 'calc(100vh - 24px)',
           }}>
-            <AppHeader />
+            <AppHeader collapsed={collapsed} setCollapsed={setCollapsed} />
             <div style={{ padding: '0 24px 24px' }}>
               <Outlet />
             </div>

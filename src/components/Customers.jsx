@@ -759,7 +759,7 @@ const handleCloseInvoiceSearchModal = () => {
     open={isInvoiceSearchModalOpen}
     onCancel={handleCloseInvoiceSearchModal}
     footer={null} // Hum apne custom buttons istemal karenge
-    destroyOnClose // Jab modal band ho to andar ki states ko destroy kar de
+    destroyOnHidden // Jab modal band ho to andar ki states ko destroy kar de
   >
     {!searchedSale ? (
       // STAGE 1: JAB SALE TALASH KI JA RAHI HO
