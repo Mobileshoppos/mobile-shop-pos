@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Tooltip,
 } from 'antd';
-import { DeleteOutlined, BarcodeOutlined } from '@ant-design/icons';
+import { DeleteOutlined, BarcodeOutlined, EditOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -13,7 +13,7 @@ import { db } from '../db';
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-const AddItemModal = ({ visible, onCancel, onOk, product, attributes }) => {
+const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialValues }) => {
   const { profile } = useAuth();
   const [form] = Form.useForm();
   const [imeis, setImeis] = useState(['']);
@@ -22,19 +22,41 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes }) => {
 
   useEffect(() => {
     if (visible && product) {
-      const commonValues = {
-        purchase_price: product.default_purchase_price || '',
-        sale_price: product.default_sale_price || '',
-      };
+      // Agar Edit kar rahe hain (initialValues mojood hai)
+      if (initialValues) {
+          const formData = {
+              purchase_price: initialValues.purchase_price,
+              sale_price: initialValues.sale_price,
+              quantity: initialValues.quantity || 1,
+              barcode: initialValues.barcode,
+              ...initialValues.item_attributes // Purane attributes wapis daalein
+          };
+          
+          // Agar IMEI wala item hai
+          if (isImeiCategory && initialValues.imei) {
+              setImeis([initialValues.imei]); // Sirf wohi IMEI dikhayein jo edit ho raha hai
+          } else if (isImeiCategory) {
+              setImeis(['']);
+          }
 
-      if (isImeiCategory) {
-        form.setFieldsValue({ ...commonValues });
-        setImeis(['']);
-      } else {
-        form.setFieldsValue({ ...commonValues, quantity: 1 });
+          form.setFieldsValue(formData);
+      } 
+      // Agar Naya Item add kar rahe hain
+      else {
+          const commonValues = {
+            purchase_price: product.default_purchase_price || '',
+            sale_price: product.default_sale_price || '',
+          };
+    
+          if (isImeiCategory) {
+            form.setFieldsValue({ ...commonValues });
+            setImeis(['']);
+          } else {
+            form.setFieldsValue({ ...commonValues, quantity: 1 });
+          }
       }
     }
-  }, [visible, product, isImeiCategory, form]);
+  }, [visible, product, isImeiCategory, form, initialValues]);
 
   
   const handleImeiChange = (index, value) => {
@@ -184,6 +206,16 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
   const [isItemModalVisible, setIsItemModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedProductAttributes, setSelectedProductAttributes] = useState([]);
+  const [editingItemIndex, setEditingItemIndex] = useState(null);
+  const totalAmount = purchaseItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.purchase_price || 0)), 0);
+
+  // Update "Amount Paid" field whenever Total Amount changes
+  useEffect(() => {
+    if (visible) {
+        // Default behavior: Set Amount Paid equal to Total Amount
+        form.setFieldsValue({ amount_paid: totalAmount });
+    }
+  }, [totalAmount, visible, form]);
 
   const getProductsWithCategory = useCallback(async () => {
     try {
@@ -314,8 +346,51 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
     }
   };
 
+  const handleEditItem = async (record, index) => {
+    try {
+        setLoading(true);
+        // 1. Asal Product dhoondein
+        const originalProduct = products.find(p => p.id === record.product_id);
+        if (!originalProduct) return;
+
+        // 2. Attributes fetch karein (Jaisa add karte waqt karte hain)
+        const { data: attrs, error } = await supabase
+          .from('category_attributes')
+          .select('*')
+          .eq('category_id', originalProduct.category_id);
+        
+        if (error) throw error;
+
+        // 3. Modal kholne ki tayari
+        setSelectedProductAttributes(attrs);
+        setSelectedProduct(originalProduct);
+        setEditingItemIndex(index); // Yaad rakhein ke hum kis number wala item edit kar rahe hain
+        setIsItemModalVisible(true);
+        
+    } catch (error) {
+        message.error("Error preparing edit: " + error.message);
+    } finally {
+        setLoading(false);
+    }
+  };
+
   const handleItemDetailsOk = (itemsData) => {
-    setPurchaseItems(prevItems => [...prevItems, ...itemsData]);
+    if (editingItemIndex !== null) {
+        // CASE: Editing Existing Item
+        // Hum purane item ko naye data se badal denge
+        const updatedList = [...purchaseItems];
+        // Note: Edit karte waqt hum maan rahe hain ke user ne 1 item edit kiya hai.
+        // Agar user ne quantity barha di, to itemsData mein zyada items honge.
+        // Hum us specific index par naye items insert kar denge.
+        updatedList.splice(editingItemIndex, 1, ...itemsData);
+        
+        setPurchaseItems(updatedList);
+        setEditingItemIndex(null); // Reset karein
+    } else {
+        // CASE: Adding New Item
+        setPurchaseItems(prevItems => [...prevItems, ...itemsData]);
+    }
+    
     setIsItemModalVisible(false);
     setSelectedProduct(null);
     setSelectedProductAttributes([]);
@@ -330,25 +405,64 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
 
   const handleSavePurchase = async () => {
     try {
-      const values = await form.validateFields(['supplier_id', 'notes']);
+      // 1. Validation: Ab hum payment fields ko bhi check karenge
+      const values = await form.validateFields(['supplier_id', 'notes', 'amount_paid', 'payment_method']);
+      
       if (purchaseItems.length === 0) { message.error("Please add at least one item."); return; }
       
       setIsSubmitting(true);
+
+      // 2. Purchase ka data tayyar karna
       const purchasePayload = {
         p_supplier_id: values.supplier_id,
         p_notes: values.notes || null,
         p_inventory_items: purchaseItems.map(({ name, brand, categories, category_is_imei_based, ...item }) => item)
       };
       
-      // 1. Seedha Online Save karein
-      const { error } = await supabase.rpc('create_new_purchase', purchasePayload);
+      // 3. Online Invoice Banana (Supabase RPC)
+      // Note: Hum koshish karenge ke RPC se ID mil jaye, warna hum server se latest ID mangwayenge
+      const { data: rpcData, error } = await supabase.rpc('create_new_purchase', purchasePayload);
+      
       if (error) throw error;
 
-      // 2. Foran naya data download karein (Taake Inventory update ho jaye)
-      await syncAllData();
+      // 4. Payment Record Karna (Agar paise diye gaye hain)
+      const amountPaid = values.amount_paid || 0;
+      
+      if (amountPaid > 0) {
+          // Hamein nayi Invoice ki ID chahiye. 
+          // Agar RPC ne ID wapis nahi ki, to hum Supplier ki sab se aakhri purchase dhoond lenge.
+          let newPurchaseId = rpcData;
+
+          if (!newPurchaseId) {
+              const { data: latestPurchase } = await supabase
+                  .from('purchases')
+                  .select('id')
+                  .eq('supplier_id', values.supplier_id)
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .single();
+              newPurchaseId = latestPurchase?.id;
+          }
+
+          if (newPurchaseId) {
+              // DataService use kar ke payment record karein (Offline-First style)
+              await DataService.recordPurchasePayment({
+                  supplier_id: values.supplier_id,
+                  purchase_id: newPurchaseId,
+                  amount: amountPaid,
+                  payment_method: values.payment_method,
+                  payment_date: new Date().toISOString(),
+                  notes: `Initial payment for Purchase #${newPurchaseId}`
+              });
+          }
+      }
+
+      // 5. Data Refresh Karna
+      await syncAllData(); // Naya data download karein
       message.success("Purchase invoice created successfully!");
       refetchStockCount();
       onPurchaseCreated();
+
     } catch (error) {
       if (error.name !== 'ValidationError') { message.error("Failed to save purchase: " + error.message); }
     } finally {
@@ -389,7 +503,12 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
       title: 'Action', 
       key: 'action', 
       align: 'center', 
-      render: (_, record) => (<Button danger icon={<DeleteOutlined />} onClick={() => handleRemoveItem(record)} />)
+      render: (_, record, index) => ( // Note: index parameter add kiya hai
+        <Space>
+            <Button icon={<EditOutlined />} onClick={() => handleEditItem(record, index)} />
+            <Button danger icon={<DeleteOutlined />} onClick={() => handleRemoveItem(record)} />
+        </Space>
+      )
     },
   ];
 
@@ -433,15 +552,55 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
               );
             }}
           />
+          {/* --- NEW PAYMENT SECTION --- */}
+          <Divider />
+          <Title level={5}>Payment Record</Title>
+          <Row gutter={16} style={{ background: 'transparent', padding: '16px', borderRadius: '8px' }}>
+              <Col span={12}>
+                  <Form.Item 
+                      name="amount_paid" 
+                      label="Amount Paid Now" 
+                      rules={[{ required: true, message: 'Please enter amount (0 if unpaid)' }]}
+                      help="Enter the amount you are paying right now. Default is Full Payment."
+                  >
+                      <InputNumber 
+                          style={{ width: '100%' }} 
+                          prefix={profile?.currency ? `${profile.currency} ` : ''}
+                          min={0}
+                          max={totalAmount} 
+                      />
+                  </Form.Item>
+              </Col>
+              <Col span={12}>
+                  <Form.Item 
+                      name="payment_method" 
+                      label="Payment Method" 
+                      rules={[{ required: true }]}
+                      initialValue="Cash"
+                  >
+                      <Select>
+                          <Option value="Cash">Cash</Option>
+                          <Option value="Bank Transfer">Bank Transfer</Option>
+                          <Option value="Cheque">Cheque</Option>
+                          <Option value="Other">Other</Option>
+                      </Select>
+                  </Form.Item>
+              </Col>
+          </Row>
         </Form>
       </Modal>
       {isItemModalVisible && 
         <AddItemModal 
           visible={isItemModalVisible} 
-          onCancel={() => setIsItemModalVisible(false)} 
+          onCancel={() => {
+              setIsItemModalVisible(false);
+              setEditingItemIndex(null); // Cancel par reset zaroor karein
+          }} 
           onOk={handleItemDetailsOk} 
           product={selectedProduct}
           attributes={selectedProductAttributes}
+          // Agar editingIndex null nahi hai, to us item ka data bhejein
+          initialValues={editingItemIndex !== null ? purchaseItems[editingItemIndex] : null}
         />
       }
     </>
