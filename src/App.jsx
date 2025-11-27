@@ -27,6 +27,7 @@ import { CustomThemeProvider, useTheme } from './context/ThemeContext';
 import { supabase } from './supabaseClient';
 import { darkThemeTokens, lightThemeTokens } from './theme/themeConfig';
 import SideMenu from './components/SideMenu';
+import Dashboard from './pages/Dashboard';
 
 const { Content } = Layout;
 
@@ -118,7 +119,8 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
       <Route path="/update-password" element={<UpdatePasswordPage />} />
       
       <Route path="/" element={<MainLayout isDarkMode={isDarkMode} toggleTheme={toggleTheme} />}>
-        <Route index element={<Inventory />} />
+        <Route index element={<Dashboard />} />
+        <Route path="inventory" element={<Inventory />} />
         <Route path="pos" element={<POS />} />
         <Route path="reports" element={<Reports />} />
         <Route path="customers" element={<Customers />} />

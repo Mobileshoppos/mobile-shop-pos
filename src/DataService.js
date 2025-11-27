@@ -916,8 +916,99 @@ async addCustomer(customerData) {
       data: { id }
     });
     return true;
-  }
+  },
 
+  // --- DASHBOARD FUNCTIONS ---
+
+  async getDashboardStats() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Aaj ki subah 12:00 baje ka waqt
+
+    // 1. Sab data layein
+    const sales = await db.sales.toArray();
+    const expenses = await db.expenses.toArray();
+    const customers = await db.customers.toArray();
+    const suppliers = await db.suppliers.toArray();
+    const products = await db.products.toArray();
+    const saleItems = await db.sale_items.toArray();
+    const inventory = await db.inventory.toArray();
+
+    // 2. Aaj ka data filter karein
+    const todaySales = sales.filter(s => new Date(s.sale_date || s.created_at) >= today);
+    const todayExpenses = expenses.filter(e => new Date(e.expense_date) >= today);
+
+    // 3. Totals Calculate karein
+    const totalSalesToday = todaySales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
+    const totalExpensesToday = todayExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+    // 4. Munafa (Profit) Calculate karein
+    // (Sale - Cost of Goods Sold) - Expenses
+    const todaySaleIds = todaySales.map(s => s.id);
+    const todayItems = saleItems.filter(i => todaySaleIds.includes(i.sale_id));
+
+    let totalCost = 0;
+    // Inventory ko tezi se dhoondne ke liye Map banayein
+    const inventoryMap = {};
+    inventory.forEach(i => inventoryMap[i.id] = i);
+
+    todayItems.forEach(item => {
+        const invItem = inventoryMap[item.inventory_id];
+        if (invItem) {
+            totalCost += (invItem.purchase_price || 0);
+        }
+    });
+
+    const grossProfitToday = totalSalesToday - totalCost;
+    const netProfitToday = grossProfitToday - totalExpensesToday;
+
+    // 5. Udhaar Khata (Receivables & Payables)
+    const totalReceivables = customers.reduce((sum, c) => sum + (c.balance || 0), 0);
+    const totalPayables = suppliers.reduce((sum, s) => sum + (s.balance_due || 0), 0);
+
+    // 6. Low Stock Alerts (Jin ki quantity 3 ya us se kam hai)
+    const lowStockItems = products
+        .filter(p => (p.quantity || 0) <= 3)
+        .slice(0, 5); // Sirf top 5 dikhayein
+
+    return {
+        totalSalesToday,
+        totalExpensesToday,
+        netProfitToday,
+        totalReceivables,
+        totalPayables,
+        lowStockItems,
+        totalProducts: products.length
+    };
+  },
+
+  async getLast7DaysSales() {
+    // Pichle 7 din ka graph banane ke liye data
+    const sales = await db.sales.toArray();
+    const map = {};
+    
+    // Pichle 7 din ki dates set karein (Value 0 rakhein)
+    for(let i=6; i>=0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+        map[dateStr] = 0;
+    }
+
+    // Sales ko dates mein bharein
+    sales.forEach(s => {
+        const dateStr = (s.sale_date || s.created_at).split('T')[0];
+        if (map[dateStr] !== undefined) {
+            map[dateStr] += (s.total_amount || 0);
+        }
+    });
+
+    // Array bana kar wapis karein
+    return Object.keys(map).sort().map(date => ({
+        date, // X-Axis (Neeche)
+        amount: map[date] // Y-Axis (Upar)
+    }));
+  }
+  
 };
 
 export default DataService;

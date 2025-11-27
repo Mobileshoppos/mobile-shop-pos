@@ -1,6 +1,6 @@
 // src/context/SyncContext.jsx - FINAL COMPLETE VERSION
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { db } from '../db';
 import { supabase } from '../supabaseClient';
 
@@ -11,6 +11,7 @@ export const useSync = () => useContext(SyncContext);
 export const SyncProvider = ({ children }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
+  const idMappingRef = useRef({});
 
   // --- DOWNLOAD FUNCTION ---
   const syncAllData = async () => {
@@ -118,7 +119,8 @@ export const SyncProvider = ({ children }) => {
 
         console.log(`Processing Sync Queue: ${queueItems.length} items found.`);
 
-        const idMap = {}; 
+        // Ab hum nayi memory use kar rahe hain
+        const idMap = idMappingRef.current; 
 
         for (const item of queueItems) {
           try {
@@ -239,12 +241,15 @@ export const SyncProvider = ({ children }) => {
             }
 
             // 3. Sales Create (FINAL FIX: Custom Invoice ID + Auto Item IDs)
+            // 3. Sales Create (FINAL FIX: Custom Invoice ID + Auto Item IDs)
             else if (item.table_name === 'sales' && item.action === 'create_full_sale') {
                 const { sale, items, inventory_ids } = item.data;
                 
-                // 1. Sale ID (Invoice Number) ko waise hi rakhein (Yehi hamara maqsad hai)
+                // 1. Sale ID (Invoice Number) ko waise hi rakhein
                 const saleData = { ...sale }; 
 
+                // *** YEH HAI WOH FIX ***
+                // Agar Customer ID hamari memory mein hai, to naya wala ID use karein
                 if (idMap[saleData.customer_id]) {
                     saleData.customer_id = idMap[saleData.customer_id];
                 }

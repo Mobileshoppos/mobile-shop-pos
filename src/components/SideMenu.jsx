@@ -20,18 +20,24 @@ import {
   UserSwitchOutlined, 
   FileProtectOutlined,
   ProfileOutlined,    
-  ToolOutlined        
+  ToolOutlined,
+  DatabaseOutlined 
 } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 
 const { Sider } = Layout;
 
 const menuItems = [
-    // 1. Main Dashboard & POS
-    { key: '/', icon: <HomeOutlined />, label: <Link to="/">Inventory Dashboard</Link> },
+    // 1. Main Dashboard
+    { key: '/', icon: <HomeOutlined />, label: <Link to="/">Dashboard</Link> },
+    
+    // 2. Inventory (Naya Button)
+    { key: '/inventory', icon: <DatabaseOutlined />, label: <Link to="/inventory">Inventory</Link> },
+
+    // 3. POS
     { key: '/pos', icon: <ShoppingCartOutlined />, label: <Link to="/pos">Point of Sale</Link> },
 
-    // 2. Product Management Group
+    // 4. Product Management Group
     {
       key: 'products',
       icon: <AppstoreOutlined />,
