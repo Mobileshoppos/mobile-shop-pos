@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag } from 'antd';
+import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table } from 'antd';
 import {
   ShoppingOutlined,
   RiseOutlined,
@@ -7,7 +7,9 @@ import {
   AlertOutlined,
   PlusOutlined,
   WalletOutlined,
-  TeamOutlined
+  TeamOutlined,
+  DollarCircleOutlined,
+  TrophyOutlined
 } from '@ant-design/icons';
 // CHANGE: Recharts hata kar Ant Design Charts lagaya hai
 import { Area } from '@ant-design/charts'; 
@@ -28,7 +30,7 @@ const Dashboard = () => {
   useEffect(() => {
     const loadDashboard = async () => {
       try {
-        const dashboardStats = await DataService.getDashboardStats();
+        const dashboardStats = await DataService.getDashboardStats(profile?.low_stock_threshold);
         const salesChart = await DataService.getLast7DaysSales();
         setStats(dashboardStats);
         setChartData(salesChart);
@@ -69,7 +71,7 @@ const Dashboard = () => {
         },
     },
     autoFit: true,
-    height: 300,
+    height: 245,
   };
 
   return (
@@ -131,15 +133,79 @@ const Dashboard = () => {
         </Col>
       </Row>
 
+      {/* --- SECTION 1.5: QUICK ACTIONS (Moved Here) --- */}
+      <Row gutter={[16, 16]} style={{ marginTop: 5 }}>
+        <Col span={24}>
+          <Card variant="borderless" style={{ borderRadius: 12 }}>
+            {/* Hum ne yahan 'flex' lagaya hai taake Title aur Buttons aamne-samne ayen */}
+            {/* 'space-between' ki jagah 'center' kiya, aur gap 16 se 24 kar diya */}
+<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
+              
+              {/* Title (Margin khatam kar diya taake center mein aye) */}
+              <Title level={5} style={{ margin: 0 }}>Quick Actions</Title>
+              
+              {/* Buttons */}
+              <Space wrap>
+                <Button type="primary" icon={<ShoppingOutlined />} onClick={() => navigate('/pos')}>
+                  New Sale
+                </Button>
+                <Button icon={<PlusOutlined />} onClick={() => navigate('/purchases')}>
+                  Purchase
+                </Button>
+                <Button icon={<TeamOutlined />} onClick={() => navigate('/suppliers')}>
+                  Suppliers
+                </Button>
+                <Button icon={<DollarCircleOutlined />} onClick={() => navigate('/expenses')}>
+                  Expenses
+                </Button>
+              </Space>
+
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
       {/* --- SECTION 2: GRAPH & ALERTS --- */}
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+      <Row gutter={[16, 16]} style={{ marginTop: 5 }}>
         
-        {/* Left Side: Sales Graph (Updated to Ant Design Charts) */}
+        {/* Left Side: Sales Graph AND Recent Transactions */}
         <Col xs={24} lg={16}>
-          <Card title="Sales Overview (Last 7 Days)" variant="borderless" style={{ borderRadius: 12, height: '100%' }}>
+          {/* 1. Graph Card */}
+          <Card title="Sales Overview (Last 7 Days)" variant="borderless" style={{ borderRadius: 12 }}>
              <div style={{ height: 300 }}>
                 <Area {...config} />
              </div>
+          </Card>
+
+          {/* 2. Recent Transactions Table (Ab yeh isi Column ke andar hai) */}
+          <Card title="Recent Transactions" variant="borderless" style={{ borderRadius: 12, marginTop: 5 }}>
+            <Table
+              dataSource={stats?.recentSales || []}
+              pagination={false}
+              size="small"
+              rowKey="id"
+              columns={[
+                { 
+                  title: 'Customer', 
+                  dataIndex: 'customer', 
+                  key: 'customer',
+                  render: (text) => <Text strong>{text}</Text>
+                },
+                { 
+                  title: 'Date', 
+                  dataIndex: 'date', 
+                  key: 'date',
+                  render: (date) => <Text type="secondary" style={{fontSize: 12}}>{new Date(date).toLocaleDateString()}</Text>
+                },
+                { 
+                  title: 'Amount', 
+                  dataIndex: 'amount', 
+                  key: 'amount',
+                  align: 'right',
+                  render: (amount) => <Tag color="green">{formatCurrency(amount, profile?.currency)}</Tag>
+                },
+              ]}
+            />
           </Card>
         </Col>
 
@@ -154,38 +220,53 @@ const Dashboard = () => {
                 variant="borderless" 
                 style={{ borderRadius: 12 }}
                 styles={{ body: { padding: '0 12px' } }}
+                extra={<Button type="link" onClick={() => navigate('/inventory?low_stock=true')}>View All</Button>}
               >
-                <List
-                  itemLayout="horizontal"
-                  dataSource={stats?.lowStockItems || []}
-                  renderItem={(item) => (
-                    <List.Item>
-                      <List.Item.Meta
-                        title={item.name}
-                        description={<Text type="secondary">Only {item.quantity} left</Text>}
-                      />
-                      <Tag color="red">Low</Tag>
-                    </List.Item>
-                  )}
-                  locale={{ emptyText: 'All items are well stocked!' }}
-                />
+                {profile?.low_stock_alerts_enabled !== false ? (
+                  <List
+                    itemLayout="horizontal"
+                    dataSource={stats?.lowStockItems || []}
+                    renderItem={(item) => (
+                      <List.Item>
+                        <List.Item.Meta
+                          title={item.name}
+                          description={<Text type="secondary">Only {item.quantity} left</Text>}
+                        />
+                        <Tag color="red">Low</Tag>
+                      </List.Item>
+                    )}
+                    locale={{ emptyText: 'All items are well stocked!' }}
+                  />
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
+                    <Text type="secondary">Low Stock Alerts are disabled in Settings.</Text>
+                  </div>
+                )}
               </Card>
             </Col>
 
-            {/* Quick Actions */}
+            {/* Top Selling Products */}
             <Col span={24}>
-              <Card title="Quick Actions" variant="borderless" style={{ borderRadius: 12 }}>
-                <Space wrap>
-                  <Button type="primary" icon={<ShoppingOutlined />} onClick={() => navigate('/pos')} size="large">
-                    New Sale
-                  </Button>
-                  <Button icon={<PlusOutlined />} onClick={() => navigate('/purchases')} size="large">
-                    Purchase
-                  </Button>
-                  <Button icon={<TeamOutlined />} onClick={() => navigate('/suppliers')} size="large">
-                    Suppliers
-                  </Button>
-                </Space>
+              <Card 
+                title={<Space><TrophyOutlined style={{ color: '#faad14' }} /> Top Selling Products</Space>} 
+                variant="borderless" 
+                style={{ borderRadius: 12 }}
+                styles={{ body: { padding: '0 12px' } }}
+              >
+                <List
+                  itemLayout="horizontal"
+                  dataSource={stats?.topSellingProducts || []}
+                  renderItem={(item, index) => (
+                    <List.Item>
+                      <List.Item.Meta
+                        avatar={<Tag color="gold">#{index + 1}</Tag>}
+                        title={item.name}
+                      />
+                      <Text strong>{item.totalSold} Sold</Text>
+                    </List.Item>
+                  )}
+                  locale={{ emptyText: 'No sales yet!' }}
+                />
               </Card>
             </Col>
 

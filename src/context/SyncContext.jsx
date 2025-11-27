@@ -49,6 +49,9 @@ export const SyncProvider = ({ children }) => {
         await db.products.bulkPut(mergedProducts);
       }
 
+      const { data: variants } = await supabase.from('product_variants').select('*');
+      if (variants) await db.product_variants.bulkPut(variants);
+
       // 3. Inventory
       const { data: inventoryItems } = await supabase.from('inventory').select('*').eq('user_id', user.id);
       if (inventoryItems) await db.inventory.bulkPut(inventoryItems);
@@ -534,7 +537,7 @@ export const SyncProvider = ({ children }) => {
           processSyncQueue();
         }
       }
-    }, 30000); // Har 30000ms (30 second) baad chalega
+    }, 30000); // Har 3000ms (3 second) baad chalega
 
     return () => clearInterval(interval);
   }, []);

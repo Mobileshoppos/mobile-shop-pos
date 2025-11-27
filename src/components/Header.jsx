@@ -77,16 +77,6 @@ const AppHeader = ({ collapsed, setCollapsed }) => {
 
         {/* Right Side: Icons & Subscription Button */}
         <Space align="center" size="small">
-          
-          {lowStockCount > 0 && (
-            <Tooltip title={`${lowStockCount} items are low in stock`} placement="bottom">
-              <Link to="/?low_stock=true" style={{ padding: '5px' }}>
-                <Badge count={lowStockCount} size="small">
-                  <BellOutlined style={{ fontSize: '18px', color: token.colorText }} />
-                </Badge>
-              </Link>
-            </Tooltip>
-          )}
 
           <Tooltip title="Manage Subscription" placement="bottom">
             <Button 

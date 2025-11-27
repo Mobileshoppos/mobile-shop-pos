@@ -920,7 +920,7 @@ async addCustomer(customerData) {
 
   // --- DASHBOARD FUNCTIONS ---
 
-  async getDashboardStats() {
+  async getDashboardStats(threshold = 5) {
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Aaj ki subah 12:00 baje ka waqt
 
@@ -967,8 +967,43 @@ async addCustomer(customerData) {
 
     // 6. Low Stock Alerts (Jin ki quantity 3 ya us se kam hai)
     const lowStockItems = products
-        .filter(p => (p.quantity || 0) <= 3)
+        .filter(p => (p.quantity || 0) <= threshold)
         .slice(0, 5); // Sirf top 5 dikhayein
+
+        // 7. Recent Sales (Aakhri 5 sales)
+    // Hum sales ko date ke hisaab se sort karenge (Newest first)
+    const recentSales = sales
+        .sort((a, b) => new Date(b.sale_date || b.created_at) - new Date(a.sale_date || a.created_at))
+        .slice(0, 5) // Sirf top 5
+        .map(s => ({
+            key: s.id,
+            id: s.id, // Invoice Number
+            date: s.sale_date || s.created_at,
+            amount: s.total_amount,
+            customer: customers.find(c => c.id === s.customer_id)?.name || 'Walk-in Customer'
+        }));
+
+        // 8. Top Selling Products (Sab se zyada bikne walay)
+    const productSalesMap = {};
+    
+    // Saare bike hue items ki ginti karein
+    saleItems.forEach(item => {
+        const pid = item.product_id;
+        if (!productSalesMap[pid]) productSalesMap[pid] = 0;
+        productSalesMap[pid] += (item.quantity || 0);
+    });
+
+    // Top 5 nikalna
+    const topSellingProducts = Object.keys(productSalesMap)
+        .map(pid => {
+            const prod = products.find(p => String(p.id) === String(pid));
+            return {
+                name: prod ? prod.name : 'Unknown Item',
+                totalSold: productSalesMap[pid]
+            };
+        })
+        .sort((a, b) => b.totalSold - a.totalSold) // Ziada se kam tarteeb dein
+        .slice(0, 5); // Sirf Top 5
 
     return {
         totalSalesToday,
@@ -977,7 +1012,9 @@ async addCustomer(customerData) {
         totalReceivables,
         totalPayables,
         lowStockItems,
-        totalProducts: products.length
+        totalProducts: products.length,
+        recentSales,
+        topSellingProducts
     };
   },
 
@@ -1008,7 +1045,7 @@ async addCustomer(customerData) {
         amount: map[date] // Y-Axis (Upar)
     }));
   }
-  
+
 };
 
 export default DataService;

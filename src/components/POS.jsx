@@ -171,6 +171,45 @@ const POS = () => {
              return;
         }
 
+        // ... (Product check code ke baad) ...
+
+        // 2. Agar Product table mein nahi mila, to Variants table mein Barcode check karein (NEW FIX)
+        if (!productByBarcode) {
+            // Local DB ke product_variants table mein dhoondein
+            const variantItem = await db.product_variants.where('barcode').equals(trimmedValue).first();
+            
+            if (variantItem) {
+                // Agar Variant mil gaya, to us variant ka "Available" stock dhoondein inventory mein
+                const inventoryItem = await db.inventory
+                    .where('variant_id').equals(variantItem.id) // Variant ID match karein
+                    .filter(i => (i.status || '').toLowerCase() === 'available') // Sirf Available items
+                    .first();
+
+                if (inventoryItem) {
+                    // Agar stock mil gaya, to parent product ki maloomat lein
+                    const parentProduct = allProducts.find(p => p.id === inventoryItem.product_id);
+                    if (parentProduct) {
+                        const itemToAdd = {
+                            ...inventoryItem,
+                            product_name: parentProduct.name,
+                            variant_id: inventoryItem.variant_id,
+                            sale_price: inventoryItem.sale_price || parentProduct.sale_price
+                        };
+                        handleVariantsSelected([itemToAdd]);
+                        setSearchTerm('');
+                        setDisplayedProducts(topSellingProducts);
+                        return;
+                    }
+                } else {
+                     message.warning('Item found but out of stock!');
+                     return;
+                }
+            }
+        }
+
+        // 3. Agar ab bhi nahi mila, to Inventory Items (IMEI) mein dhoondein...
+        // ... (Baqi purana code yahan se continue hoga) ...
+
         // 2. Agar Product nahi mila, to Inventory Items (IMEI) mein dhoondein
         // Hamein Local DB ke 'inventory' table mein check karna hai
         const inventoryItem = await db.inventory.where('imei').equals(trimmedValue).first();
