@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider } from 'antd';
+import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -18,7 +19,7 @@ const formatPriceRange = (min, max, currency) => {
   return `${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`;
 };
 
-const ProductList = ({ products, loading }) => {
+const ProductList = ({ products, loading, onDelete }) => {
   const { profile } = useAuth();
   
   const memoizedProducts = React.useMemo(() => {
@@ -126,9 +127,17 @@ const ProductList = ({ products, loading }) => {
       renderItem={(product) => (
         <List.Item style={{ width: '100%' }}>
           <Card 
-            variant="outlined" 
-            // *** YAHAN TABDEELI KI GAYI HAI: Header ko behtar banaya gaya ***
-            title={
+  variant="outlined"
+  extra={
+    <Button 
+      type="text" 
+      danger 
+      icon={<DeleteOutlined />} 
+      onClick={() => onDelete(product)} 
+    />
+  }
+  // *** YAHAN TABDEELI KI GAYI HAI: Header ko behtar banaya gaya ***
+  title={
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <Title level={5} style={{ margin: 0 }}>{product.name}</Title>
@@ -216,7 +225,7 @@ const Inventory = () => {
   const { processSyncQueue } = useSync();
   const showLowStockOnly = searchParams.get('low_stock') === 'true';
   const location = useLocation();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const { user, profile } = useAuth();
   const isMobile = useMediaQuery('(max-width: 768px)');
   
@@ -412,6 +421,30 @@ const Inventory = () => {
       message.error('Error adding product model: ' + error.message); 
     }
   };
+
+  // --- DELETE FUNCTION START ---
+  const handleDeleteProduct = (product) => {
+    modal.confirm({
+      title: 'Delete Product Model?',
+      icon: <ExclamationCircleOutlined />,
+      content: `Are you sure you want to delete "${product.name}"? This action cannot be undone.`,
+      okText: 'Yes, Delete',
+      okType: 'danger',
+      cancelText: 'No',
+      onOk: async () => {
+        try {
+          await DataService.deleteProduct(product.id);
+          message.success('Product model deleted successfully');
+          // List ko refresh karein
+          setSearchText(prev => prev ? prev + ' ' : ' ');
+          setTimeout(() => setSearchText(prev => prev.trim()), 10);
+        } catch (error) {
+          message.error(error.message);
+        }
+      },
+    });
+  };
+  // --- DELETE FUNCTION END ---
   
   const isSmartPhoneCategorySelected = categories.find(c => c.id === selectedCategoryId)?.name === 'Smart Phones & Tablets';
 
@@ -542,7 +575,7 @@ const Inventory = () => {
         </Row>
       </Card>
 
-      <ProductList products={products} loading={loading} />
+      <ProductList products={products} loading={loading} onDelete={handleDeleteProduct} />
 
       <Modal title="Add a New Product Model" open={isProductModalOpen} onOk={productForm.submit} onCancel={() => setIsProductModalOpen(false)} okText="Save Model">
         <Form form={productForm} layout="vertical" onFinish={handleProductOk} style={{marginTop: '24px'}}>

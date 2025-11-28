@@ -112,7 +112,37 @@ const DataService = {
 
   return true;
 },
-  
+
+// --- NAYA DELETE FUNCTION ---
+  async deleteProduct(id) {
+    // 1. Check karein ke kya Stock (Inventory) mein yeh product majood hai?
+    const hasInventory = await db.inventory.where('product_id').equals(id).count();
+    if (hasInventory > 0) {
+      throw new Error("Cannot delete: This product has stock items (Active or Sold).");
+    }
+
+    // 2. Check karein ke kya yeh kabhi Sale hua hai?
+    // (Note: Agar inventory check pass ho gaya to sales check ki zaroorat kam hoti hai, 
+    // lekin hifazat ke liye check kar lete hain agar sale_items mein record reh gaya ho)
+    if (db.sale_items) {
+        const hasSales = await db.sale_items.where('product_id').equals(id).count();
+        if (hasSales > 0) {
+             throw new Error("Cannot delete: This product has sales history.");
+        }
+    }
+
+    // 3. Agar sab clear hai, to Local DB se delete karein
+    await db.products.delete(id);
+
+    // 4. Sync Queue mein 'delete' action daalein
+    await db.sync_queue.add({
+      table_name: 'products',
+      action: 'delete',
+      data: { id }
+    });
+
+    return true;
+  },  
   
   async getSuppliers() {
     const suppliers = await db.suppliers.toArray();

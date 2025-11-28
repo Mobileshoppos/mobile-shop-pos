@@ -11,6 +11,7 @@ export const useSync = () => useContext(SyncContext);
 export const SyncProvider = ({ children }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
+  const isSyncingRef = useRef(false);
   const idMappingRef = useRef({});
 
   // --- DOWNLOAD FUNCTION ---
@@ -106,13 +107,15 @@ export const SyncProvider = ({ children }) => {
 
   // --- UPLOAD FUNCTION (Fixed: Lock + Suppliers Swap) ---
   const processSyncQueue = async () => {
-    // 1. LOCK: Agar internet nahi hai YA pehle se sync chal raha hai, to ruk jayen.
-    if (!navigator.onLine || isSyncing) return;
+  // 1. LOCK: Agar internet nahi hai YA Ref Lock laga hua hai, to ruk jayen.
+  // Hum 'isSyncing' state ke bajaye 'isSyncingRef.current' check karenge jo foran kaam karta hai.
+  if (!navigator.onLine || isSyncingRef.current) return;
 
-    // 2. Lock lagayen
-    setIsSyncing(true);
+  // 2. Lock lagayen (Ref aur State dono)
+  isSyncingRef.current = true; // Foran Lock
+  setIsSyncing(true); // UI ke liye
 
-    try {
+  try {
         const queueItems = await db.sync_queue.toArray();
         
         if (queueItems.length === 0) {
@@ -153,6 +156,18 @@ export const SyncProvider = ({ children }) => {
                    await db.products.where('id').equals(localProdId).delete();
                }
             }
+
+            // --- PRODUCT DELETE (NAYA CODE) ---
+        else if (item.table_name === 'products' && item.action === 'delete') {
+            const realId = idMap[item.data.id] || item.data.id;
+            // Server se delete karein
+            const { error: supError } = await supabase
+                .from('products')
+                .delete()
+                .eq('id', realId);
+            
+            error = supError;
+        }
             
             // --- SUPPLIERS (FIXED NOW) ---
             // Hum ne yahan wohi logic lagaya hai jo Products/Customers ke liye tha
@@ -504,10 +519,11 @@ export const SyncProvider = ({ children }) => {
     } catch (err) {
         console.error("Critical Sync Error:", err);
     } finally {
-        // 3. LOCK KHOL DEIN
-        setIsSyncing(false);
-    }
-  };
+    // 3. LOCK KHOL DEIN
+    isSyncingRef.current = false; // Ref Lock khol dein
+    setIsSyncing(false);
+  }
+};
 
   useEffect(() => {
     const handleOnline = () => {
