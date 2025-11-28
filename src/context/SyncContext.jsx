@@ -537,7 +537,7 @@ export const SyncProvider = ({ children }) => {
           processSyncQueue();
         }
       }
-    }, 30000); // Har 3000ms (3 second) baad chalega
+    }, 3000); // Har 3000ms (3 second) baad chalega
 
     return () => clearInterval(interval);
   }, []);

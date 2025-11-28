@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table } from 'antd';
+import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table, Radio } from 'antd';
 import {
   ShoppingOutlined,
   RiseOutlined,
@@ -9,100 +9,194 @@ import {
   WalletOutlined,
   TeamOutlined,
   DollarCircleOutlined,
-  TrophyOutlined
+  TrophyOutlined,
+  ArrowUpOutlined,
+  ArrowDownOutlined
 } from '@ant-design/icons';
-// CHANGE: Recharts hata kar Ant Design Charts lagaya hai
 import { Area } from '@ant-design/charts'; 
 import { useNavigate } from 'react-router-dom';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
+import { useTheme } from '../context/ThemeContext';
 
 const { Title, Text } = Typography;
 
 const Dashboard = () => {
+  const { isDarkMode } = useTheme(); 
   const [stats, setStats] = useState(null);
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
+  // NAYA: Time Range State (Default: Today)
+  const [timeRange, setTimeRange] = useState('today');
+  
   const { profile } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     const loadDashboard = async () => {
+      setLoading(true); // Loading shuru
       try {
-        const dashboardStats = await DataService.getDashboardStats(profile?.low_stock_threshold);
+        // Hum ab timeRange bhi bhej rahe hain
+        const dashboardStats = await DataService.getDashboardStats(profile?.low_stock_threshold, timeRange);
         const salesChart = await DataService.getLast7DaysSales();
         setStats(dashboardStats);
         setChartData(salesChart);
       } catch (error) {
         console.error("Dashboard Load Error:", error);
       } finally {
-        setLoading(false);
+        setLoading(false); // Loading khatam
       }
     };
     loadDashboard();
-  }, []);
+  }, [timeRange, profile]); // Jab timeRange badle, to dubara load karo
 
-  if (loading) return <div style={{ textAlign: 'center', marginTop: 100 }}><Spin size="large" /></div>;
+  if (loading && !stats) return <div style={{ textAlign: 'center', marginTop: 100 }}><Spin size="large" /></div>;
 
-  // --- Custom Styles for Cards (Gradients) ---
-  const cardStyle = { borderRadius: 12, border: 'none', color: 'white', height: '100%' };
+  // --- Helper: Comparison Label ---
+  const getComparisonLabel = () => {
+      if (timeRange === 'week') return 'vs Last Week';
+      if (timeRange === 'month') return 'vs Last Month';
+      return 'vs Yesterday';
+  };
 
-  // --- Graph Configuration (Ant Design Charts) ---
+  // --- Helper: Trend Renderer ---
+  const renderTrend = (percent) => {
+    if (percent === undefined || percent === null) return null;
+    const isPositive = percent >= 0;
+    
+    if (percent === 0) return <span style={{ fontSize: '12px', opacity: 0.8 }}>No change {getComparisonLabel()}</span>;
+
+    return (
+      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', fontSize: '13px' }}>
+        {isPositive ? <ArrowUpOutlined style={{ color: '#fff' }} /> : <ArrowDownOutlined style={{ color: '#fff' }} />}
+        <span style={{ marginLeft: 4, fontWeight: 'bold' }}>
+          {Math.abs(percent).toFixed(1)}%
+        </span>
+        <span style={{ marginLeft: 4, opacity: 0.8 }}>{getComparisonLabel()}</span>
+      </div>
+    );
+  };
+
+  // --- Custom Styles for Cards ---
+  const cardStyle = { borderRadius: 5, border: 'none', color: 'white', height: '100%' };
+
+  // --- Graph Configuration (UPDATED FOR DARK MODE) ---
   const config = {
     data: chartData,
     xField: 'date',
     yField: 'amount',
-    smooth: true, // Line ko golai (curve) deta hai
+    smooth: true,
+    // 1. Theme set karein
+    theme: isDarkMode ? 'dark' : 'light',
+    
+    // 2. Gradient Color (Dark mode mein thora dark, Light mein bright)
     areaStyle: () => {
       return {
-        fill: 'l(270) 0:#ffffff 0.5:#7ec2f3 1:#1890ff', // Khoobsurat Gradient
+        fill: isDarkMode 
+            ? 'l(270) 0:#1f1f1f 0.5:#1890ff 1:#1890ff' 
+            : 'l(270) 0:#ffffff 0.5:#7ec2f3 1:#1890ff',
       };
     },
     color: '#1890ff',
+    
+    // 3. X-Axis (Neeche wali dates)
+    xAxis: {
+        label: {
+            style: {
+                // Agar Dark mode hai to White text, warna Black
+                fill: isDarkMode ? 'rgba(255,255,255,0.85)' : '#000000',
+            }
+        },
+        grid: {
+            line: {
+                style: {
+                    stroke: isDarkMode ? '#444' : '#eee',
+                }
+            }
+        }
+    },
+
+    // 4. Y-Axis (Side wali prices)
     yAxis: {
         label: {
-            formatter: (v) => `${v}`, // Yahan currency symbol hata diya taake saaf dikhe
+            formatter: (v) => `${v}`,
+            style: {
+                // Agar Dark mode hai to White text, warna Black
+                fill: isDarkMode ? 'rgba(255,255,255,0.85)' : '#000000',
+            }
         },
+        grid: {
+            line: {
+                style: {
+                    stroke: isDarkMode ? '#444' : '#eee',
+                }
+            }
+        }
     },
+
+    // 5. Tooltip (Jab mouse upar layein)
     tooltip: {
         formatter: (datum) => {
             return { name: 'Sales', value: formatCurrency(datum.amount, profile?.currency) };
         },
+        // Tooltip ka background aur text color set karein
+        domStyles: isDarkMode ? {
+            'g2-tooltip': { backgroundColor: '#333', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' },
+            'g2-tooltip-title': { color: '#fff' },
+            'g2-tooltip-list-item': { color: '#fff' }
+        } : undefined
     },
     autoFit: true,
-    height: 245,
+    height: 300,
   };
 
   return (
     <div style={{ padding: '0 8px' }}>
-      <Title level={2} style={{ marginBottom: 24 }}>Dashboard</Title>
+      
+      {/* HEADER WITH FILTERS */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
+        <Title level={2} style={{ margin: 0 }}>Dashboard</Title>
+        
+        {/* Time Filter Buttons */}
+        <Radio.Group value={timeRange} onChange={(e) => setTimeRange(e.target.value)} buttonStyle="solid">
+          <Radio.Button value="today">Today</Radio.Button>
+          <Radio.Button value="week">This Week</Radio.Button>
+          <Radio.Button value="month">This Month</Radio.Button>
+        </Radio.Group>
+      </div>
 
-      {/* --- SECTION 1: TODAY'S SNAPSHOT (Top Cards) --- */}
+      {/* --- SECTION 1: STATS CARDS --- */}
       <Row gutter={[16, 16]}>
-        {/* Card 1: Today's Sales */}
+        {/* Card 1: Sales */}
         <Col xs={24} sm={12} lg={6}>
           <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
             <Statistic
-              title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Today's Sales</span>}
-              value={stats?.totalSalesToday || 0}
+              title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>
+                {timeRange === 'today' ? "Today's Sales" : timeRange === 'week' ? "Weekly Sales" : "Monthly Sales"}
+              </span>}
+              value={stats?.totalSales || 0}
               prefix={<ShoppingOutlined />}
               valueStyle={{ color: 'white', fontWeight: 'bold' }}
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
+            {renderTrend(stats?.salesGrowth)}
           </Card>
         </Col>
 
-        {/* Card 2: Today's Profit */}
+        {/* Card 2: Profit */}
         <Col xs={24} sm={12} lg={6}>
           <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' }}>
             <Statistic
-              title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Net Profit (Today)</span>}
-              value={stats?.netProfitToday || 0}
+              title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Net Profit</span>}
+              value={stats?.netProfit || 0}
               prefix={<RiseOutlined />}
               valueStyle={{ color: 'white', fontWeight: 'bold' }}
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
+            <div style={{ marginTop: 8, fontSize: '12px', opacity: 0.8 }}>
+                {timeRange === 'today' ? "Today's" : "Period"} Profit
+            </div>
           </Card>
         </Col>
 
@@ -110,16 +204,17 @@ const Dashboard = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #ff9966 0%, #ff5e62 100%)' }}>
             <Statistic
-              title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Today's Expenses</span>}
-              value={stats?.totalExpensesToday || 0}
+              title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Total Expenses</span>}
+              value={stats?.totalExpenses || 0}
               prefix={<FallOutlined />}
               valueStyle={{ color: 'white', fontWeight: 'bold' }}
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
+            {renderTrend(stats?.expensesGrowth)}
           </Card>
         </Col>
 
-        {/* Card 4: Receivables */}
+        {/* Card 4: Receivables (Yeh hamesha Total rehta hai) */}
         <Col xs={24} sm={12} lg={6}>
           <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #3a6073 0%, #3a7bd5 100%)' }}>
             <Statistic
@@ -129,22 +224,19 @@ const Dashboard = () => {
               valueStyle={{ color: 'white', fontWeight: 'bold' }}
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
+             <div style={{ marginTop: 8, fontSize: '12px', opacity: 0.8 }}>
+                Total Pending from Customers
+            </div>
           </Card>
         </Col>
       </Row>
 
-      {/* --- SECTION 1.5: QUICK ACTIONS (Moved Here) --- */}
+      {/* --- SECTION 1.5: QUICK ACTIONS --- */}
       <Row gutter={[16, 16]} style={{ marginTop: 5 }}>
         <Col span={24}>
-          <Card variant="borderless" style={{ borderRadius: 12 }}>
-            {/* Hum ne yahan 'flex' lagaya hai taake Title aur Buttons aamne-samne ayen */}
-            {/* 'space-between' ki jagah 'center' kiya, aur gap 16 se 24 kar diya */}
-<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
-              
-              {/* Title (Margin khatam kar diya taake center mein aye) */}
+          <Card variant="borderless" style={{ borderRadius: 5 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
               <Title level={5} style={{ margin: 0 }}>Quick Actions</Title>
-              
-              {/* Buttons */}
               <Space wrap>
                 <Button type="primary" icon={<ShoppingOutlined />} onClick={() => navigate('/pos')}>
                   New Sale
@@ -159,7 +251,6 @@ const Dashboard = () => {
                   Expenses
                 </Button>
               </Space>
-
             </div>
           </Card>
         </Col>
@@ -171,14 +262,23 @@ const Dashboard = () => {
         {/* Left Side: Sales Graph AND Recent Transactions */}
         <Col xs={24} lg={16}>
           {/* 1. Graph Card */}
-          <Card title="Sales Overview (Last 7 Days)" variant="borderless" style={{ borderRadius: 12 }}>
-             <div style={{ height: 300 }}>
-                <Area {...config} />
-             </div>
+          <Card 
+  title="Sales Overview (Last 7 Days)" 
+  // variant="borderless" hata diya
+  style={{ borderRadius: 5, border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9' }} // <--- Border add kiya
+>
+             <div style={{ height: 265 }}>
+   {/* Key lagane se chart force-refresh hoga jab theme badlegi */}
+   <Area {...config} key={isDarkMode ? 'dark-chart' : 'light-chart'} />
+</div>
           </Card>
 
-          {/* 2. Recent Transactions Table (Ab yeh isi Column ke andar hai) */}
-          <Card title="Recent Transactions" variant="borderless" style={{ borderRadius: 12, marginTop: 5 }}>
+          {/* 2. Recent Transactions Table */}
+          <Card 
+  title="Recent Transactions" 
+  // variant="borderless" hata diya
+  style={{ borderRadius: 5, marginTop: 15, border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9' }} // <--- Border add kiya
+>
             <Table
               dataSource={stats?.recentSales || []}
               pagination={false}
@@ -198,11 +298,23 @@ const Dashboard = () => {
                   render: (date) => <Text type="secondary" style={{fontSize: 12}}>{new Date(date).toLocaleDateString()}</Text>
                 },
                 { 
+                  title: 'Status', 
+                  dataIndex: 'payment_status', 
+                  key: 'payment_status',
+                  // NAYA: Status Color Logic
+                  render: (status) => {
+                      let color = 'green';
+                      if (status === 'unpaid') color = 'volcano';
+                      if (status === 'partial') color = 'orange';
+                      return <Tag color={color}>{status ? status.toUpperCase() : 'PAID'}</Tag>
+                  }
+                },
+                { 
                   title: 'Amount', 
                   dataIndex: 'amount', 
                   key: 'amount',
                   align: 'right',
-                  render: (amount) => <Tag color="green">{formatCurrency(amount, profile?.currency)}</Tag>
+                  render: (amount) => <Tag color="blue">{formatCurrency(amount, profile?.currency)}</Tag>
                 },
               ]}
             />
@@ -217,8 +329,7 @@ const Dashboard = () => {
             <Col span={24}>
               <Card 
                 title={<Space><AlertOutlined style={{ color: '#ff4d4f' }} /> Low Stock Alert</Space>} 
-                variant="borderless" 
-                style={{ borderRadius: 12 }}
+                style={{ borderRadius: 5, border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9' }}
                 styles={{ body: { padding: '0 12px' } }}
                 extra={<Button type="link" onClick={() => navigate('/inventory?low_stock=true')}>View All</Button>}
               >
@@ -249,8 +360,7 @@ const Dashboard = () => {
             <Col span={24}>
               <Card 
                 title={<Space><TrophyOutlined style={{ color: '#faad14' }} /> Top Selling Products</Space>} 
-                variant="borderless" 
-                style={{ borderRadius: 12 }}
+                style={{ borderRadius: 5, border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9' }}
                 styles={{ body: { padding: '0 12px' } }}
               >
                 <List

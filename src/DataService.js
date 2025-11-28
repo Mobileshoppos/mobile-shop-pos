@@ -920,11 +920,46 @@ async addCustomer(customerData) {
 
   // --- DASHBOARD FUNCTIONS ---
 
-  async getDashboardStats(threshold = 5) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Aaj ki subah 12:00 baje ka waqt
+  async getDashboardStats(threshold = 5, timeRange = 'today') {
+    // 1. Date Ranges Calculate karein
+    const now = new Date();
+    let currentStart = new Date();
+    let previousStart = new Date();
+    let previousEnd = new Date();
 
-    // 1. Sab data layein
+    // Time Range Logic
+    if (timeRange === 'week') {
+        // Is Haftay (Monday se shuru)
+        const day = currentStart.getDay() || 7; // Sunday is 7
+        if (day !== 1) currentStart.setHours(-24 * (day - 1));
+        else currentStart.setHours(0,0,0,0);
+        
+        // Pichla Hafta (Comparison ke liye)
+        previousStart = new Date(currentStart);
+        previousStart.setDate(previousStart.getDate() - 7);
+        previousEnd = new Date(currentStart); // End of previous week is start of current
+    } 
+    else if (timeRange === 'month') {
+        // Is Mahinay (1st date se)
+        currentStart.setDate(1);
+        currentStart.setHours(0,0,0,0);
+
+        // Pichla Mahina
+        previousStart = new Date(currentStart);
+        previousStart.setMonth(previousStart.getMonth() - 1);
+        previousEnd = new Date(currentStart);
+    } 
+    else {
+        // Default: Aaj (Today)
+        currentStart.setHours(0, 0, 0, 0);
+        
+        // Kal (Yesterday)
+        previousStart = new Date(currentStart);
+        previousStart.setDate(previousStart.getDate() - 1);
+        previousEnd = new Date(currentStart);
+    }
+
+    // 2. Sab data layein
     const sales = await db.sales.toArray();
     const expenses = await db.expenses.toArray();
     const customers = await db.customers.toArray();
@@ -933,67 +968,104 @@ async addCustomer(customerData) {
     const saleItems = await db.sale_items.toArray();
     const inventory = await db.inventory.toArray();
 
-    // 2. Aaj ka data filter karein
-    const todaySales = sales.filter(s => new Date(s.sale_date || s.created_at) >= today);
-    const todayExpenses = expenses.filter(e => new Date(e.expense_date) >= today);
+    // 3. Current aur Previous Data filter karein
+    const currentSalesData = sales.filter(s => new Date(s.sale_date || s.created_at) >= currentStart);
+    const previousSalesData = sales.filter(s => {
+        const d = new Date(s.sale_date || s.created_at);
+        return d >= previousStart && d < (timeRange === 'today' ? previousEnd : currentStart);
+    });
 
-    // 3. Totals Calculate karein
-    const totalSalesToday = todaySales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
-    const totalExpensesToday = todayExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const currentExpensesData = expenses.filter(e => new Date(e.expense_date) >= currentStart);
+    const previousExpensesData = expenses.filter(e => {
+        const d = new Date(e.expense_date);
+        return d >= previousStart && d < (timeRange === 'today' ? previousEnd : currentStart);
+    });
 
-    // 4. Munafa (Profit) Calculate karein
-    // (Sale - Cost of Goods Sold) - Expenses
-    const todaySaleIds = todaySales.map(s => s.id);
-    const todayItems = saleItems.filter(i => todaySaleIds.includes(i.sale_id));
+    // 4. Totals Calculate karein
+    const totalSalesCurrent = currentSalesData.reduce((sum, s) => sum + (s.total_amount || 0), 0);
+    const totalSalesPrevious = previousSalesData.reduce((sum, s) => sum + (s.total_amount || 0), 0);
+    
+    const totalExpensesCurrent = currentExpensesData.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalExpensesPrevious = previousExpensesData.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+    // 5. Percentage Calculation Helper
+    const calculateGrowth = (current, previous) => {
+        if (previous === 0) return current > 0 ? 100 : 0;
+        return ((current - previous) / previous) * 100;
+    };
+
+    const salesGrowth = calculateGrowth(totalSalesCurrent, totalSalesPrevious);
+    const expensesGrowth = calculateGrowth(totalExpensesCurrent, totalExpensesPrevious);
+
+    // 6. Munafa (Profit) Calculate karein (Current Period)
+    const currentSaleIds = currentSalesData.map(s => s.id);
+    const currentItems = saleItems.filter(i => currentSaleIds.includes(i.sale_id));
 
     let totalCost = 0;
-    // Inventory ko tezi se dhoondne ke liye Map banayein
     const inventoryMap = {};
     inventory.forEach(i => inventoryMap[i.id] = i);
 
-    todayItems.forEach(item => {
+    currentItems.forEach(item => {
         const invItem = inventoryMap[item.inventory_id];
         if (invItem) {
             totalCost += (invItem.purchase_price || 0);
         }
     });
 
-    const grossProfitToday = totalSalesToday - totalCost;
-    const netProfitToday = grossProfitToday - totalExpensesToday;
+    const grossProfitCurrent = totalSalesCurrent - totalCost;
+    const netProfitCurrent = grossProfitCurrent - totalExpensesCurrent;
 
-    // 5. Udhaar Khata (Receivables & Payables)
+    // 7. Udhaar Khata (Yeh hamesha Total hota hai, time range se change nahi hota)
     const totalReceivables = customers.reduce((sum, c) => sum + (c.balance || 0), 0);
     const totalPayables = suppliers.reduce((sum, s) => sum + (s.balance_due || 0), 0);
 
-    // 6. Low Stock Alerts (Jin ki quantity 3 ya us se kam hai)
-    const lowStockItems = products
-        .filter(p => (p.quantity || 0) <= threshold)
-        .slice(0, 5); // Sirf top 5 dikhayein
+    // 8. Low Stock Alerts (QUANTITY FIX)
+    
+    const stockCounts = {};
+    inventory.forEach(item => {
+        // Status check karein (case-insensitive)
+        const status = (item.status || '').toLowerCase();
+        
+        if (status === 'available') {
+            // YAHAN CHANGE HAI:
+            // Agar item ki apni quantity likhi hai (jaise covers mein hoti hai) to wo uthayein,
+            // Warna 1 samjhein (jaise mobiles mein hota hai).
+            const qty = item.quantity ? Number(item.quantity) : 1;
+            
+            stockCounts[item.product_id] = (stockCounts[item.product_id] || 0) + qty;
+        }
+    });
 
-        // 7. Recent Sales (Aakhri 5 sales)
-    // Hum sales ko date ke hisaab se sort karenge (Newest first)
+    // Products list update karein
+    const lowStockItems = products
+        .map(product => ({
+            ...product,
+            quantity: stockCounts[product.id] || 0 
+        }))
+        .filter(p => p.quantity <= threshold)
+        .slice(0, 5);
+
+    // 9. Recent Sales (Is mein hum ne 'payment_status' add kiya hai)
     const recentSales = sales
         .sort((a, b) => new Date(b.sale_date || b.created_at) - new Date(a.sale_date || a.created_at))
-        .slice(0, 5) // Sirf top 5
+        .slice(0, 5)
         .map(s => ({
             key: s.id,
-            id: s.id, // Invoice Number
+            id: s.id,
             date: s.sale_date || s.created_at,
             amount: s.total_amount,
+            payment_status: s.payment_status || 'paid', // NAYA FIELD
             customer: customers.find(c => c.id === s.customer_id)?.name || 'Walk-in Customer'
         }));
 
-        // 8. Top Selling Products (Sab se zyada bikne walay)
+    // 10. Top Selling Products
     const productSalesMap = {};
-    
-    // Saare bike hue items ki ginti karein
     saleItems.forEach(item => {
         const pid = item.product_id;
         if (!productSalesMap[pid]) productSalesMap[pid] = 0;
         productSalesMap[pid] += (item.quantity || 0);
     });
 
-    // Top 5 nikalna
     const topSellingProducts = Object.keys(productSalesMap)
         .map(pid => {
             const prod = products.find(p => String(p.id) === String(pid));
@@ -1002,13 +1074,15 @@ async addCustomer(customerData) {
                 totalSold: productSalesMap[pid]
             };
         })
-        .sort((a, b) => b.totalSold - a.totalSold) // Ziada se kam tarteeb dein
-        .slice(0, 5); // Sirf Top 5
+        .sort((a, b) => b.totalSold - a.totalSold)
+        .slice(0, 5);
 
     return {
-        totalSalesToday,
-        totalExpensesToday,
-        netProfitToday,
+        totalSales: totalSalesCurrent, // Naam change kiya taake generic ho
+        salesGrowth,
+        totalExpenses: totalExpensesCurrent, // Naam change kiya
+        expensesGrowth,
+        netProfit: netProfitCurrent, // Naam change kiya
         totalReceivables,
         totalPayables,
         lowStockItems,
