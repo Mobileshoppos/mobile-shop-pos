@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
-import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider } from 'antd';
-import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined } from '@ant-design/icons';
+import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu } from 'antd';
+import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -46,7 +46,7 @@ const formatPriceRange = (min, max, currency) => {
   return `${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`;
 };
 
-const ProductList = ({ products, loading, onDelete, onAddStock, onQuickEdit }) => {
+const ProductList = ({ products, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel }) => {
   const { profile } = useAuth();
   const { isDarkMode } = useTheme();
   
@@ -148,14 +148,44 @@ const ProductList = ({ products, loading, onDelete, onAddStock, onQuickEdit }) =
                   </div>
                 </div>
 
-                <div style={{ textAlign: 'right', minWidth: '90px' }}>
-                  {/* PRICE RANGE - FONT INCREASED TO 18px */}
-                  <Text strong style={{ fontSize: '18px', color: '#52c41a', display: 'block' }}>
+                {/* --- RIGHT SIDE (Price + Menu) --- */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                  
+                  {/* Price Range */}
+                  <Text strong style={{ fontSize: '18px', color: '#52c41a', whiteSpace: 'nowrap' }}>
                     {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
                   </Text>
-                  <div style={{ marginTop: '4px' }}>
-                    <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => onDelete(product)} />
-                  </div>
+                  
+                  {/* 3-DOTS MENU (Ab Price ke barabar mein) */}
+                  <Dropdown 
+                    trigger={['click']}
+                    menu={{
+                      items: [
+                        {
+                          key: 'edit',
+                          label: 'Edit Details',
+                          icon: <EditOutlined />,
+                          onClick: () => onEditProductModel(product)
+                        },
+                        {
+                          key: 'delete',
+                          label: 'Delete Model',
+                          icon: <DeleteOutlined />,
+                          danger: true,
+                          onClick: () => onDelete(product)
+                        }
+                      ]
+                    }}
+                  >
+                    {/* Style thora adjust kiya taake icon upar align ho */}
+                    <Button 
+                        type="text" 
+                        size="small"
+                        icon={<MoreOutlined style={{ fontSize: '20px', fontWeight: 'bold' }} />} 
+                        style={{ marginTop: '-2px' }} 
+                    />
+                  </Dropdown>
+
                 </div>
               </div>
 
@@ -293,6 +323,59 @@ const Inventory = () => {
   const [loading, setLoading] = useState(true);
   const [advancedFilters, setAdvancedFilters] = useState([]);
   const [filterAttributes, setFilterAttributes] = useState({}); 
+  // --- PRODUCT MODEL EDIT STATE ---
+  const [isProductEditModalOpen, setIsProductEditModalOpen] = useState(false);
+  const [editingProductModel, setEditingProductModel] = useState(null);
+  const [productEditForm] = Form.useForm();
+
+  // --- EDIT PRODUCT MODEL FUNCTION ---
+  const handleEditProductModelClick = (product) => {
+      setEditingProductModel(product);
+      productEditForm.setFieldsValue({
+          name: product.name,
+          brand: product.brand,
+          category_id: product.category_id
+      });
+      setIsProductEditModalOpen(true);
+  };
+
+  const handleProductModelUpdate = async (values) => {
+      try {
+          if (!editingProductModel) return;
+
+          // 1. Local DB Update
+          await db.products.update(editingProductModel.id, {
+              name: values.name,
+              brand: values.brand,
+              category_id: values.category_id
+          });
+
+          // 2. Server Update (Supabase)
+          if (navigator.onLine) {
+              const { error } = await supabase
+                  .from('products')
+                  .update({
+                      name: values.name,
+                      brand: values.brand,
+                      category_id: values.category_id
+                  })
+                  .eq('id', editingProductModel.id);
+              
+              if (error) console.error("Server update failed:", error);
+          }
+
+          message.success('Product details updated!');
+          setIsProductEditModalOpen(false);
+          setEditingProductModel(null);
+          
+          // Refresh List
+          setSearchText(prev => prev ? prev + ' ' : ' ');
+          setTimeout(() => setSearchText(prev => prev.trim()), 10);
+
+      } catch (error) {
+          message.error("Update failed: " + error.message);
+      }
+  };
 
   // --- QUICK EDIT STATE ---
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -588,7 +671,7 @@ const Inventory = () => {
       try {
           if (!editingItem || !editingItem.ids) return;
 
-          // 1. ID Dhoondna (Local DB se - Offline Safe)
+          // 1. ID Dhoondna
           let variantId = editingItem.variant_id;
           if (!variantId && editingItem.ids.length > 0) {
               const localItem = await db.inventory.get(editingItem.ids[0]);
@@ -597,20 +680,33 @@ const Inventory = () => {
 
           if (!variantId) throw new Error("Item ID not found.");
 
-          // 2. LOCAL Update (Foran Asar dikhane ke liye)
+          // --- STEP 1: DUPLICATE CHECK (Local DB) ---
+          // Update karne se pehle check karein ke kya yeh barcode kisi AUR item ka to nahi?
+          if (values.barcode) {
+              // Hum check kar rahe hain ke kya koi aisa item hai jiska barcode same ho, MAGAR ID alag ho
+              const duplicateItem = await db.product_variants
+                  .where('barcode').equals(values.barcode)
+                  .filter(item => item.id !== variantId) // Apne aap ko ignore karein
+                  .first();
+
+              if (duplicateItem) {
+                  throw new Error(`This Barcode "${values.barcode}" is already assigned to another item. Duplicates are not allowed.`);
+              }
+          }
+
+          // --- STEP 2: LOCAL UPDATE ---
           await db.product_variants.update(variantId, {
               barcode: values.barcode || null,
               sale_price: values.sale_price
           });
 
-          // 3. Inventory Update (Stock prices sync karne ke liye)
+          // Stock Prices Sync
           const updates = { sale_price: values.sale_price };
           for (const id of editingItem.ids) {
               await DataService.updateInventoryItem(id, updates);
           }
 
-          // 4. SERVER Update (Supabase)
-          // Ab Policy theek hone ke baad yeh zaroor chalega
+          // --- STEP 3: SERVER UPDATE (With Error Handling) ---
           if (navigator.onLine) {
               const { error: masterError } = await supabase
                   .from('product_variants')
@@ -621,23 +717,28 @@ const Inventory = () => {
                   .eq('id', variantId);
 
               if (masterError) {
-                  // Hum user ko pareshan nahi karenge kyunke local update ho chuka hai
+                  // Agar Server ne kaha "Duplicate", to hum Error throw karenge
+                  if (masterError.code === '23505') { // 23505 = Unique Violation Code
+                      // Hamein Local change ko wapis revert karna chahiye ya user ko batana chahiye
+                      throw new Error("Server Error: Yeh Barcode pehle se mojood hai. (Duplicate)");
+                  }
                   console.error("Server sync failed:", masterError);
               }
           }
 
+          // Agar yahan tak pohanch gaye, to sab theek hai
           message.success('Item updated successfully!');
           setIsEditModalOpen(false);
           setEditingItem(null);
           processSyncQueue();
           
-          // Refresh List
           setSearchText(prev => prev ? prev + ' ' : ' ');
           setTimeout(() => setSearchText(prev => prev.trim()), 10);
 
       } catch (error) {
           console.error(error);
-          message.error("Update Failed: " + error.message);
+          // Yahan ab User ko Laal Rang ka Error nazar aayega Success ki jagah
+          message.error(error.message);
       }
   };
   
@@ -755,6 +856,7 @@ const Inventory = () => {
         onDelete={handleDeleteProduct} 
         onAddStock={handleAddStockClick}
         onQuickEdit={handleQuickEditClick}
+        onEditProductModel={handleEditProductModelClick}
       />
 
       {/* MODAL 1: PRODUCT MODEL EDIT/CREATE */}
@@ -813,6 +915,28 @@ const Inventory = () => {
     </Form.Item>
   </Form>
 </Modal>
+
+{/* --- PRODUCT NAME EDIT MODAL (START) --- */}
+      <Modal
+        title="Edit Product Details"
+        open={isProductEditModalOpen}
+        onOk={productEditForm.submit}
+        onCancel={() => setIsProductEditModalOpen(false)}
+        okText="Update"
+      >
+        <Form form={productEditForm} layout="vertical" onFinish={handleProductModelUpdate}>
+          <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="brand" label="Brand"><Input /></Form.Item>
+          <Form.Item name="category_id" label="Category" rules={[{ required: true }]}>
+              <Select>
+                  {categories.map(c => <Option key={c.id} value={c.id}>{c.name}</Option>)}
+              </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
+      {/* --- PRODUCT NAME EDIT MODAL (END) --- */}
+
+      {/* Iske neeche AddPurchaseForm hoga, usay mat chherein */}
       
       {/* MODAL 3: ADD STOCK (PURCHASE FORM) */}
   <AddPurchaseForm 

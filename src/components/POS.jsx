@@ -304,6 +304,7 @@ const POS = () => {
     let newItemsAdded = false;
     let quantityUpdated = false;
     let alreadyInCart = false;
+    let stockLimitReached = false;
 
     setCart(currentCart => {
       let updatedCart = [...currentCart];
@@ -311,6 +312,7 @@ const POS = () => {
       const imeiItemsToAdd = selectedItems.filter(i => i.category_is_imei_based || i.imei);
       const quantityItemsToAdd = selectedItems.filter(i => !i.category_is_imei_based && !i.imei);
 
+      // 1. IMEI Items (Inki quantity hamesha 1 hoti hai)
       imeiItemsToAdd.forEach(item => {
         const isImeiAlreadyInCart = updatedCart.some(cartItem => cartItem.imei === item.imei);
         if (!isImeiAlreadyInCart) {
@@ -321,6 +323,7 @@ const POS = () => {
         }
       });
 
+      // 2. Quantity Items (Yahan Stock Check Lagana Hai - ATTRIBUTE BASED)
       const groupedQuantityItems = {};
       quantityItemsToAdd.forEach(item => {
         if (!groupedQuantityItems[item.variant_id]) {
@@ -331,16 +334,42 @@ const POS = () => {
 
       for (const variantId in groupedQuantityItems) {
         const { item, count } = groupedQuantityItems[variantId];
+        
+        // --- STOCK CHECK LOGIC (FIXED) ---
+        // Hum ID ke bajaye Attributes aur Price match karenge
+        const parentProduct = allProducts.find(p => p.id === item.product_id);
+        const realStockCount = parentProduct 
+            ? parentProduct.variants.filter(v => 
+                // Attributes match karein (JSON stringify sab se asaan tareeqa hai compare karne ka)
+                JSON.stringify(v.item_attributes || {}) === JSON.stringify(item.item_attributes || {}) &&
+                // Price bhi match karein (taake sahi variant mile)
+                v.sale_price === item.sale_price &&
+                // Sirf Available stock ginein
+                (v.status || 'available').toLowerCase() === 'available'
+              ).length
+            : 0;
+        // -------------------------------
+
         const existingIndex = updatedCart.findIndex(ci => ci.variant_id === item.variant_id);
 
         if (existingIndex > -1) {
           const existingItem = updatedCart[existingIndex];
-          const updatedItem = { ...existingItem, quantity: existingItem.quantity + count };
-          updatedCart[existingIndex] = updatedItem;
-          quantityUpdated = true;
+          const newTotal = existingItem.quantity + count;
+
+          if (newTotal > realStockCount) {
+             stockLimitReached = true;
+          } else {
+             const updatedItem = { ...existingItem, quantity: newTotal };
+             updatedCart[existingIndex] = updatedItem;
+             quantityUpdated = true;
+          }
         } else {
-          updatedCart.push({ ...item, quantity: count });
-          newItemsAdded = true;
+          if (count > realStockCount) {
+             stockLimitReached = true;
+          } else {
+             updatedCart.push({ ...item, quantity: count });
+             newItemsAdded = true;
+          }
         }
       }
       
@@ -348,30 +377,28 @@ const POS = () => {
     });
 
     setTimeout(() => {
-      if (newItemsAdded) message.success(`New item(s) added to cart.`);
-      if (quantityUpdated) message.info(`Quantity updated for existing item(s).`);
-      if (alreadyInCart) message.warning(`Some items were already in the cart.`);
+      if (stockLimitReached) message.warning(`Cannot add more. Stock limit reached!`);
+      else if (newItemsAdded) message.success(`New item(s) added to cart.`);
+      else if (quantityUpdated) message.info(`Quantity updated.`);
+      if (alreadyInCart) message.warning(`Item already in cart.`);
     }, 100);
   
     setIsVariantModalOpen(false);
     setProductForVariantSelection(null);
   };
 
-// === NAYA AUR MUKAMMAL SEARCH FUNCTION START ===
-// NAYA handleSearch (Offline-First)
   const handleSearch = async (value, source = 'input') => {
     const trimmedValue = value ? value.trim() : '';
     
-    // Agar Barcode Scan hai (Enter dabaya gaya) - TO YEH WAISA HI RAHEGA (SAFE)
+    // Agar Barcode Scan hai (Enter dabaya gaya)
     if (source === 'search' && trimmedValue) {
       setLoading(true);
       try {
-        // ... (Barcode Logic Same as Before) ...
         // 1. Product Barcode Check
         const productByBarcode = allProducts.find(p => p.barcode === trimmedValue);
         if (productByBarcode) {
              handleAddToCart(productByBarcode);
-             setSearchTerm(''); // Clear search
+             setSearchTerm(''); 
              return;
         }
 
@@ -380,7 +407,7 @@ const POS = () => {
         if (variantItem) {
             const inventoryItem = await db.inventory
                 .where('variant_id').equals(variantItem.id)
-                .filter(i => (i.status || '').toLowerCase() === 'available')
+                .filter(i => (i.status || '').toLowerCase() === 'available') // Yahan pehle se theek tha
                 .first();
 
             if (inventoryItem) {
@@ -402,23 +429,28 @@ const POS = () => {
             }
         }
 
-        // 3. IMEI Check
+        // 3. IMEI Check (YAHAN TABDEELI KI HAI)
         const inventoryItem = await db.inventory.where('imei').equals(trimmedValue).first();
-        if (inventoryItem && inventoryItem.status === 'available') {
+        
+        // Neeche wali line ghaur se dekhein, yahan 'toLowerCase()' add kiya hai
+        if (inventoryItem && (inventoryItem.status || '').toLowerCase() === 'available') {
              const parentProduct = allProducts.find(p => p.id === inventoryItem.product_id);
              if (parentProduct) {
                  const itemToAdd = {
                      ...inventoryItem,
                      product_name: parentProduct.name,
                      variant_id: inventoryItem.variant_id || inventoryItem.id,
-                     sale_price: inventoryItem.sale_price || parentProduct.sale_price
+                     sale_price: inventoryItem.sale_price || parentProduct.sale_price,
+                     imei: trimmedValue 
                  };
                  handleVariantsSelected([itemToAdd]);
                  setSearchTerm('');
                  return;
              }
         }
+        
         message.warning(`No Barcode or IMEI matched for: ${trimmedValue}`);
+
       } catch (error) {
         message.error("Search failed: " + error.message);
       } finally {
@@ -427,8 +459,7 @@ const POS = () => {
       return;
     }
 
-    // Agar sirf type kar raha hai -> To bas State update karein
-    // Baqi kaam 'useEffect' karega
+    // Agar sirf type kar raha hai
     setSearchTerm(value || ''); 
   };
 
@@ -436,11 +467,22 @@ const POS = () => {
     setCart(cart.map(item => {
       if (item.variant_id === variantId) {
         if (field === 'quantity') {
-          const productInStock = allProducts.find(p => p.id === item.product_id);
-          if (value > productInStock.quantity) {
-            message.warning(`No more stock for this product.`);
-            return { ...item, quantity: productInStock.quantity };
+          // --- STOCK CHECK LOGIC (FIXED) ---
+          const parentProduct = allProducts.find(p => p.id === item.product_id);
+          const realStockCount = parentProduct 
+              ? parentProduct.variants.filter(v => 
+                  // Attributes aur Price match karein
+                  JSON.stringify(v.item_attributes || {}) === JSON.stringify(item.item_attributes || {}) &&
+                  v.sale_price === item.sale_price &&
+                  (v.status || 'available').toLowerCase() === 'available'
+                ).length
+              : 0;
+
+          if (value > realStockCount) {
+            message.warning(`Stock limit reached! Only ${realStockCount} available.`);
+            return { ...item, quantity: realStockCount };
           }
+          // -------------------------------
         }
         return { ...item, [field]: value };
       }
@@ -502,10 +544,15 @@ const POS = () => {
             if (cartItem.imei) {
                 const inventoryId = cartItem.inventory_id || cartItem.id;
                 allSaleItemsToInsert.push({
-                    id: crypto.randomUUID(), // Items ki ID UUID hi rahegi (Internal use)
+                    id: crypto.randomUUID(),
                     sale_id: saleId,
                     inventory_id: inventoryId,
                     product_id: cartItem.product_id,
+                    
+                    // *** YEH NAYA COLUMN HAI ***
+                    product_name_snapshot: cartItem.product_name, 
+                    // ***************************
+
                     quantity: 1,
                     price_at_sale: cartItem.sale_price,
                     user_id: user.id
@@ -528,6 +575,11 @@ const POS = () => {
                         sale_id: saleId,
                         inventory_id: invItem.id,
                         product_id: invItem.product_id,
+                        
+                        // *** YEH NAYA COLUMN HAI ***
+                        product_name_snapshot: cartItem.product_name,
+                        // ***************************
+
                         quantity: 1,
                         price_at_sale: cartItem.sale_price,
                         user_id: user.id
@@ -674,6 +726,28 @@ const POS = () => {
 
   return (
     <>
+    <style>
+        {`
+          /* Scrollbar ki churai (width) */
+          ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+          }
+          /* Scrollbar ka peeche ka hissa (Track) */
+          ::-webkit-scrollbar-track {
+            background: ${isDarkMode ? '#1f1f1f' : '#f0f0f0'}; 
+          }
+          /* Scrollbar ka pakarne wala hissa (Thumb) */
+          ::-webkit-scrollbar-thumb {
+            background-color: ${isDarkMode ? '#424242' : '#c1c1c1'};
+            border-radius: 4px;
+          }
+          /* Jab mouse upar layein */
+          ::-webkit-scrollbar-thumb:hover {
+            background-color: ${isDarkMode ? '#666' : '#a8a8a8'};
+          }
+        `}
+      </style>
       <Title level={2} style={{ marginBottom: '5px', marginLeft: '48px', fontSize: '20px' }}>Point of Sale</Title>
       <Row gutter={24}>
         <Col xs={24} md={14}>

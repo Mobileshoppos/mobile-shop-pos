@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@ant-design/charts": "^2.6.6",
+    "@sentry/react": "^10.29.0",
     "@supabase/supabase-js": "^2.56.0",
     "antd": "^5.27.1",
     "dexie": "^4.2.1",

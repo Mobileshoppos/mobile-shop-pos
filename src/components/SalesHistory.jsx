@@ -74,8 +74,12 @@ const SalesHistory = () => {
       
       const itemsWithNames = await Promise.all(saleItems.map(async (item) => {
           const product = await db.products.get(item.product_id);
+          
+          // Logic: Agar Snapshot hai to wo lo, warna Product Table se naam lo
+          const displayName = item.product_name_snapshot || (product ? product.name : 'Unknown Item');
+
           return {
-              name: product ? product.name : 'Unknown Item', // Receipt generator ko 'name' chahiye
+              name: displayName, // Ab yeh hamesha sahi naam dikhayega
               quantity: item.quantity,
               price_at_sale: item.price_at_sale,
               total: item.quantity * item.price_at_sale
