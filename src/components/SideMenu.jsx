@@ -151,7 +151,6 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile, isDarkMode, toggleTheme }
 
   return (
     <Sider 
-        breakpoint="lg" 
         collapsedWidth={isMobile ? "0" : "80"}
         theme="dark"
         collapsible

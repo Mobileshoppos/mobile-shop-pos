@@ -113,6 +113,20 @@ const DataService = {
   return true;
 },
 
+ // Product Model Update
+  async updateProduct(id, updates) {
+    await db.products.update(id, updates);
+    await db.sync_queue.add({ table_name: 'products', action: 'update', data: { id, ...updates } });
+    return true;
+  },
+
+  // Inventory Item Update (Supplier Ledger Safe)
+  async updateInventoryItem(id, updates) {
+    await db.inventory.update(id, updates);
+    await db.sync_queue.add({ table_name: 'inventory', action: 'update', data: { id, ...updates } });
+    return true;
+  },
+
 // --- NAYA DELETE FUNCTION ---
   async deleteProduct(id) {
     // 1. Check karein ke kya Stock (Inventory) mein yeh product majood hai?
@@ -951,46 +965,38 @@ async addCustomer(customerData) {
   // --- DASHBOARD FUNCTIONS ---
 
   async getDashboardStats(threshold = 5, timeRange = 'today') {
-    // 1. Date Ranges Calculate karein
+    // 1. Date Ranges (Wohi purana logic)
     const now = new Date();
     let currentStart = new Date();
     let previousStart = new Date();
     let previousEnd = new Date();
 
-    // Time Range Logic
     if (timeRange === 'week') {
-        // Is Haftay (Monday se shuru)
-        const day = currentStart.getDay() || 7; // Sunday is 7
+        const day = currentStart.getDay() || 7; 
         if (day !== 1) currentStart.setHours(-24 * (day - 1));
         else currentStart.setHours(0,0,0,0);
-        
-        // Pichla Hafta (Comparison ke liye)
         previousStart = new Date(currentStart);
         previousStart.setDate(previousStart.getDate() - 7);
-        previousEnd = new Date(currentStart); // End of previous week is start of current
+        previousEnd = new Date(currentStart); 
     } 
     else if (timeRange === 'month') {
-        // Is Mahinay (1st date se)
         currentStart.setDate(1);
         currentStart.setHours(0,0,0,0);
-
-        // Pichla Mahina
         previousStart = new Date(currentStart);
         previousStart.setMonth(previousStart.getMonth() - 1);
         previousEnd = new Date(currentStart);
     } 
     else {
-        // Default: Aaj (Today)
         currentStart.setHours(0, 0, 0, 0);
-        
-        // Kal (Yesterday)
         previousStart = new Date(currentStart);
         previousStart.setDate(previousStart.getDate() - 1);
         previousEnd = new Date(currentStart);
     }
 
-    // 2. Sab data layein
+    // 2. Data Fetching
     const sales = await db.sales.toArray();
+    const returns = await db.sale_returns.toArray(); 
+    const returnItems = await db.sale_return_items.toArray(); 
     const expenses = await db.expenses.toArray();
     const customers = await db.customers.toArray();
     const suppliers = await db.suppliers.toArray();
@@ -998,10 +1004,16 @@ async addCustomer(customerData) {
     const saleItems = await db.sale_items.toArray();
     const inventory = await db.inventory.toArray();
 
-    // 3. Current aur Previous Data filter karein
+    // 3. Filtering Logic
     const currentSalesData = sales.filter(s => new Date(s.sale_date || s.created_at) >= currentStart);
     const previousSalesData = sales.filter(s => {
         const d = new Date(s.sale_date || s.created_at);
+        return d >= previousStart && d < (timeRange === 'today' ? previousEnd : currentStart);
+    });
+
+    const currentReturnsData = returns.filter(r => new Date(r.created_at) >= currentStart);
+    const previousReturnsData = returns.filter(r => {
+        const d = new Date(r.created_at);
         return d >= previousStart && d < (timeRange === 'today' ? previousEnd : currentStart);
     });
 
@@ -1011,62 +1023,86 @@ async addCustomer(customerData) {
         return d >= previousStart && d < (timeRange === 'today' ? previousEnd : currentStart);
     });
 
-    // 4. Totals Calculate karein
-    const totalSalesCurrent = currentSalesData.reduce((sum, s) => sum + (s.total_amount || 0), 0);
-    const totalSalesPrevious = previousSalesData.reduce((sum, s) => sum + (s.total_amount || 0), 0);
+    // 4. Net Sales Calculation
+    const rawSalesCurrent = currentSalesData.reduce((sum, s) => sum + (s.total_amount || 0), 0);
+    const rawReturnsCurrent = currentReturnsData.reduce((sum, r) => sum + (r.total_refund_amount || 0), 0);
+    const netSalesCurrent = rawSalesCurrent - rawReturnsCurrent;
+
+    const rawSalesPrevious = previousSalesData.reduce((sum, s) => sum + (s.total_amount || 0), 0);
+    const rawReturnsPrevious = previousReturnsData.reduce((sum, r) => sum + (r.total_refund_amount || 0), 0);
+    const netSalesPrevious = rawSalesPrevious - rawReturnsPrevious;
     
     const totalExpensesCurrent = currentExpensesData.reduce((sum, e) => sum + (e.amount || 0), 0);
     const totalExpensesPrevious = previousExpensesData.reduce((sum, e) => sum + (e.amount || 0), 0);
 
-    // 5. Percentage Calculation Helper
+    // 5. Growth
     const calculateGrowth = (current, previous) => {
         if (previous === 0) return current > 0 ? 100 : 0;
         return ((current - previous) / previous) * 100;
     };
-
-    const salesGrowth = calculateGrowth(totalSalesCurrent, totalSalesPrevious);
+    const salesGrowth = calculateGrowth(netSalesCurrent, netSalesPrevious);
     const expensesGrowth = calculateGrowth(totalExpensesCurrent, totalExpensesPrevious);
 
-    // 6. Munafa (Profit) Calculate karein (Current Period)
+    // 6. Profit Calculation
     const currentSaleIds = currentSalesData.map(s => s.id);
-    const currentItems = saleItems.filter(i => currentSaleIds.includes(i.sale_id));
+    const currentSoldItems = saleItems.filter(i => currentSaleIds.includes(i.sale_id));
 
-    let totalCost = 0;
     const inventoryMap = {};
     inventory.forEach(i => inventoryMap[i.id] = i);
 
-    currentItems.forEach(item => {
+    let totalCostOfSold = 0;
+    currentSoldItems.forEach(item => {
         const invItem = inventoryMap[item.inventory_id];
-        if (invItem) {
-            totalCost += (invItem.purchase_price || 0);
+        if (invItem) totalCostOfSold += (invItem.purchase_price || 0);
+    });
+
+    const currentReturnIds = currentReturnsData.map(r => r.id);
+    const currentReturnedItems = returnItems.filter(i => currentReturnIds.includes(i.return_id));
+
+    let totalCostOfReturns = 0;
+    currentReturnedItems.forEach(item => {
+        const invItem = inventoryMap[item.inventory_id];
+        if (invItem) totalCostOfReturns += (invItem.purchase_price || 0);
+    });
+
+    const netCost = totalCostOfSold - totalCostOfReturns;
+    const grossProfitCurrent = netSalesCurrent - netCost;
+    const netProfitCurrent = grossProfitCurrent - totalExpensesCurrent;
+
+    // --- 7. BUSINESS LOGIC FIX: Receivables vs Payables (Credits) ---
+    
+    let totalReceivables = 0;       // Jo paise LENE hain (Positive Balance)
+    let totalCustomerCredits = 0;   // Jo paise WAPIS KARNE hain (Negative Balance)
+
+    customers.forEach(c => {
+        const bal = c.balance || 0;
+        if (bal > 0) {
+            totalReceivables += bal;
+        } else if (bal < 0) {
+            // Math.abs(-20) = 20. Hamein positive number chahiye display ke liye
+            totalCustomerCredits += Math.abs(bal); 
         }
     });
 
-    const grossProfitCurrent = totalSalesCurrent - totalCost;
-    const netProfitCurrent = grossProfitCurrent - totalExpensesCurrent;
+    // Suppliers ka udhaar (Payables)
+    const totalSupplierPayables = suppliers.reduce((sum, s) => sum + (s.balance_due || 0), 0);
 
-    // 7. Udhaar Khata (Yeh hamesha Total hota hai, time range se change nahi hota)
-    const totalReceivables = customers.reduce((sum, c) => sum + (c.balance || 0), 0);
-    const totalPayables = suppliers.reduce((sum, s) => sum + (s.balance_due || 0), 0);
+    // Total Payables (Suppliers + Customers jinko wapis karna hai)
+    // Business mein yeh dono "Liabilities" hain.
+    const totalLiabilities = totalSupplierPayables + totalCustomerCredits;
 
-    // 8. Low Stock Alerts (QUANTITY FIX)
-    
+    // ---------------------------------------------------------------
+
+    // 8. Low Stock
     const stockCounts = {};
     inventory.forEach(item => {
-        // Status check karein (case-insensitive)
         const status = (item.status || '').toLowerCase();
-        
         if (status === 'available') {
-            // YAHAN CHANGE HAI:
-            // Agar item ki apni quantity likhi hai (jaise covers mein hoti hai) to wo uthayein,
-            // Warna 1 samjhein (jaise mobiles mein hota hai).
             const qty = item.quantity ? Number(item.quantity) : 1;
-            
             stockCounts[item.product_id] = (stockCounts[item.product_id] || 0) + qty;
         }
     });
 
-    // Products list update karein
     const lowStockItems = products
         .map(product => ({
             ...product,
@@ -1075,7 +1111,7 @@ async addCustomer(customerData) {
         .filter(p => p.quantity <= threshold)
         .slice(0, 5);
 
-    // 9. Recent Sales (Is mein hum ne 'payment_status' add kiya hai)
+    // 9. Recent Sales
     const recentSales = sales
         .sort((a, b) => new Date(b.sale_date || b.created_at) - new Date(a.sale_date || a.created_at))
         .slice(0, 5)
@@ -1084,11 +1120,11 @@ async addCustomer(customerData) {
             id: s.id,
             date: s.sale_date || s.created_at,
             amount: s.total_amount,
-            payment_status: s.payment_status || 'paid', // NAYA FIELD
+            payment_status: s.payment_status || 'paid',
             customer: customers.find(c => c.id === s.customer_id)?.name || 'Walk-in Customer'
         }));
 
-    // 10. Top Selling Products
+    // 10. Top Selling
     const productSalesMap = {};
     saleItems.forEach(item => {
         const pid = item.product_id;
@@ -1108,13 +1144,16 @@ async addCustomer(customerData) {
         .slice(0, 5);
 
     return {
-        totalSales: totalSalesCurrent, // Naam change kiya taake generic ho
+        totalSales: netSalesCurrent,
         salesGrowth,
-        totalExpenses: totalExpensesCurrent, // Naam change kiya
+        totalExpenses: totalExpensesCurrent,
         expensesGrowth,
-        netProfit: netProfitCurrent, // Naam change kiya
-        totalReceivables,
-        totalPayables,
+        netProfit: netProfitCurrent,
+        
+        totalReceivables, // Sirf Lene wale paise
+        totalPayables: totalLiabilities, // Suppliers + Customer Returns (Dene wale paise)
+        totalCustomerCredits, // Alag se bhi bhej rahe hain agar future mein dikhana ho
+        
         lowStockItems,
         totalProducts: products.length,
         recentSales,
@@ -1123,11 +1162,13 @@ async addCustomer(customerData) {
   },
 
   async getLast7DaysSales() {
-    // Pichle 7 din ka graph banane ke liye data
+    // 1. Sales aur Returns dono layein
     const sales = await db.sales.toArray();
+    const returns = await db.sale_returns.toArray(); // <--- NAYA: Returns bhi layein
+    
     const map = {};
     
-    // Pichle 7 din ki dates set karein (Value 0 rakhein)
+    // 2. Pichle 7 din ka map banayein
     for(let i=6; i>=0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
@@ -1135,7 +1176,7 @@ async addCustomer(customerData) {
         map[dateStr] = 0;
     }
 
-    // Sales ko dates mein bharein
+    // 3. Sales Jama (Add) karein
     sales.forEach(s => {
         const dateStr = (s.sale_date || s.created_at).split('T')[0];
         if (map[dateStr] !== undefined) {
@@ -1143,10 +1184,18 @@ async addCustomer(customerData) {
         }
     });
 
-    // Array bana kar wapis karein
+    // 4. Returns Manfi (Subtract) karein <--- NAYA STEP
+    returns.forEach(r => {
+        const dateStr = (r.created_at).split('T')[0];
+        if (map[dateStr] !== undefined) {
+            map[dateStr] -= (r.total_refund_amount || 0);
+        }
+    });
+
+    // 5. Data wapis karein (Math.max use kiya taake graph negative mein na jaye)
     return Object.keys(map).sort().map(date => ({
-        date, // X-Axis (Neeche)
-        amount: map[date] // Y-Axis (Upar)
+        date, 
+        amount: Math.max(0, map[date]) 
     }));
   }
 

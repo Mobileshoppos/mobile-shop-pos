@@ -151,6 +151,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    const getOfflineBackup = () => {
+      try {
+        const backup = localStorage.getItem('app_offline_user_backup');
+        return backup ? JSON.parse(backup) : null;
+      } catch (e) {
+        return null;
+      }
+    };
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         setSession(session);
@@ -158,6 +166,20 @@ export const AuthProvider = ({ children }) => {
         setIsPasswordRecovery(true);
         setLoading(false);
         return;
+      }
+
+      if (!session && !navigator.onLine) {
+        console.log("Offline mode: Restoring user from backup...");
+        const offlineUser = getOfflineBackup();
+        if (offlineUser) {
+          // Hum ek "Naqli" (Fake) session bana rahe hain taake App khul jaye
+          session = { user: offlineUser, access_token: 'offline_mode' };
+        }
+      }
+
+      // Agar Session Valid hai (Online), to future ke liye Backup save karein
+      if (session?.user) {
+        localStorage.setItem('app_offline_user_backup', JSON.stringify(session.user));
       }
 
       setIsPasswordRecovery(false);
@@ -175,8 +197,15 @@ export const AuthProvider = ({ children }) => {
     });
 
     const checkSession = async () => {
-      // Pehle Local Storage se session check karein (Supabase khud karta hai)
-      const { data: { session } } = await supabase.auth.getSession();
+      // Pehle Local Storage se session check karein
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session && !navigator.onLine) {
+        console.log("Startup Offline: Restoring user...");
+        const offlineUser = getOfflineBackup();
+        if (offlineUser) {
+          session = { user: offlineUser, access_token: 'offline_mode' };
+        }
+      }
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {

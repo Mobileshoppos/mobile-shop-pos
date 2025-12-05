@@ -9,45 +9,47 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { useSync } from '../context/SyncContext';
 import { db } from '../db';
+import { useTheme } from '../context/ThemeContext';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
 const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialValues }) => {
   const { profile } = useAuth();
+  const { isDarkMode } = useTheme(); // <--- Theme hook yahan add kiya
   const [form] = Form.useForm();
   const [imeis, setImeis] = useState(['']);
   const imeiInputRefs = useRef([]);
   const isImeiCategory = product?.category_is_imei_based;
 
+  const [isBarcodeLocked, setIsBarcodeLocked] = useState(!!initialValues);
+
   useEffect(() => {
     if (visible && product) {
-      // Agar Edit kar rahe hain (initialValues mojood hai)
       if (initialValues) {
+          // EXISTING ITEM
+          setIsBarcodeLocked(true);
           const formData = {
               purchase_price: initialValues.purchase_price,
               sale_price: initialValues.sale_price,
               quantity: initialValues.quantity || 1,
               barcode: initialValues.barcode,
-              ...initialValues.item_attributes // Purane attributes wapis daalein
+              ...initialValues.item_attributes
           };
           
-          // Agar IMEI wala item hai
           if (isImeiCategory && initialValues.imei) {
-              setImeis([initialValues.imei]); // Sirf wohi IMEI dikhayein jo edit ho raha hai
+              setImeis([initialValues.imei]);
           } else if (isImeiCategory) {
               setImeis(['']);
           }
-
           form.setFieldsValue(formData);
-      } 
-      // Agar Naya Item add kar rahe hain
-      else {
+      } else {
+          // NEW ITEM
+          setIsBarcodeLocked(false);
           const commonValues = {
             purchase_price: product.default_purchase_price || '',
             sale_price: product.default_sale_price || '',
           };
-    
           if (isImeiCategory) {
             form.setFieldsValue({ ...commonValues });
             setImeis(['']);
@@ -58,6 +60,31 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
     }
   }, [visible, product, isImeiCategory, form, initialValues]);
 
+  // --- FIXED LOGIC (Warning Khatam karne ke liye) ---
+  const handleValuesChange = (changedValues, allValues) => {
+    if (!initialValues) return;
+
+    const attributeNames = attributes.map(a => a.attribute_name);
+    
+    // Check karein ke kya Attributes change hue hain?
+    const isAttributeChanged = attributeNames.some(attr => {
+        return allValues[attr] !== initialValues.item_attributes[attr];
+    });
+
+    if (isAttributeChanged) {
+        // Agar change hua hai, aur pehle se locked hai, to unlock karein
+        if (isBarcodeLocked) setIsBarcodeLocked(false);
+    } else {
+        // Agar wapis purana ho gaya
+        if (!isBarcodeLocked) setIsBarcodeLocked(true);
+        
+        // WARNING FIX: Sirf tab value set karein agar wo ghalat ho
+        // Taake baar baar loop na bane
+        if (allValues.barcode !== initialValues.barcode) {
+            form.setFieldValue('barcode', initialValues.barcode);
+        }
+    }
+  };
   
   const handleImeiChange = (index, value) => {
     const newImeis = [...imeis];
@@ -138,13 +165,27 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
     }
   };
 
+  // --- DARK MODE STYLE LOGIC ---
+  const disabledInputStyle = isBarcodeLocked ? { 
+      backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5', // Dark mode mein transparent, Light mein grey
+      color: isDarkMode ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.25)', // Text color dim
+      borderColor: isDarkMode ? '#424242' : '#d9d9d9',
+      cursor: 'not-allowed' 
+  } : {};
+
   return (
     <Modal
       title={<>Add Details for: <Typography.Text type="success">{product?.name}</Typography.Text></>}
       open={visible} onCancel={onCancel} onOk={handleOk} okText="Add to Purchase List"
       width={isImeiCategory ? 800 : 520} destroyOnHidden
     >
-      <Form form={form} layout="vertical" autoComplete="off" style={{ marginTop: '24px' }}>
+      <Form 
+        form={form} 
+        layout="vertical" 
+        autoComplete="off" 
+        style={{ marginTop: '24px' }}
+        onValuesChange={handleValuesChange}
+      >
         {isImeiCategory ? (
             <>
                 <Row gutter={16}>
@@ -173,10 +214,15 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                     <Col span={12}>
                         <Form.Item 
                           name="barcode" 
-                          label="Variant Barcode (Optional)"
-                          tooltip="Assign a unique barcode to this specific variant (e.g., 18W Adapter). You can scan it here."
+                          label="Variant Barcode"
+                          tooltip={isBarcodeLocked ? "To change barcode, please use the Quick Edit (Pencil) icon on Inventory screen." : "Assign a unique barcode to this new variant."}
                         >
-                            <Input prefix={<BarcodeOutlined />} placeholder="Scan or type barcode" />
+                            <Input 
+                                prefix={<BarcodeOutlined />} 
+                                placeholder="Scan or type barcode" 
+                                disabled={isBarcodeLocked} 
+                                style={disabledInputStyle} // <--- Yahan Style Apply Kiya
+                            />
                         </Form.Item>
                     </Col>
                 </Row>
@@ -191,7 +237,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
   );
 };
 
-const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
+const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData }) => {
   const { profile } = useAuth();
   const { message } = App.useApp();
   const { refetchStockCount } = useAuth();
@@ -322,7 +368,48 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
       loadData();
 
     } 
+
   }, [visible, form, message, getProductsWithCategory]);
+
+  // --- NAYA CODE: Inventory se aane wale data ko handle karna ---
+useEffect(() => {
+  // Agar form khula hai AUR hamein peeche se data (initialData) mila hai
+  if (visible && initialData && products.length > 0) {
+    
+    const targetProduct = products.find(p => p.id === initialData.product_id);
+    
+    if (targetProduct) {
+        // 1. Product select karein
+        setSelectedProduct(targetProduct);
+        form.setFieldsValue({ product_id: targetProduct.id });
+
+        // 2. Attributes fetch karein (taake size/color waghera fill ho sakein)
+        const fetchAttributes = async () => {
+           const { data } = await supabase
+            .from('category_attributes')
+            .select('*')
+            .eq('category_id', targetProduct.category_id);
+           
+           setSelectedProductAttributes(data || []);
+           
+           // 3. Item wala chota modal khol dein
+           setTimeout(() => {
+              setIsItemModalVisible(true);
+           }, 200);
+        };
+        fetchAttributes();
+    }
+  }
+}, [visible, initialData, products, form]);
+
+// --- NAYA CODE: Jab Form band ho to sab kuch saaf (Reset) kar do ---
+  useEffect(() => {
+    if (!visible) {
+      setPurchaseItems([]); // Purani items ki list khali karein
+      form.resetFields();   // Form ke fields (Supplier, Notes) bhi saaf karein
+      setEditingItemIndex(null);
+    }
+  }, [visible, form]);
 
   const handleAddItemClick = async () => {
     const productId = form.getFieldValue('product_id');
@@ -515,13 +602,13 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
   return (
     <>
       <Modal
-        title="Create New Purchase Invoice" open={visible} onCancel={onCancel} width={1000} destroyOnHidden={true}
+        title="Create New Purchase Invoice" open={visible} onCancel={onCancel} width={1000}
         footer={[ <Button key="back" onClick={onCancel}>Cancel</Button>, <Button key="submit" type="primary" loading={isSubmitting} onClick={handleSavePurchase}>Save Purchase</Button> ]}
       >
         <Form form={form} layout="vertical" style={{ marginTop: '24px' }}>
           <Row gutter={16}>
             <Col span={12}><Form.Item name="supplier_id" label="Supplier" rules={[{ required: true }]}><Select placeholder="Select a supplier" loading={loading}>{(suppliers || []).map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}</Select></Form.Item></Col>
-            <Col span={12}><Form.Item name="notes" label="Notes / Bill # (Optional)"><Input placeholder="e.g., Invoice #INV-12345" /></Form.Item></Col>
+            <Col span={12}><Form.Item name="notes" label="Notes / Bill #"><Input placeholder="e.g., Invoice #INV-12345" /></Form.Item></Col>
           </Row>
           <Divider />
           <Title level={5}>Add Products to Invoice</Title>
@@ -539,7 +626,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
           <Table
             columns={columns} 
             dataSource={purchaseItems}
-            rowKey={(record, index) => `${record.product_id}-${index}-${record.imei}`}
+            rowKey={(record) => `${record.product_id}-${record.imei || ''}-${JSON.stringify(record.item_attributes)}`}
             pagination={false}
             summary={pageData => {
               const total = pageData.reduce((sum, item) => sum + ((item.quantity || 0) * (item.purchase_price || 0)), 0);
@@ -600,7 +687,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated }) => {
           product={selectedProduct}
           attributes={selectedProductAttributes}
           // Agar editingIndex null nahi hai, to us item ka data bhejein
-          initialValues={editingItemIndex !== null ? purchaseItems[editingItemIndex] : null}
+          initialValues={editingItemIndex !== null ? purchaseItems[editingItemIndex] : (initialData ? { ...initialData, quantity: 1 } : null)}
         />
       }
     </>

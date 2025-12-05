@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip
 } from 'antd';
-import { PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined } from '@ant-design/icons';
+import { PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
@@ -14,11 +14,42 @@ import { db } from '../db';
 import { useSync } from '../context/SyncContext';
 import DataService from '../DataService';
 import { generateInvoiceId } from '../utils/idGenerator';
+import { useTheme } from '../context/ThemeContext';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
 
+// --- HELPER: SMART SEARCH (Naram Mizaaj) ---
+const isSmartMatch = (text, search) => {
+  if (!text || !search) return false;
+  const cleanText = text.toString().toLowerCase();
+  const cleanSearch = search.toString().toLowerCase();
+  if (cleanText.includes(cleanSearch)) return true; // Strict match
+  if (cleanSearch.length < 3) return false; // Chote words par risk na lein
+  
+  let searchIndex = 0;
+  for (let i = 0; i < cleanText.length; i++) {
+    if (cleanText[i] === cleanSearch[searchIndex]) {
+      searchIndex++;
+    }
+    if (searchIndex === cleanSearch.length) return true;
+  }
+  return false;
+};
+
+// --- HELPER: PRICE RANGE FORMATTER ---
+const formatPriceRange = (min, max, currency) => {
+  if (min === null || max === null) return 'N/A';
+  if (min === max) return formatCurrency(min, currency);
+  return `${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`;
+};
+
 const POS = () => {
+  const { isDarkMode } = useTheme();
+  const [showFilters, setShowFilters] = useState(false);
+  const [priceRange, setPriceRange] = useState([null, null]);
+  const [filterAttributes, setFilterAttributes] = useState({});
+  const [advancedFilters, setAdvancedFilters] = useState([]);
   const { message, modal } = App.useApp();
   const { user, profile, refetchStockCount } = useAuth();
   const { processSyncQueue } = useSync();
@@ -42,6 +73,73 @@ const POS = () => {
   const [popularCategories, setPopularCategories] = useState([]);
   const [activeCategoryId, setActiveCategoryId] = useState(null);
   const [topSellingProducts, setTopSellingProducts] = useState([]);
+
+  // --- DATA PREPARATION FOR UI (Inventory Style) ---
+  const productsWithVariants = React.useMemo(() => {
+    if (!displayedProducts) return [];
+
+    const createStableAttributeKey = (attributes) => {
+      if (!attributes || typeof attributes !== 'object') return '{}';
+      const filteredAttributes = {};
+      Object.keys(attributes).forEach(key => {
+        const lowerKey = key.toLowerCase();
+        if (!lowerKey.includes('imei') && !lowerKey.includes('serial')) {
+          filteredAttributes[key] = attributes[key];
+        }
+      });
+      const sortedKeys = Object.keys(filteredAttributes).sort();
+      const sortedAttributes = {};
+      for (const key of sortedKeys) {
+        sortedAttributes[key] = filteredAttributes[key];
+      }
+      return JSON.stringify(sortedAttributes);
+    };
+
+    return displayedProducts.map(product => {
+      // Variants grouping logic
+      let groupedVariants = [];
+      if (product.variants) {
+        const itemsMap = new Map();
+        for (const variant of product.variants) {
+          const attributesKey = createStableAttributeKey(variant.item_attributes);
+          const key = `${attributesKey}-${variant.sale_price}`; // Group by Attributes & Price
+
+          if (itemsMap.has(key)) {
+            const existing = itemsMap.get(key);
+            existing.display_quantity += 1;
+            existing.ids.push(variant.id);
+            if (variant.imei) existing.imeis.push(variant.imei);
+          } else {
+            itemsMap.set(key, {
+              ...variant,
+              display_quantity: 1,
+              ids: [variant.id],
+              imeis: variant.imei ? [variant.imei] : [],
+              // Important for Cart:
+              product_id: product.id,
+              product_name: product.name,
+              variant_id: variant.id // Use first ID as reference
+            });
+          }
+        }
+        groupedVariants = Array.from(itemsMap.values());
+      }
+
+      return {
+        ...product,
+        min_sale_price: product.min_sale_price || product.sale_price,
+        max_sale_price: product.max_sale_price || product.sale_price,
+        groupedVariants: groupedVariants,
+      };
+    });
+  }, [displayedProducts]);
+
+  // --- QUICK ADD HANDLER (Directly from Card) ---
+  const handleVariantQuickAdd = (variantItem) => {
+    // Hum existing logic use karenge jo 'handleVariantsSelected' mein hai
+    // Bas data ko array bana kar pass karna hai
+    handleVariantsSelected([variantItem]);
+  };
 
   useEffect(() => {
   if (!user) return;
@@ -81,6 +179,115 @@ const POS = () => {
   initialLoad();
 
 }, [user, message]);
+
+// --- 1. DYNAMIC ATTRIBUTES OPTIONS (Jab Category Change ho) ---
+  useEffect(() => {
+    if (activeCategoryId && allProducts.length > 0) {
+      // Sirf is category ke products lein
+      const catProducts = allProducts.filter(p => p.category_id === activeCategoryId);
+      
+      // Saare attributes ikathe karein (RAM, ROM etc)
+      const optionsMap = {};
+      catProducts.forEach(p => {
+        if (p.variants) {
+          p.variants.forEach(v => {
+            if (v.item_attributes) {
+              Object.entries(v.item_attributes).forEach(([key, val]) => {
+                if (key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) return;
+                if (!optionsMap[key]) optionsMap[key] = new Set();
+                optionsMap[key].add(val);
+              });
+            }
+          });
+        }
+      });
+
+      // Dropdown format mein convert karein
+      const filters = Object.keys(optionsMap).map(key => ({
+        attribute_name: key,
+        options: Array.from(optionsMap[key]).sort()
+      }));
+      setAdvancedFilters(filters);
+    } else {
+      setAdvancedFilters([]);
+      setFilterAttributes({}); // Reset attributes if category removed
+    }
+  }, [activeCategoryId, allProducts]);
+
+  // --- 2. MASTER FILTER LOGIC (Search + Price + Attributes) ---
+  useEffect(() => {
+    if (loading) return;
+
+    let filtered = allProducts;
+
+    // A. Category Filter
+    if (activeCategoryId) {
+      filtered = filtered.filter(p => p.category_id === activeCategoryId);
+    }
+
+    // B. Text Search (Smart Match & Tags)
+    if (searchTerm) {
+      filtered = filtered.filter(p => {
+        // 1. Pehle Main Product Details check karein
+        const mainMatch = isSmartMatch(p.name, searchTerm) ||
+                          isSmartMatch(p.brand, searchTerm) ||
+                          isSmartMatch(p.category_name, searchTerm);
+        
+        if (mainMatch) return true;
+
+        // 2. Agar wahan nahi mila, to Variants ke Tags (Attributes) check karein
+        if (p.variants && p.variants.length > 0) {
+            return p.variants.some(v => {
+                if (!v.item_attributes) return false;
+                // Har Tag ki value ko check karein (e.g. "Red", "A10")
+                return Object.values(v.item_attributes).some(val => 
+                    isSmartMatch(val, searchTerm)
+                );
+            });
+        }
+
+        return false;
+      });
+    }
+
+    // C. Price Range Filter (Updated for Variants)
+    if (priceRange[0] !== null) {
+      filtered = filtered.filter(p => {
+        // Agar variants hain to check karein ke kya koi bhi variant is price se zyada hai?
+        if (p.variants && p.variants.length > 0) {
+           return p.variants.some(v => v.sale_price >= priceRange[0]);
+        }
+        // Agar variant nahi hai to main price check karein
+        return (p.sale_price || 0) >= priceRange[0];
+      });
+    }
+
+    if (priceRange[1] !== null) {
+      filtered = filtered.filter(p => {
+        // Agar variants hain to check karein ke kya koi bhi variant is price se kam hai?
+        if (p.variants && p.variants.length > 0) {
+           return p.variants.some(v => v.sale_price <= priceRange[1]);
+        }
+        return (p.sale_price || 0) <= priceRange[1];
+      });
+    }
+
+    // D. Attribute Filter (RAM, ROM, Color)
+    Object.keys(filterAttributes).forEach(attrKey => {
+      const attrValue = filterAttributes[attrKey];
+      if (attrValue) {
+        filtered = filtered.filter(p => {
+          // Check karein agar product ka koi bhi variant match karta hai
+          return p.variants && p.variants.some(v => 
+            v.item_attributes && v.item_attributes[attrKey] === attrValue
+          );
+        });
+      }
+    });
+
+    setDisplayedProducts(filtered);
+
+  }, [searchTerm, activeCategoryId, priceRange, filterAttributes, allProducts, loading]);
 
   const handleAddToCart = (product) => {
     if (product.quantity <= 0) { message.warning('This product is out of stock!'); return; }
@@ -154,71 +361,51 @@ const POS = () => {
 // NAYA handleSearch (Offline-First)
   const handleSearch = async (value, source = 'input') => {
     const trimmedValue = value ? value.trim() : '';
-    setSearchTerm(value || ''); 
-
-    // Jab Enter dabaya jaye (Barcode ya IMEI Search)
+    
+    // Agar Barcode Scan hai (Enter dabaya gaya) - TO YEH WAISA HI RAHEGA (SAFE)
     if (source === 'search' && trimmedValue) {
       setLoading(true);
       try {
-        // 1. Pehle Products list mein Barcode check karein (Yeh list pehle se loaded hai)
+        // ... (Barcode Logic Same as Before) ...
+        // 1. Product Barcode Check
         const productByBarcode = allProducts.find(p => p.barcode === trimmedValue);
-        
         if (productByBarcode) {
-             // Agar product mil gaya, to cart mein add karne ke liye modal kholein
              handleAddToCart(productByBarcode);
-             setSearchTerm('');
-             setDisplayedProducts(topSellingProducts);
+             setSearchTerm(''); // Clear search
              return;
         }
 
-        // ... (Product check code ke baad) ...
+        // 2. Variant Barcode Check
+        const variantItem = await db.product_variants.where('barcode').equals(trimmedValue).first();
+        if (variantItem) {
+            const inventoryItem = await db.inventory
+                .where('variant_id').equals(variantItem.id)
+                .filter(i => (i.status || '').toLowerCase() === 'available')
+                .first();
 
-        // 2. Agar Product table mein nahi mila, to Variants table mein Barcode check karein (NEW FIX)
-        if (!productByBarcode) {
-            // Local DB ke product_variants table mein dhoondein
-            const variantItem = await db.product_variants.where('barcode').equals(trimmedValue).first();
-            
-            if (variantItem) {
-                // Agar Variant mil gaya, to us variant ka "Available" stock dhoondein inventory mein
-                const inventoryItem = await db.inventory
-                    .where('variant_id').equals(variantItem.id) // Variant ID match karein
-                    .filter(i => (i.status || '').toLowerCase() === 'available') // Sirf Available items
-                    .first();
-
-                if (inventoryItem) {
-                    // Agar stock mil gaya, to parent product ki maloomat lein
-                    const parentProduct = allProducts.find(p => p.id === inventoryItem.product_id);
-                    if (parentProduct) {
-                        const itemToAdd = {
-                            ...inventoryItem,
-                            product_name: parentProduct.name,
-                            variant_id: inventoryItem.variant_id,
-                            sale_price: inventoryItem.sale_price || parentProduct.sale_price
-                        };
-                        handleVariantsSelected([itemToAdd]);
-                        setSearchTerm('');
-                        setDisplayedProducts(topSellingProducts);
-                        return;
-                    }
-                } else {
-                     message.warning('Item found but out of stock!');
-                     return;
+            if (inventoryItem) {
+                const parentProduct = allProducts.find(p => p.id === inventoryItem.product_id);
+                if (parentProduct) {
+                    const itemToAdd = {
+                        ...inventoryItem,
+                        product_name: parentProduct.name,
+                        variant_id: inventoryItem.variant_id,
+                        sale_price: inventoryItem.sale_price || parentProduct.sale_price
+                    };
+                    handleVariantsSelected([itemToAdd]);
+                    setSearchTerm('');
+                    return;
                 }
+            } else {
+                 message.warning('Item found but out of stock!');
+                 return;
             }
         }
 
-        // 3. Agar ab bhi nahi mila, to Inventory Items (IMEI) mein dhoondein...
-        // ... (Baqi purana code yahan se continue hoga) ...
-
-        // 2. Agar Product nahi mila, to Inventory Items (IMEI) mein dhoondein
-        // Hamein Local DB ke 'inventory' table mein check karna hai
+        // 3. IMEI Check
         const inventoryItem = await db.inventory.where('imei').equals(trimmedValue).first();
-        
-        // Sirf wo item uthayein jo 'available' ho
         if (inventoryItem && inventoryItem.status === 'available') {
-             // Item mil gaya, ab iski parent product details (Naam, Brand) chahiye
              const parentProduct = allProducts.find(p => p.id === inventoryItem.product_id);
-             
              if (parentProduct) {
                  const itemToAdd = {
                      ...inventoryItem,
@@ -228,13 +415,10 @@ const POS = () => {
                  };
                  handleVariantsSelected([itemToAdd]);
                  setSearchTerm('');
-                 setDisplayedProducts(topSellingProducts);
                  return;
              }
         }
-
-        message.warning(`No product found for: ${trimmedValue}`);
-
+        message.warning(`No Barcode or IMEI matched for: ${trimmedValue}`);
       } catch (error) {
         message.error("Search failed: " + error.message);
       } finally {
@@ -243,20 +427,9 @@ const POS = () => {
       return;
     }
 
-    // Normal Typing Search (Naam se dhoondna) - Yeh pehle jaisa hi hai
-    setActiveCategoryId(null); 
-
-    if (trimmedValue === '') {
-      setDisplayedProducts(topSellingProducts); 
-    } else {
-      const lowercasedValue = trimmedValue.toLowerCase();
-      const filtered = allProducts.filter(product => 
-        (product.name.toLowerCase().includes(lowercasedValue)) ||
-        (product.brand && product.brand.toLowerCase().includes(lowercasedValue)) ||
-        (product.category_name && product.category_name.toLowerCase().includes(lowercasedValue))
-      );
-      setDisplayedProducts(filtered);
-    }
+    // Agar sirf type kar raha hai -> To bas State update karein
+    // Baqi kaam 'useEffect' karega
+    setSearchTerm(value || ''); 
   };
 
   const handleCartItemUpdate = (variantId, field, value) => {
@@ -501,91 +674,229 @@ const POS = () => {
 
   return (
     <>
-      <Title level={2} style={{ marginBottom: '24px' }}>Point of Sale</Title>
+      <Title level={2} style={{ marginBottom: '5px', marginLeft: '48px', fontSize: '20px' }}>Point of Sale</Title>
       <Row gutter={24}>
         <Col xs={24} md={14}>
-          <Card>
-            <Search
-  placeholder="Search or Scan Barcode & Press Enter"
-  onChange={(e) => handleSearch(e.target.value, 'input')}
-  onSearch={(value) => handleSearch(value, 'search')}
-  allowClear
-  value={searchTerm}
-  style={{ marginBottom: '16px' }}
-  ref={searchInputRef}
-/>
+          <Card styles={{ body: { padding: '12px' } }}>
+            {/* === ROW 1: SEARCH, CATEGORY, BUTTONS === */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              
+              {/* 1. Search & Scan Input */}
+              <Input
+                placeholder="Scan Barcode or Search..."
+                prefix={<BarcodeOutlined style={{ color: '#1890ff', fontSize: '18px' }} />}
+                value={searchTerm}
+                onChange={(e) => handleSearch(e.target.value, 'input')}
+                onPressEnter={(e) => handleSearch(e.target.value, 'search')}
+                allowClear
+                style={{ flex: 1 }}
+                ref={searchInputRef}
+              />
 
-<div style={{ margin: '16px 0' }}>
-  <Space wrap>
-    <Tooltip title="Top Selling">
-  <Button
-    type={!activeCategoryId ? 'primary' : 'default'}
-    icon={<StarOutlined />}
-    onClick={() => {
-  setActiveCategoryId(null);
-  setSearchTerm('');
-  setDisplayedProducts(topSellingProducts);
-}}
-  />
-</Tooltip>
-    {popularCategories.map(cat => (
-      <Button
-        key={cat.category_id}
-        type={activeCategoryId === cat.category_id ? 'primary' : 'default'}
-        onClick={() => {
-          setActiveCategoryId(cat.category_id);
-          const filtered = allProducts.filter(p => p.category_id === cat.category_id);
-          setDisplayedProducts(filtered);
-          setSearchTerm('');
-        }}
-      >
-        {cat.category_name}
-      </Button>
-    ))}
-    <Select
-      placeholder="All Categories"
-      value={activeCategoryId}
-      onChange={(value) => {
-        if (!value) {
-          setActiveCategoryId(null);
-          handleSearch('');
-        } else {
-          setActiveCategoryId(value);
-          const filtered = allProducts.filter(p => p.category_id === value);
-          setDisplayedProducts(filtered);
-        }
-        setSearchTerm('');
-      }}
-      style={{ width: 150 }}
-      allowClear
-    >
-      {allProducts
-        .reduce((acc, current) => {
-          if (!acc.find(item => item.category_id === current.category_id)) {
-            acc.push({ category_id: current.category_id, category_name: current.category_name });
-          }
-          return acc;
-        }, [])
-        .sort((a,b) => a.category_name.localeCompare(b.category_name))
-        .map(cat => (
-          <Select.Option key={cat.category_id} value={cat.category_id}>
-            {cat.category_name}
-          </Select.Option>
-        ))
-      }
-    </Select>
-  </Space>
-</div>
-<Divider style={{ margin: '0 0 16px 0' }} />
+              {/* 2. Category Select */}
+              <Select
+                placeholder="Category"
+                value={activeCategoryId}
+                onChange={(value) => { setActiveCategoryId(value); setSearchTerm(''); }}
+                style={{ width: '140px' }}
+                allowClear
+                showSearch
+                optionFilterProp="children"
+              >
+                {allProducts
+                  .reduce((acc, current) => {
+                    if (!acc.find(item => item.category_id === current.category_id)) {
+                      acc.push({ category_id: current.category_id, category_name: current.category_name });
+                    }
+                    return acc;
+                  }, [])
+                  .sort((a,b) => a.category_name.localeCompare(b.category_name))
+                  .map(cat => (<Select.Option key={cat.category_id} value={cat.category_id}>{cat.category_name}</Select.Option>))
+                }
+              </Select>
 
-            <List loading={loading} dataSource={displayedProducts} 
+              {/* 3. Filter Toggle Button (Yeh Naya Hai) */}
+              <Button 
+                icon={<FilterOutlined />} 
+                type={showFilters ? 'primary' : 'default'}
+                onClick={() => setShowFilters(!showFilters)}
+                title="More Filters"
+              />
+
+              {/* 4. Top Selling Button */}
+              <Tooltip title="Show Top Selling">
+                <Button
+                  icon={<StarOutlined />}
+                  onClick={() => {
+                    setActiveCategoryId(null);
+                    setSearchTerm('');
+                    setPriceRange([null, null]); // Reset Price
+                    setFilterAttributes({});     // Reset Attrs
+                    setDisplayedProducts(topSellingProducts);
+                    if (searchInputRef.current) searchInputRef.current.focus();
+                  }}
+                />
+              </Tooltip>
+            </div>
+
+            {/* === ROW 2: HIDDEN FILTERS (Fixed for Dark Mode) === */}
+            {showFilters && (
+               <div style={{ 
+                  marginBottom: '12px', 
+                  padding: '12px', 
+                  // Agar Dark Mode hai to halka transparent background, warna light gray
+                  background: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#f9f9f9', 
+                  borderRadius: '6px', 
+                  // Border bhi theme ke hisaab se
+                  border: isDarkMode ? '1px solid #424242' : '1px solid #f0f0f0' 
+               }}>
+                  <Row gutter={[8, 8]} align="middle">
+                    {/* A. Price Range */}
+                    <Col xs={24} md={10}>
+                       <Space>
+                          <Text type="secondary" style={{fontSize: '12px'}}>Price:</Text>
+                          <InputNumber placeholder="Min" value={priceRange[0]} onChange={(v) => setPriceRange([v, priceRange[1]])} style={{ width: '90px' }} />
+                          <span>-</span>
+                          <InputNumber placeholder="Max" value={priceRange[1]} onChange={(v) => setPriceRange([priceRange[0], v])} style={{ width: '90px' }} />
+                       </Space>
+                    </Col>
+
+                    {/* B. Dynamic Attributes (RAM, ROM etc) */}
+                    {advancedFilters.map((filter) => (
+                      <Col xs={12} md={6} key={filter.attribute_name}>
+                        <Select
+                          allowClear
+                          showSearch
+                          style={{ width: '100%' }}
+                          placeholder={filter.attribute_name}
+                          value={filterAttributes[filter.attribute_name]}
+                          onChange={(val) => setFilterAttributes(prev => ({ ...prev, [filter.attribute_name]: val }))}
+                        >
+                          {filter.options.map(opt => <Select.Option key={opt} value={opt}>{opt}</Select.Option>)}
+                        </Select>
+                      </Col>
+                    ))}
+
+                    {/* C. Message agar Category select na ho */}
+                    {!activeCategoryId && (
+                       <Col xs={24} md={14}>
+                         <Text type="secondary" style={{ fontSize: '12px', fontStyle: 'italic' }}>
+                           * Select a Category (e.g. Mobile) to see RAM/ROM filters.
+                         </Text>
+                       </Col>
+                    )}
+                  </Row>
+               </div>
+            )}
+            
+            {/* === NEW PRODUCT LIST (INVENTORY STYLE) === */}
+            <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
+            
+            <List
+              grid={{ gutter: 16, xs: 1, sm: 1, md: 1, lg: 2, xl: 2 }} // 2 Columns on large screens
+              dataSource={productsWithVariants}
+              loading={loading}
+              rowKey="id"
+              style={{ height: '60vh', overflowY: 'auto', overflowX: 'hidden', paddingRight: '5px' }}
               renderItem={(product) => (
-                <List.Item>
-                  <List.Item.Meta title={<Text>{product.name}</Text>} description={`Brand: ${product.brand} - Stock: ${product.quantity}`} />
-                  <Button type="primary" icon={<PlusOutlined />} onClick={() => handleAddToCart(product)} disabled={product.quantity <= 0}>Add</Button>
+                <List.Item style={{ marginBottom: '16px' }}>
+                  <Card
+                    hoverable
+                    style={{ 
+                      border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9', 
+                      height: '100%',
+                      background: isDarkMode ? '#1f1f1f' : '#fff'
+                    }}
+                    styles={{ body: { padding: '12px' } }}
+                  >
+                    {/* === HEADER: Name, Category, Price === */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1, paddingRight: '4px' }}>
+                        <Text strong style={{ fontSize: '16px', display: 'block', marginBottom: '4px', lineHeight: 1.2 }}>
+                          {product.name}
+                        </Text>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                           <Tag style={{ margin: 0, fontSize: '10px', padding: '0 4px' }}>{product.category_name}</Tag>
+                           {product.brand && <Text type="secondary" style={{ fontSize: '11px' }}>{product.brand}</Text>}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <Text strong style={{ fontSize: '14px', color: '#52c41a', display: 'block' }}>
+                          {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
+                        </Text>
+                        {/* Main Stock Badge */}
+                        <Tag color={product.quantity > 0 ? "blue" : "red"} style={{ margin: '4px 0 0 0', fontSize: '10px' }}>
+                           Total: {product.quantity}
+                        </Tag>
+                      </div>
+                    </div>
+
+                    <Divider style={{ margin: '8px 0', borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)' }} />
+
+                    {/* === VARIANTS LIST (Scrollable) === */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '150px', overflowY: 'auto' }} className="hide-scrollbar">
+                      {product.groupedVariants.map((variant, index) => (
+                        <div key={index} 
+                          style={{ 
+                            padding: '6px',
+                            background: isDarkMode ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+                            borderRadius: '4px', 
+                            border: isDarkMode ? 'none' : '1px solid rgba(0,0,0,0.05)',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                          }}>
+                          
+                          <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+                            {/* Stock Count */}
+                            <div style={{ marginRight: '8px', flexShrink: 0 }}>
+                              <Tag 
+                                style={{ margin: 0, fontSize: '11px', padding: '0 6px' }}
+                                color={variant.display_quantity > 0 ? "cyan" : "red"}
+                              >
+                                {variant.display_quantity}
+                              </Tag>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                              {/* Price */}
+                              <Text strong style={{ color: '#52c41a', fontSize: '13px' }}>
+                                 {formatCurrency(variant.sale_price, profile?.currency)}
+                              </Text>
+                              
+                              {/* Attributes (RAM/ROM etc) */}
+                              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
+                                  if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) return null;
+                                  return <Text key={key} type="secondary" style={{ fontSize: '11px' }}>{value}</Text>;
+                                })}
+                                {(!variant.item_attributes || Object.keys(variant.item_attributes).length === 0) && (
+                                  <Text type="secondary" style={{ fontSize: '11px' }}>Standard</Text>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* ADD TO CART BUTTON (Direct) */}
+                          <Button 
+                            type="primary" 
+                            shape="circle" 
+                            icon={<PlusOutlined />} 
+                            size="small" 
+                            disabled={variant.display_quantity <= 0}
+                            onClick={() => handleVariantQuickAdd(variant)}
+                          />
+                        </div>
+                      ))}
+
+                      {/* Agar Variants nahi hain (Empty State) */}
+                      {product.groupedVariants.length === 0 && (
+                        <div style={{ textAlign: 'center', padding: '8px' }}>
+                            <Text type="secondary" style={{ fontSize: '12px' }}>Out of Stock</Text>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
                 </List.Item>
-              )} 
-              style={{ height: '60vh', overflowY: 'auto' }} 
+              )}
             />
           </Card>
         </Col>

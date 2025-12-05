@@ -156,7 +156,7 @@ const Dashboard = () => {
       
       {/* HEADER WITH FILTERS */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
-        <Title level={2} style={{ margin: 0 }}>Dashboard</Title>
+        <Title level={2} style={{ margin: 0, marginLeft: '48px', fontSize: '20px' }}>Dashboard</Title>
         
         {/* Time Filter Buttons */}
         <Radio.Group value={timeRange} onChange={(e) => setTimeRange(e.target.value)} buttonStyle="solid">
@@ -214,7 +214,7 @@ const Dashboard = () => {
           </Card>
         </Col>
 
-        {/* Card 4: Receivables (Yeh hamesha Total rehta hai) */}
+        {/* Card 4: Receivables, Customer Credits & Supplier Payables */}
         <Col xs={24} sm={12} lg={6}>
           <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #3a6073 0%, #3a7bd5 100%)' }}>
             <Statistic
@@ -225,8 +225,31 @@ const Dashboard = () => {
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
              <div style={{ marginTop: 8, fontSize: '12px', opacity: 0.8 }}>
-                Total Pending from Customers
+                Pending from Customers
             </div>
+
+            {/* Section: Paise jo wapis karne hain (Liabilities) */}
+            <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+                
+                {/* 1. Customer Returns (Agar hain) */}
+                {stats?.totalCustomerCredits > 0 && (
+                    <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffccc7', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>To Customers:</span>
+                        <span>- {formatCurrency(stats.totalCustomerCredits, profile?.currency)}</span>
+                    </div>
+                )}
+
+                {/* 2. Supplier Payables (Agar hain) */}
+                {/* Logic: Total Payables mein se Customer Credits nikaal dein to baqi Supplier ka bachega */}
+                {(stats?.totalPayables - (stats?.totalCustomerCredits || 0)) > 0 && (
+                    <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffccc7', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+                        <span>To Suppliers:</span>
+                        <span>- {formatCurrency(stats.totalPayables - (stats.totalCustomerCredits || 0), profile?.currency)}</span>
+                    </div>
+                )}
+
+            </div>
+
           </Card>
         </Col>
       </Row>

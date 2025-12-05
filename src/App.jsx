@@ -47,7 +47,12 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
     const handleResize = () => {
       const mobile = window.innerWidth < 992;
       setIsMobile(mobile);
-      setCollapsed(mobile); 
+      
+      // Agar mobile hai to menu band rakhein, 
+      // lekin Desktop par zabardasti open na karein (initial state 'true' hi rahegi)
+      if (mobile) {
+        setCollapsed(true);
+      }
     };
     window.addEventListener('resize', handleResize);
     handleResize();

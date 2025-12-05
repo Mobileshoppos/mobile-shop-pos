@@ -168,6 +168,23 @@ export const SyncProvider = ({ children }) => {
             
             error = supError;
         }
+
+         // Product Update
+            else if (item.table_name === 'products' && item.action === 'update') {
+                // Yahan hum faaltu fields (min/max/quantity) nikaal rahe hain taake error na aaye
+                const { id, min_sale_price, max_sale_price, quantity, ...updates } = item.data;
+                
+                const realId = idMap[id] || id;
+                const { error: supError } = await supabase.from('products').update(updates).eq('id', realId);
+                error = supError;
+            }
+
+            // Inventory Update
+            else if (item.table_name === 'inventory' && item.action === 'update') {
+                const { id, ...updates } = item.data;
+                const { error: supError } = await supabase.from('inventory').update(updates).eq('id', id);
+                error = supError;
+            }
             
             // --- SUPPLIERS (FIXED NOW) ---
             // Hum ne yahan wohi logic lagaya hai jo Products/Customers ke liye tha
