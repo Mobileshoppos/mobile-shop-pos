@@ -62,47 +62,81 @@ const SalesHistory = () => {
     setIsPrinting(saleId); 
   
     try {
-      // 1. Sale dhoondein
       const sale = await db.sales.get(saleId);
       if (!sale) throw new Error("Sale not found locally");
 
-      // 2. Customer dhoondein
       const customer = await db.customers.get(sale.customer_id);
-
-      // 3. Items aur unke Product Names dhoondein
       const saleItems = await db.sale_items.where('sale_id').equals(saleId).toArray();
       
-      const itemsWithNames = await Promise.all(saleItems.map(async (item) => {
+      // 1. Data Fetching
+      const rawItems = await Promise.all(saleItems.map(async (item) => {
           const product = await db.products.get(item.product_id);
-          
-          // Logic: Agar Snapshot hai to wo lo, warna Product Table se naam lo
+          const inventoryItem = await db.inventory.get(item.inventory_id);
           const displayName = item.product_name_snapshot || (product ? product.name : 'Unknown Item');
 
           return {
-              name: displayName, // Ab yeh hamesha sahi naam dikhayega
+              name: displayName, 
               quantity: item.quantity,
               price_at_sale: item.price_at_sale,
-              total: item.quantity * item.price_at_sale
+              total: item.quantity * item.price_at_sale,
+              imei: inventoryItem ? inventoryItem.imei : null,
+              item_attributes: inventoryItem ? inventoryItem.item_attributes : {} // Attributes laye
           };
       }));
 
-      // 4. Receipt Data Tayyar Karein
+      // 2. Grouping Logic
+      const groupedHistoryItemsMap = {};
+
+      rawItems.forEach(item => {
+          const key = `${item.name}-${item.price_at_sale}`;
+
+          // Attributes Format
+          const attrValues = item.item_attributes 
+            ? Object.entries(item.item_attributes)
+                .filter(([k, v]) => !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial'))
+                .map(([k, v]) => v)
+                .join(', ')
+            : '';
+
+          if (!groupedHistoryItemsMap[key]) {
+              groupedHistoryItemsMap[key] = {
+                  name: item.name,
+                  quantity: 0,
+                  price_at_sale: item.price_at_sale,
+                  total: 0,
+                  imeis: [],
+                  attributes: attrValues // Attributes save kiye
+              };
+          }
+
+          groupedHistoryItemsMap[key].quantity += (item.quantity || 1);
+          groupedHistoryItemsMap[key].total += (item.quantity || 1) * item.price_at_sale;
+
+          if (item.imei) {
+              groupedHistoryItemsMap[key].imeis.push(item.imei);
+          }
+      });
+
+      const finalReceiptItems = Object.values(groupedHistoryItemsMap);
+
+      // 3. Receipt Data
       const receiptData = {
           shopName: profile?.shop_name || 'My Shop',
           shopAddress: profile?.address || '',
           shopPhone: profile?.phone || '',
-          saleId: sale.id, // Ab yeh Number hai, poora bhejein
+          saleId: sale.id,
           saleDate: sale.created_at || sale.sale_date,
           customerName: customer ? customer.name : 'Walk-in Customer',
-          items: itemsWithNames,
+          items: finalReceiptItems, 
           subtotal: sale.subtotal,
           discount: sale.discount,
           grandTotal: sale.total_amount,
           amountPaid: sale.amount_paid_at_sale,
-          paymentStatus: sale.payment_status
+          paymentStatus: sale.payment_status,
+          footerMessage: profile?.warranty_policy,
+          showQrCode: profile?.qr_code_enabled ?? true
       };
             
-      // 5. Print Karein (Thermal ya Standard)
       if (profile?.receipt_format === 'thermal') {
           printThermalReceipt(receiptData, profile?.currency);
       } else {

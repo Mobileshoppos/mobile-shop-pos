@@ -197,15 +197,31 @@ export const AuthProvider = ({ children }) => {
     });
 
     const checkSession = async () => {
-      // Pehle Local Storage se session check karein
-      let { data: { session } } = await supabase.auth.getSession();
-      if (!session && !navigator.onLine) {
-        console.log("Startup Offline: Restoring user...");
+      // --- TABDEELI YAHAN HAI ---
+      
+      // Step 1: Sab se pehle check karein ke kya hum Offline hain?
+      if (!navigator.onLine) {
         const offlineUser = getOfflineBackup();
         if (offlineUser) {
-          session = { user: offlineUser, access_token: 'offline_mode' };
+          console.log("Startup Offline: Immediate Restore...");
+          // Agar offline hain aur backup hai, to foran set karein aur YAHIN RUK JAYEIN
+          // Supabase ko call karne ki zaroorat nahi hai.
+          setSession({ user: offlineUser, access_token: 'offline_mode' });
+          setUser(offlineUser);
+          
+          // Profile bhi local DB se utha lein
+          await getProfile(offlineUser);
+          fetchStockCount();
+          
+          setLoading(false);
+          return; // <--- Yeh return zaroori hai taake code neeche na jaye
         }
       }
+
+      // Step 2: Agar hum yahan pohnche, iska matlab ya to Online hain ya Backup nahi mila
+      // Ab hum Supabase ko call karenge (jo 1 minute le sakta hai agar internet slow ho)
+      let { data: { session } } = await supabase.auth.getSession();
+      
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {

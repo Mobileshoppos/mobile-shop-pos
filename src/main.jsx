@@ -7,7 +7,7 @@ import App from './App.jsx'
 
 // --- SENTRY CONFIGURATION (START) ---
 Sentry.init({
-  dsn: "https://554178099a1edc566ca382bb7564207a@o4510483705692160.ingest.us.sentry.io/4510483705692168",
+  dsn: "https://554178099a1edc566ca382bb7564207a@o4510483664207872.ingest.us.sentry.io/4510483705692160",
   integrations: [
     Sentry.browserTracingIntegration(),
     Sentry.replayIntegration(),

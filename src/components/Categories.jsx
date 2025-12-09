@@ -8,6 +8,7 @@ import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { supabase } from '../supabaseClient';
+import { db } from '../db';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -34,9 +35,23 @@ const Categories = () => {
   const getCategories = useCallback(async () => {
     try {
       setLoadingCategories(true);
-      // DataService se categories layein
       const data = await DataService.getProductCategories();
-      setCategories(data);
+
+      // --- DUPLICATE CHUPANE KA LOGIC ---
+      // 1. Pehle un categories ke naam ki list banayein jo User ne khud banayi hain
+      const userCategoryNames = data.filter(c => c.user_id).map(c => c.name);
+
+      // 2. Ab list ko filter karein
+      const filteredData = data.filter(c => {
+        // Agar yeh User ki apni category hai, to isay dikhao
+        if (c.user_id) return true;
+        
+        // Agar yeh Default category hai, to sirf tab dikhao agar User ke paas same naam ki category NAHI hai
+        return !userCategoryNames.includes(c.name);
+      });
+      // ----------------------------------
+
+      setCategories(filteredData);
     } catch (error) { 
       message.error('Error fetching categories: ' + error.message); 
     } finally { 
@@ -60,14 +75,23 @@ const Categories = () => {
   const cloneDefaultCategory = async (categoryToClone) => {
     try {
       message.loading('Customizing category...', 1);
+      
+      // Server par clone ban raha hai
       const { data: newCategoryId, error } = await supabase.rpc('clone_category_for_user', { source_category_id: categoryToClone.id });
       if (error) throw error;
       
       message.destroy();
       message.success(`'${categoryToClone.name}' is now ready for customization.`);
       
-      await getCategories();
+      // Naya data tayyar kiya
       const newCategoryData = { ...categoryToClone, id: newCategoryId, user_id: user.id };
+      
+      // --- YEH LINE ADD KARNI HAI (Start) ---
+      // Hum Local DB (Dexie) mein bhi yeh naya record daal rahe hain taake foran nazar aaye
+      await db.categories.put(newCategoryData);
+      // --- YEH LINE ADD KARNI HAI (End) ---
+
+      await getCategories(); // Ab yeh list ko refresh karega to naya item nazar aayega
       
       setSelectedCategory(newCategoryData);
       await getAttributesForCategory(newCategoryId);

@@ -202,8 +202,16 @@ const Customers = () => {
       setIsSearching(true);
       setSearchedSale(null); 
 
-      // User jo number likhega (e.g., 75)
-      const searchInput = values.invoiceId; 
+      // User jo number likhega ya Scan karega
+      let searchInput = values.invoiceId; 
+      
+      // --- SMART SCAN LOGIC START ---
+      // Agar scanner ne "INV:123" bheja hai, to "INV:" hata dein
+      if (typeof searchInput === 'string' && searchInput.toUpperCase().startsWith('INV:')) {
+          searchInput = searchInput.split(':')[1]; // Sirf number utha lein
+      }
+      // ------------------------------
+
       let saleData = null;
 
       // 1. Seedha Number se dhoondein
@@ -766,10 +774,15 @@ const handleCloseInvoiceSearchModal = () => {
       <Form form={invoiceSearchForm} onFinish={handleSearchInvoice} layout="vertical">
         <Form.Item
           name="invoiceId"
-          label="Enter Invoice ID"
-          rules={[{ required: true, message: 'Please enter the invoice number from the receipt!' }]}
+          label="Scan QR Code or Enter Invoice ID"
+          rules={[{ required: true, message: 'Please scan or enter the invoice number!' }]}
         >
-          <InputNumber style={{ width: '100%' }} placeholder="e.g., 152" min={1} />
+          <Input 
+            style={{ width: '100%' }} 
+            placeholder="Click here and scan receipt..." 
+            autoFocus 
+            autoComplete="off"
+          />
         </Form.Item>
         <Form.Item>
           <Button type="primary" htmlType="submit" loading={isSearching} block>

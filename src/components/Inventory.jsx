@@ -46,7 +46,7 @@ const formatPriceRange = (min, max, currency) => {
   return `${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`;
 };
 
-const ProductList = ({ products, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel }) => {
+const ProductList = ({ products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel }) => {
   const { profile } = useAuth();
   const { isDarkMode } = useTheme();
   
@@ -271,7 +271,14 @@ const ProductList = ({ products, loading, onDelete, onAddStock, onQuickEdit, onE
   icon={<EditOutlined />} 
   size="small" 
   style={{ marginLeft: '8px', color: '#1890ff', fontSize: '16px' }} 
-  onClick={() => onQuickEdit(variant)} 
+  onClick={() => {
+      // 1. Product ki category dhoondein
+      const cat = categories?.find(c => c.id === product.category_id);
+      // 2. Check karein ke wo IMEI based hai ya nahi
+      const isImei = cat ? cat.is_imei_based : false;
+      // 3. Function ko batayein
+      onQuickEdit(variant, isImei); 
+  }}
   title="Edit Barcode/Price"
 />
                   </div>
@@ -630,9 +637,9 @@ const Inventory = () => {
   };
 
   // --- UPDATED QUICK EDIT CLICK (Barcode Show Karne Ke Liye) ---
-  const handleQuickEditClick = async (variant) => {
-      // 1. Modal foran khol dein aur item set karein
-      setEditingItem(variant);
+  const handleQuickEditClick = async (variant, isImeiBased) => {
+      // 1. Modal foran khol dein. Hum is_imei_based flag bhi save kar rahe hain.
+      setEditingItem({ ...variant, is_imei_based: isImeiBased });
       setIsEditModalOpen(true);
 
       // 2. Pehle wo value set karein jo abhi hamare paas hai (Temporary)
@@ -852,6 +859,7 @@ const Inventory = () => {
 
       <ProductList 
         products={products} 
+        categories={categories}
         loading={loading} 
         onDelete={handleDeleteProduct} 
         onAddStock={handleAddStockClick}
@@ -898,13 +906,16 @@ const Inventory = () => {
   okText="Update"
 >
   <Form form={editForm} layout="vertical" onFinish={handleQuickEditOk}>
-    <Form.Item 
-        name="barcode" 
-        label="Barcode" 
-        help="Scan new barcode or type to correct it."
-    >
-        <Input prefix={<BarcodeOutlined />} placeholder="Scan Barcode" />
-    </Form.Item>
+    {/* Agar Item IMEI Based NAHI hai, tab hi Barcode dikhao */}
+    {!editingItem?.is_imei_based && (
+        <Form.Item 
+            name="barcode" 
+            label="Barcode" 
+            help="Scan new barcode or type to correct it."
+        >
+            <Input prefix={<BarcodeOutlined />} placeholder="Scan Barcode" />
+        </Form.Item>
+    )}
     
     <Form.Item 
         name="sale_price" 

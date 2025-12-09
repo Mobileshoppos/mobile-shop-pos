@@ -134,11 +134,27 @@ const POS = () => {
     });
   }, [displayedProducts]);
 
-  // --- QUICK ADD HANDLER (Directly from Card) ---
+  // --- QUICK ADD HANDLER (SMART LOGIC) ---
   const handleVariantQuickAdd = (variantItem) => {
-    // Hum existing logic use karenge jo 'handleVariantsSelected' mein hai
-    // Bas data ko array bana kar pass karna hai
-    handleVariantsSelected([variantItem]);
+    // Check 1: Kya yeh IMEI wala item hai?
+    const isImeiItem = variantItem.category_is_imei_based || (variantItem.imeis && variantItem.imeis.length > 0);
+
+    if (isImeiItem) {
+        // CASE: IMEI ITEM (Mobile Phones)
+        // Direct add na karein, balkeh Modal kholein taake user IMEI select kar sake
+        
+        // Hamein parent product dhoondna hoga taake modal ko sahi data mile
+        const parentProduct = allProducts.find(p => p.id === variantItem.product_id);
+        
+        if (parentProduct) {
+            setProductForVariantSelection(parentProduct);
+            setIsVariantModalOpen(true);
+        }
+    } else {
+        // CASE: QUANTITY ITEM (Covers/Cables)
+        // Purana tareeqa: Foran cart mein daal do (Fast)
+        handleVariantsSelected([variantItem]);
+    }
   };
 
   useEffect(() => {
@@ -631,23 +647,61 @@ const POS = () => {
 
         // Print Receipt
         if (saleDataForReceipt) {
+             
+             // --- GROUPING LOGIC WITH ATTRIBUTES ---
+             const groupedItemsMap = {};
+
+             cart.forEach(c => {
+                // Key: Name + Price
+                const key = `${c.product_name}-${c.sale_price}`;
+
+                // Attributes ko format karein (e.g., "8GB, Black")
+                // Hum IMEI aur Serial ko filter kar rahe hain taake wo yahan show na hon
+                const attrValues = c.item_attributes 
+                    ? Object.entries(c.item_attributes)
+                        .filter(([k, v]) => !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial'))
+                        .map(([k, v]) => v)
+                        .join(', ')
+                    : '';
+
+                if (!groupedItemsMap[key]) {
+                    groupedItemsMap[key] = {
+                        name: c.product_name,
+                        quantity: 0,
+                        price_at_sale: c.sale_price,
+                        total: 0,
+                        imeis: [],
+                        attributes: attrValues // Attributes yahan save kiye
+                    };
+                }
+
+                groupedItemsMap[key].quantity += (c.quantity || 1);
+                groupedItemsMap[key].total += (c.quantity || 1) * c.sale_price;
+                
+                if (c.imei) {
+                    groupedItemsMap[key].imeis.push(c.imei);
+                }
+             });
+
+             const receiptItems = Object.values(groupedItemsMap);
+             // ---------------------------------------
+
              const receiptData = {
                  ...saleDataForReceipt,
                  shopName: profile?.shop_name || 'My Shop',
                  shopAddress: profile?.address || '',
                  shopPhone: profile?.phone || '',
-                 saleId: saleDataForReceipt.id, // Ab yeh Number hai (e.g., 75)
-                 items: cart.map(c => ({
-                     name: c.product_name,
-                     quantity: c.quantity,
-                     price_at_sale: c.sale_price,
-                     total: c.quantity * c.sale_price
-                 })),
+                 saleId: saleDataForReceipt.id,
+                 
+                 items: receiptItems, 
+                 
                  customerName: customers.find(c => c.id === saleDataForReceipt.customer_id)?.name || 'Walk-in Customer',
                  saleDate: new Date().toISOString(),
                  amountPaid: saleDataForReceipt.amount_paid_at_sale,
                  paymentStatus: saleDataForReceipt.payment_status,
-                 grandTotal: saleDataForReceipt.total_amount
+                 grandTotal: saleDataForReceipt.total_amount,
+                 footerMessage: profile?.warranty_policy,
+                 showQrCode: profile?.qr_code_enabled ?? true
              };
 
              if (profile?.receipt_format === 'thermal') {
