@@ -274,9 +274,26 @@ const DataService = {
     // 2. Supplier dhoondein
     const supplier = await db.suppliers.get(purchase.supplier_id);
     
-    // 3. Items dhoondein (CORRECTION: Inventory table se dhoondein)
-    // Asal items 'inventory' table mein hotay hain jahan purchase_id match kare
-    const itemsData = await db.inventory.where('purchase_id').equals(purchase.id).toArray();
+    // 3. Items dhoondein
+    let itemsData = await db.inventory.where('purchase_id').equals(purchase.id).toArray();
+
+    // --- FIX: Duplicates Safai Logic ---
+    // Check karein: Kya Server se Asli Items (Number IDs) aa chuke hain?
+    const hasServerItems = itemsData.some(item => !isNaN(item.id));
+    
+    if (hasServerItems) {
+        // Agar Asli Items majood hain, to Local UUIDs (Text IDs) ko filter kar dein
+        const realItems = itemsData.filter(item => !isNaN(item.id));
+        
+        // Jo Faltu Local Items (UUIDs) hain, unhein Database se bhi delete kar dein taake kachra saaf ho jaye
+        const garbageIds = itemsData.filter(item => isNaN(item.id)).map(i => i.id);
+        if (garbageIds.length > 0) {
+            db.inventory.bulkDelete(garbageIds); 
+        }
+        
+        itemsData = realItems; // List ko update karein
+    }
+    // -----------------------------------
 
     // 4. Product Names jorein
     const formattedItems = await Promise.all(itemsData.map(async (item) => {
@@ -492,6 +509,110 @@ async addCustomer(customerData) {
         action: 'update',
         data: { id: purchaseId, ...updatedData }
     });
+    return true;
+  },
+
+  // --- NAYA FUNCTION: Offline-First Purchase Edit ---
+  async updatePurchaseFully(purchaseId, payload) {
+    const { supplier_id, notes, amount_paid, items } = payload;
+
+    // 1. Naya Total Calculate karein
+    const newTotal = items.reduce((sum, item) => sum + ((item.quantity || 1) * (item.purchase_price || 0)), 0);
+    const newBalance = newTotal - (amount_paid || 0);
+    
+    // Status tay karein
+    let newStatus = 'unpaid';
+    if (newBalance <= 0) newStatus = 'paid';
+    else if (amount_paid > 0) newStatus = 'partially_paid';
+
+    // 2. Purana Data layein (Supplier Balance adjust karne ke liye)
+    const oldPurchase = await db.purchases.get(purchaseId);
+    if (!oldPurchase) throw new Error("Purchase not found locally");
+    const oldTotal = oldPurchase.total_amount || 0;
+
+    // 3. Purchase Record Update (Local)
+    await db.purchases.update(purchaseId, {
+        supplier_id,
+        notes,
+        total_amount: newTotal,
+        amount_paid,
+        balance_due: newBalance,
+        status: newStatus
+    });
+
+    // 4. Inventory Handle Karein (Local)
+    // A. Pehle se mojood items dhoondein
+    const existingItems = await db.inventory.where('purchase_id').equals(purchaseId).toArray();
+    const existingIds = existingItems.map(i => i.id);
+    const keptIds = []; // Jo items delete nahi hue
+
+    // B. List ko check karein (Update ya Create)
+    const itemsToCreate = [];
+    
+    for (const item of items) {
+        // Agar item ke paas ID hai aur wo Server ID (Number) hai ya Local UUID hai
+        if (item.id && !String(item.id).startsWith('new-')) {
+            keptIds.push(item.id);
+            // Purane item ko update karein
+            await db.inventory.update(item.id, {
+                product_id: item.product_id,
+                purchase_price: item.purchase_price,
+                sale_price: item.sale_price,
+                imei: item.imei,
+                item_attributes: item.item_attributes
+            });
+        } else {
+            // Yeh bilkul naya item hai (Add hua hai) -> Create
+            itemsToCreate.push({
+                id: crypto.randomUUID(), // Local UUID generate karein
+                purchase_id: purchaseId,
+                product_id: item.product_id,
+                quantity: 1,
+                purchase_price: item.purchase_price,
+                sale_price: item.sale_price,
+                imei: item.imei,
+                item_attributes: item.item_attributes,
+                user_id: oldPurchase.user_id,
+                status: 'Available',
+                supplier_id: supplier_id
+            });
+        }
+    }
+
+    // C. Naye items save karein
+    if (itemsToCreate.length > 0) {
+        await db.inventory.bulkAdd(itemsToCreate);
+    }
+
+    // D. Delete Removed Items (Jo ab list mein nahi hain)
+    // Sirf wo delete karein jo 'Available' hain (Sold items ko Dexie rok nahi sakta, par hum koshish karenge)
+    const idsToDelete = existingIds.filter(id => !keptIds.includes(id));
+    if (idsToDelete.length > 0) {
+        await db.inventory.bulkDelete(idsToDelete);
+    }
+
+    // 5. Supplier Balance Update (Local)
+    // Logic: Purana Total minus karein, Naya Total jama karein
+    const supplier = await db.suppliers.get(supplier_id);
+    if (supplier) {
+        const updatedSupplierBalance = (supplier.balance_due || 0) - oldTotal + newTotal;
+        await db.suppliers.update(supplier_id, { balance_due: updatedSupplierBalance });
+    }
+
+    // 6. Sync Queue mein daalein (Server Update ke liye)
+    // Hum poora payload bhejenge, SyncContext isay handle karega
+    await db.sync_queue.add({
+        table_name: 'purchases',
+        action: 'update_full_purchase', // Yeh naya action hum Step 3 mein handle karenge
+        data: {
+            id: purchaseId,
+            supplier_id,
+            notes,
+            amount_paid,
+            items: items // Is list mein IDs hongi (kuch BigInt, kuch null/UUID)
+        }
+    });
+
     return true;
   },
 

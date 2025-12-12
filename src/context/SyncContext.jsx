@@ -275,6 +275,42 @@ export const SyncProvider = ({ children }) => {
                 error = supError;
             }
 
+            // --- NAYA CODE: Purchase Edit Sync ---
+            else if (item.action === 'update_full_purchase') {
+                const { id, supplier_id, notes, amount_paid, items } = item.data;
+
+                // 1. IDs ko Map karein (Agar pehle sync ho chuki hain to Asli Server ID use karein)
+                const realPurchaseId = idMap[id] || id;
+                const realSupplierId = idMap[supplier_id] || supplier_id;
+
+                // 2. Items ko saaf karein (UUIDs hatayein)
+                const cleanItems = items.map(i => {
+                    // Agar ID number nahi hai (yani UUID hai), to null bhejein
+                    // Taake server samjhe yeh naya item hai
+                    let serverItemId = i.id;
+                    if (serverItemId && isNaN(serverItemId)) {
+                        serverItemId = null;
+                    }
+
+                    return {
+                        ...i,
+                        id: serverItemId, // Ab yeh ya to Number hoga ya Null
+                        product_id: idMap[i.product_id] || i.product_id
+                    };
+                });
+
+                // 3. Server RPC call karein
+                const { error: supError } = await supabase.rpc('update_purchase_inventory', {
+                    p_purchase_id: realPurchaseId,
+                    p_supplier_id: realSupplierId,
+                    p_notes: notes,
+                    p_amount_paid: amount_paid,
+                    p_items: cleanItems
+                });
+
+                error = supError;
+            }
+
             // 3. Sales Create (FINAL FIX: Custom Invoice ID + Auto Item IDs)
             // 3. Sales Create (FINAL FIX: Custom Invoice ID + Auto Item IDs)
             else if (item.table_name === 'sales' && item.action === 'create_full_sale') {
@@ -450,13 +486,29 @@ export const SyncProvider = ({ children }) => {
                 }
             }
 
-            // Product Categories & Attributes
+            // --- FIX: Categories Create Logic Updated ---
             else if (item.table_name === 'categories' && item.action === 'create') {
-                const { id, ...catData } = item.data;
-                const { error: supError } = await supabase.from('categories').insert([catData]);
+                const { id: localId, ...catData } = item.data;
+                
+                // 1. Insert karein aur Naya Data wapis mangwayein (.select().single())
+                const { data: insertedCat, error: supError } = await supabase
+                    .from('categories')
+                    .insert([catData])
+                    .select()
+                    .single();
+                
                 error = supError;
-                if (!error) await db.categories.delete(id);
+
+                if (!error && insertedCat) {
+                    // 2. YAHAN HAI FIX: Nayi ID ko Map mein save karein
+                    // Taake agle items (Attributes) ko pata chal sake ke Abba ki nayi ID kya hai
+                    idMap[localId] = insertedCat.id;
+
+                    // 3. Local DB se purani ID wala record delete karein
+                    await db.categories.delete(localId);
+                }
             }
+            
             else if (item.table_name === 'categories' && item.action === 'update') {
                 const { id, ...updates } = item.data;
                 if (!isNaN(id)) { 
@@ -470,12 +522,24 @@ export const SyncProvider = ({ children }) => {
                     error = supError;
                  }
             }
+            
+            // --- FIX: Attributes Sync Logic Updated ---
             else if (item.table_name === 'category_attributes' && item.action === 'create') {
                 const { id, ...attrData } = item.data;
+                
+                // Yahan hum check kar rahe hain ke kya Category ID server wali ID se replace honi chahiye?
+                // idMap wo list hai jisme hum ne nayi IDs save ki hoti hain
+                if (idMap[attrData.category_id]) {
+                    attrData.category_id = idMap[attrData.category_id];
+                }
+
                 const { error: supError } = await supabase.from('category_attributes').insert([attrData]);
                 error = supError;
+                
+                // Agar kamyab ho jaye to local ID delete kar dein
                 if (!error) await db.category_attributes.delete(id);
             }
+
             else if (item.table_name === 'category_attributes' && item.action === 'update') {
                 const { id, ...updates } = item.data;
                 if (!isNaN(id)) {

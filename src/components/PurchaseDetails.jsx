@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
 import { useSync } from '../context/SyncContext';
+import AddPurchaseForm from '../components/AddPurchaseForm';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -180,7 +181,20 @@ const PurchaseDetails = () => {
             
             {/* Tamam Modals waise hi rahenge */}
             <Modal title="Record Payment" open={isPaymentModalVisible} onCancel={() => setIsPaymentModalVisible(false)} onOk={paymentForm.submit} okText="Save Payment"><Form form={paymentForm} layout="vertical" onFinish={handlePaymentSubmit} style={{marginTop: '24px'}}><Form.Item name="amount" label="Payment Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} /></Form.Item><Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="payment_method" label="Payment Method" rules={[{ required: true }]}><Select><Option value="Cash">Cash</Option><Option value="Bank Transfer">Bank Transfer</Option><Option value="Cheque">Cheque</Option><Option value="Other">Other</Option></Select></Form.Item><Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item></Form></Modal>
-            <Modal title={`Editing Purchase #${purchase.id}`} open={isEditModalVisible} onCancel={() => setIsEditModalVisible(false)} onOk={editForm.submit} okText="Save Changes" width={1000}><Form form={editForm} layout="vertical" onFinish={handleUpdateSubmit} style={{ marginTop: '24px' }}><Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item><Title level={5} style={{ marginTop: '16px' }}>Items in this Purchase</Title><Table columns={editItemColumns} dataSource={editingItems} rowKey="id" pagination={false} size="small" scroll={{ x: true }} /></Form></Modal>
+{/* --- NAYA EDIT FORM (AddPurchaseForm ko hi use karega) --- */}
+        {isEditModalVisible && (
+            <AddPurchaseForm
+                visible={isEditModalVisible}
+                onCancel={() => setIsEditModalVisible(false)}
+                onPurchaseCreated={() => {
+                    setIsEditModalVisible(false);
+                    fetchDetails(); // Data refresh karein
+                }}
+                initialData={null}
+                editingPurchase={purchase} // Purana data bhejein
+                editingItems={items}       // Purane items bhejein
+            />
+        )}
             <Modal title="Return Items to Supplier" open={isReturnModalVisible} onCancel={() => setIsReturnModalVisible(false)} onOk={returnForm.submit} okText="Process Return" width={800} okButtonProps={{ danger: true }}><Form form={returnForm} layout="vertical" onFinish={handleReturnSubmit} style={{ marginTop: '24px' }}><Form.Item name="return_date" label="Return Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="notes" label="Reason for Return (Optional)"><Input.TextArea rows={2} placeholder="e.g., Damaged items, wrong model, etc." /></Form.Item><Title level={5} style={{ marginTop: '16px' }}>Select Items to Return</Title><Table rowSelection={{ type: 'checkbox', ...returnItemSelection }} columns={itemColumns} dataSource={items} rowKey="id" pagination={false} size="small" /></Form></Modal>
         </div>
     );
