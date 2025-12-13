@@ -93,6 +93,9 @@ export const SyncProvider = ({ children }) => {
       const { data: returnItems } = await supabase.from('sale_return_items').select('*');
       if (returnItems) await db.sale_return_items.bulkPut(returnItems);
 
+      const { data: purReturnItems } = await supabase.from('purchase_return_items').select('*');
+      if (purReturnItems) await db.purchase_return_items.bulkPut(purReturnItems);
+
       const { data: payouts } = await supabase.from('credit_payouts').select('*').eq('user_id', user.id);
       if (payouts) await db.credit_payouts.bulkPut(payouts);
 
@@ -435,15 +438,31 @@ export const SyncProvider = ({ children }) => {
                 error = supError;
             }
 
-            // Purchase Return
-            else if (item.table_name === 'purchase_returns' && item.action === 'create') {
-                const { error: supError } = await supabase.rpc('process_purchase_return', {
-                    p_purchase_id: item.data.purchase_id,
-                    p_item_ids: item.data.item_ids,
-                    p_return_date: item.data.return_date,
-                    p_notes: item.data.notes
-                });
-                error = supError;
+            // --- NAYA CODE: Return Sync ---
+            else if (item.action === 'process_return_fully') {
+                const { purchase_id, item_ids, return_date, notes } = item.data;
+
+                // 1. Asli IDs dhoondein
+                const realPurchaseId = idMap[purchase_id] || purchase_id;
+                
+                // Items ki IDs ko map karein (Agar koi item abhi bana tha aur return ho gaya)
+                const realItemIds = item_ids.map(id => idMap[id] || id);
+
+                // Check: Agar koi ID abhi bhi Text (UUID) hai, to hum usay Server par nahi bhej sakte.
+                // Lekin kyunke Return sirf "Existing" items ka hota hai, to umeed hai ke IDs number hi hongi.
+                // Phir bhi, hum sirf Numeric IDs filter kar lete hain taake crash na ho.
+                const validItemIds = realItemIds.filter(id => !isNaN(id));
+
+                if (validItemIds.length > 0) {
+                    // 2. Server RPC Call (Aapka mojooda function)
+                    const { error: supError } = await supabase.rpc('process_purchase_return', {
+                        p_purchase_id: realPurchaseId,
+                        p_item_ids: validItemIds,
+                        p_return_date: return_date,
+                        p_notes: notes
+                    });
+                    error = supError;
+                }
             }
 
             // Expense Categories & Expenses (Standard Logic)

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu } from 'antd';
-import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -46,7 +46,7 @@ const formatPriceRange = (min, max, currency) => {
   return `${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`;
 };
 
-const ProductList = ({ products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel }) => {
+const ProductList = ({ showArchived, products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel }) => {
   const { profile } = useAuth();
   const { isDarkMode } = useTheme();
   
@@ -166,6 +166,14 @@ const ProductList = ({ products, categories, loading, onDelete, onAddStock, onQu
                           label: 'Edit Details',
                           icon: <EditOutlined />,
                           onClick: () => onEditProductModel(product)
+                        },
+                        {
+                          key: 'archive',
+                          // Agar showArchived true hai to "Unarchive", warna "Archive"
+                          label: showArchived ? 'Unarchive (Restore)' : 'Archive (Hide)',
+                          icon: <span style={{ fontSize: '16px' }}>{showArchived ? '♻️' : '📦'}</span>,
+                          // Agar Unarchive karna hai to 'false' bhejein, Archive ke liye 'true'
+                          onClick: () => onDelete(product, !showArchived) 
                         },
                         {
                           key: 'delete',
@@ -312,7 +320,8 @@ const ProductList = ({ products, categories, loading, onDelete, onAddStock, onQu
 };
 
 const Inventory = () => {
-  const { isDarkMode } = useTheme(); // <-- Yeh line add karni hai
+  const [showArchived, setShowArchived] = useState(false);
+  const { isDarkMode } = useTheme();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [searchParams] = useSearchParams();
   const { processSyncQueue } = useSync();
@@ -453,7 +462,7 @@ const Inventory = () => {
     const searchHandler = setTimeout(async () => {
       setLoading(true);
       try {
-        const { productsData } = await DataService.getInventoryData();
+        const { productsData } = await DataService.getInventoryData(showArchived);
         let filteredProducts = productsData;
 
         // === CHANGE 1: UPDATED SEARCH (Tags & Attributes bhi dhoondega) ===
@@ -536,7 +545,7 @@ const Inventory = () => {
       } catch (error) { message.error("Error fetching products: " + error.message); setProducts([]); } finally { setLoading(false); }
     }, 300);
     return () => clearTimeout(searchHandler);
-  }, [user, searchText, filterCategory, filterAttributes, priceRange, sortBy, message, showLowStockOnly, location, refreshTrigger]);
+  }, [user, searchText, filterCategory, filterAttributes, priceRange, sortBy, message, showLowStockOnly, location, refreshTrigger, showArchived]);
 
   const handleResetFilters = () => {
     setSearchText(''); setFilterCategory(null); setFilterAttributes({}); setPriceRange([null, null]); setSortBy('name_asc');
@@ -620,7 +629,33 @@ const Inventory = () => {
     } catch (error) { message.error('Error: ' + error.message); }
   };
 
-  const handleDeleteProduct = (product) => {
+  // --- UPDATED HANDLER: Delete ya Archive ---
+  const handleDeleteProduct = (product, isArchiveRequest = null) => {
+    // Agar Archive/Unarchive ki request hai (yani null nahi hai)
+    if (isArchiveRequest !== null) {
+        const isHiding = isArchiveRequest; // True = Hide, False = Restore
+        
+        modal.confirm({
+            title: isHiding ? 'Archive Product?' : 'Restore Product?',
+            icon: <ExclamationCircleOutlined />,
+            content: isHiding 
+                ? `Hide "${product.name}" from the main list?` 
+                : `Restore "${product.name}" to the main list?`,
+            okText: isHiding ? 'Yes, Archive' : 'Yes, Restore',
+            onOk: async () => {
+                try {
+                    // DataService ko batayen (True = Hide, False = Show)
+                    await DataService.toggleArchiveProduct(product.id, isHiding); 
+                    message.success(isHiding ? 'Product archived' : 'Product restored');
+                    // List refresh karein
+                    setRefreshTrigger(prev => prev + 1); 
+                } catch (error) { message.error(error.message); }
+            }
+        });
+        return;
+    }
+
+    // Agar Delete ki request hai (Purana Logic)
     modal.confirm({
       title: 'Delete Product Model?',
       icon: <ExclamationCircleOutlined />,
@@ -799,13 +834,32 @@ const Inventory = () => {
 
           {/* 4. Action Buttons (Filter Toggle & Reset) */}
           <Col xs={24} sm={4} md={5} style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+             
+             {/* Filter Toggle Button */}
              <Button 
                icon={<FilterOutlined />} 
                onClick={() => setShowFilters(!showFilters)} 
                type={showFilters ? 'primary' : 'default'}
-               title="More Filters"
+               title="More Filters" // Mouse rakhne par naam aayega
              />
-             <Button onClick={handleResetFilters} title="Reset All">Reset</Button>
+
+             {/* Archive Toggle Button (Icon Only) */}
+             <Button 
+               // Agar Archived list khuli hai to 'Wapis' ka icon, warna 'Box' ka icon
+               icon={showArchived ? <RollbackOutlined /> : <InboxOutlined />} 
+               onClick={() => setShowArchived(!showArchived)} 
+               type={showArchived ? 'primary' : 'default'}
+               danger={showArchived}
+               // Tooltip: Taake user ko pata chale yeh button kya karta hai
+               title={showArchived ? 'Back to Active Items' : 'View Archived Items'}
+             />
+
+             {/* Reset Button (Icon Only) */}
+             <Button 
+                icon={<ReloadOutlined />} 
+                onClick={handleResetFilters} 
+                title="Reset All Filters" 
+             />
           </Col>
         </Row>
 
@@ -865,6 +919,7 @@ const Inventory = () => {
         onAddStock={handleAddStockClick}
         onQuickEdit={handleQuickEditClick}
         onEditProductModel={handleEditProductModelClick}
+        ProductList showArchived={showArchived}
       />
 
       {/* MODAL 1: PRODUCT MODEL EDIT/CREATE */}

@@ -3,11 +3,14 @@ import { db } from './db';
 
 const DataService = {
 
-  // src/DataService.js - Final getInventoryData
-  async getInventoryData() {
-    // 1. Sab cheezein Local DB se layein
-    const products = await db.products.toArray();
+  // Hum ne parameter 'showArchivedOnly' add kiya hai
+  async getInventoryData(showArchivedOnly = false) { 
+    const allProducts = await db.products.toArray();
     const categories = await db.categories.toArray();
+    
+    // Agar showArchivedOnly true hai, to sirf 'false' wale dikhao. Warna 'true' wale.
+    const products = allProducts.filter(p => showArchivedOnly ? p.is_active === false : p.is_active !== false);
+    
     
     // Inventory se wo items layein jo BIKAY NAHI hain (Available)
     const allInventoryItems = await db.inventory.toArray();
@@ -129,15 +132,13 @@ const DataService = {
 
 // --- NAYA DELETE FUNCTION ---
   async deleteProduct(id) {
-    // 1. Check karein ke kya Stock (Inventory) mein yeh product majood hai?
+    // 1. Check: Kya Stock (Inventory) mein yeh product majood hai?
     const hasInventory = await db.inventory.where('product_id').equals(id).count();
     if (hasInventory > 0) {
       throw new Error("Cannot delete: This product has stock items (Active or Sold).");
     }
 
-    // 2. Check karein ke kya yeh kabhi Sale hua hai?
-    // (Note: Agar inventory check pass ho gaya to sales check ki zaroorat kam hoti hai, 
-    // lekin hifazat ke liye check kar lete hain agar sale_items mein record reh gaya ho)
+    // 2. Check: Kya yeh kabhi Sale hua hai?
     if (db.sale_items) {
         const hasSales = await db.sale_items.where('product_id').equals(id).count();
         if (hasSales > 0) {
@@ -145,10 +146,29 @@ const DataService = {
         }
     }
 
-    // 3. Agar sab clear hai, to Local DB se delete karein
+    // 3. Check: Kya yeh kabhi Khareeda gaya tha?
+    if (db.purchase_items) {
+        const hasPurchases = await db.purchase_items.where('product_id').equals(id).count();
+        if (hasPurchases > 0) {
+            throw new Error("Cannot delete: This product is part of a purchase history.");
+        }
+    }
+
+    // --- YEH NAYA CHECK HAI (START) ---
+    // 4. Check: Kya yeh kabhi Supplier ko Wapis (Return) kiya gaya?
+    // Yeh wo check hai jo uss laal rang walay error ko rokega.
+    if (db.purchase_return_items) {
+        const hasReturns = await db.purchase_return_items.where('product_id').equals(id).count();
+        if (hasReturns > 0) {
+             throw new Error("Cannot delete: This product has been returned to a supplier (Purchase Return History).");
+        }
+    }
+    // --- YEH NAYA CHECK HAI (END) ---
+
+    // 5. Agar charon (4) checks pass ho gaye, tab hi delete karein.
     await db.products.delete(id);
 
-    // 4. Sync Queue mein 'delete' action daalein
+    // 6. Sync Queue mein 'delete' action daalein
     await db.sync_queue.add({
       table_name: 'products',
       action: 'delete',
@@ -156,7 +176,25 @@ const DataService = {
     });
 
     return true;
-  },  
+  },
+
+  // --- NAYA FUNCTION: Archive / Unarchive ---
+  async toggleArchiveProduct(id, shouldArchive) {
+    // Local DB Update
+    // Agar shouldArchive true hai, to is_active false hoga (yani chupana hai)
+    const newStatus = !shouldArchive; 
+    
+    await db.products.update(id, { is_active: newStatus });
+
+    // Sync Queue (Server Update)
+    await db.sync_queue.add({
+      table_name: 'products',
+      action: 'update',
+      data: { id, is_active: newStatus }
+    });
+
+    return true;
+  },
   
   async getSuppliers() {
     const suppliers = await db.suppliers.toArray();
@@ -649,13 +687,71 @@ async addCustomer(customerData) {
     return true;
   },
 
+  // --- UPDATED (FIXED): Offline-First Return Logic ---
   async createPurchaseReturn(returnData) {
-    // Queue mein daalein
+    const { purchase_id, item_ids, return_date, notes } = returnData;
+
+    // FIX 1: Purchase ID ko Number banayein (Taake DB mein match ho sake)
+    const pId = parseInt(purchase_id);
+
+    // 1. Purchase aur Items ka Data layein
+    const purchase = await db.purchases.get(pId);
+    if (!purchase) throw new Error("Purchase not found locally");
+
+    const allInventory = await db.inventory.where('purchase_id').equals(pId).toArray();
+    
+    // FIX 2: Items Match karte waqt String/Number ka farq khatam karein
+    const itemsToReturn = allInventory.filter(i => 
+        item_ids.map(id => String(id)).includes(String(i.id))
+    );
+    
+    // 2. Total Return Amount calculate karein
+    const totalReturnAmount = itemsToReturn.reduce((sum, item) => sum + (item.purchase_price || 0), 0);
+    
+    // Agar items match nahi hue to error aayega
+    if (totalReturnAmount <= 0) throw new Error("Invalid return amount or items not found.");
+
+    // 3. Hisaab Kitab (Debt vs Credit)
+    const currentBalance = purchase.balance_due || 0;
+    const returnToClearDebt = Math.min(totalReturnAmount, currentBalance);
+    const creditToAdd = totalReturnAmount - returnToClearDebt;
+
+    // 4. Local DB Updates
+    
+    // A. Purchase Update
+    await db.purchases.update(pId, {
+        total_amount: (purchase.total_amount || 0) - totalReturnAmount,
+        balance_due: currentBalance - returnToClearDebt,
+        status: (currentBalance - returnToClearDebt) <= 0 ? 'paid' : 'partially_paid'
+    });
+
+    // B. Supplier Credit Update
+    if (creditToAdd > 0) {
+        const supplier = await db.suppliers.get(purchase.supplier_id);
+        if (supplier) {
+            await db.suppliers.update(purchase.supplier_id, {
+                credit_balance: (supplier.credit_balance || 0) + creditToAdd
+            });
+        }
+    }
+
+    // C. Inventory Delete (Local)
+    // Hamein wahi IDs delete karni hain jo hum ne dhoondi hain
+    const idsToDelete = itemsToReturn.map(i => i.id);
+    await db.inventory.bulkDelete(idsToDelete);
+
+    // 5. Queue mein daalein (Server ke liye)
     await db.sync_queue.add({
         table_name: 'purchase_returns',
-        action: 'create',
-        data: returnData
+        action: 'process_return_fully',
+        data: {
+            purchase_id: pId, // Number bhejein
+            item_ids: idsToDelete, // Number IDs bhejein
+            return_date,
+            notes
+        }
     });
+
     return true;
   },
 

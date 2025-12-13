@@ -40,6 +40,7 @@ const PurchaseDetails = () => {
     const [isReturnModalVisible, setIsReturnModalVisible] = useState(false);
     const [selectedReturnItems, setSelectedReturnItems] = useState([]);
     const [returnForm] = Form.useForm();
+    const [returnHistory, setReturnHistory] = useState([]);
 
     const fetchDetails = async () => {
         setLoading(true);
@@ -52,6 +53,8 @@ const PurchaseDetails = () => {
         } finally {
             setLoading(false);
         }
+        const history = await DataService.getPurchaseReturnHistory(id);
+setReturnHistory(history || []);
     };
 
     useEffect(() => { 
@@ -87,7 +90,23 @@ const PurchaseDetails = () => {
     }, [items]);
     
     const itemColumns = [
-        { title: 'Product', dataIndex: 'product_name', key: 'product_name' },
+        { 
+            title: 'Product', 
+            dataIndex: 'product_name', 
+            key: 'product_name',
+            // --- Yahan tabdeeli hai: Hum ne render function add kiya hai ---
+            render: (text, record) => (
+                <Space direction="vertical" size={0}>
+                    <Text>{text}</Text>
+                    {/* Agar item Available nahi hai (yani Sold hai), to laal tag dikhao */}
+                    {record.status && record.status.toLowerCase() !== 'available' && (
+                        <Tag color="red" style={{ fontSize: '10px', marginTop: '4px' }}>
+                            Sold - Cannot Return
+                        </Tag>
+                    )}
+                </Space>
+            )
+        },
         { title: 'Quantity', dataIndex: 'quantity', key: 'quantity', align: 'center' },
         { 
             title: 'Details', 
@@ -107,13 +126,46 @@ const PurchaseDetails = () => {
     
     const showPaymentModal = () => { paymentForm.setFieldsValue({ amount: purchase.balance_due, payment_date: dayjs(), payment_method: 'Cash' }); setIsPaymentModalVisible(true); };
     const handlePaymentSubmit = async (values) => { try { if (values.amount > purchase.balance_due) { notification.warning({ message: 'Warning', description: 'Payment amount cannot be greater than the balance due.' }); return; } const paymentData = { amount: values.amount, payment_date: values.payment_date.format('YYYY-MM-DD'), payment_method: values.payment_method, notes: values.notes || null, supplier_id: purchase.supplier_id, purchase_id: purchase.id, }; await DataService.recordPurchasePayment(paymentData); notification.success({ message: 'Success', description: 'Payment recorded successfully!' }); setIsPaymentModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to record payment.' }); } };
-    const showEditModal = () => { editForm.setFieldsValue({ notes: purchase.notes }); setEditingItems(items.map(item => ({ ...item }))); setIsEditModalVisible(true); };
+const showEditModal = () => {
+        // --- NAYA CODE: Internet Check ---
+        if (!navigator.onLine) {
+            // Agar internet nahi hai, to yahi rok dein aur user ko bata dein
+            notification.warning({
+                message: 'Internet Required',
+                description: 'Internet connection required to edit.',
+            });
+            return;
+        }
+        // ---------------------------------
+
+        // Agar internet hai, to modal khol dein
+        setIsEditModalVisible(true);
+    };
     const handleUpdateSubmit = async (values) => { try { const updatedData = { notes: values.notes, items: editingItems, }; await DataService.updatePurchase(id, updatedData); notification.success({ message: 'Success', description: 'Purchase updated successfully!' }); setIsEditModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to update purchase.' }); } };
     const handleItemChange = (itemId, field, value) => { setEditingItems(currentItems => currentItems.map(item => item.id === itemId ? { ...item, [field]: value } : item )); };
     const editItemColumns = [ { title: 'Product', dataIndex: 'product_name', key: 'product_name' }, { title: 'Purchase Price', dataIndex: 'purchase_price', key: 'purchase_price', render: (text, record) => (<InputNumber defaultValue={text} style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} onChange={(value) => handleItemChange(record.id, 'purchase_price', value)} />) }, { title: 'Sale Price', dataIndex: 'sale_price', key: 'sale_price', render: (text, record) => (<InputNumber defaultValue={text} style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} onChange={(value) => handleItemChange(record.id, 'sale_price', value)} />) }, { title: 'IMEI/Serial', dataIndex: 'imei', key: 'imei', render: (text, record) => (<Input defaultValue={text} onChange={(e) => handleItemChange(record.id, 'imei', e.target.value)} />) }, ];
-    const showReturnModal = () => { returnForm.setFieldsValue({ return_date: dayjs(), notes: '' }); setSelectedReturnItems([]); setIsReturnModalVisible(true); };
+    const showReturnModal = () => {
+    returnForm.setFieldsValue({ return_date: dayjs(), notes: '' });
+    setSelectedReturnItems([]);
+    
+    // --- FIX: Sirf Available Items dikhayen ---
+    // Hum items list ko filter nahi kar rahe, balke Table ko batayenge ke kin ko dikhana hai.
+    // Behtar ye hai ke hum Table ke dataSource ko filter karein.
+    setIsReturnModalVisible(true);
+};
     const handleReturnSubmit = async (values) => { if (selectedReturnItems.length === 0) { notification.warning({ message: 'No Items Selected', description: 'Please select at least one item to return.' }); return; } try { const returnData = { purchase_id: id, item_ids: selectedReturnItems, return_date: values.return_date.format('YYYY-MM-DD'), notes: values.notes || null, }; await DataService.createPurchaseReturn(returnData); notification.success({ message: 'Success', description: 'Items returned successfully!' }); setIsReturnModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to process return.' }); } };
-    const returnItemSelection = { onChange: (selectedRowKeys) => { setSelectedReturnItems(selectedRowKeys); }, };
+// --- UPDATED: Row Selection with Disable Logic ---
+    const returnItemSelection = {
+        onChange: (selectedRowKeys) => {
+            setSelectedReturnItems(selectedRowKeys);
+        },
+        // Yeh function har row ke liye chalta hai
+        getCheckboxProps: (record) => ({
+            // Agar status 'Available' nahi hai, to checkbox disable kar do
+            disabled: record.status && record.status.toLowerCase() !== 'available', 
+            name: record.name,
+        }),
+    };
 
     if (loading) return <div style={{ textAlign: 'center', padding: '50px' }}><Spin size="large" /></div>;
     if (!purchase) return <Alert message="Not Found" description="No purchase found with this ID." type="warning" showIcon />;
