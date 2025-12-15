@@ -53,8 +53,6 @@ const PurchaseDetails = () => {
         } finally {
             setLoading(false);
         }
-        const history = await DataService.getPurchaseReturnHistory(id);
-setReturnHistory(history || []);
     };
 
     useEffect(() => { 

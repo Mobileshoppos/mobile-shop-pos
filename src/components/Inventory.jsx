@@ -1005,6 +1005,7 @@ const Inventory = () => {
       {/* Iske neeche AddPurchaseForm hoga, usay mat chherein */}
       
       {/* MODAL 3: ADD STOCK (PURCHASE FORM) */}
+{isPurchaseModalOpen && (
   <AddPurchaseForm 
     visible={isPurchaseModalOpen}
     onCancel={() => { setIsPurchaseModalOpen(false); setPurchaseInitialData(null); }}
@@ -1017,6 +1018,7 @@ const Inventory = () => {
     }}
     initialData={purchaseInitialData}
   />
+)}
     </>
   );
 };

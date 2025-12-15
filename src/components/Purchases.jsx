@@ -194,13 +194,14 @@ const Purchases = () => {
     />
 )}
 
-            {/* --- NAYI TABDEELIYAN (Step 4) --- */}
-            <AddPurchaseForm
-                visible={isAddModalVisible}
-                onCancel={() => setIsAddModalVisible(false)}
-                onPurchaseCreated={handlePurchaseCreated}
-                isMobile={isMobile}
-            />
+            {isAddModalVisible && (
+    <AddPurchaseForm
+        visible={isAddModalVisible}
+        onCancel={() => setIsAddModalVisible(false)}
+        onPurchaseCreated={handlePurchaseCreated}
+        isMobile={isMobile}
+    />
+)}
         </>
     );
 };

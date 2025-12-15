@@ -115,6 +115,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
         finalItemsData = finalImeis.map(imei => ({
             // Agar edit kar rahe hain to purani ID sath rakhein (Server Safety)
             id: initialValues?.id || null, 
+            temp_id: crypto.randomUUID(),
             product_id: product.id,
             name: product.name,
             purchase_price: values.purchase_price,
@@ -128,6 +129,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
       } else {
         finalItemsData = [{
             id: initialValues?.id || null,
+            temp_id: crypto.randomUUID(),
             product_id: product.id,
             name: product.name,
             purchase_price: values.purchase_price,
@@ -556,7 +558,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
           <Table
             columns={columns} 
             dataSource={purchaseItems}
-            rowKey={(record, index) => record.id || `new-${index}`}
+            rowKey={(record) => record.id || record.temp_id}
             pagination={false}
             summary={pageData => {
               const total = pageData.reduce((sum, item) => sum + ((item.quantity || 0) * (item.purchase_price || 0)), 0);
