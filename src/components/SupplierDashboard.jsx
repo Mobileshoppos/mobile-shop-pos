@@ -29,10 +29,9 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
     const fetchLedger = useCallback(async () => {
         if (!supplier?.id) return; setLoading(true);
         try {
-            // CHANGE: Hum 'supplier' bhi nikaal rahe hain jisme ab calculated totals hain
-            const { supplier: calculatedSup, purchases, payments } = await DataService.getSupplierLedgerDetails(supplier.id);
+            // Yahan hum refunds bhi mangwa rahe hain
+            const { supplier: calculatedSup, purchases, payments, refunds } = await DataService.getSupplierLedgerDetails(supplier.id);
             
-            // NAYA: State update karein
             setCalculatedStats(calculatedSup);
 
             const combinedData = [
@@ -41,6 +40,15 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                 })),
                 ...(payments || []).map(p => ({
                     key: `pay-${p.id}`, date: p.payment_date, type: 'Payment', details: `Payment via ${p.payment_method}` + (p.notes ? ` (${p.notes})` : ''), debit: 0, credit: p.amount,
+                })),
+                // --- Refunds ko list mein shamil kiya ---
+                ...(refunds || []).map(r => ({
+                    key: `ref-${r.id}`, 
+                    date: r.refund_date, 
+                    type: 'Refund', 
+                    details: `Refund Received via ${r.refund_method || r.payment_method || 'Cash'}` + (r.notes ? ` (${r.notes})` : ''), 
+                    debit: 0, 
+                    credit: r.amount, 
                 }))
             ];
             combinedData.sort((a, b) => new Date(b.date) - new Date(a.date)); setLedgerData(combinedData);

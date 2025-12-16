@@ -413,6 +413,18 @@ export const SyncProvider = ({ children }) => {
                 error = supError;
                 if (!error && item.data.id) await db.supplier_payments.delete(item.data.id);
             }
+
+            // Supplier Refund Sync
+            else if (item.action === 'create_refund') {
+                const { error: supError } = await supabase.rpc('record_supplier_refund', {
+                    p_supplier_id: item.data.supplier_id,
+                    p_amount: item.data.amount,
+                    p_refund_date: item.data.refund_date,
+                    p_method: item.data.refund_method,
+                    p_notes: item.data.notes
+                });
+                error = supError;
+            }
             
             // Purchase Payment
             else if (item.action === 'create_purchase_payment') {

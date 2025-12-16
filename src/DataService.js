@@ -240,7 +240,6 @@ const DataService = {
   },
 
   async getSupplierLedgerDetails(supplierId) {
-    // 1. Supplier dhoondein
     let supplier = null;
     if (!isNaN(supplierId)) {
         supplier = await db.suppliers.get(parseInt(supplierId));
@@ -248,28 +247,29 @@ const DataService = {
         supplier = await db.suppliers.get(supplierId);
     }
 
-    // 2. Purchases dhoondein
     const purchases = await db.purchases.where('supplier_id').equals(supplierId).toArray();
 
-    // 3. Payments dhoondein
     let payments = [];
     if (db.supplier_payments) {
         payments = await db.supplier_payments.where('supplier_id').equals(supplierId).toArray();
     }
 
-    // --- NAYA CODE: Khud Hisaab Lagayein (Calculation) ---
-    // Hum database ke purane number par bharosa nahi karenge, khud total karenge
+    // --- Refunds bhi layein ---
+    let refunds = [];
+    if (db.supplier_refunds) {
+        refunds = await db.supplier_refunds.where('supplier_id').equals(supplierId).toArray();
+    }
+
     const calculatedTotalBusiness = purchases.reduce((sum, p) => sum + (p.total_amount || 0), 0);
     const calculatedTotalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
-    // Supplier object mein yeh naye numbers jor dein
     const supplierWithStats = {
         ...supplier,
         total_purchases: calculatedTotalBusiness,
         total_payments: calculatedTotalPaid
     };
 
-    return { supplier: supplierWithStats, purchases, payments };
+    return { supplier: supplierWithStats, purchases, payments, refunds };
   },
 
   async getAccountsPayable() {
@@ -756,12 +756,28 @@ async addCustomer(customerData) {
   },
 
   async recordSupplierRefund(refundData) {
-    // Queue mein daalein
+    // 1. Local Table mein save karein
+    if (db.supplier_refunds) {
+        const localData = { ...refundData, id: crypto.randomUUID() };
+        await db.supplier_refunds.add(localData);
+    }
+
+    // 2. Local Supplier ka Credit Balance kam karein
+    const supplier = await db.suppliers.get(refundData.supplier_id);
+    if (supplier) {
+        const newCredit = (supplier.credit_balance || 0) - refundData.amount;
+        await db.suppliers.update(refundData.supplier_id, {
+            credit_balance: newCredit < 0 ? 0 : newCredit
+        });
+    }
+
+    // 3. Queue mein daalein
     await db.sync_queue.add({
         table_name: 'supplier_refunds',
         action: 'create_refund',
         data: refundData
     });
+
     return true;
   },
 
