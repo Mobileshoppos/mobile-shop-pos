@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
+import { useSync } from '../context/SyncContext';
 
 const { Header } = Layout;
 
@@ -24,6 +25,7 @@ const titleContainerStyle = {
 // Hum ne yahan 'collapsed' aur 'setCollapsed' receive kiya hai App.jsx se
 const AppHeader = ({ collapsed, setCollapsed }) => {
   const { profile, isPro, stockCount, lowStockCount } = useAuth();
+  const { pendingCount } = useSync();
   
   const { token } = theme.useToken();
   const navigate = useNavigate();
@@ -73,6 +75,21 @@ const AppHeader = ({ collapsed, setCollapsed }) => {
                 {profile?.shop_name || 'My Shop'}
               </Tag>
             </div>
+            {pendingCount > 0 && (
+  <Tooltip title={`${pendingCount} items waiting to sync with server`}>
+    <Tag 
+      color="orange" 
+      style={{ 
+        marginLeft: 8, 
+        borderRadius: '10px', 
+        cursor: 'help',
+        animation: 'pulse 2s infinite' 
+      }}
+    >
+      {pendingCount} Syncing...
+    </Tag>
+  </Tooltip>
+)}
         </div>
 
         {/* Right Side: Icons & Subscription Button */}

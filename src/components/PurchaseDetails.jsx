@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input, Space } from 'antd';
-import { ArrowLeftOutlined, DollarCircleOutlined, EditOutlined, RollbackOutlined } from '@ant-design/icons';
+import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input, Space, Popconfirm } from 'antd';
+import { ArrowLeftOutlined, DollarCircleOutlined, EditOutlined, RollbackOutlined, DeleteOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -62,44 +62,71 @@ const PurchaseDetails = () => {
         }
     }, [id, notification, isSyncing]); // <--- isSyncing dependency mein add kiya
 
-    const displayItems = useMemo(() => {
-        const grouped = {};
+    // --- CHANGE 1 START: Items ko Active aur Returned mein taqseem karna ---
+    const { activeDisplayItems, returnedDisplayItems, totalReturnedAmount } = useMemo(() => {
+        const activeGrouped = {};
+        const returnedGrouped = {};
+        let retAmount = 0;
+
         items.forEach(item => {
+            // Attributes key banayein grouping ke liye
             const tempAttributes = { ...(item.item_attributes || {}) };
-            
             delete tempAttributes['IMEI'];
             delete tempAttributes['Serial / IMEI'];
             delete tempAttributes['Serial Number'];
-
             const attributesKey = JSON.stringify(tempAttributes);
             const key = `${item.product_id}-${attributesKey}-${item.purchase_price}`;
 
-            if (!grouped[key]) {
-                grouped[key] = { ...item, quantity: 0, imeis: [], key: key };
-            }
-
-            grouped[key].quantity += 1;
-            if (item.imei) {
-                grouped[key].imeis.push(item.imei);
+            // Check karein ke item Returned hai ya nahi
+            if (item.status === 'Returned') {
+                retAmount += (item.purchase_price || 0);
+                if (!returnedGrouped[key]) returnedGrouped[key] = { ...item, quantity: 0, imeis: [], key: key };
+                returnedGrouped[key].quantity += 1;
+                if (item.imei) returnedGrouped[key].imeis.push(item.imei);
+            } else {
+                // Active Items (Available or Sold)
+                if (!activeGrouped[key]) activeGrouped[key] = { ...item, quantity: 0, imeis: [], key: key };
+                activeGrouped[key].quantity += 1;
+                if (item.imei) activeGrouped[key].imeis.push(item.imei);
             }
         });
 
-        return Object.values(grouped);
+        return {
+            activeDisplayItems: Object.values(activeGrouped),
+            returnedDisplayItems: Object.values(returnedGrouped),
+            totalReturnedAmount: retAmount
+        };
     }, [items]);
+
+    // --- NAYA FUNCTION: Undo Return ---
+    const handleUndoReturn = async (record) => {
+        try {
+            await DataService.undoReturnItem(record.id);
+            notification.success({ message: 'Success', description: 'Item restored to inventory.' });
+            fetchDetails(); // Data refresh karein
+        } catch (error) {
+            notification.error({ message: 'Error', description: 'Failed to undo return.' });
+        }
+    };
     
     const itemColumns = [
         { 
             title: 'Product', 
             dataIndex: 'product_name', 
             key: 'product_name',
-            // --- Yahan tabdeeli hai: Hum ne render function add kiya hai ---
             render: (text, record) => (
                 <Space direction="vertical" size={0}>
                     <Text>{text}</Text>
-                    {/* Agar item Available nahi hai (yani Sold hai), to laal tag dikhao */}
-                    {record.status && record.status.toLowerCase() !== 'available' && (
+                    {/* Agar item Sold hai */}
+                    {record.status && record.status.toLowerCase() === 'sold' && (
                         <Tag color="red" style={{ fontSize: '10px', marginTop: '4px' }}>
                             Sold - Cannot Return
+                        </Tag>
+                    )}
+                    {/* Agar item Returned hai */}
+                    {record.status && record.status.toLowerCase() === 'returned' && (
+                        <Tag color="orange" style={{ fontSize: '10px', marginTop: '4px' }}>
+                            Returned
                         </Tag>
                     )}
                 </Space>
@@ -120,6 +147,30 @@ const PurchaseDetails = () => {
         },
         { title: 'Purchase Price (Unit)', dataIndex: 'purchase_price', key: 'purchase_price', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
         { title: 'Subtotal', key: 'subtotal', align: 'right', render: (_, record) => formatCurrency(record.quantity * record.purchase_price, profile?.currency) },
+        
+        // --- YEH HAI NAYA COLUMN (ACTION) ---
+        {
+            title: 'Action',
+            key: 'action',
+            align: 'center',
+            render: (_, record) => {
+                // Sirf 'Returned' items ke liye Delete (Undo) button dikhayein
+                if (record.status === 'Returned') {
+                    return (
+                        <Popconfirm 
+                            title="Undo Return?" 
+                            description="This will move item back to Available stock." 
+                            onConfirm={() => handleUndoReturn(record)}
+                            okText="Yes, Undo"
+                            cancelText="No"
+                        >
+                            <Button type="text" danger icon={<DeleteOutlined />} />
+                        </Popconfirm>
+                    );
+                }
+                return null; // Baqi items ke liye kuch na dikhayein
+            }
+        }
     ];
     
     const showPaymentModal = () => { paymentForm.setFieldsValue({ amount: purchase.balance_due, payment_date: dayjs(), payment_method: 'Cash' }); setIsPaymentModalVisible(true); };
@@ -151,8 +202,7 @@ const showEditModal = () => {
     // Behtar ye hai ke hum Table ke dataSource ko filter karein.
     setIsReturnModalVisible(true);
 };
-    const handleReturnSubmit = async (values) => { if (selectedReturnItems.length === 0) { notification.warning({ message: 'No Items Selected', description: 'Please select at least one item to return.' }); return; } try { const returnData = { purchase_id: id, item_ids: selectedReturnItems, return_date: values.return_date.format('YYYY-MM-DD'), notes: values.notes || null, }; await DataService.createPurchaseReturn(returnData); notification.success({ message: 'Success', description: 'Items returned successfully!' }); setIsReturnModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to process return.' }); } };
-// --- UPDATED: Row Selection with Disable Logic ---
+    const handleReturnSubmit = async (values) => { if (selectedReturnItems.length === 0) { notification.warning({ message: 'No Items Selected', description: 'Please select at least one item to return.' }); return; } try { const returnData = { purchase_id: id, item_ids: selectedReturnItems, return_date: values.return_date.format('YYYY-MM-DD'), notes: values.notes || null, }; await DataService.createPurchaseReturn(returnData); notification.success({ message: 'Success', description: 'Items returned successfully!' }); setIsReturnModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: error.message || 'Failed to process return.' }); } };
     const returnItemSelection = {
         onChange: (selectedRowKeys) => {
             setSelectedReturnItems(selectedRowKeys);
@@ -202,9 +252,9 @@ const showEditModal = () => {
     <Button type="primary" block={isMobile} icon={<DollarCircleOutlined />} onClick={showPaymentModal} disabled={purchase.balance_due <= 0}>
         Record a Payment
     </Button>
-    <Button block={isMobile} icon={<EditOutlined />} onClick={showEditModal} disabled={purchase.status === 'paid'}>
-        Edit Purchase
-    </Button>
+    <Button block={isMobile} icon={<EditOutlined />} onClick={showEditModal}>
+    Edit Purchase
+</Button>
     <Button danger block={isMobile} icon={<RollbackOutlined />} onClick={showReturnModal}>
         Return Items
     </Button>
@@ -212,9 +262,10 @@ const showEditModal = () => {
             </Card>
             
             <Title level={3} style={{ marginTop: '32px' }}>Items in this Purchase ({items.length})</Title>
+            {/* --- CHANGE 2 START: Active Items Table --- */}
             <Table 
                 columns={itemColumns} 
-                dataSource={displayItems}
+                dataSource={activeDisplayItems} // Yahan 'displayItems' ki jagah 'activeDisplayItems' likha hai
                 rowKey="key"
                 pagination={false}
                 scroll={{ x: true }}
@@ -226,6 +277,30 @@ const showEditModal = () => {
                     rowExpandable: (record) => record.imeis && record.imeis.length > 0,
                 }}
             />
+
+            {/* Agar Returned Items hain to unhein alag Table mein dikhayein */}
+            {returnedDisplayItems.length > 0 && (
+                <>
+                    <Title level={4} type="danger" style={{ marginTop: '32px' }}>Returned Items (History)</Title>
+                    <Alert message={`Total Returned Value: ${formatCurrency(totalReturnedAmount, profile?.currency)}`} type="error" showIcon style={{ marginBottom: '16px' }} />
+                    <Table 
+                        columns={itemColumns} 
+                        dataSource={returnedDisplayItems}
+                        rowKey="key"
+                        pagination={false}
+                        scroll={{ x: true }}
+                        expandable={{
+                            expandedRowRender: (record) => {
+                                if (!record.imeis || record.imeis.length === 0) return null;
+                                return (<ul style={{ margin: 0, paddingLeft: '20px' }}>{record.imeis.map(imei => <li key={imei}><Text code type="danger">{imei}</Text></li>)}</ul>);
+                            },
+                            rowExpandable: (record) => record.imeis && record.imeis.length > 0,
+                        }}
+                        rowClassName={() => 'returned-row-bg'} // Optional styling
+                    />
+                </>
+            )}
+            {/* --- CHANGE 2 END --- */}
 
             <Link to="/purchases"><Button style={{ marginTop: '24px' }} icon={<ArrowLeftOutlined />}>Back to Purchases List</Button></Link>
             
@@ -245,7 +320,15 @@ const showEditModal = () => {
                 editingItems={items}       // Purane items bhejein
             />
         )}
-            <Modal title="Return Items to Supplier" open={isReturnModalVisible} onCancel={() => setIsReturnModalVisible(false)} onOk={returnForm.submit} okText="Process Return" width={800} okButtonProps={{ danger: true }}><Form form={returnForm} layout="vertical" onFinish={handleReturnSubmit} style={{ marginTop: '24px' }}><Form.Item name="return_date" label="Return Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="notes" label="Reason for Return (Optional)"><Input.TextArea rows={2} placeholder="e.g., Damaged items, wrong model, etc." /></Form.Item><Title level={5} style={{ marginTop: '16px' }}>Select Items to Return</Title><Table rowSelection={{ type: 'checkbox', ...returnItemSelection }} columns={itemColumns} dataSource={items} rowKey="id" pagination={false} size="small" /></Form></Modal>
+            <Modal title="Return Items to Supplier" open={isReturnModalVisible} onCancel={() => setIsReturnModalVisible(false)} onOk={returnForm.submit} okText="Process Return" width={800} okButtonProps={{ danger: true }}><Form form={returnForm} layout="vertical" onFinish={handleReturnSubmit} style={{ marginTop: '24px' }}><Form.Item name="return_date" label="Return Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="notes" label="Reason for Return (Optional)"><Input.TextArea rows={2} placeholder="e.g., Damaged items, wrong model, etc." /></Form.Item><Title level={5} style={{ marginTop: '16px' }}>Select Items to Return</Title><Table 
+    rowSelection={{ type: 'checkbox', ...returnItemSelection }} 
+    columns={itemColumns} 
+    dataSource={items.filter(i => i.status !== 'Returned')} // Sirf wo jo Returned nahi hain
+    rowKey="id" 
+    pagination={false} 
+    size="small" 
+/>
+</Form></Modal>
         </div>
     );
 };

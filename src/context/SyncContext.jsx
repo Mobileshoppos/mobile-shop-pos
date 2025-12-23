@@ -11,8 +11,55 @@ export const useSync = () => useContext(SyncContext);
 export const SyncProvider = ({ children }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const isSyncingRef = useRef(false);
   const idMappingRef = useRef({});
+
+  // Database se purani mappings load karne ke liye
+  useEffect(() => {
+    const loadMappings = async () => {
+      try {
+        const savedMappings = await db.id_mappings.toArray();
+        savedMappings.forEach(m => {
+          idMappingRef.current[m.local_id] = m.server_id;
+        });
+        console.log('Mappings restored from DB:', idMappingRef.current);
+      } catch (err) {
+        console.error('Failed to load mappings:', err);
+      }
+    };
+    loadMappings();
+  }, []);
+
+  // Yeh code har waqt check karega ke queue mein kitne items hain
+  useEffect(() => {
+    const refreshCount = async () => {
+      const count = await db.sync_queue.count();
+      setPendingCount(count);
+    };
+
+    // Fauran check karein
+    refreshCount();
+
+    // Har 2 second baad dobara check karein (taake offline mein bhi count nazar aaye)
+    const interval = setInterval(refreshCount, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Safety Lock: Agar data sync hona baqi ho to browser tab band karne se rokay
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (pendingCount > 0) {
+        const message = "Sync in progress. To keep your records safe, please stay on this page and check your internet connection. Your data will be saved to the server shortly.";
+        e.preventDefault();
+        e.returnValue = message; // Purane browsers ke liye
+        return message; // Naye browsers ke liye
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [pendingCount]);
 
   // --- DOWNLOAD FUNCTION ---
   const syncAllData = async () => {
@@ -108,6 +155,16 @@ export const SyncProvider = ({ children }) => {
     }
   };
 
+  // Nayi mapping ko memory aur database dono mein save karne ke liye
+  const updateMapping = async (localId, serverId, tableName) => {
+    idMappingRef.current[localId] = serverId;
+    await db.id_mappings.put({
+      local_id: localId,
+      server_id: serverId,
+      table_name: tableName
+    });
+  };
+
   // --- UPLOAD FUNCTION (Fixed: Lock + Suppliers Swap) ---
   const processSyncQueue = async () => {
   // 1. LOCK: Agar internet nahi hai YA Ref Lock laga hua hai, to ruk jayen.
@@ -120,6 +177,7 @@ export const SyncProvider = ({ children }) => {
 
   try {
         const queueItems = await db.sync_queue.toArray();
+        setPendingCount(queueItems.length);
         
         if (queueItems.length === 0) {
             await syncAllData();
@@ -132,6 +190,12 @@ export const SyncProvider = ({ children }) => {
         const idMap = idMappingRef.current; 
 
         for (const item of queueItems) {
+            // --- GLOBAL FILTER (Faltu columns saaf karne ke liye) ---
+          if (item.data && typeof item.data === 'object') {
+            delete item.data.balance_due;
+            delete item.data.total_purchases;
+            delete item.data.total_payments;
+          }
           try {
             let error = null;
 
@@ -149,7 +213,7 @@ export const SyncProvider = ({ children }) => {
 
                if (!error && insertedProduct) {
                    const newServerId = insertedProduct.id;
-                   idMap[localProdId] = newServerId;
+                   await updateMapping(localProdId, newServerId, 'products');
 
                    await db.inventory.where('product_id').equals(localProdId).modify({ product_id: newServerId });
                    if (db.sale_items) await db.sale_items.where('product_id').equals(localProdId).modify({ product_id: newServerId });
@@ -206,7 +270,7 @@ export const SyncProvider = ({ children }) => {
                 // B. Agar upload kamyab ho
                 if (!error && insertedSupplier) {
                     const newServerId = insertedSupplier.id;
-                    idMap[localId] = newServerId; // Map mein save karein
+                    await updateMapping(localId, newServerId, 'suppliers');
 
                     // 1. References Update Karein (Purchases & Payments)
                     // Taake agar is supplier ki koi purchase offline hui thi to wo link ho jaye
@@ -238,7 +302,7 @@ export const SyncProvider = ({ children }) => {
                 // B. Agar upload kamyab ho jaye
                 if (!error && insertedCustomer) {
                     const newServerId = insertedCustomer.id;
-                    idMap[localId] = newServerId; 
+                    await updateMapping(localId, newServerId, 'customers'); 
 
                     // 1. References Update Karein (Jahan jahan yeh customer use hua hai)
                     await db.sales.where('customer_id').equals(localId).modify({ customer_id: newServerId });
@@ -382,13 +446,18 @@ export const SyncProvider = ({ children }) => {
                 if (!error) await db.credit_payouts.delete(localId);
             }
 
-            // Suppliers Update/Delete
+            // Suppliers Update (Safety Filter Added)
             else if (item.table_name === 'suppliers' && item.action === 'update') {
-                const { id, ...updates } = item.data;
-                // Agar ID map mein hai (matlab abhi change hui hai), to nayi ID use karein
+                // Hum 'balance_due', 'total_purchases', aur 'total_payments' ko nikaal rahe hain
+                // taake server par sirf asli columns (name, phone, etc.) jayein.
+                const { id, balance_due, total_purchases, total_payments, ...updates } = item.data;
+                
                 const realId = idMap[id] || id;
                 if (!isNaN(realId)) {
-                    const { error: supError } = await supabase.from('suppliers').update(updates).eq('id', realId);
+                    const { error: supError } = await supabase
+                        .from('suppliers')
+                        .update(updates) // Ab is mein koi faltu column nahi hai
+                        .eq('id', realId);
                     error = supError;
                 }
             }
@@ -412,6 +481,38 @@ export const SyncProvider = ({ children }) => {
                 });
                 error = supError;
                 if (!error && item.data.id) await db.supplier_payments.delete(item.data.id);
+            }
+
+            // --- Edit Supplier Payment Sync (UPDATED) ---
+            else if (item.action === 'edit_supplier_payment') {
+                const { p_payment_id, p_new_amount, p_new_notes } = item.data;
+                
+                // 1. Server RPC call karein
+                const { error: supError } = await supabase.rpc('edit_supplier_payment', {
+                    p_payment_id: p_payment_id,
+                    p_new_amount: p_new_amount,
+                    p_new_notes: p_new_notes
+                });
+                error = supError;
+
+                // 2. AGAR KAMYAB HO, TO SUPPLIER KA NAYA DATA DOWNLOAD KAREIN (YEH HAI FIX)
+                if (!error) {
+                    // Payment ID se Supplier ID nikalein (Local DB se)
+                    const payment = await db.supplier_payments.get(p_payment_id);
+                    if (payment && payment.supplier_id) {
+                        // Server se is Supplier ka taza data layein
+                        const { data: freshSupplier } = await supabase
+                            .from('suppliers_with_balance')
+                            .select('*')
+                            .eq('id', payment.supplier_id)
+                            .single();
+                        
+                        // Local DB update karein
+                        if (freshSupplier) {
+                            await db.suppliers.put(freshSupplier);
+                        }
+                    }
+                }
             }
 
             // Supplier Refund Sync
@@ -450,28 +551,43 @@ export const SyncProvider = ({ children }) => {
                 error = supError;
             }
 
-            // --- NAYA CODE: Return Sync ---
-            else if (item.action === 'process_return_fully') {
-                const { purchase_id, item_ids, return_date, notes } = item.data;
-
-                // 1. Asli IDs dhoondein
-                const realPurchaseId = idMap[purchase_id] || purchase_id;
+            // --- NAYA CODE: Return Sync (FIXED MATCHING) ---
+            // Ab Action ka naam 'process_purchase_return' hai
+            else if (item.action === 'process_purchase_return') {
                 
-                // Items ki IDs ko map karein (Agar koi item abhi bana tha aur return ho gaya)
-                const realItemIds = item_ids.map(id => idMap[id] || id);
+                // Data ab 'p_' prefix ke saath aa raha hai (DataService se match karein)
+                const { p_purchase_id, p_item_ids, p_return_date, p_notes } = item.data;
 
-                // Check: Agar koi ID abhi bhi Text (UUID) hai, to hum usay Server par nahi bhej sakte.
-                // Lekin kyunke Return sirf "Existing" items ka hota hai, to umeed hai ke IDs number hi hongi.
-                // Phir bhi, hum sirf Numeric IDs filter kar lete hain taake crash na ho.
+                // 1. Asli IDs dhoondein (Mapping check karein)
+                const realPurchaseId = idMap[p_purchase_id] || p_purchase_id;
+                
+                // Items ki IDs ko map karein
+                const realItemIds = p_item_ids.map(id => idMap[id] || id);
+
+                // Sirf Numeric IDs filter karein (Safety)
                 const validItemIds = realItemIds.filter(id => !isNaN(id));
 
                 if (validItemIds.length > 0) {
-                    // 2. Server RPC Call (Aapka mojooda function)
+                    // 2. Server RPC Call
+                    // Note: Parameters ke naam wahi hain jo SQL function mein hain
                     const { error: supError } = await supabase.rpc('process_purchase_return', {
                         p_purchase_id: realPurchaseId,
                         p_item_ids: validItemIds,
-                        p_return_date: return_date,
-                        p_notes: notes
+                        p_return_date: p_return_date,
+                        p_notes: p_notes
+                    });
+                    error = supError;
+                }
+            }
+
+            // --- Undo Return Sync ---
+            else if (item.action === 'undo_return_item') {
+                const { p_inventory_id } = item.data;
+                const realInvId = idMap[p_inventory_id] || p_inventory_id;
+                
+                if (!isNaN(realInvId)) {
+                    const { error: supError } = await supabase.rpc('undo_return_item', {
+                        p_inventory_id: realInvId
                     });
                     error = supError;
                 }
@@ -533,7 +649,7 @@ export const SyncProvider = ({ children }) => {
                 if (!error && insertedCat) {
                     // 2. YAHAN HAI FIX: Nayi ID ko Map mein save karein
                     // Taake agle items (Attributes) ko pata chal sake ke Abba ki nayi ID kya hai
-                    idMap[localId] = insertedCat.id;
+                    await updateMapping(localId, insertedCat.id, 'categories');
 
                     // 3. Local DB se purani ID wala record delete karein
                     await db.categories.delete(localId);
@@ -671,7 +787,7 @@ export const SyncProvider = ({ children }) => {
   }, []);
 
   return (
-    <SyncContext.Provider value={{ isOnline, isSyncing, syncAllData, processSyncQueue }}>
+    <SyncContext.Provider value={{ isOnline, isSyncing, pendingCount, syncAllData, processSyncQueue }}>
       {children}
     </SyncContext.Provider>
   );

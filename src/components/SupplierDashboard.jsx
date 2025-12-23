@@ -26,6 +26,31 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
     const [isRefundModalVisible, setIsRefundModalVisible] = useState(false);
     const [refundForm] = Form.useForm();
 
+    // --- Edit Payment State (NAYA CODE) ---
+    const [isEditPaymentVisible, setIsEditPaymentVisible] = useState(false);
+    const [editingPayment, setEditingPayment] = useState(null);
+    const [editPaymentForm] = Form.useForm();
+
+    const handleEditPaymentClick = (record) => {
+        setEditingPayment(record);
+        editPaymentForm.setFieldsValue({
+            amount: record.credit, 
+            notes: record.original_notes
+        });
+        setIsEditPaymentVisible(true);
+    };
+
+    const handleEditPaymentSubmit = async (values) => {
+        try {
+            await DataService.editSupplierPayment(editingPayment.id, values.amount, values.notes);
+            notification.success({ message: 'Success', description: 'Payment updated successfully!' });
+            setIsEditPaymentVisible(false);
+            onRefresh(); 
+        } catch (error) {
+            notification.error({ message: 'Error', description: 'Failed to update payment.' });
+        }
+    };
+
     const fetchLedger = useCallback(async () => {
         if (!supplier?.id) return; setLoading(true);
         try {
@@ -39,7 +64,15 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                     key: `pur-${p.id}`, date: p.purchase_date, type: 'Purchase', details: `Purchase #${p.id}`, debit: p.total_amount, credit: 0, link: `/purchases/${p.id}`
                 })),
                 ...(payments || []).map(p => ({
-                    key: `pay-${p.id}`, date: p.payment_date, type: 'Payment', details: `Payment via ${p.payment_method}` + (p.notes ? ` (${p.notes})` : ''), debit: 0, credit: p.amount,
+                    key: `pay-${p.id}`, 
+                    id: p.id, 
+                    original_notes: p.notes, 
+                    payment_method: p.payment_method,
+                    date: p.payment_date, 
+                    type: 'Payment', 
+                    details: `Payment via ${p.payment_method}` + (p.notes ? ` (${p.notes})` : ''), 
+                    debit: 0, 
+                    credit: p.amount,
                 })),
                 // --- Refunds ko list mein shamil kiya ---
                 ...(refunds || []).map(r => ({
@@ -97,6 +130,23 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
         { title: 'Debit', dataIndex: 'debit', key: 'debit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
         // YEH LINE BHI TABDEEL HUI HAI
         { title: 'Credit', dataIndex: 'credit', key: 'credit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
+        { 
+            title: 'Action', 
+            key: 'action', 
+            align: 'center', 
+            render: (_, record) => {
+                if (record.type === 'Payment') {
+                    return (
+                        <Button 
+                            icon={<EditOutlined />} 
+                            size="small"
+                            onClick={() => handleEditPaymentClick(record)}
+                        />
+                    );
+                }
+                return null;
+            }
+        },
     ];
     
     if (loading) return <div style={{ textAlign: 'center', padding: '50px' }}><Spin /></div>;
@@ -171,6 +221,29 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                         <Select><Select.Option value="Cash">Cash</Select.Option><Select.Option value="Bank Transfer">Bank Transfer</Select.Option></Select>
                     </Form.Item>
                     <Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item>
+                </Form>
+            </Modal>
+            <Modal 
+                title="Edit Payment" 
+                open={isEditPaymentVisible} 
+                onCancel={() => setIsEditPaymentVisible(false)} 
+                onOk={editPaymentForm.submit} 
+                okText="Update Payment"
+            >
+                <Form form={editPaymentForm} layout="vertical" onFinish={handleEditPaymentSubmit} style={{ marginTop: 24 }}>
+                    <Alert 
+                        message="Warning" 
+                        description="Changing the amount will automatically adjust (revert and re-apply) the related bills." 
+                        type="warning" 
+                        showIcon 
+                        style={{ marginBottom: 16 }} 
+                    />
+                    <Form.Item name="amount" label="Amount" rules={[{ required: true }]}>
+                        <InputNumber style={{ width: '100%' }} min={0} />
+                    </Form.Item>
+                    <Form.Item name="notes" label="Notes / Reason">
+                        <Input.TextArea rows={2} placeholder="Reason for change..." />
+                    </Form.Item>
                 </Form>
             </Modal>
         </div>

@@ -115,6 +115,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
         finalItemsData = finalImeis.map(imei => ({
             // Agar edit kar rahe hain to purani ID sath rakhein (Server Safety)
             id: initialValues?.id || null, 
+            status: initialValues?.status || 'Available',
             temp_id: crypto.randomUUID(),
             product_id: product.id,
             name: product.name,
@@ -129,6 +130,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
       } else {
         finalItemsData = [{
             id: initialValues?.id || null,
+            status: initialValues?.status || 'Available',
             temp_id: crypto.randomUUID(),
             product_id: product.id,
             name: product.name,
@@ -490,10 +492,18 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
         render: (_, record) => (
             <Space direction="vertical" size={0}>
                 <Text>{renderItemName(record)}</Text>
-                {/* Agar item Sold hai to Red Tag dikhayein */}
-                {record.status && record.status.toLowerCase() !== 'available' && (
+                
+                {/* Case 1: Agar Item BIK CHUKA hai */}
+                {record.status && record.status.toLowerCase() === 'sold' && (
                     <Text type="danger" style={{ fontSize: '12px' }}>
                         (Sold - Cannot Delete)
+                    </Text>
+                )}
+
+                {/* Case 2: Agar Item WAPIS (Return) ho chuka hai */}
+                {record.status && record.status.toLowerCase() === 'returned' && (
+                    <Text type="warning" style={{ fontSize: '12px' }}>
+                        (Returned - Price Editable)
                     </Text>
                 )}
             </Space>
@@ -507,21 +517,23 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
       key: 'action', 
       align: 'center', 
       render: (_, record, index) => {
-        // Check karein ke kya item Sold hai?
-        const isSold = record.status && record.status.toLowerCase() !== 'available';
+        const status = record.status ? record.status.toLowerCase() : 'available';
+        const isSold = status === 'sold';
+        const isReturned = status === 'returned';
         
         return (
             <Space>
-                {/* Agar Sold hai to Edit/Delete disable karein */}
                 <Button 
                     icon={<EditOutlined />} 
+                    // Sold item edit nahi ho sakta, lekin Returned item ki price edit ho sakti hai
                     disabled={isSold} 
                     onClick={() => handleEditItem(record, index)} 
                 />
                 <Button 
                     danger 
                     icon={<DeleteOutlined />} 
-                    disabled={isSold} // <--- Yahan Lock lagaya hai
+                    // Sold aur Returned dono delete nahi ho sakte (History kharab hogi)
+                    disabled={isSold || isReturned} 
                     onClick={() => handleRemoveItem(record, index)} 
                 />
             </Space>
@@ -576,12 +588,18 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
           <Row gutter={16} style={{ background: 'transparent', padding: '16px', borderRadius: '8px' }}>
               <Col span={12}>
                   <Form.Item 
-                      name="amount_paid" 
-                      label="Amount Paid Now" 
-                      rules={[{ required: true, message: 'Please enter amount (0 if unpaid)' }]}
-                  >
-                      <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} />
-                  </Form.Item>
+    name="amount_paid" 
+    label="Amount Paid Now" 
+    help={editingPurchase ? "To adjust payment, use 'Record Payment' or 'Refund' options." : null} // User ko batane ke liye
+    rules={[{ required: true, message: 'Please enter amount (0 if unpaid)' }]}
+>
+    <InputNumber 
+        style={{ width: '100%' }} 
+        prefix={profile?.currency ? `${profile.currency} ` : ''} 
+        min={0} 
+        disabled={!!editingPurchase} // <--- YEH HAI FOOL-PROOF LOCK
+    />
+</Form.Item>
               </Col>
               <Col span={12}>
                   <Form.Item name="payment_method" label="Payment Method" rules={[{ required: true }]} initialValue="Cash">
