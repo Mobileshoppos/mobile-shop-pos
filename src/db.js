@@ -7,7 +7,7 @@ export const db = new Dexie('MobileShopDB');
 // Note: Hum sirf wohi columns likhte hain jin se hamein search ya filter karna ho.
 // Baqi data khud ba khud save ho jata hai.
 
-db.version(11).stores({
+db.version(16).stores({
   // --- Business Data Tables (Jo Supabase se sync honge) ---
   
   // Products: ID, Category, Name aur Barcode se search karne ke liye
@@ -27,24 +27,26 @@ db.version(11).stores({
   purchase_items: 'id, purchase_id, product_id', // Purchase ke andar kya items thay
   
   // Sales (Farokht)
-  sales: 'id, customer_id, sale_date, user_id',
+  sales: 'id, customer_id, sale_date, user_id, payment_method',
   sale_items: 'id, sale_id, product_id, product_name_snapshot',  // Sale ke andar kya items thay
   
   // Expenses (Akhrajat)
-  expenses: 'id, category_id, expense_date, user_id',
+  expenses: 'id, category_id, expense_date, user_id, payment_method',
   expense_categories: 'id, user_id',
 
   inventory: 'id, product_id, purchase_id, status, user_id, variant_id, imei', 
-  customer_payments: 'id, customer_id, user_id',
+  customer_payments: 'id, customer_id, user_id, payment_method',
   sale_returns: 'id, sale_id, customer_id, user_id',
   sale_return_items: 'id, return_id, inventory_id',
   purchase_return_items: 'id, return_id, product_id',
-  credit_payouts: 'id, customer_id, user_id',
+  credit_payouts: 'id, customer_id, user_id, payment_method',
   category_attributes: 'id, category_id',
-  supplier_payments: 'id, supplier_id, user_id',
+  supplier_payments: 'id, supplier_id, user_id, payment_method',
   product_variants: 'id, product_id, barcode',
-  supplier_refunds: 'id, supplier_id, refund_date, user_id',
+  supplier_refunds: 'id, supplier_id, refund_date, user_id, payment_method',
   id_mappings: '++id, local_id, server_id, table_name',
+  cash_adjustments: 'id, user_id, type, payment_method, created_at, transfer_to',
+  daily_closings: 'id, user_id, closing_date, created_at',
   
   // --- Offline System Tables (Jo sirf Local rahenge) ---
   

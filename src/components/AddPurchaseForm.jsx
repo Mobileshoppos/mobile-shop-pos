@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber
+  Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Radio
 } from 'antd';
 import { DeleteOutlined, BarcodeOutlined, EditOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
@@ -602,14 +602,12 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
 </Form.Item>
               </Col>
               <Col span={12}>
-                  <Form.Item name="payment_method" label="Payment Method" rules={[{ required: true }]} initialValue="Cash">
-                      <Select>
-                          <Option value="Cash">Cash</Option>
-                          <Option value="Bank Transfer">Bank Transfer</Option>
-                          <Option value="Cheque">Cheque</Option>
-                          <Option value="Other">Other</Option>
-                      </Select>
-                  </Form.Item>
+                  <Form.Item name="payment_method" label="Paid From" rules={[{ required: true }]} initialValue="Cash">
+    <Radio.Group buttonStyle="solid">
+        <Radio.Button value="Cash">Cash (Galla)</Radio.Button>
+        <Radio.Button value="Bank">Bank / EasyPaisa</Radio.Button>
+    </Radio.Group>
+</Form.Item>
               </Col>
           </Row>
         </Form>

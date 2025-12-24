@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider
+  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio
 } from 'antd';
 import { UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
@@ -40,6 +40,7 @@ const Customers = () => {
   const [payoutForm] = Form.useForm();
   
   const [addForm] = Form.useForm();
+  const [cashOrBank, setCashOrBank] = useState('Cash');
   const [paymentForm] = Form.useForm();
   const [returnForm] = Form.useForm();
 
@@ -105,6 +106,7 @@ const Customers = () => {
           id: crypto.randomUUID(),
           customer_id: selectedCustomer.id, 
           amount_paid: values.amount, 
+          payment_method: cashOrBank,
           user_id: user.id,
           created_at: new Date().toISOString()
       };
@@ -161,6 +163,7 @@ const Customers = () => {
           id: crypto.randomUUID(),
           customer_id: selectedCustomer.id, 
           amount_paid: values.amount, 
+          payment_method: cashOrBank,
           remarks: values.remarks,
           user_id: user.id,
           created_at: new Date().toISOString()
@@ -736,7 +739,14 @@ const handleCloseInvoiceSearchModal = () => {
     )}
 </Modal> <Modal title={`Payment from: ${selectedCustomer?.name}`} open={isPaymentModalOpen} onCancel={handlePaymentCancel} onOk={() => paymentForm.submit()} okText="Confirm Payment"> <Title level={5}>Balance: <Text type="danger">{formatCurrency(selectedCustomer?.balance, profile?.currency)}</Text></Title> <Form form={paymentForm} layout="vertical" onFinish={handleReceivePayment}><Form.Item name="amount" label="Amount Received" rules={[{ required: true }]}>
     <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={1} max={selectedCustomer?.balance} />
-</Form.Item></Form> </Modal> <Modal title={`Return for Invoice #${selectedSale?.id}`} open={isReturnModalOpen} onCancel={handleReturnCancel} onOk={() => returnForm.submit()} okText="Confirm Return" confirmLoading={isReturnSubmitting} okButtonProps={{ disabled: selectedReturnItems.length === 0 }}> <Checkbox.Group style={{ width: '100%' }} value={selectedReturnItems} onChange={setSelectedReturnItems}> <div style={{ maxHeight: '30vh', overflowY: 'auto' }}> {returnableItems.length > 0 ? returnableItems.map(item => (<Card size="small" key={item.sale_item_id} style={{ marginBottom: '8px' }}><Checkbox value={item.sale_item_id}><Space><Text strong>{item.product_name}</Text><Text type="secondary">({item.imei || 'Item'})</Text>-<Text>{formatCurrency(item.price_at_sale, profile?.currency)}</Text></Space></Checkbox></Card>)) : <Text type="secondary">No items available.</Text>} </div> </Checkbox.Group> <Form form={returnForm} layout="vertical" onFinish={handleConfirmReturn} style={{ marginTop: '24px' }}> <Form.Item name="reason" label="Reason for Return"><Input.TextArea /></Form.Item> </Form> <Descriptions bordered><Descriptions.Item label="Total Credit"><Title level={4} style={{margin:0, color: '#52c41a'}}>{formatCurrency(totalRefundAmount, profile?.currency)}</Title></Descriptions.Item></Descriptions> </Modal> <Modal
+</Form.Item>
+<Form.Item label="Receive In">
+  <Radio.Group onChange={(e) => setCashOrBank(e.target.value)} value={cashOrBank} buttonStyle="solid">
+    <Radio.Button value="Cash">Cash (Galla)</Radio.Button>
+    <Radio.Button value="Bank">Bank / EasyPaisa</Radio.Button>
+  </Radio.Group>
+</Form.Item>
+</Form> </Modal> <Modal title={`Return for Invoice #${selectedSale?.id}`} open={isReturnModalOpen} onCancel={handleReturnCancel} onOk={() => returnForm.submit()} okText="Confirm Return" confirmLoading={isReturnSubmitting} okButtonProps={{ disabled: selectedReturnItems.length === 0 }}> <Checkbox.Group style={{ width: '100%' }} value={selectedReturnItems} onChange={setSelectedReturnItems}> <div style={{ maxHeight: '30vh', overflowY: 'auto' }}> {returnableItems.length > 0 ? returnableItems.map(item => (<Card size="small" key={item.sale_item_id} style={{ marginBottom: '8px' }}><Checkbox value={item.sale_item_id}><Space><Text strong>{item.product_name}</Text><Text type="secondary">({item.imei || 'Item'})</Text>-<Text>{formatCurrency(item.price_at_sale, profile?.currency)}</Text></Space></Checkbox></Card>)) : <Text type="secondary">No items available.</Text>} </div> </Checkbox.Group> <Form form={returnForm} layout="vertical" onFinish={handleConfirmReturn} style={{ marginTop: '24px' }}> <Form.Item name="reason" label="Reason for Return"><Input.TextArea /></Form.Item> </Form> <Descriptions bordered><Descriptions.Item label="Total Credit"><Title level={4} style={{margin:0, color: '#52c41a'}}>{formatCurrency(totalRefundAmount, profile?.currency)}</Title></Descriptions.Item></Descriptions> </Modal> <Modal
   title={`Settle Credit for: ${selectedCustomer?.name}`}
   open={isPayoutModalOpen}
   onCancel={handlePayoutCancel}
@@ -745,6 +755,12 @@ const handleCloseInvoiceSearchModal = () => {
 >
   <Title level={5}>Credit Balance: <Text type="success">{formatCurrency(Math.abs(selectedCustomer?.balance || 0), profile?.currency)}</Text></Title>
   <Form form={payoutForm} layout="vertical" onFinish={handleConfirmPayout}>
+    <Form.Item label="Pay From">
+  <Radio.Group onChange={(e) => setCashOrBank(e.target.value)} value={cashOrBank} buttonStyle="solid">
+    <Radio.Button value="Cash">Cash (Galla)</Radio.Button>
+    <Radio.Button value="Bank">Bank / EasyPaisa</Radio.Button>
+  </Radio.Group>
+</Form.Item>
     <Form.Item
       name="amount"
       label="Amount Paid to Customer"

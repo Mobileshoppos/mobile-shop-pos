@@ -11,7 +11,9 @@ import {
   Select,
   App as AntApp,
   Space,
-  Popconfirm
+  Popconfirm,
+  Radio,
+  Tag
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
@@ -63,7 +65,10 @@ const Expenses = () => {
       });
     } else {
       form.resetFields();
-      form.setFieldsValue({ expense_date: dayjs() });
+      form.setFieldsValue({ 
+        expense_date: dayjs(),
+        payment_method: 'Cash' // Naya kharcha hamesha Cash se shuru ho
+      });
     }
     setIsModalOpen(true);
   };
@@ -113,6 +118,12 @@ const Expenses = () => {
     { title: 'Date', dataIndex: 'expense_date', key: 'expense_date', render: (date) => dayjs(date).format('DD MMM, YYYY') },
     { title: 'Title / Description', dataIndex: 'title', key: 'title' },
     { title: 'Category', dataIndex: 'expense_categories', key: 'category', render: (category) => category ? category.name : 'N/A' },
+    { 
+      title: 'Method', 
+      dataIndex: 'payment_method', 
+      key: 'payment_method', 
+      render: (method) => <Tag color={method === 'Bank' ? 'blue' : 'default'}>{method || 'Cash'}</Tag> 
+    },
     { title: 'Amount', dataIndex: 'amount', key: 'amount', align: 'right', render: (amount) => <Text strong>{formatCurrency(amount, profile?.currency)}</Text> },
     {
       title: 'Actions',
@@ -146,6 +157,12 @@ const Expenses = () => {
           </Form.Item>
           <Form.Item name="amount" label="Amount" rules={[{ required: true }]}>
             <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={1} />
+          </Form.Item>
+          <Form.Item name="payment_method" label="Paid From" initialValue="Cash">
+            <Radio.Group buttonStyle="solid">
+              <Radio.Button value="Cash">Cash (Galla)</Radio.Button>
+              <Radio.Button value="Bank">Bank / EasyPaisa</Radio.Button>
+            </Radio.Group>
           </Form.Item>
           <Form.Item name="category_id" label="Category" rules={[{ required: true }]}>
             <Select placeholder="Select a category">

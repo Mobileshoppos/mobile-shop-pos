@@ -118,6 +118,11 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
                 </div>
 
                 <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+    <span>Payment Method:</span>
+    <span>${saleDetails.payment_method || 'Cash'}</span>
+</div>
+
+                <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
                     <span>Amount Paid:</span>
                     <span>${formatMoney(amountPaid)}</span>
                 </div>

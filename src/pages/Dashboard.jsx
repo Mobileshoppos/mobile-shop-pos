@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table, Radio } from 'antd';
+import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table, Radio, Modal, Form, InputNumber, Input, App, Tooltip, Tabs } from 'antd';
 import {
   ShoppingOutlined,
   RiseOutlined,
@@ -11,11 +11,14 @@ import {
   DollarCircleOutlined,
   TrophyOutlined,
   ArrowUpOutlined,
-  ArrowDownOutlined
+  ArrowDownOutlined,
+  HistoryOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons';
 import { Area } from '@ant-design/charts'; 
 import { useNavigate } from 'react-router-dom';
 import DataService from '../DataService';
+import { db } from '../db';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { useTheme } from '../context/ThemeContext';
@@ -27,10 +30,104 @@ const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
-  // NAYA: Time Range State (Default: Today)
   const [timeRange, setTimeRange] = useState('today');
+
+  const { message } = App.useApp();
+  const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
+  const [adjustmentForm] = Form.useForm();
+
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [historyData, setHistoryData] = useState([]);
+
+  const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
+  const [closingForm] = Form.useForm();
+
+  const [closingHistoryData, setClosingHistoryData] = useState([]);
+
+  const handleOpenHistory = async () => {
+    // Dono tables se data uthayein
+    const adjustments = await db.cash_adjustments.orderBy('created_at').reverse().toArray();
+    const closings = await db.daily_closings.orderBy('created_at').reverse().toArray();
+    
+    setHistoryData(adjustments);
+    setClosingHistoryData(closings);
+    setIsHistoryModalOpen(true);
+  };
+
+  // Cash Adjustment Save karne ka function
+  const handleAdjustmentSubmit = async (values) => {
+    try {
+      const adjustmentData = {
+        id: crypto.randomUUID(),
+        user_id: user?.id, // Corrected
+        amount: values.amount,
+        type: values.type,
+        payment_method: values.payment_method,
+        transfer_to: values.type === 'Transfer' ? values.transfer_to : null,
+        notes: values.notes || '',
+        created_at: new Date().toISOString()
+      };
+
+      // 1. Local DB mein save karein (Corrected: DataService.db ki jagah sirf db)
+      await db.cash_adjustments.add(adjustmentData);
+
+      // 2. Sync Queue mein dalein
+      await db.sync_queue.add({
+        table_name: 'cash_adjustments',
+        action: 'create',
+        data: adjustmentData
+      });
+
+      message.success('Galla adjusted successfully!');
+      setIsAdjustmentModalOpen(false);
+      adjustmentForm.resetFields();
+      
+      // Dashboard refresh karein
+      window.location.reload(); 
+
+    } catch (error) {
+      message.error('Adjustment failed: ' + error.message);
+    }
+  };
+
+  // Day-End Closing Save karne ka function
+  const handleClosingSubmit = async (values) => {
+    try {
+      const expected = stats?.cashInHand || 0;
+      const actual = values.actual_cash;
+      const diff = actual - expected;
+
+      const closingData = {
+        id: crypto.randomUUID(),
+        user_id: user?.id,
+        closing_date: new Date().toISOString().split('T')[0], // Aaj ki date
+        expected_cash: expected,
+        actual_cash: actual,
+        difference: diff,
+        notes: values.notes || '',
+        created_at: new Date().toISOString()
+      };
+
+      // 1. Local DB mein save karein
+      await db.daily_closings.add(closingData);
+
+      // 2. Sync Queue mein dalein
+      await db.sync_queue.add({
+        table_name: 'daily_closings',
+        action: 'create',
+        data: closingData
+      });
+
+      message.success('Galla closed and recorded successfully!');
+      setIsClosingModalOpen(false);
+      closingForm.resetFields();
+
+    } catch (error) {
+      message.error('Closing failed: ' + error.message);
+    }
+  };
   
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -184,6 +281,44 @@ const Dashboard = () => {
           </Card>
         </Col>
 
+        {/* Card: Cash in Hand (Galla) */}
+        <Col xs={24} sm={12} lg={6}>
+          <Card 
+            style={{ ...cardStyle, background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}
+            styles={{ header: { borderBottom: 'none' } }} // <--- Warning Fixed Here
+            extra={
+              <Space>
+                <Tooltip title="Cash History">
+                  <Button 
+                    type="text" 
+                    icon={<HistoryOutlined style={{ color: 'white', fontSize: '20px' }} />} 
+                    onClick={handleOpenHistory} 
+                  />
+                </Tooltip>
+                <Tooltip title="Cash Adjustment (Cash In/Out)">
+                  <Button 
+                    type="text" 
+                    icon={<WalletOutlined style={{ color: 'white', fontSize: '20px' }} />} 
+                    onClick={() => setIsAdjustmentModalOpen(true)} 
+                  />
+                </Tooltip>
+              </Space>
+            }
+          >
+            <Statistic
+              title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Cash in Hand (Galla)</span>}
+              value={stats?.cashInHand || 0}
+              prefix={<WalletOutlined />}
+              valueStyle={{ color: 'white', fontWeight: 'bold' }}
+              formatter={(val) => formatCurrency(val, profile?.currency)}
+            />
+            <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Bank Balance:</span>
+                <span>{formatCurrency(stats?.bankBalance || 0, profile?.currency)}</span>
+            </div>
+          </Card>
+        </Col>
+
         {/* Card 2: Profit */}
         <Col xs={24} sm={12} lg={6}>
           <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' }}>
@@ -273,6 +408,13 @@ const Dashboard = () => {
                 <Button icon={<DollarCircleOutlined />} onClick={() => navigate('/expenses')}>
                   Expenses
                 </Button>
+                <Button 
+  icon={<CheckCircleOutlined />} 
+  style={{ backgroundColor: '#52c41a', color: 'white', border: 'none' }}
+  onClick={() => setIsClosingModalOpen(true)}
+>
+  Close Register
+</Button>
               </Space>
             </div>
           </Card>
@@ -406,6 +548,204 @@ const Dashboard = () => {
           </Row>
         </Col>
       </Row>
+      {/* CASH ADJUSTMENT MODAL */}
+      <Modal
+        title="Cash Adjustment"
+        open={isAdjustmentModalOpen}
+        onCancel={() => setIsAdjustmentModalOpen(false)}
+        onOk={() => adjustmentForm.submit()}
+        okText="Save Adjustment"
+      >
+        <Form 
+  form={adjustmentForm} 
+  layout="vertical" 
+  onFinish={handleAdjustmentSubmit} 
+  initialValues={{ type: 'In', payment_method: 'Cash' }}
+  onValuesChange={(changedValues, allValues) => {
+    // Agar "Where" badla jaye aur Type "Transfer" ho
+    if (changedValues.payment_method && allValues.type === 'Transfer') {
+      const newTransferTo = changedValues.payment_method === 'Cash' ? 'Bank' : 'Cash';
+      adjustmentForm.setFieldsValue({ transfer_to: newTransferTo });
+    }
+    // Agar Type "Transfer" par switch kiya jaye
+    if (changedValues.type === 'Transfer') {
+      const newTransferTo = allValues.payment_method === 'Cash' ? 'Bank' : 'Cash';
+      adjustmentForm.setFieldsValue({ transfer_to: newTransferTo });
+    }
+  }}
+>
+          <Form.Item name="type" label="Adjustment Type" rules={[{ required: true }]}>
+            <Radio.Group buttonStyle="solid">
+              <Radio.Button value="In">Cash In</Radio.Button>
+              <Radio.Button value="Out">Cash Out</Radio.Button>
+              <Radio.Button value="Transfer">Transfer</Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+
+          <Form.Item name="payment_method" label="Where?" rules={[{ required: true }]}>
+            <Radio.Group buttonStyle="solid">
+              <Radio.Button value="Cash">Cash</Radio.Button>
+              <Radio.Button value="Bank">Bank</Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+
+          {/* Agar Transfer select ho to poocho kahan bhejna hai */}
+          <Form.Item shouldUpdate={(prev, curr) => prev.type !== curr.type || prev.payment_method !== curr.payment_method} noStyle>
+            {({ getFieldValue }) => 
+              getFieldValue('type') === 'Transfer' ? (
+                <Form.Item name="transfer_to" label="Transfer To" rules={[{ required: true }]}>
+                  <Radio.Group buttonStyle="solid">
+                    <Radio.Button value={getFieldValue('payment_method') === 'Cash' ? 'Bank' : 'Cash'}>
+                      {getFieldValue('payment_method') === 'Cash' ? 'Bank' : 'Cash'}
+                    </Radio.Button>
+                  </Radio.Group>
+                </Form.Item>
+              ) : null
+            }
+          </Form.Item>
+
+          <Form.Item name="amount" label="Amount" rules={[{ required: true }]}>
+            <InputNumber style={{ width: '100%' }} prefix={profile?.currency} min={1} />
+          </Form.Item>
+
+          <Form.Item name="notes" label="Notes (e.g. Opening Balance)">
+            <Input.TextArea placeholder="Why are you adjusting cash?" />
+          </Form.Item>
+        </Form>
+      </Modal>
+      {/* UPGRADED HISTORY MODAL (WITH TABS) */}
+      <Modal
+        title="Cash & Closing Reports"
+        open={isHistoryModalOpen}
+        onCancel={() => setIsHistoryModalOpen(false)}
+        footer={null}
+        width={850}
+      >
+        <Tabs defaultActiveKey="1">
+          {/* TAB 1: ADJUSTMENTS */}
+          <Tabs.TabPane tab="Cash Adjustments (In/Out)" key="1">
+            <Table
+              dataSource={historyData}
+              rowKey="id"
+              pagination={{ pageSize: 5 }}
+              size="small"
+              columns={[
+                { title: 'Date', dataIndex: 'created_at', render: (date) => new Date(date).toLocaleString() },
+                { title: 'Type', dataIndex: 'type', render: (type) => <Tag color={type === 'In' ? 'green' : type === 'Out' ? 'red' : 'blue'}>{type.toUpperCase()}</Tag> },
+                { title: 'Method', dataIndex: 'payment_method', render: (m) => <Tag>{m}</Tag> },
+                { title: 'Amount', dataIndex: 'amount', align: 'right', render: (val) => <Text strong>{formatCurrency(val, profile?.currency)}</Text> },
+                { title: 'Notes', dataIndex: 'notes', ellipsis: true }
+              ]}
+            />
+          </Tabs.TabPane>
+
+          {/* TAB 2: CLOSING REPORTS */}
+          <Tabs.TabPane tab="Daily Closing Reports" key="2">
+            <Table
+              dataSource={closingHistoryData}
+              rowKey="id"
+              pagination={{ pageSize: 5 }}
+              size="small"
+              columns={[
+                { title: 'Date', dataIndex: 'closing_date', render: (date) => new Date(date).toLocaleDateString() },
+                { title: 'Expected', dataIndex: 'expected_cash', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
+                { title: 'Actual', dataIndex: 'actual_cash', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
+                { 
+                  title: 'Difference', 
+                  dataIndex: 'difference', 
+                  align: 'right', 
+                  render: (diff) => (
+                    <Text strong style={{ color: diff === 0 ? '#52c41a' : '#f5222d' }}>
+                      {formatCurrency(diff, profile?.currency)}
+                    </Text>
+                  ) 
+                },
+                { title: 'Remarks', dataIndex: 'notes', render: (text) => <Text type="secondary" style={{ fontStyle: 'italic' }}>{text || 'No notes'}</Text> }
+              ]}
+            />
+          </Tabs.TabPane>
+        </Tabs>
+      </Modal>
+      {/* DAY-END CLOSING MODAL */}
+      <Modal
+        title="Daily Cash Closing"
+        open={isClosingModalOpen}
+        onCancel={() => setIsClosingModalOpen(false)}
+        onOk={() => closingForm.submit()}
+        okText="Confirm & Close Register"
+        width={500}
+      >
+        <div style={{ textAlign: 'center', marginBottom: '20px', padding: '15px', background: isDarkMode ? '#1f1f1f' : '#f5f5f5', borderRadius: '8px' }}>
+          <Text type="secondary">Expected Cash in Drawer:</Text>
+          <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
+            {formatCurrency(stats?.cashInHand || 0, profile?.currency)}
+          </Title>
+        </div>
+
+        <Form form={closingForm} layout="vertical" onFinish={handleClosingSubmit}>
+          <Form.Item 
+            name="actual_cash" 
+            label="Actual Cash Counted:" 
+            rules={[{ required: true, message: 'Please enter actual cash amount' }]}
+          >
+            <InputNumber 
+              style={{ width: '100%' }} 
+              size="large"
+              prefix={profile?.currency} 
+              placeholder="Enter counted cash"
+            />
+          </Form.Item>
+
+          {/* Live Difference Display */}
+          <Form.Item shouldUpdate={(prev, curr) => prev.actual_cash !== curr.actual_cash} noStyle>
+            {({ getFieldValue }) => {
+              const actual = getFieldValue('actual_cash') || 0;
+              const expected = stats?.cashInHand || 0;
+              const diff = actual - expected;
+              
+              if (actual === 0) return null;
+
+              return (
+                <div style={{ marginBottom: '20px', padding: '10px', borderRadius: '5px', backgroundColor: diff === 0 ? '#f6ffed' : '#fff1f0', border: diff === 0 ? '1px solid #b7eb8f' : '1px solid #ffa39e' }}>
+                  <Text strong style={{ color: diff >= 0 ? '#52c41a' : '#f5222d' }}>
+                    Difference: {formatCurrency(diff, profile?.currency)}
+                  </Text>
+                  <br />
+                  <Text size="small" type="secondary">
+                    {diff === 0 ? "Perfect! Cash matches the record." : diff > 0 ? "Cash is over (Surplus)." : "Cash is short (Deficit)!"}
+                  </Text>
+                </div>
+              );
+            }}
+          </Form.Item>
+
+          <Form.Item 
+  noStyle
+  shouldUpdate={(prev, curr) => prev.actual_cash !== curr.actual_cash}
+>
+  {({ getFieldValue }) => {
+    const actual = getFieldValue('actual_cash') || 0;
+    const expected = stats?.cashInHand || 0;
+    const isDifferent = actual !== expected && actual !== 0;
+
+    return (
+      <Form.Item 
+        name="notes" 
+        label="Remarks / Notes:" 
+        rules={[{ 
+          required: isDifferent, 
+          message: 'Please explain the reason for the cash difference.' 
+        }]}
+      >
+        <Input.TextArea 
+          placeholder={isDifferent ? "Explain why there is a difference..." : "Optional notes..."} 
+        />
+      </Form.Item>
+    );
+  }}
+</Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

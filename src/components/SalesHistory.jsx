@@ -40,7 +40,8 @@ const SalesHistory = () => {
                 total_items: totalItems,
                 total_amount: sale.total_amount,
                 payment_status: sale.payment_status,
-                salesperson_name: 'Admin' // Offline mein user name fetch karna complex ho sakta hai, filhal Admin rakhein
+                salesperson_name: 'Admin',
+                payment_method: sale.payment_method || 'Cash'
             };
         }));
 
@@ -197,6 +198,13 @@ const SalesHistory = () => {
       align: 'center',
       width: 120,
     },
+    {
+  title: 'Method',
+  dataIndex: 'payment_method',
+  key: 'payment_method',
+  render: (method) => <Tag color={method === 'Bank' ? 'blue' : 'default'}>{method || 'Cash'}</Tag>,
+  width: 100,
+},
     {
   title: 'Total Amount',
   dataIndex: 'total_amount',

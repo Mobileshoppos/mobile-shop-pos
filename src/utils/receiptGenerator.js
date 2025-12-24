@@ -132,6 +132,8 @@ export const generateSaleReceipt = async (saleDetails, currency = 'PKR') => {
   
   printTotalRow('GRAND TOTAL:', formatCurrency(grandTotal || 0, currency), finalY + 16, true);
 
+  printTotalRow('Payment Method:', safeString(saleDetails.payment_method || 'Cash'), finalY - 6);
+
   if (paymentStatus === 'Unpaid') {
     printTotalRow('Amount Paid:', formatCurrency(amountPaid || 0, currency), finalY + 24);
     printTotalRow('Balance Due:', formatCurrency((grandTotal || 0) - (amountPaid || 0), currency), finalY + 30);

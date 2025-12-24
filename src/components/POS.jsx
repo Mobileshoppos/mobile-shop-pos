@@ -60,6 +60,7 @@ const POS = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('Paid');
+  const [cashOrBank, setCashOrBank] = useState('Cash');
   const [amountPaid, setAmountPaid] = useState(0);
   const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
   const [addForm] = Form.useForm();
@@ -547,6 +548,7 @@ const POS = () => {
               subtotal, 
               discount: discountAmount, 
               total_amount: grandTotal, 
+              payment_method: paymentMethod === 'Paid' ? cashOrBank : 'Cash',
               amount_paid_at_sale: paymentMethod === 'Paid' ? grandTotal : amountPaid, 
               payment_status: (paymentMethod === 'Unpaid' && (grandTotal - amountPaid > 0)) ? 'Unpaid' : 'Paid', 
               user_id: user.id,
@@ -1044,6 +1046,15 @@ const POS = () => {
               <Radio value={'Paid'}>Paid</Radio>
               <Radio value={'Unpaid'} disabled={!selectedCustomer}>Pay Later (Credit)</Radio>
             </Radio.Group>
+            {paymentMethod === 'Paid' && (
+              <div style={{ marginBottom: '16px' }}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: '8px' }}>Receive Money In:</Text>
+                <Radio.Group onChange={(e) => setCashOrBank(e.target.value)} value={cashOrBank} buttonStyle="solid">
+                  <Radio.Button value="Cash">Cash (Galla)</Radio.Button>
+                  <Radio.Button value="Bank">Bank / EasyPaisa</Radio.Button>
+                  </Radio.Group>
+              </div>
+              )}
             {paymentMethod === 'Unpaid' && selectedCustomer && (<Form.Item label="Amount Paid Now (optional)"><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} max={grandTotal} value={amountPaid} onChange={(value) => setAmountPaid(value || 0)} /></Form.Item>)}
             {cart.length === 0 ? <Empty description="Cart is empty" /> : 
               <List 

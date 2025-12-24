@@ -119,6 +119,10 @@ export const SyncProvider = ({ children }) => {
       if (expCats) await db.expense_categories.bulkPut(expCats);
       const { data: expenses } = await supabase.from('expenses').select('*').eq('user_id', user.id);
       if (expenses) await db.expenses.bulkPut(expenses);
+      const { data: adjustments } = await supabase.from('cash_adjustments').select('*').eq('user_id', user.id);
+      if (adjustments) await db.cash_adjustments.bulkPut(adjustments);
+      const { data: closings } = await supabase.from('daily_closings').select('*').eq('user_id', user.id);
+      if (closings) await db.daily_closings.bulkPut(closings);
 
       // 6. Purchases
       const { data: purchases } = await supabase.from('purchases').select('*').eq('user_id', user.id);
@@ -591,6 +595,21 @@ export const SyncProvider = ({ children }) => {
                     });
                     error = supError;
                 }
+            }
+
+            // --- CASH ADJUSTMENTS SYNC ---
+            else if (item.table_name === 'cash_adjustments' && item.action === 'create') {
+                const { id, ...adjustmentData } = item.data;
+                const { error: supError } = await supabase.from('cash_adjustments').insert([adjustmentData]);
+                error = supError;
+                if (!error) await db.cash_adjustments.delete(id);
+            }
+
+            else if (item.table_name === 'daily_closings' && item.action === 'create') {
+                const { id, ...closingData } = item.data;
+                const { error: supError } = await supabase.from('daily_closings').insert([closingData]);
+                error = supError;
+                if (!error) await db.daily_closings.delete(id);
             }
 
             // Expense Categories & Expenses (Standard Logic)
