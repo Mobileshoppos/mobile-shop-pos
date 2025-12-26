@@ -1408,11 +1408,15 @@ async addCustomer(customerData) {
     const creditPayouts = await db.credit_payouts.toArray();
     const supplierRefunds = await db.supplier_refunds.toArray();
     const cashAdjustments = await db.cash_adjustments.toArray();
+    const expenseCategories = await db.expense_categories.toArray();
     const customers = await db.customers.toArray();
     const suppliers = await db.suppliers.toArray();
     const products = await db.products.toArray();
     const saleItems = await db.sale_items.toArray();
     const inventory = await db.inventory.toArray();
+    const lastClosing = await db.daily_closings.orderBy('created_at').reverse().first();
+    const cashFilterDate = lastClosing ? new Date(lastClosing.created_at) : new Date(0);
+    const startingCash = lastClosing ? (lastClosing.actual_cash || 0) : 0;
 
     // 3. Filtering Logic
     const currentSalesData = sales.filter(s => new Date(s.sale_date || s.created_at) >= currentStart);
@@ -1453,6 +1457,18 @@ async addCustomer(customerData) {
     const salesGrowth = calculateGrowth(netSalesCurrent, netSalesPrevious);
     const expensesGrowth = calculateGrowth(totalExpensesCurrent, totalExpensesPrevious);
 
+    const expenseCatMap = {};
+    expenseCategories.forEach(c => expenseCatMap[c.id] = c.name);
+    const expenseBreakdown = [];
+    const breakdownMap = {};
+    currentExpensesData.forEach(e => {
+        const catName = expenseCatMap[e.category_id] || 'Other';
+        breakdownMap[catName] = (breakdownMap[catName] || 0) + (e.amount || 0);
+    });
+    Object.keys(breakdownMap).forEach(name => {
+        expenseBreakdown.push({ type: name, value: breakdownMap[name] });
+    });
+
     // 6. Profit Calculation
     const currentSaleIds = currentSalesData.map(s => s.id);
     const currentSoldItems = saleItems.filter(i => currentSaleIds.includes(i.sale_id));
@@ -1482,23 +1498,19 @@ async addCustomer(customerData) {
     // --- CASH IN HAND & BANK BALANCE CALCULATION ---
     
     // A. Cash Calculation
-    const cashSales = sales.filter(s => s.payment_method === 'Cash').reduce((sum, s) => sum + (s.amount_paid_at_sale || 0), 0);
-    const cashReceived = customerPayments.filter(p => p.payment_method === 'Cash').reduce((sum, p) => sum + (p.amount_paid || 0), 0);
-    const cashExpenses = expenses.filter(e => e.payment_method === 'Cash').reduce((sum, e) => sum + (e.amount || 0), 0);
-    const cashPaidToSuppliers = supplierPayments.filter(p => p.payment_method === 'Cash').reduce((sum, p) => sum + (p.amount || 0), 0);
-    const cashPayouts = creditPayouts.filter(p => p.payment_method === 'Cash').reduce((sum, p) => sum + (p.amount_paid || 0), 0);
-    const cashRefunds = supplierRefunds.filter(r => r.payment_method === 'Cash').reduce((sum, r) => sum + (r.amount || 0), 0);
+    const cashSales = sales.filter(s => s.payment_method === 'Cash' && new Date(s.sale_date || s.created_at) > cashFilterDate).reduce((sum, s) => sum + (s.amount_paid_at_sale || 0), 0);
+    const cashReceived = customerPayments.filter(p => p.payment_method === 'Cash' && new Date(p.created_at) > cashFilterDate).reduce((sum, p) => sum + (p.amount_paid || 0), 0);
+    const cashExpenses = expenses.filter(e => e.payment_method === 'Cash' && new Date(e.expense_date) > cashFilterDate).reduce((sum, e) => sum + (e.amount || 0), 0);
+    const cashPaidToSuppliers = supplierPayments.filter(p => p.payment_method === 'Cash' && new Date(p.payment_date || p.created_at) > cashFilterDate).reduce((sum, p) => sum + (p.amount || 0), 0);
+    const cashPayouts = creditPayouts.filter(p => p.payment_method === 'Cash' && new Date(p.created_at) > cashFilterDate).reduce((sum, p) => sum + (p.amount_paid || 0), 0);
+    const cashRefunds = supplierRefunds.filter(r => r.payment_method === 'Cash' && new Date(r.created_at) > cashFilterDate).reduce((sum, r) => sum + (r.amount || 0), 0);
 
-    // --- CASH LOGIC (Galla) ---
-    const totalCashIn = cashAdjustments.filter(a => a.type === 'In' && a.payment_method === 'Cash').reduce((sum, a) => sum + (a.amount || 0), 0);
-    const totalCashOut = cashAdjustments.filter(a => a.type === 'Out' && a.payment_method === 'Cash').reduce((sum, a) => sum + (a.amount || 0), 0);
-    
-    // NAYA: Bank se Cash mein aaya (Cash barhega)
-    const cashTransfersIn = cashAdjustments.filter(a => a.type === 'Transfer' && a.transfer_to === 'Cash').reduce((sum, a) => sum + (a.amount || 0), 0);
-    // NAYA: Cash se Bank mein gaya (Cash kam hoga)
-    const cashTransfersOut = cashAdjustments.filter(a => a.type === 'Transfer' && a.payment_method === 'Cash').reduce((sum, a) => sum + (a.amount || 0), 0);
+    const totalCashIn = cashAdjustments.filter(a => a.type === 'In' && a.payment_method === 'Cash' && new Date(a.created_at) > cashFilterDate).reduce((sum, a) => sum + (a.amount || 0), 0);
+    const totalCashOut = cashAdjustments.filter(a => a.type === 'Out' && a.payment_method === 'Cash' && new Date(a.created_at) > cashFilterDate).reduce((sum, a) => sum + (a.amount || 0), 0);
+    const cashTransfersIn = cashAdjustments.filter(a => a.type === 'Transfer' && a.transfer_to === 'Cash' && new Date(a.created_at) > cashFilterDate).reduce((sum, a) => sum + (a.amount || 0), 0);
+    const cashTransfersOut = cashAdjustments.filter(a => a.type === 'Transfer' && a.payment_method === 'Cash' && new Date(a.created_at) > cashFilterDate).reduce((sum, a) => sum + (a.amount || 0), 0);
 
-    const cashInHand = (cashSales + cashReceived + cashRefunds + totalCashIn + cashTransfersIn) - (cashExpenses + cashPaidToSuppliers + cashPayouts + totalCashOut + cashTransfersOut);
+    const cashInHand = startingCash + (cashSales + cashReceived + cashRefunds + totalCashIn + cashTransfersIn) - (cashExpenses + cashPaidToSuppliers + cashPayouts + totalCashOut + cashTransfersOut);
 
     // --- BANK LOGIC (Bank/EasyPaisa) ---
     const bankSales = sales.filter(s => s.payment_method === 'Bank').reduce((sum, s) => sum + (s.amount_paid_at_sale || 0), 0);
@@ -1539,6 +1551,7 @@ async addCustomer(customerData) {
     // Total Payables (Suppliers + Customers jinko wapis karna hai)
     // Business mein yeh dono "Liabilities" hain.
     const totalLiabilities = totalSupplierPayables + totalCustomerCredits;
+    const totalInventoryValue = inventory.filter(i => (i.status || '').toLowerCase() === 'available').reduce((sum, i) => sum + (i.purchase_price || 0), 0);
 
     // ---------------------------------------------------------------
 
@@ -1599,11 +1612,15 @@ async addCustomer(customerData) {
         bankBalance,
         totalExpenses: totalExpensesCurrent,
         expensesGrowth,
+        expenseBreakdown,
+        grossProfit: grossProfitCurrent,
         netProfit: netProfitCurrent,
+        profitMargin: netSalesCurrent > 0 ? (netProfitCurrent / netSalesCurrent) * 100 : 0,
         
-        totalReceivables, // Sirf Lene wale paise
-        totalPayables: totalLiabilities, // Suppliers + Customer Returns (Dene wale paise)
-        totalCustomerCredits, // Alag se bhi bhej rahe hain agar future mein dikhana ho
+        totalReceivables, 
+        totalPayables: totalLiabilities, 
+        totalInventoryValue,
+        totalCustomerCredits, 
         
         lowStockItems,
         totalProducts: products.length,

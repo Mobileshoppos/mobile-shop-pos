@@ -134,6 +134,7 @@ const SalesHistory = () => {
           grandTotal: sale.total_amount,
           amountPaid: sale.amount_paid_at_sale,
           paymentStatus: sale.payment_status,
+          payment_method: sale.payment_method || 'Cash',
           footerMessage: profile?.warranty_policy,
           showQrCode: profile?.qr_code_enabled ?? true
       };

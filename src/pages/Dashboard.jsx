@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table, Radio, Modal, Form, InputNumber, Input, App, Tooltip, Tabs } from 'antd';
 import {
   ShoppingOutlined,
@@ -13,9 +13,11 @@ import {
   ArrowUpOutlined,
   ArrowDownOutlined,
   HistoryOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
+  UserOutlined, 
+  TransactionOutlined
 } from '@ant-design/icons';
-import { Area } from '@ant-design/charts'; 
+import { Area, Pie } from '@ant-design/charts'; 
 import { useNavigate } from 'react-router-dom';
 import DataService from '../DataService';
 import { db } from '../db';
@@ -34,6 +36,8 @@ const Dashboard = () => {
 
   const { message } = App.useApp();
   const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
+  const [isAdjustmentSubmitting, setIsAdjustmentSubmitting] = useState(false);
+  const [isClosingSubmitting, setIsClosingSubmitting] = useState(false);
   const [adjustmentForm] = Form.useForm();
 
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -57,6 +61,7 @@ const Dashboard = () => {
   // Cash Adjustment Save karne ka function
   const handleAdjustmentSubmit = async (values) => {
     try {
+      setIsAdjustmentSubmitting(true);
       const adjustmentData = {
         id: crypto.randomUUID(),
         user_id: user?.id, // Corrected
@@ -82,17 +87,20 @@ const Dashboard = () => {
       setIsAdjustmentModalOpen(false);
       adjustmentForm.resetFields();
       
-      // Dashboard refresh karein
-      window.location.reload(); 
+      // Stats update karein baghair reload ke
+      loadDashboard(); 
 
     } catch (error) {
       message.error('Adjustment failed: ' + error.message);
+      } finally {
+      setIsAdjustmentSubmitting(false);
     }
   };
 
   // Day-End Closing Save karne ka function
   const handleClosingSubmit = async (values) => {
     try {
+      setIsClosingSubmitting(true);
       const expected = stats?.cashInHand || 0;
       const actual = values.actual_cash;
       const diff = actual - expected;
@@ -121,32 +129,36 @@ const Dashboard = () => {
       message.success('Galla closed and recorded successfully!');
       setIsClosingModalOpen(false);
       closingForm.resetFields();
+      loadDashboard();
 
     } catch (error) {
       message.error('Closing failed: ' + error.message);
+      } finally {
+      setIsClosingSubmitting(false);
     }
   };
   
   const { user, profile } = useAuth();
   const navigate = useNavigate();
 
+  const loadDashboard = useCallback(async () => {
+    // Agar stats pehle se hain to poora page white na ho, sirf data update ho
+    if (!stats) setLoading(true); 
+    try {
+      const dashboardStats = await DataService.getDashboardStats(profile?.low_stock_threshold, timeRange);
+      const salesChart = await DataService.getLast7DaysSales();
+      setStats(dashboardStats);
+      setChartData(salesChart);
+    } catch (error) {
+      console.error("Dashboard Load Error:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [profile, timeRange, stats]);
+
   useEffect(() => {
-    const loadDashboard = async () => {
-      setLoading(true); // Loading shuru
-      try {
-        // Hum ab timeRange bhi bhej rahe hain
-        const dashboardStats = await DataService.getDashboardStats(profile?.low_stock_threshold, timeRange);
-        const salesChart = await DataService.getLast7DaysSales();
-        setStats(dashboardStats);
-        setChartData(salesChart);
-      } catch (error) {
-        console.error("Dashboard Load Error:", error);
-      } finally {
-        setLoading(false); // Loading khatam
-      }
-    };
     loadDashboard();
-  }, [timeRange, profile]); // Jab timeRange badle, to dubara load karo
+  }, [loadDashboard]);
 
   if (loading && !stats) return <div style={{ textAlign: 'center', marginTop: 100 }}><Spin size="large" /></div>;
 
@@ -266,7 +278,7 @@ const Dashboard = () => {
       {/* --- SECTION 1: STATS CARDS --- */}
       <Row gutter={[16, 16]}>
         {/* Card 1: Sales */}
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
           <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>
@@ -281,37 +293,39 @@ const Dashboard = () => {
           </Card>
         </Col>
 
-        {/* Card: Cash in Hand (Galla) */}
-        <Col xs={24} sm={12} lg={6}>
+        {/* Card: Cash in Hand (Galla) - Fixed Alignment */}
+        <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
           <Card 
             style={{ ...cardStyle, background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}
-            styles={{ header: { borderBottom: 'none' } }} // <--- Warning Fixed Here
-            extra={
-              <Space>
-                <Tooltip title="Cash History">
-                  <Button 
-                    type="text" 
-                    icon={<HistoryOutlined style={{ color: 'white', fontSize: '20px' }} />} 
-                    onClick={handleOpenHistory} 
-                  />
-                </Tooltip>
-                <Tooltip title="Cash Adjustment (Cash In/Out)">
-                  <Button 
-                    type="text" 
-                    icon={<WalletOutlined style={{ color: 'white', fontSize: '20px' }} />} 
-                    onClick={() => setIsAdjustmentModalOpen(true)} 
-                  />
-                </Tooltip>
-              </Space>
-            }
           >
-            <Statistic
-              title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Cash in Hand (Galla)</span>}
+            {/* Floating Buttons - Ab yeh alignment kharab nahi karenge */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <Statistic
+              title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Cash in Hand</span>}
               value={stats?.cashInHand || 0}
               prefix={<WalletOutlined />}
               valueStyle={{ color: 'white', fontWeight: 'bold' }}
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
+              <Space size="small">
+                <Tooltip title="Cash History">
+                  <Button 
+                    type="text" 
+                    size="small"
+                    icon={<HistoryOutlined style={{ color: 'white', fontSize: '18px' }} />} 
+                    onClick={handleOpenHistory} 
+                  />
+                </Tooltip>
+                <Tooltip title="Cash Adjustment (In/Out)">
+                  <Button 
+                    type="text" 
+                    size="small"
+                    icon={<TransactionOutlined style={{ color: 'white', fontSize: '18px' }} />} 
+                    onClick={() => setIsAdjustmentModalOpen(true)} 
+                  />
+                </Tooltip>
+              </Space>
+            </div>
             <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
                 <span>Bank Balance:</span>
                 <span>{formatCurrency(stats?.bankBalance || 0, profile?.currency)}</span>
@@ -319,8 +333,8 @@ const Dashboard = () => {
           </Card>
         </Col>
 
-        {/* Card 2: Profit */}
-        <Col xs={24} sm={12} lg={6}>
+        {/* Card 2: Profit (Updated Layout for Clarity) */}
+        <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
           <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Net Profit</span>}
@@ -329,14 +343,27 @@ const Dashboard = () => {
               valueStyle={{ color: 'white', fontWeight: 'bold' }}
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
-            <div style={{ marginTop: 8, fontSize: '12px', opacity: 0.8 }}>
-                {timeRange === 'today' ? "Today's" : "Period"} Profit
+            
+            {/* Net Profit ki description - Ab yeh upar hai */}
+            <div style={{ marginTop: -4, marginBottom: 10, fontSize: '11px', opacity: 0.8 }}>
+                {timeRange === 'today' ? "Today's" : "Total"} profit after expenses
+            </div>
+            <div style={{ marginTop: 3 }}>
+              <Tag color="non" style={{ fontSize: '11px', borderRadius: '4px' }}>
+                Margin: {stats?.profitMargin?.toFixed(1)}%
+              </Tag>
+            </div>
+
+            {/* Divider aur Gross Profit - Yeh ab alag nazar aayega */}
+            <div style={{ paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Gross Profit (Before Exp):</span>
+                <span style={{ fontWeight: 'bold' }}>{formatCurrency(stats?.grossProfit || 0, profile?.currency)}</span>
             </div>
           </Card>
         </Col>
 
         {/* Card 3: Expenses */}
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
           <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #ff9966 0%, #ff5e62 100%)' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Total Expenses</span>}
@@ -346,16 +373,38 @@ const Dashboard = () => {
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
             {renderTrend(stats?.expensesGrowth)}
+            <div style={{ height: 80, marginTop: 5 }}>
+  {stats?.expenseBreakdown?.length > 0 ? (
+    <Pie
+      data={stats.expenseBreakdown}
+      angleField="value"
+      colorField="type"
+      radius={1}
+      innerRadius={0.6}
+      label={false}
+      legend={false}
+      tooltip={{
+        formatter: (datum) => ({ name: datum.type, value: formatCurrency(datum.value, profile?.currency) }),
+      }}
+      padding="auto"
+      autoFit
+    />
+  ) : (
+    <div style={{ textAlign: 'center', paddingTop: 20, fontSize: '11px', opacity: 0.6 }}>
+      No expenses to show
+    </div>
+  )}
+</div>
           </Card>
         </Col>
 
         {/* Card 4: Receivables, Customer Credits & Supplier Payables */}
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
           <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #3a6073 0%, #3a7bd5 100%)' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Total Receivables</span>}
               value={stats?.totalReceivables || 0}
-              prefix={<WalletOutlined />}
+              prefix={<UserOutlined />}
               valueStyle={{ color: 'white', fontWeight: 'bold' }}
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
@@ -543,6 +592,23 @@ const Dashboard = () => {
                   locale={{ emptyText: 'No sales yet!' }}
                 />
               </Card>
+              <Col span={24} style={{ marginTop: 16 }}>
+  <Card 
+    title={<Space><ShoppingOutlined style={{ color: '#1890ff' }} /> Inventory Assets</Space>} 
+    style={{ borderRadius: 5, border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9' }}
+    styles={{ body: { padding: '12px' } }}
+  >
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Text type="secondary">Total Stock Value:</Text>
+      <Text strong style={{ fontSize: '16px' }}>
+        {formatCurrency(stats?.totalInventoryValue || 0, profile?.currency)}
+      </Text>
+    </div>
+    <div style={{ marginTop: 8, fontSize: '11px', color: '#8c8c8c', fontStyle: 'italic' }}>
+      * Based on purchase price of available items.
+    </div>
+  </Card>
+</Col>
             </Col>
 
           </Row>
@@ -555,6 +621,7 @@ const Dashboard = () => {
         onCancel={() => setIsAdjustmentModalOpen(false)}
         onOk={() => adjustmentForm.submit()}
         okText="Save Adjustment"
+        confirmLoading={isAdjustmentSubmitting}
       >
         <Form 
   form={adjustmentForm} 
@@ -613,7 +680,7 @@ const Dashboard = () => {
           </Form.Item>
         </Form>
       </Modal>
-      {/* UPGRADED HISTORY MODAL (WITH TABS) */}
+      {/* UPGRADED HISTORY MODAL (FIXED DEPRECATION WARNING) */}
       <Modal
         title="Cash & Closing Reports"
         open={isHistoryModalOpen}
@@ -621,50 +688,58 @@ const Dashboard = () => {
         footer={null}
         width={850}
       >
-        <Tabs defaultActiveKey="1">
-          {/* TAB 1: ADJUSTMENTS */}
-          <Tabs.TabPane tab="Cash Adjustments (In/Out)" key="1">
-            <Table
-              dataSource={historyData}
-              rowKey="id"
-              pagination={{ pageSize: 5 }}
-              size="small"
-              columns={[
-                { title: 'Date', dataIndex: 'created_at', render: (date) => new Date(date).toLocaleString() },
-                { title: 'Type', dataIndex: 'type', render: (type) => <Tag color={type === 'In' ? 'green' : type === 'Out' ? 'red' : 'blue'}>{type.toUpperCase()}</Tag> },
-                { title: 'Method', dataIndex: 'payment_method', render: (m) => <Tag>{m}</Tag> },
-                { title: 'Amount', dataIndex: 'amount', align: 'right', render: (val) => <Text strong>{formatCurrency(val, profile?.currency)}</Text> },
-                { title: 'Notes', dataIndex: 'notes', ellipsis: true }
-              ]}
-            />
-          </Tabs.TabPane>
-
-          {/* TAB 2: CLOSING REPORTS */}
-          <Tabs.TabPane tab="Daily Closing Reports" key="2">
-            <Table
-              dataSource={closingHistoryData}
-              rowKey="id"
-              pagination={{ pageSize: 5 }}
-              size="small"
-              columns={[
-                { title: 'Date', dataIndex: 'closing_date', render: (date) => new Date(date).toLocaleDateString() },
-                { title: 'Expected', dataIndex: 'expected_cash', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
-                { title: 'Actual', dataIndex: 'actual_cash', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
-                { 
-                  title: 'Difference', 
-                  dataIndex: 'difference', 
-                  align: 'right', 
-                  render: (diff) => (
-                    <Text strong style={{ color: diff === 0 ? '#52c41a' : '#f5222d' }}>
-                      {formatCurrency(diff, profile?.currency)}
-                    </Text>
-                  ) 
-                },
-                { title: 'Remarks', dataIndex: 'notes', render: (text) => <Text type="secondary" style={{ fontStyle: 'italic' }}>{text || 'No notes'}</Text> }
-              ]}
-            />
-          </Tabs.TabPane>
-        </Tabs>
+        <Tabs 
+          defaultActiveKey="1" 
+          items={[
+            {
+              key: '1',
+              label: 'Cash Adjustments (In/Out)',
+              children: (
+                <Table
+                  dataSource={historyData}
+                  rowKey="id"
+                  pagination={{ pageSize: 5 }}
+                  size="small"
+                  columns={[
+                    { title: 'Date', dataIndex: 'created_at', render: (date) => new Date(date).toLocaleString() },
+                    { title: 'Type', dataIndex: 'type', render: (type) => <Tag color={type === 'In' ? 'green' : type === 'Out' ? 'red' : 'blue'}>{type.toUpperCase()}</Tag> },
+                    { title: 'Method', dataIndex: 'payment_method', render: (m) => <Tag>{m}</Tag> },
+                    { title: 'Amount', dataIndex: 'amount', align: 'right', render: (val) => <Text strong>{formatCurrency(val, profile?.currency)}</Text> },
+                    { title: 'Notes', dataIndex: 'notes', ellipsis: true }
+                  ]}
+                />
+              ),
+            },
+            {
+              key: '2',
+              label: 'Daily Closing Reports',
+              children: (
+                <Table
+                  dataSource={closingHistoryData}
+                  rowKey="id"
+                  pagination={{ pageSize: 5 }}
+                  size="small"
+                  columns={[
+                    { title: 'Date', dataIndex: 'closing_date', render: (date) => new Date(date).toLocaleDateString() },
+                    { title: 'Expected', dataIndex: 'expected_cash', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
+                    { title: 'Actual', dataIndex: 'actual_cash', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
+                    { 
+                      title: 'Difference', 
+                      dataIndex: 'difference', 
+                      align: 'right', 
+                      render: (diff) => (
+                        <Text strong style={{ color: diff === 0 ? '#52c41a' : '#f5222d' }}>
+                          {formatCurrency(diff, profile?.currency)}
+                        </Text>
+                      ) 
+                    },
+                    { title: 'Remarks', dataIndex: 'notes', render: (text) => <Text type="secondary" style={{ fontStyle: 'italic' }}>{text || 'No notes'}</Text> }
+                  ]}
+                />
+              ),
+            },
+          ]}
+        />
       </Modal>
       {/* DAY-END CLOSING MODAL */}
       <Modal
@@ -673,6 +748,7 @@ const Dashboard = () => {
         onCancel={() => setIsClosingModalOpen(false)}
         onOk={() => closingForm.submit()}
         okText="Confirm & Close Register"
+        confirmLoading={isClosingSubmitting}
         width={500}
       >
         <div style={{ textAlign: 'center', marginBottom: '20px', padding: '15px', background: isDarkMode ? '#1f1f1f' : '#f5f5f5', borderRadius: '8px' }}>
