@@ -1,0 +1,1 @@
+ALTER TABLE public.credit_payouts ADD COLUMN IF NOT EXISTS local_id UUID UNIQUE;

@@ -75,16 +75,15 @@ const Categories = () => {
   const cloneDefaultCategory = async (categoryToClone) => {
     try {
       message.loading('Customizing category...', 1);
-      
-      // Server par clone ban raha hai
-      const { data: newCategoryId, error } = await supabase.rpc('clone_category_for_user', { source_category_id: categoryToClone.id });
+      const categoryLocalId = crypto.randomUUID();
+      const { data: newCategoryId, error } = await supabase.rpc('clone_category_for_user', { p_local_id: categoryLocalId, source_category_id: categoryToClone.id });
       if (error) throw error;
       
       message.destroy();
       message.success(`'${categoryToClone.name}' is now ready for customization.`);
       
       // Naya data tayyar kiya
-      const newCategoryData = { ...categoryToClone, id: newCategoryId, user_id: user.id };
+      const newCategoryData = { ...categoryToClone, id: newCategoryId, local_id: categoryLocalId, user_id: user.id };
       
       // --- YEH LINE ADD KARNI HAI (Start) ---
       // Hum Local DB (Dexie) mein bhi yeh naya record daal rahe hain taake foran nazar aaye

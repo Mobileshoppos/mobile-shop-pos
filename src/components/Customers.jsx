@@ -65,7 +65,8 @@ const Customers = () => {
       // 1. Naya Customer Object banayein
       const newCustomer = { 
           ...values, 
-          id: crypto.randomUUID(), // ID khud generate karein
+          id: crypto.randomUUID(), 
+          local_id: crypto.randomUUID(),
           user_id: user.id, 
           balance: 0 
       };
@@ -104,6 +105,7 @@ const Customers = () => {
     try {
       const paymentData = { 
           id: crypto.randomUUID(),
+          local_id: crypto.randomUUID(),
           customer_id: selectedCustomer.id, 
           amount_paid: values.amount, 
           payment_method: cashOrBank,
@@ -161,6 +163,7 @@ const Customers = () => {
     try {
       const payoutData = { 
           id: crypto.randomUUID(),
+          local_id: crypto.randomUUID(),
           customer_id: selectedCustomer.id, 
           amount_paid: values.amount, 
           payment_method: cashOrBank,
@@ -340,6 +343,7 @@ const handleCloseInvoiceSearchModal = () => {
       const returnId = crypto.randomUUID();
       const returnRecord = {
           id: returnId,
+          local_id: returnId,
           sale_id: selectedSale.id,
           customer_id: selectedSale.customer_id,
           total_refund_amount: totalRefundAmount,
@@ -363,6 +367,7 @@ const handleCloseInvoiceSearchModal = () => {
       const paymentId = crypto.randomUUID();
       const paymentRecord = {
         id: paymentId,
+        local_id: paymentId,
         customer_id: selectedSale.customer_id,
         amount_paid: -totalRefundAmount, // Negative amount for credit
         user_id: user.id,

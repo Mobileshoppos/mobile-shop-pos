@@ -1,0 +1,1 @@
+ALTER TABLE public.product_variants ADD COLUMN IF NOT EXISTS local_id UUID UNIQUE;

@@ -1,0 +1,1 @@
+ALTER TABLE public.expense_categories ADD COLUMN IF NOT EXISTS local_id UUID UNIQUE;

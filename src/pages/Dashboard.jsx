@@ -64,7 +64,8 @@ const Dashboard = () => {
       setIsAdjustmentSubmitting(true);
       const adjustmentData = {
         id: crypto.randomUUID(),
-        user_id: user?.id, // Corrected
+        local_id: crypto.randomUUID(),
+        user_id: user?.id, 
         amount: values.amount,
         type: values.type,
         payment_method: values.payment_method,
@@ -107,6 +108,7 @@ const Dashboard = () => {
 
       const closingData = {
         id: crypto.randomUUID(),
+        local_id: crypto.randomUUID(),
         user_id: user?.id,
         closing_date: new Date().toISOString().split('T')[0], // Aaj ki date
         expected_cash: expected,

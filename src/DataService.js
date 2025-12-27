@@ -101,6 +101,7 @@ const DataService = {
   // 1. Agar ID nahi hai, to hum khud ek unique ID banayenge (UUID)
   if (!productData.id) {
     productData.id = crypto.randomUUID();
+    productData.local_id = productData.id;
   }
 
   // 2. Local DB mein save karein (hum 'put' use karenge jo zyada mehfooz hai)
@@ -202,7 +203,7 @@ const DataService = {
   },
 
   async addSupplier(supplierData) {
-    const newSupplier = { ...supplierData, id: crypto.randomUUID(), balance_due: 0, credit_balance: 0 };
+    const newSupplier = { ...supplierData, id: crypto.randomUUID(), local_id: crypto.randomUUID(), balance_due: 0, credit_balance: 0 };
     
     await db.suppliers.add(newSupplier);
     
@@ -387,6 +388,7 @@ async createNewPurchase(purchasePayload) {
   // 2. Purchase Object banayein
   const purchaseData = {
     id: purchaseId,
+    local_id: purchaseId,
     user_id: userId,
     supplier_id: purchasePayload.p_supplier_id,
     purchase_date: new Date().toISOString(),
@@ -400,6 +402,7 @@ async createNewPurchase(purchasePayload) {
   // 3. Items Object banayein
   const itemsData = purchasePayload.p_inventory_items.map(item => ({
     id: crypto.randomUUID(),
+    local_id: crypto.randomUUID(),
     purchase_id: purchaseId,
     product_id: item.product_id,
     quantity: item.quantity,
@@ -432,9 +435,10 @@ async createNewPurchase(purchasePayload) {
 
   // 5. Sync Queue mein daalein (Poora payload ek sath)
   await db.sync_queue.add({
-    table_name: 'purchases', // Hum isay special handle karenge
-    action: 'create_full_purchase', // Special action name
+    table_name: 'purchases', 
+    action: 'create_full_purchase', 
     data: {
+      p_local_id: purchaseId,
       purchase: purchaseData,
       items: itemsData
     }
@@ -445,6 +449,7 @@ async createNewPurchase(purchasePayload) {
 
 async addCustomer(customerData) {
     if (!customerData.id) customerData.id = crypto.randomUUID();
+    customerData.local_id = customerData.id;
     
     // Local Save
     await db.customers.put(customerData);
@@ -516,6 +521,7 @@ async addCustomer(customerData) {
   },
 
   async recordPurchasePayment(paymentData) {
+    if (!paymentData.local_id) paymentData.local_id = crypto.randomUUID();
     // 1. Queue mein daalein (Upload ke liye)
     await db.sync_queue.add({
         table_name: 'supplier_payments',
@@ -648,6 +654,7 @@ async addCustomer(customerData) {
             // Naya item create
             itemsToCreate.push({
                 id: crypto.randomUUID(),
+                local_id: crypto.randomUUID(),
                 purchase_id: updateId,
                 product_id: item.product_id,
                 quantity: 1,
@@ -693,6 +700,7 @@ async addCustomer(customerData) {
         action: 'update_full_purchase',
         data: {
             id: updateId,
+            p_local_id: crypto.randomUUID(),
             supplier_id,
             notes,
             amount_paid,
@@ -706,7 +714,8 @@ async addCustomer(customerData) {
   async recordBulkSupplierPayment(paymentData) {
     // 1. Ek aarzi (temporary) ID banayein
     const localId = crypto.randomUUID();
-    const paymentWithId = { ...paymentData, id: localId };
+    paymentData.local_id = localId;
+    const paymentWithId = { ...paymentData, id: localId, local_id: localId };
 
     // 2. Local DB mein save karein (Taake Ledger mein foran nazar aaye)
     if (db.supplier_payments) {
@@ -930,7 +939,7 @@ async addCustomer(customerData) {
   async recordSupplierRefund(refundData) {
     // 1. Local Table mein save karein
     if (db.supplier_refunds) {
-        const localData = { ...refundData, id: crypto.randomUUID() };
+        const localData = { ...refundData, id: crypto.randomUUID(), local_id: crypto.randomUUID() };
         await db.supplier_refunds.add(localData);
     }
 
@@ -1175,6 +1184,7 @@ async addCustomer(customerData) {
   async addExpense(expenseData) {
     // ID aur User ID set karein
     if (!expenseData.id) expenseData.id = crypto.randomUUID();
+    expenseData.local_id = expenseData.id;
     
     // Local Save
     await db.expenses.add(expenseData);
@@ -1217,15 +1227,15 @@ async addCustomer(customerData) {
   // --- EXPENSE CATEGORIES SECTION ---
 
   async addExpenseCategory(categoryData) {
-    // ID generate karein
     if (!categoryData.id) categoryData.id = crypto.randomUUID();
+    categoryData.local_id = categoryData.id;
     
     // Local DB mein save karein
     await db.expense_categories.add(categoryData);
     
     // Upload Queue mein dalein
     await db.sync_queue.add({
-      table_name: 'expense_categories', // Note: Supabase table name
+      table_name: 'expense_categories', 
       action: 'create',
       data: categoryData
     });

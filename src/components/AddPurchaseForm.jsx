@@ -418,6 +418,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
       setIsSubmitting(true);
 
       const payload = {
+        p_local_id: crypto.randomUUID(),
         p_supplier_id: values.supplier_id,
         p_notes: values.notes || null,
         p_inventory_items: purchaseItems.map(({ name, brand, categories, category_is_imei_based, ...item }) => item)
@@ -451,6 +452,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
               }
               if (newPurchaseId) {
                   await DataService.recordPurchasePayment({
+                    local_id: crypto.randomUUID(),
                       supplier_id: values.supplier_id,
                       purchase_id: newPurchaseId,
                       amount: amountPaid,
@@ -597,7 +599,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
         style={{ width: '100%' }} 
         prefix={profile?.currency ? `${profile.currency} ` : ''} 
         min={0} 
-        disabled={!!editingPurchase} // <--- YEH HAI FOOL-PROOF LOCK
+        disabled={!!editingPurchase} 
     />
 </Form.Item>
               </Col>

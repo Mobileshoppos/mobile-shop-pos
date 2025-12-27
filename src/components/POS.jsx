@@ -543,7 +543,8 @@ const POS = () => {
           const saleDate = new Date().toISOString();
 
           const saleRecord = { 
-              id: saleId, // Ab yeh Number hai (e.g., 75)
+              id: saleId, 
+              local_id: crypto.randomUUID(),
               customer_id: selectedCustomer || 1, 
               subtotal, 
               discount: discountAmount, 
@@ -741,7 +742,8 @@ const POS = () => {
       // 1. Naya Customer Object banayein
       const newCustomer = { 
           ...values, 
-          id: crypto.randomUUID(), // ID khud generate karein
+          id: crypto.randomUUID(), 
+          local_id: crypto.randomUUID(),
           user_id: user.id, 
           balance: 0 
       };

@@ -209,7 +209,7 @@ export const SyncProvider = ({ children }) => {
                
                const { data: insertedProduct, error: supError } = await supabase
                     .from('products')
-                    .insert([cleanProductData])
+                    .upsert([cleanProductData], { onConflict: 'local_id' })
                     .select()
                     .single();
                
@@ -265,7 +265,7 @@ export const SyncProvider = ({ children }) => {
                 // A. Server par bhejein
                 const { data: insertedSupplier, error: supError } = await supabase
                     .from('suppliers')
-                    .insert([supplierData])
+                    .upsert([supplierData], { onConflict: 'local_id' })
                     .select()
                     .single();
                 
@@ -297,7 +297,7 @@ export const SyncProvider = ({ children }) => {
                 // A. Server par upload karein
                 const { data: insertedCustomer, error: supError } = await supabase
                     .from('customers')
-                    .insert([customerData])
+                    .upsert([customerData], { onConflict: 'local_id' })
                     .select()
                     .single();
                 
@@ -339,7 +339,8 @@ export const SyncProvider = ({ children }) => {
                     product_id: idMap[i.product_id] || i.product_id
                 }));
                 const { error: supError } = await supabase.rpc('create_new_purchase', {
-                    p_supplier_id: realSupplierId, // Updated Supplier ID
+                    p_local_id: item.data.p_local_id,
+                    p_supplier_id: realSupplierId, 
                     p_notes: purchase.notes,
                     p_inventory_items: updatedItems
                 });
@@ -376,7 +377,8 @@ export const SyncProvider = ({ children }) => {
                     p_supplier_id: realSupplierId,
                     p_notes: notes,
                     p_amount_paid: amount_paid,
-                    p_items: cleanItems
+                    p_items: cleanItems,
+                    p_local_id: item.data.p_local_id
                 });
 
                 error = supError;
@@ -398,7 +400,7 @@ export const SyncProvider = ({ children }) => {
 
                 const { data: insertedSale, error: saleError } = await supabase
                     .from('sales')
-                    .insert([saleData]) 
+                    .upsert([saleData], { onConflict: 'local_id' }) 
                     .select()
                     .single();
 
@@ -436,7 +438,7 @@ export const SyncProvider = ({ children }) => {
             else if (item.table_name === 'customer_payments' && item.action === 'create') {
                 const { id: localId, ...paymentData } = item.data;
                 if (idMap[paymentData.customer_id]) paymentData.customer_id = idMap[paymentData.customer_id];
-                const { error: supError } = await supabase.from('customer_payments').insert([paymentData]);
+                const { error: supError } = await supabase.from('customer_payments').upsert([paymentData], { onConflict: 'local_id' });
                 error = supError;
                 if (!error) await db.customer_payments.delete(localId);
             }
@@ -445,7 +447,7 @@ export const SyncProvider = ({ children }) => {
             else if (item.table_name === 'credit_payouts' && item.action === 'create') {
                 const { id: localId, ...payoutData } = item.data;
                 if (idMap[payoutData.customer_id]) payoutData.customer_id = idMap[payoutData.customer_id];
-                const { error: supError } = await supabase.from('credit_payouts').insert([payoutData]);
+                const { error: supError } = await supabase.from('credit_payouts').upsert([payoutData], { onConflict: 'local_id' });
                 error = supError;
                 if (!error) await db.credit_payouts.delete(localId);
             }
@@ -477,6 +479,7 @@ export const SyncProvider = ({ children }) => {
             else if (item.action === 'create_bulk_payment') {
                 const realSupplierId = idMap[item.data.supplier_id] || item.data.supplier_id;
                 const { error: supError } = await supabase.rpc('record_bulk_supplier_payment', {
+                    p_local_id: item.data.p_local_id,
                     p_supplier_id: realSupplierId,
                     p_amount: item.data.amount,
                     p_payment_method: item.data.payment_method,
@@ -535,6 +538,7 @@ export const SyncProvider = ({ children }) => {
             else if (item.action === 'create_purchase_payment') {
                 const realSupplierId = idMap[item.data.supplier_id] || item.data.supplier_id;
                 const { error: supError } = await supabase.rpc('record_purchase_payment', {
+                    p_local_id: item.data.local_id,
                     p_supplier_id: realSupplierId,
                     p_purchase_id: item.data.purchase_id,
                     p_amount: item.data.amount,
@@ -600,14 +604,14 @@ export const SyncProvider = ({ children }) => {
             // --- CASH ADJUSTMENTS SYNC ---
             else if (item.table_name === 'cash_adjustments' && item.action === 'create') {
                 const { id, ...adjustmentData } = item.data;
-                const { error: supError } = await supabase.from('cash_adjustments').insert([adjustmentData]);
+                const { error: supError } = await supabase.from('cash_adjustments').upsert([adjustmentData], { onConflict: 'local_id' });
                 error = supError;
                 if (!error) await db.cash_adjustments.delete(id);
             }
 
             else if (item.table_name === 'daily_closings' && item.action === 'create') {
                 const { id, ...closingData } = item.data;
-                const { error: supError } = await supabase.from('daily_closings').insert([closingData]);
+                const { error: supError } = await supabase.from('daily_closings').upsert([adjustmentData], { onConflict: 'local_id' });
                 error = supError;
                 if (!error) await db.daily_closings.delete(id);
             }
@@ -615,7 +619,7 @@ export const SyncProvider = ({ children }) => {
             // Expense Categories & Expenses (Standard Logic)
             else if (item.table_name === 'expense_categories' && item.action === 'create') {
                 const { id, ...catData } = item.data;
-                const { error: supError } = await supabase.from('expense_categories').insert([catData]);
+                const { error: supError } = await supabase.from('expense_categories').upsert([catData], { onConflict: 'local_id' });
                 error = supError;
                 if (!error) await db.expense_categories.delete(id);
             }
@@ -634,7 +638,7 @@ export const SyncProvider = ({ children }) => {
             }
             else if (item.table_name === 'expenses' && item.action === 'create') {
                 const { id, ...expenseData } = item.data;
-                const { error: supError } = await supabase.from('expenses').insert([expenseData]);
+                const { error: supError } = await supabase.from('expenses').upsert([expenseData], { onConflict: 'local_id' });
                 error = supError;
                 if (!error) await db.expenses.delete(id);
             }
@@ -726,7 +730,7 @@ export const SyncProvider = ({ children }) => {
                 const { id: localReturnId, ...returnData } = return_record;
                 if (idMap[returnData.customer_id]) returnData.customer_id = idMap[returnData.customer_id];
                 
-                const { data: insertedReturn, error: retError } = await supabase.from('sale_returns').insert([returnData]).select().single();
+                const { data: insertedReturn, error: retError } = await supabase.from('sale_returns').upsert([returnData], { onConflict: 'local_id' }).select().single();
                 if (retError) throw retError;
 
                 const itemsWithRealId = items.map(i => {

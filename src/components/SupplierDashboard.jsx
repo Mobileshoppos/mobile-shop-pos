@@ -100,7 +100,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                 payment_date: values.payment_date ? values.payment_date.toISOString() : new Date().toISOString()
             };
 
-            const paymentData = { supplier_id: supplier.id, ...formattedValues };
+            const paymentData = { local_id: crypto.randomUUID(), supplier_id: supplier.id, ...formattedValues };
             await DataService.recordBulkSupplierPayment(paymentData);
             notification.success({ message: 'Success', description: 'Payment recorded!' });
             setIsPaymentModalVisible(false); onRefresh();
@@ -115,7 +115,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                 refund_date: values.refund_date ? values.refund_date.toISOString() : new Date().toISOString()
             };
 
-            const refundData = { supplier_id: supplier.id, ...formattedValues };
+            const refundData = { local_id: crypto.randomUUID(), supplier_id: supplier.id, ...formattedValues };
             await DataService.recordSupplierRefund(refundData);
             notification.success({ message: 'Success', description: 'Refund recorded!' });
             setIsRefundModalVisible(false); onRefresh();
