@@ -160,8 +160,8 @@ const Expenses = () => {
           </Form.Item>
           <Form.Item name="payment_method" label="Paid From" initialValue="Cash">
             <Radio.Group buttonStyle="solid">
-              <Radio.Button value="Cash">Cash (Galla)</Radio.Button>
-              <Radio.Button value="Bank">Bank / EasyPaisa</Radio.Button>
+              <Radio.Button value="Cash">Cash</Radio.Button>
+              <Radio.Button value="Bank">Bank / Online</Radio.Button>
             </Radio.Group>
           </Form.Item>
           <Form.Item name="category_id" label="Category" rules={[{ required: true }]}>

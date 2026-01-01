@@ -816,8 +816,8 @@ const handleCloseInvoiceSearchModal = () => {
 </Form.Item>
 <Form.Item label="Receive In">
   <Radio.Group onChange={(e) => setCashOrBank(e.target.value)} value={cashOrBank} buttonStyle="solid">
-    <Radio.Button value="Cash">Cash (Galla)</Radio.Button>
-    <Radio.Button value="Bank">Bank / EasyPaisa</Radio.Button>
+    <Radio.Button value="Cash">Cash</Radio.Button>
+    <Radio.Button value="Bank">Bank / Online</Radio.Button>
   </Radio.Group>
 </Form.Item>
 </Form> </Modal> <Modal title={`Return for Invoice #${selectedSale?.id}`} open={isReturnModalOpen} onCancel={handleReturnCancel} onOk={() => returnForm.submit()} okText="Confirm Return" confirmLoading={isReturnSubmitting} okButtonProps={{ disabled: selectedReturnItems.length === 0 }}> 
@@ -874,8 +874,8 @@ const handleCloseInvoiceSearchModal = () => {
   <Form form={payoutForm} layout="vertical" onFinish={handleConfirmPayout}>
     <Form.Item label="Pay From">
   <Radio.Group onChange={(e) => setCashOrBank(e.target.value)} value={cashOrBank} buttonStyle="solid">
-    <Radio.Button value="Cash">Cash (Galla)</Radio.Button>
-    <Radio.Button value="Bank">Bank / EasyPaisa</Radio.Button>
+    <Radio.Button value="Cash">Cash</Radio.Button>
+    <Radio.Button value="Bank">Bank / Online</Radio.Button>
   </Radio.Group>
 </Form.Item>
     <Form.Item

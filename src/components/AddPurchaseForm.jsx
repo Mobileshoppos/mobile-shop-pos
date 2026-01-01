@@ -650,8 +650,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
               <Col span={12}>
                   <Form.Item name="payment_method" label="Paid From" rules={[{ required: true }]} initialValue="Cash">
     <Radio.Group buttonStyle="solid">
-        <Radio.Button value="Cash">Cash (Galla)</Radio.Button>
-        <Radio.Button value="Bank">Bank / EasyPaisa</Radio.Button>
+        <Radio.Button value="Cash">Cash</Radio.Button>
+        <Radio.Button value="Bank">Bank / Online</Radio.Button>
     </Radio.Group>
 </Form.Item>
               </Col>

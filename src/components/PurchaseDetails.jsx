@@ -285,8 +285,8 @@ const showEditModal = () => {
             {/* Tamam Modals waise hi rahenge */}
             <Modal title="Record Payment" open={isPaymentModalVisible} onCancel={() => setIsPaymentModalVisible(false)} onOk={paymentForm.submit} okText="Save Payment"><Form form={paymentForm} layout="vertical" onFinish={handlePaymentSubmit} style={{marginTop: '24px'}}><Form.Item name="amount" label="Payment Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} /></Form.Item><Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="payment_method" label="Paid From" rules={[{ required: true }]}>
     <Radio.Group buttonStyle="solid">
-        <Radio.Button value="Cash">Cash (Galla)</Radio.Button>
-        <Radio.Button value="Bank">Bank / EasyPaisa</Radio.Button>
+        <Radio.Button value="Cash">Cash</Radio.Button>
+        <Radio.Button value="Bank">Bank / Online</Radio.Button>
     </Radio.Group>
 </Form.Item><Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item></Form></Modal>
 {/* --- NAYA EDIT FORM (AddPurchaseForm ko hi use karega) --- */}
