@@ -34,7 +34,7 @@ db.version(16).stores({
   expenses: 'id, category_id, expense_date, user_id, payment_method',
   expense_categories: 'id, user_id',
 
-  inventory: 'id, product_id, purchase_id, status, user_id, variant_id, imei', 
+  inventory: 'id, product_id, purchase_id, status, user_id, variant_id, imei, available_qty, sold_qty', 
   customer_payments: 'id, customer_id, user_id, payment_method',
   sale_returns: 'id, sale_id, customer_id, user_id',
   sale_return_items: 'id, return_id, inventory_id',

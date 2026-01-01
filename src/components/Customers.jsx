@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio
+  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag
 } from 'antd';
 import { UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
@@ -278,41 +278,44 @@ const handleCloseInvoiceSearchModal = () => {
       setIsReturnModalOpen(true);
       setSelectedSale(sale);
 
-      // 1. Sale Items layein
+      // 1. Sale Items layein (Jo asli bill mein thay)
       const soldItems = await db.sale_items.where('sale_id').equals(sale.id).toArray();
 
-      // 2. Pehle se Return kiye gaye items layein
-      // Hamein sale_returns table se is sale ke returns dhoondne honge
+      // 2. Pehle se kitne units return ho chuke hain, unka hisaab lagayein
       const previousReturns = await db.sale_returns.where('sale_id').equals(sale.id).toArray();
-      const previousReturnIds = previousReturns.map(r => r.id);
-      
-      // Phir un returns ke items dhoondne honge
-      let returnedInventoryIds = [];
-      if (previousReturnIds.length > 0) {
-          const returnedItems = await db.sale_return_items
-              .filter(item => previousReturnIds.includes(item.return_id))
-              .toArray();
-          returnedInventoryIds = returnedItems.map(i => i.inventory_id);
+      const returnTotals = {}; // { inventory_id: total_returned_qty }
+
+      if (previousReturns.length > 0) {
+          const retIds = previousReturns.map(r => r.id);
+          const retItems = await db.sale_return_items.filter(ri => retIds.includes(ri.return_id)).toArray();
+          retItems.forEach(ri => {
+              returnTotals[ri.inventory_id] = (returnTotals[ri.inventory_id] || 0) + (ri.quantity || 1);
+          });
       }
 
-      // 3. Sirf wo items dikhayein jo abhi tak return nahi hue
-      const availableItems = soldItems.filter(item => !returnedInventoryIds.includes(item.inventory_id));
+      // 3. Sirf wo items dikhayein jin ki bachi hui quantity 0 se zyada ho
+      const itemsWithDetails = [];
+      for (const item of soldItems) {
+          const alreadyReturned = returnTotals[item.inventory_id] || 0;
+          const originalSoldQty = item.quantity || 1;
+          const remainingToReturn = originalSoldQty - alreadyReturned;
 
-      // 4. Details Jorein (Product Name, IMEI etc)
-      const itemsWithDetails = await Promise.all(availableItems.map(async (item) => {
-          const product = await db.products.get(item.product_id);
-          const inventory = await db.inventory.get(item.inventory_id);
-          
-          return {
-            sale_item_id: item.id, // Sale Item ID zaroori hai return ke liye
-            inventory_id: item.inventory_id,
-            product_id: item.product_id,
-            product_name: product ? product.name : 'Unknown Product',
-            imei: inventory ? inventory.imei : '',
-            item_attributes: inventory ? inventory.item_attributes : {},
-            price_at_sale: item.price_at_sale
-          };
-      }));
+          if (remainingToReturn > 0) {
+              const product = await db.products.get(item.product_id);
+              const inventory = await db.inventory.get(item.inventory_id);
+              
+              itemsWithDetails.push({
+                sale_item_id: item.id,
+                inventory_id: item.inventory_id,
+                product_id: item.product_id,
+                product_name: product ? product.name : 'Unknown Product',
+                imei: inventory ? inventory.imei : '',
+                item_attributes: inventory ? inventory.item_attributes : {},
+                price_at_sale: item.price_at_sale,
+                quantity: remainingToReturn // YEH HAI FIX: Ab modal mein sirf bachi hui qty nazar aayegi
+              });
+          }
+      }
 
       setReturnableItems(itemsWithDetails);
 
@@ -353,15 +356,14 @@ const handleCloseInvoiceSearchModal = () => {
       };
 
       // 2. Return Items Banayein
-      const itemsToInsert = returnableItems
-        .filter(i => selectedReturnItems.includes(i.sale_item_id))
-        .map(i => ({
+      const itemsToInsert = selectedReturnItems.map(i => ({
           id: crypto.randomUUID(),
           return_id: returnId,
           inventory_id: i.inventory_id,
           product_id: i.product_id,
-          price_at_return: i.price_at_sale
-        }));
+          price_at_return: i.price_at_sale,
+          quantity: i.return_qty // Naya column
+      }));
 
       // 3. Payment (Credit) Record Banayein
       const paymentId = crypto.randomUUID();
@@ -382,10 +384,23 @@ const handleCloseInvoiceSearchModal = () => {
       if (db.sale_return_items) await db.sale_return_items.bulkAdd(itemsToInsert);
       await db.customer_payments.add(paymentRecord);
 
-      // 5. Inventory ko wapis 'Available' karein (Local)
-      const inventoryIdsToUpdate = itemsToInsert.map(i => i.inventory_id);
-      for (const invId of inventoryIdsToUpdate) {
-          await db.inventory.update(invId, { status: 'available' });
+      // 5. Inventory Update (Local - Bulk System Logic for Customer Return)
+      const inventoryIdsToUpdate = itemsToInsert.map(i => i.inventory_id); 
+      for (const item of itemsToInsert) {
+          const invItem = await db.inventory.get(item.inventory_id);
+          if (invItem) {
+              if (invItem.imei) {
+                  await db.inventory.update(item.inventory_id, { status: 'Available', available_qty: 1, sold_qty: 0 });
+              } else {
+                  // Jitne units wapis aaye (item.quantity), utne hi adjust karein
+                  const qtyReturned = item.quantity || 1;
+                  await db.inventory.update(item.inventory_id, { 
+                      available_qty: (invItem.available_qty || 0) + qtyReturned, 
+                      sold_qty: Math.max(0, (invItem.sold_qty || 0) - qtyReturned),
+                      status: 'Available' 
+                  });
+              }
+          }
       }
 
       // 6. Balance Update (UI & Local DB)
@@ -429,82 +444,101 @@ const handleCloseInvoiceSearchModal = () => {
     }
   };
   
-  const totalRefundAmount = useMemo(() => returnableItems.filter(i => selectedReturnItems.includes(i.sale_item_id)).reduce((sum, i) => sum + i.price_at_sale, 0), [selectedReturnItems, returnableItems]);
+  const totalRefundAmount = useMemo(() => selectedReturnItems.reduce((sum, i) => sum + (i.return_qty * i.price_at_sale), 0), [selectedReturnItems]);
   
+  const [returnHistory, setReturnHistory] = useState([]); // File ke shuru mein state add karein
+
   const handleViewLedger = async (customer) => {
     setSelectedCustomer(customer);
     setIsLedgerModalOpen(true);
     try {
         setLedgerLoading(true);
 
-        // 1. Sales layein
         const sales = await db.sales.where('customer_id').equals(customer.id).toArray();
-        
-        // 2. Payments layein
         const payments = await db.customer_payments.where('customer_id').equals(customer.id).toArray();
-
-        // 3. Returns layein
         const returns = await db.sale_returns.where('customer_id').equals(customer.id).toArray();
+        const allReturnItems = await db.sale_return_items.toArray();
+        
+        // Return history ko state mein save karein (Full Details ke sath)
+        const history = [];
+        for (const ret of returns) {
+            const items = allReturnItems.filter(ri =>
+                String(ri.return_id) === String(ret.id) ||
+                (ret.local_id && String(ri.return_id) === String(ret.local_id))
+            );
 
-        // 4. Payouts layein
-        let payouts = [];
-        if (db.credit_payouts) {
-             payouts = await db.credit_payouts.where('customer_id').equals(customer.id).toArray();
-        }
-
-        // *** MAGIC STEP: Sales ke Items + Products + Inventory Details dhoondein ***
-        const salesWithDetails = await Promise.all(sales.map(async (sale) => {
-            // Is sale ke items dhoondein
-            const items = await db.sale_items.where('sale_id').equals(sale.id).toArray();
-            
-            // Har item ka Product Name aur Inventory Details dhoondein
-            const itemsWithFullDetails = await Promise.all(items.map(async (item) => {
-                const product = await db.products.get(item.product_id);
-                
-                // *** YEH LINE NAYI HAI (Inventory Details ke liye) ***
-                const inventoryItem = await db.inventory.get(item.inventory_id);
-
-                return { 
-                    ...item, 
+            // Har item ke liye Product aur Inventory details dhoondein
+            const itemsWithFullDetails = await Promise.all(items.map(async (ri) => {
+                const product = await db.products.get(ri.product_id);
+                const inventory = await db.inventory.get(ri.inventory_id);
+                return {
+                    ...ri,
                     products: product || { name: 'Unknown Product' },
-                    inventory: inventoryItem || {} // <--- Yeh "N/A" ko khatam karega
+                    inventory: inventory || {},
+                    sale_id: ret.sale_id
                 };
             }));
+            history.push(...itemsWithFullDetails);
+        }
+        setReturnHistory(history);
 
+        const salesWithDetails = await Promise.all(sales.map(async (sale) => {
+            const items = await db.sale_items.where('sale_id').equals(sale.id).toArray();
+            const itemsWithFullDetails = await Promise.all(items.map(async (item) => {
+                const product = await db.products.get(item.product_id);
+                const inventoryItem = await db.inventory.get(item.inventory_id);
+                return { ...item, products: product || { name: 'Unknown Product' }, inventory: inventoryItem || {} };
+            }));
             return { ...sale, sale_items: itemsWithFullDetails };
         }));
-        // *************************************************************************
 
-        // Data ko format karein
         const salesTx = salesWithDetails.map(s => ({ 
-            type: 'sale', 
-            date: s.created_at || s.sale_date, 
+            type: 'sale', date: s.created_at || s.sale_date, 
             description: `Sale (Invoice #${s.id})`, 
             debit: (s.total_amount || 0) - (s.amount_paid_at_sale || 0), 
-            credit: 0, 
-            details: s 
+            credit: 0, details: s 
         }));
 
-        const paymentsTx = payments.map(p => ({
-            type: p.amount_paid > 0 ? 'payment' : 'return',
-            date: p.created_at,
-            description: p.amount_paid > 0 ? 'Payment Received' : `Return Credit`,
-            debit: 0,
-            credit: Math.abs(p.amount_paid),
-            details: p
-        }));
+        const paymentsTx = payments.map(p => {
+            const isReturn = p.amount_paid < 0;
+            let description = 'Payment Received';
+            let returnDetails = null;
 
-        const payoutsTx = payouts.map(p => ({
-            type: 'payout',
-            date: p.created_at,
-            description: 'Credit Payout',
-            debit: p.amount_paid,
-            credit: 0,
-            details: p
-        }));
+            if (isReturn) {
+                // Return record dhoondein jo is payment ke waqt bana tha
+                const relatedReturn = returns.find(r => 
+                    r.id === p.local_id || r.id === p.id || 
+                    (Math.abs(new Date(r.created_at) - new Date(p.created_at)) < 5000) // 5 seconds gap safety
+                );
+                
+                if (relatedReturn) {
+                    description = `Return Credit (Inv #${relatedReturn.sale_id})`;
+                    // History se wo items uthayein jo is return se talluq rakhte hain
+                    const itemsFromHistory = history.filter(h => 
+                        String(h.return_id) === String(relatedReturn.id)
+                    );
+                    
+                    returnDetails = {
+                        ...relatedReturn,
+                        sale_return_items: itemsFromHistory
+                    };
+                } else {
+                    description = `Return Credit`;
+                }
+            }
 
-        // Sab ko milayein aur sort karein
-        const allTx = [...salesTx, ...paymentsTx, ...payoutsTx].sort((a, b) => new Date(a.date) - new Date(b.date));
+            return {
+                type: isReturn ? 'return' : 'payment',
+                date: p.created_at,
+                description: description,
+                debit: 0,
+                credit: Math.abs(p.amount_paid),
+                // Hum details mein return_details bhi bhej rahe hain taake expand hone par details nazar aayein
+                details: { ...p, return_details: returnDetails } 
+            };
+        });
+
+        const allTx = [...salesTx, ...paymentsTx].sort((a, b) => new Date(a.date) - new Date(b.date));
         
         let runningBalance = 0;
         const finalLedger = allTx.map(tx => {
@@ -513,9 +547,7 @@ const handleCloseInvoiceSearchModal = () => {
         });
 
         setLedgerData(finalLedger.reverse());
-
     } catch (error) {
-        console.error(error);
         message.error('Error fetching ledger: ' + error.message);
     } finally {
         setLedgerLoading(false);
@@ -569,8 +601,45 @@ const handleCloseInvoiceSearchModal = () => {
       const saleItemCols = [
         { title: 'Product', dataIndex: ['products', 'name'] },
         { title: 'Details', render: renderItemDetails },
-        // --- YAHAN TABDEELI HUI HAI ---
-        { title: 'Price', dataIndex: 'price_at_sale', align: 'right', render: p => formatCurrency(p, profile?.currency) }
+        { 
+          title: 'Sold', 
+          dataIndex: 'quantity', 
+          align: 'center', 
+          render: q => <Text strong>{q || 1}</Text> 
+        },
+        { 
+          title: 'Returned', 
+          key: 'returned_qty', 
+          align: 'center', 
+          render: (_, item) => {
+            // Is sale item ke liye kitne return hue hain wo dhoondein
+            const returned = ledgerData.find(ld => ld.type === 'return' && ld.details.sale_id === record.details.id);
+            // Hum return items table se is inventory_id ke returns ginte hain
+            const retQty = returnHistory
+                .filter(rh => 
+                    String(rh.inventory_id) === String(item.inventory_id) && 
+                    String(rh.sale_id) === String(record.details.id)
+                )
+                .reduce((sum, r) => sum + (r.quantity || 0), 0);
+            return retQty > 0 ? <Text type="danger">{retQty}</Text> : '0';
+          }
+        },
+        { title: 'Price', dataIndex: 'price_at_sale', align: 'right', render: p => formatCurrency(p, profile?.currency) },
+        { 
+          title: 'Net Total', 
+          key: 'total', 
+          align: 'right', 
+          render: (_, item) => {
+            const retQty = returnHistory
+                .filter(rh => 
+                    String(rh.inventory_id) === String(item.inventory_id) && 
+                    String(rh.sale_id) === String(record.details.id)
+                )
+                .reduce((sum, r) => sum + (r.quantity || 0), 0);
+            const netQty = (item.quantity || 0) - retQty;
+            return formatCurrency(netQty * item.price_at_sale, profile?.currency);
+          }
+        }
       ];
       return (
         <Card size="small" style={{ margin: '8px 0' }}>
@@ -597,7 +666,7 @@ const handleCloseInvoiceSearchModal = () => {
       const returnItemCols = [
         { title: 'Product', dataIndex: ['products', 'name'] },
         { title: 'Details', render: renderItemDetails },
-        // --- YAHAN TABDEELI HUI HAI ---
+        { title: 'Qty', dataIndex: 'quantity', align: 'center', render: q => q || 1 },
         { title: 'Returned Price', dataIndex: 'price_at_return', align: 'right', render: p => formatCurrency(p, profile?.currency) }
       ];
       return (
@@ -751,7 +820,50 @@ const handleCloseInvoiceSearchModal = () => {
     <Radio.Button value="Bank">Bank / EasyPaisa</Radio.Button>
   </Radio.Group>
 </Form.Item>
-</Form> </Modal> <Modal title={`Return for Invoice #${selectedSale?.id}`} open={isReturnModalOpen} onCancel={handleReturnCancel} onOk={() => returnForm.submit()} okText="Confirm Return" confirmLoading={isReturnSubmitting} okButtonProps={{ disabled: selectedReturnItems.length === 0 }}> <Checkbox.Group style={{ width: '100%' }} value={selectedReturnItems} onChange={setSelectedReturnItems}> <div style={{ maxHeight: '30vh', overflowY: 'auto' }}> {returnableItems.length > 0 ? returnableItems.map(item => (<Card size="small" key={item.sale_item_id} style={{ marginBottom: '8px' }}><Checkbox value={item.sale_item_id}><Space><Text strong>{item.product_name}</Text><Text type="secondary">({item.imei || 'Item'})</Text>-<Text>{formatCurrency(item.price_at_sale, profile?.currency)}</Text></Space></Checkbox></Card>)) : <Text type="secondary">No items available.</Text>} </div> </Checkbox.Group> <Form form={returnForm} layout="vertical" onFinish={handleConfirmReturn} style={{ marginTop: '24px' }}> <Form.Item name="reason" label="Reason for Return"><Input.TextArea /></Form.Item> </Form> <Descriptions bordered><Descriptions.Item label="Total Credit"><Title level={4} style={{margin:0, color: '#52c41a'}}>{formatCurrency(totalRefundAmount, profile?.currency)}</Title></Descriptions.Item></Descriptions> </Modal> <Modal
+</Form> </Modal> <Modal title={`Return for Invoice #${selectedSale?.id}`} open={isReturnModalOpen} onCancel={handleReturnCancel} onOk={() => returnForm.submit()} okText="Confirm Return" confirmLoading={isReturnSubmitting} okButtonProps={{ disabled: selectedReturnItems.length === 0 }}> 
+  <Table 
+    dataSource={returnableItems} 
+    rowKey="sale_item_id" 
+    pagination={false} 
+    size="small"
+    columns={[
+        { title: 'Product', dataIndex: 'product_name' },
+        { 
+            title: 'Sold Qty', 
+            dataIndex: 'quantity', 
+            render: (q) => <Tag color="orange">{q || 1} Sold</Tag> 
+        },
+        {
+            title: 'Return Qty',
+            key: 'return_qty',
+            render: (_, record) => (
+                <InputNumber 
+                    min={0} 
+                    max={record.quantity || 1} 
+                    defaultValue={0}
+                    onChange={(val) => {
+                        const current = selectedReturnItems.filter(i => i.sale_item_id !== record.sale_item_id);
+                        if (val > 0) {
+                            setSelectedReturnItems([...current, { ...record, return_qty: val }]);
+                        } else {
+                            setSelectedReturnItems(current);
+                        }
+                    }}
+                />
+            )
+        },
+        { 
+            title: 'Refund', 
+            key: 'refund', 
+            align: 'right',
+            render: (_, record) => {
+                const selected = selectedReturnItems.find(i => i.sale_item_id === record.sale_item_id);
+                return formatCurrency((selected?.return_qty || 0) * record.price_at_sale, profile?.currency);
+            }
+        }
+    ]}
+/>
+   <Form form={returnForm} layout="vertical" onFinish={handleConfirmReturn} style={{ marginTop: '24px' }}> <Form.Item name="reason" label="Reason for Return"><Input.TextArea /></Form.Item> </Form> <Descriptions bordered><Descriptions.Item label="Total Credit"><Title level={4} style={{margin:0, color: '#52c41a'}}>{formatCurrency(totalRefundAmount, profile?.currency)}</Title></Descriptions.Item></Descriptions> </Modal> <Modal
   title={`Settle Credit for: ${selectedCustomer?.name}`}
   open={isPayoutModalOpen}
   onCancel={handlePayoutCancel}

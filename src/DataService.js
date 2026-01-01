@@ -17,7 +17,8 @@ const DataService = {
     
     const availableItems = allInventoryItems.filter(item => {
         const status = (item.status || '').toLowerCase();
-        return status === 'available'; 
+        // Ab hum sirf wo items dikhayenge jin ki available_qty 0 se zyada hai
+        return status === 'available' && (item.available_qty > 0); 
     });
 
     // 2. Categories Map
@@ -35,11 +36,11 @@ const DataService = {
         }
         variantsMap[item.product_id].push(item);
 
-        // Stock ginnana
+        // Stock ginnana (Bulk system ke mutabiq available_qty ko jama karein)
         if (!stockCountMap[item.product_id]) {
             stockCountMap[item.product_id] = 0;
         }
-        stockCountMap[item.product_id]++;
+        stockCountMap[item.product_id] += (item.available_qty || 0);
     });
 
     // 4. Products ko format karein
@@ -406,6 +407,8 @@ async createNewPurchase(purchasePayload) {
     purchase_id: purchaseId,
     product_id: item.product_id,
     quantity: item.quantity,
+    available_qty: item.quantity, // Naya column: Shuru mein saara maal available hai
+    sold_qty: 0,
     purchase_price: item.purchase_price,
     sale_price: item.sale_price,
     imei: item.imei || null,
@@ -503,8 +506,30 @@ async addCustomer(customerData) {
     await db.sales.add(saleData);
     if (db.sale_items) await db.sale_items.bulkAdd(saleItemsData);
 
-    // B. Inventory ka status 'Sold' karein (Taake wo foran list se gayab ho jaye)
-    await db.inventory.where('id').anyOf(soldInventoryIds).modify({ status: 'Sold' });
+    // B. Inventory Update (Bulk aur IMEI dono ke liye)
+    for (const item of salePayload.items) {
+      const invItem = await db.inventory.get(item.inventory_id);
+      if (invItem) {
+        if (invItem.imei) {
+          // IMEI Based: Purana tareeqa (Poori row sold)
+          await db.inventory.update(item.inventory_id, { 
+            status: 'Sold', 
+            available_qty: 0, 
+            sold_qty: 1 
+          });
+        } else {
+          // Bulk Based: Quantity minus karein
+          const newAvailable = Math.max(0, (invItem.available_qty || 0) - 1);
+          const newSold = (invItem.sold_qty || 0) + 1;
+          await db.inventory.update(item.inventory_id, { 
+            available_qty: newAvailable, 
+            sold_qty: newSold,
+            // Agar saara maal bik jaye to status 'Sold' kar dein
+            status: newAvailable === 0 ? 'Sold' : 'Available'
+          });
+        }
+      }
+    }
 
     // C. Sync Queue mein dalein
     await db.sync_queue.add({
@@ -804,67 +829,57 @@ async addCustomer(customerData) {
     return true;
   },
 
-  // --- UPDATED: Robust Return Function ---
+  // --- UPDATED: Professional Bulk Return Function ---
   async createPurchaseReturn(returnData) {
-    const { purchase_id, item_ids, return_date, notes } = returnData;
+    const { purchase_id, items_with_qty, return_date, notes } = returnData;
 
-    // 1. Purchase dhoondein (Smart Search)
-    // Pehle waisa hi dhoondein jaisa URL mein hai (String)
+    // 1. Purchase dhoondein
     let purchase = await db.purchases.get(purchase_id);
-    
-    // Agar nahi mila, aur yeh number ban sakta hai, to Number bana kar dhoondein
     if (!purchase && !isNaN(purchase_id)) {
         purchase = await db.purchases.get(parseInt(purchase_id));
     }
+    if (!purchase) throw new Error("Purchase not found locally.");
 
-    if (!purchase) throw new Error("Purchase not found locally (ID mismatch).");
-
-    // 2. Ab Purchase ki ASLI ID (jo DB mein save hai) use karein
     const realPurchaseId = purchase.id;
+    let totalReturnAmount = 0;
 
-    // 3. Inventory dhoondein (Smart Search)
-    // Pehle Asli ID se dhoondein
-    let allInventory = await db.inventory.where('purchase_id').equals(realPurchaseId).toArray();
-    
-    // Agar items nahi mile, to ID ki type badal kar try karein (String <-> Number)
-    if (allInventory.length === 0) {
-         const altId = typeof realPurchaseId === 'number' ? String(realPurchaseId) : parseInt(realPurchaseId);
-         // Agar alternate ID valid hai to try karein
-         if (altId) {
-             const tempInv = await db.inventory.where('purchase_id').equals(altId).toArray();
-             if (tempInv.length > 0) allInventory = tempInv;
-         }
+    // 2. Local DB Updates (Loop through each item being returned)
+    for (const item of items_with_qty) {
+        const invItem = await db.inventory.get(item.inventory_id);
+        if (invItem) {
+            const itemTotal = (invItem.purchase_price || 0) * item.qty;
+            totalReturnAmount += itemTotal;
+
+            if (invItem.imei) {
+                // IMEI Based: Poori row returned
+                await db.inventory.update(invItem.id, { 
+                    status: 'Returned', available_qty: 0, returned_qty: 1 
+                });
+            } else {
+                // Bulk Based: Quantity adjust karein
+                const newAvail = Math.max(0, (invItem.available_qty || 0) - item.qty);
+                const newRet = (invItem.returned_qty || 0) + item.qty;
+                await db.inventory.update(invItem.id, { 
+                    available_qty: newAvail, 
+                    returned_qty: newRet,
+                    status: (newAvail === 0 && (invItem.sold_qty || 0) <= 0) ? 'Returned' : invItem.status
+                });
+            }
+        }
     }
 
-    // FIX 2: Items Match karte waqt String/Number ka farq khatam karein
-    const itemsToReturn = allInventory.filter(i => 
-        item_ids.map(id => String(id)).includes(String(i.id))
-    );
-    
-    // 4. Total Return Amount calculate karein
-    const totalReturnAmount = itemsToReturn.reduce((sum, item) => sum + (item.purchase_price || 0), 0);
-    
-    // Agar items match nahi hue to error aayega
-    if (totalReturnAmount <= 0) throw new Error("Items not found in inventory. Please sync your data.");
-
-    // 5. Hisaab Kitab (Debt vs Credit)
+    // 3. Purchase Balance Update
     const currentBalance = purchase.balance_due || 0;
     const returnToClearDebt = Math.min(totalReturnAmount, currentBalance);
     const creditToAdd = totalReturnAmount - returnToClearDebt;
 
-    // 6. Local DB Updates
-    
-    // A. Purchase Update
-    // FIX: Ensure purchase ID is a number for Dexie update
-    const purchaseIdForDbUpdate = !isNaN(purchase.id) ? parseInt(purchase.id) : purchase.id;
-
-    await db.purchases.update(purchaseIdForDbUpdate, { 
+    await db.purchases.update(realPurchaseId, { 
         total_amount: (purchase.total_amount || 0) - totalReturnAmount,
         balance_due: currentBalance - returnToClearDebt,
         status: (currentBalance - returnToClearDebt) <= 0 ? 'paid' : 'partially_paid'
     });
 
-    // B. Supplier Credit Update
+    // 4. Supplier Credit Update
     if (creditToAdd > 0) {
         const supplier = await db.suppliers.get(purchase.supplier_id);
         if (supplier) {
@@ -874,21 +889,15 @@ async addCustomer(customerData) {
         }
     }
 
-    // C. Inventory Update (Local) - Delete ke bajaye Status 'Returned' karein
-    const idsToReturn = itemsToReturn.map(i => i.id);
-    await db.inventory.where('id').anyOf(idsToReturn).modify({ status: 'Returned' });
-
-    // 7. Queue mein daalein (Server ke liye)
+    // 5. Queue mein daalein (Server ke liye)
     const serverPurchaseId = !isNaN(realPurchaseId) ? parseInt(realPurchaseId) : realPurchaseId;
-    const serverItemIds = idsToReturn.map(id => !isNaN(id) ? parseInt(id) : id);
-
+    
     await db.sync_queue.add({
         table_name: 'purchase_returns',
         action: 'process_purchase_return',
         data: {
-            // FIX: Parameter names MUST match the SQL function arguments (p_ prefix)
             p_purchase_id: serverPurchaseId, 
-            p_item_ids: serverItemIds,
+            p_return_items: items_with_qty, 
             p_return_date: return_date,
             p_notes: notes
         }
@@ -897,49 +906,16 @@ async addCustomer(customerData) {
     return true;
   },
 
-  // --- Undo Return Function (Ghalti Sudharna) ---
-  async undoReturnItem(inventoryId) {
-    // 1. Local Inventory Update
-    await db.inventory.update(inventoryId, { status: 'Available' });
-
-    // 2. Purchase aur Supplier ka hisaab local update karna mushkil hai, 
-    // is liye hum filhal sirf Sync Queue mein daalenge aur page refresh par data theek ho jayega.
-    // Lekin user experience ke liye hum koshish karte hain:
-    
-    const item = await db.inventory.get(inventoryId);
-    if (item && item.purchase_id) {
-        const purchase = await db.purchases.get(item.purchase_id);
-        if (purchase) {
-             // Local Balance wapis barha dein
-             const newTotal = (purchase.total_amount || 0) + (item.purchase_price || 0);
-             const newBalance = newTotal - (purchase.amount_paid || 0);
-             await db.purchases.update(item.purchase_id, {
-                 total_amount: newTotal,
-                 balance_due: newBalance,
-                 status: newBalance <= 0 ? 'paid' : 'partially_paid'
-             });
-        }
-    }
-
-    // 3. Queue mein daalein (Server ke liye)
-    // Hamein pakka Number ID chahiye
-    const serverInvId = !isNaN(inventoryId) ? parseInt(inventoryId) : inventoryId;
-
-    await db.sync_queue.add({
-        table_name: 'purchase_returns', // Table name same rakhein
-        action: 'undo_return_item',     // Action naya hai
-        data: {
-            p_inventory_id: serverInvId
-        }
-    });
-
-    return true;
-  },
 
   async recordSupplierRefund(refundData) {
     // 1. Local Table mein save karein
     if (db.supplier_refunds) {
-        const localData = { ...refundData, id: crypto.randomUUID(), local_id: crypto.randomUUID() };
+        const localData = { 
+            ...refundData, 
+            id: crypto.randomUUID(), 
+            local_id: crypto.randomUUID(),
+            created_at: new Date().toISOString() // Dashboard calculation ke liye zaroori hai
+        };
         await db.supplier_refunds.add(localData);
     }
 
@@ -1513,7 +1489,10 @@ async addCustomer(customerData) {
     const cashExpenses = expenses.filter(e => e.payment_method === 'Cash' && new Date(e.expense_date) > cashFilterDate).reduce((sum, e) => sum + (e.amount || 0), 0);
     const cashPaidToSuppliers = supplierPayments.filter(p => p.payment_method === 'Cash' && new Date(p.payment_date || p.created_at) > cashFilterDate).reduce((sum, p) => sum + (p.amount || 0), 0);
     const cashPayouts = creditPayouts.filter(p => p.payment_method === 'Cash' && new Date(p.created_at) > cashFilterDate).reduce((sum, p) => sum + (p.amount_paid || 0), 0);
-    const cashRefunds = supplierRefunds.filter(r => r.payment_method === 'Cash' && new Date(r.created_at) > cashFilterDate).reduce((sum, r) => sum + (r.amount || 0), 0);
+    const cashRefunds = supplierRefunds.filter(r => 
+      (r.payment_method === 'Cash' || r.refund_method === 'Cash') && 
+      new Date(r.refund_date || r.created_at) > cashFilterDate
+    ).reduce((sum, r) => sum + (r.amount || 0), 0);
 
     const totalCashIn = cashAdjustments.filter(a => a.type === 'In' && a.payment_method === 'Cash' && new Date(a.created_at) > cashFilterDate).reduce((sum, a) => sum + (a.amount || 0), 0);
     const totalCashOut = cashAdjustments.filter(a => a.type === 'Out' && a.payment_method === 'Cash' && new Date(a.created_at) > cashFilterDate).reduce((sum, a) => sum + (a.amount || 0), 0);
@@ -1528,7 +1507,9 @@ async addCustomer(customerData) {
     const bankExpenses = expenses.filter(e => e.payment_method === 'Bank').reduce((sum, e) => sum + (e.amount || 0), 0);
     const bankPaidToSuppliers = supplierPayments.filter(p => p.payment_method === 'Bank').reduce((sum, p) => sum + (p.amount || 0), 0);
     const bankPayouts = creditPayouts.filter(p => p.payment_method === 'Bank').reduce((sum, p) => sum + (p.amount_paid || 0), 0);
-    const bankRefunds = supplierRefunds.filter(r => r.payment_method === 'Bank').reduce((sum, r) => sum + (r.amount || 0), 0);
+    const bankRefunds = supplierRefunds.filter(r => 
+      (r.payment_method === 'Bank' || r.refund_method === 'Bank' || r.payment_method === 'Bank Transfer' || r.refund_method === 'Bank Transfer')
+    ).reduce((sum, r) => sum + (r.amount || 0), 0);
 
     const totalBankIn = cashAdjustments.filter(a => a.type === 'In' && a.payment_method === 'Bank').reduce((sum, a) => sum + (a.amount || 0), 0);
     const totalBankOut = cashAdjustments.filter(a => a.type === 'Out' && a.payment_method === 'Bank').reduce((sum, a) => sum + (a.amount || 0), 0);

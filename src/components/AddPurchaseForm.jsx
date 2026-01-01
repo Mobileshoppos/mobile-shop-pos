@@ -198,7 +198,24 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                 <Row gutter={16}>
                     <Col span={12}><Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
                     <Col span={12}><Form.Item name="sale_price" label="Sale Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
-                    <Col span={12}><Form.Item name="quantity" label="Quantity" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={1} /></Form.Item></Col>
+                    <Col span={12}>
+    <Form.Item 
+        name="quantity" 
+        label="Total Quantity" 
+        rules={[{ required: true }]}
+        // User ko batane ke liye ke kitne bik chuke hain
+        help={(initialValues?.sold_qty > 0 || initialValues?.returned_qty > 0) ? 
+            <Text type="warning" style={{fontSize: '12px'}}>
+                {`Min required: ${(initialValues.sold_qty || 0) + (initialValues.returned_qty || 0)} (Already sold/returned)`}
+            </Text> : null}
+    >
+        <InputNumber 
+            style={{ width: '100%' }} 
+            // Safety Lock: Bikay hue maal se kam nahi karne dega
+            min={(initialValues?.sold_qty || 0) + (initialValues?.returned_qty || 0) || 1} 
+        />
+    </Form.Item>
+</Col>
                     <Col span={12}>
                         <Form.Item name="barcode" label="Variant Barcode" tooltip="Assign a unique barcode to this variant.">
                             <Input prefix={<BarcodeOutlined />} placeholder="Scan or type barcode" disabled={isBarcodeLocked} style={disabledInputStyle} />
@@ -304,13 +321,16 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
                   payment_method: 'Cash' // Default
               });
 
-              // Items ko format karein taake Table sahi dikhaye
+              // Items ko format karein (Bulk fields ke sath)
               if (editingItems) {
                   const formattedItems = editingItems.map(item => ({
                       ...item,
                       name: item.product_name,
                       quantity: item.quantity || 1,
-                      // ID zaroori hai taake update karte waqt pata chale ke yeh purana item hai
+                      // Safety Lock ke liye used quantity columns
+                      sold_qty: item.sold_qty || 0,
+                      returned_qty: item.returned_qty || 0,
+                      damaged_qty: item.damaged_qty || 0
                   }));
                   setPurchaseItems(formattedItems);
               }
@@ -480,11 +500,29 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
     let details = [];
     if (record.item_attributes) {
         Object.entries(record.item_attributes).forEach(([key, value]) => {
-            if (value && key.toUpperCase() !== 'IMEI') details.push(`${key}: ${value}`);
+            if (value) {
+                const upperKey = key.toUpperCase();
+                // IMEI ya Serial wale labels ko attributes se nikaal dein taake double na ho
+                if (upperKey.includes('IMEI') || upperKey.includes('SERIAL')) return;
+                
+                // Sirf value add karein (e.g., "New" ya "8"), label nahi
+                details.push(value);
+            }
         });
     }
-    if (record.imei) details.push(`IMEI: ${record.imei}`);
-    return `${record.name} ${details.length > 0 ? `(${details.join(', ')})` : ''}`;
+    // IMEI ko aakhir mein alag se add karein agar mojood ho
+    if (record.imei) details.push(record.imei);
+    
+    return (
+        <span>
+            <Text strong>{record.name}</Text>
+            {details.length > 0 && (
+                <Text type="secondary" style={{ fontSize: '12px', marginLeft: '8px' }}>
+                    {`(${details.join(', ')})`}
+                </Text>
+            )}
+        </span>
+    );
   }
 
   const columns = [
@@ -496,9 +534,15 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
                 <Text>{renderItemName(record)}</Text>
                 
                 {/* Case 1: Agar Item BIK CHUKA hai */}
-                {record.status && record.status.toLowerCase() === 'sold' && (
+                {/* Bulk Status Info */}
+                {(record.sold_qty > 0 || record.returned_qty > 0) && (
+                    <Text type="warning" style={{ fontSize: '12px', display: 'block' }}>
+                        {`(${record.sold_qty || 0} Sold, ${record.returned_qty || 0} Returned)`}
+                    </Text>
+                )}
+                {record.status && record.status.toLowerCase() === 'sold' && record.available_qty <= 0 && (
                     <Text type="danger" style={{ fontSize: '12px' }}>
-                        (Sold - Cannot Delete)
+                        (Fully Sold - Cannot Delete)
                     </Text>
                 )}
 

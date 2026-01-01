@@ -80,13 +80,13 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
 
         if (itemsMap.has(key)) {
           const existing = itemsMap.get(key);
-          existing.display_quantity += 1;
+          existing.display_quantity += (variant.available_qty || 0); // 1 ki jagah available_qty jama karein
           existing.ids.push(variant.id);
           if (variant.imei) existing.imeis.push(variant.imei);
         } else {
           itemsMap.set(key, {
             ...variant,
-            display_quantity: 1,
+            display_quantity: variant.available_qty || 0, // 1 ki jagah available_qty rakhein
             ids: [variant.id],
             imeis: variant.imei ? [variant.imei] : [],
           });

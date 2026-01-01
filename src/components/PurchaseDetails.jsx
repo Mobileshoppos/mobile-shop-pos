@@ -77,17 +77,21 @@ const PurchaseDetails = () => {
             const attributesKey = JSON.stringify(tempAttributes);
             const key = `${item.product_id}-${attributesKey}-${item.purchase_price}`;
 
-            // Check karein ke item Returned hai ya nahi
-            if (item.status === 'Returned') {
-                retAmount += (item.purchase_price || 0);
-                if (!returnedGrouped[key]) returnedGrouped[key] = { ...item, quantity: 0, imeis: [], key: key };
-                returnedGrouped[key].quantity += 1;
-                if (item.imei) returnedGrouped[key].imeis.push(item.imei);
-            } else {
-                // Active Items (Available or Sold)
+            // Bulk System Display Logic
+            // 1. Agar item bacha hua hai ya bik gaya hai (Active)
+            const currentAvail = (item.available_qty || 0) + (item.sold_qty || 0);
+            if (currentAvail > 0) {
                 if (!activeGrouped[key]) activeGrouped[key] = { ...item, quantity: 0, imeis: [], key: key };
-                activeGrouped[key].quantity += 1;
-                if (item.imei) activeGrouped[key].imeis.push(item.imei);
+                activeGrouped[key].quantity += currentAvail;
+                if (item.imei && item.status !== 'Returned') activeGrouped[key].imeis.push(item.imei);
+            }
+
+            // 2. Agar item wapis ho chuka hai (Returned)
+            if ((item.returned_qty || 0) > 0) {
+                retAmount += (item.purchase_price || 0) * item.returned_qty;
+                if (!returnedGrouped[key]) returnedGrouped[key] = { ...item, quantity: 0, imeis: [], key: key };
+                returnedGrouped[key].quantity += item.returned_qty;
+                if (item.imei && item.status === 'Returned') returnedGrouped[key].imeis.push(item.imei);
             }
         });
 
@@ -98,16 +102,7 @@ const PurchaseDetails = () => {
         };
     }, [items]);
 
-    // --- NAYA FUNCTION: Undo Return ---
-    const handleUndoReturn = async (record) => {
-        try {
-            await DataService.undoReturnItem(record.id);
-            notification.success({ message: 'Success', description: 'Item restored to inventory.' });
-            fetchDetails(); // Data refresh karein
-        } catch (error) {
-            notification.error({ message: 'Error', description: 'Failed to undo return.' });
-        }
-    };
+    
     
     const itemColumns = [
         { 
@@ -148,29 +143,7 @@ const PurchaseDetails = () => {
         { title: 'Purchase Price (Unit)', dataIndex: 'purchase_price', key: 'purchase_price', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
         { title: 'Subtotal', key: 'subtotal', align: 'right', render: (_, record) => formatCurrency(record.quantity * record.purchase_price, profile?.currency) },
         
-        // --- YEH HAI NAYA COLUMN (ACTION) ---
-        {
-            title: 'Action',
-            key: 'action',
-            align: 'center',
-            render: (_, record) => {
-                // Sirf 'Returned' items ke liye Delete (Undo) button dikhayein
-                if (record.status === 'Returned') {
-                    return (
-                        <Popconfirm 
-                            title="Undo Return?" 
-                            description="This will move item back to Available stock." 
-                            onConfirm={() => handleUndoReturn(record)}
-                            okText="Yes, Undo"
-                            cancelText="No"
-                        >
-                            <Button type="text" danger icon={<DeleteOutlined />} />
-                        </Popconfirm>
-                    );
-                }
-                return null; // Baqi items ke liye kuch na dikhayein
-            }
-        }
+        
     ];
     
     const showPaymentModal = () => { paymentForm.setFieldsValue({ amount: purchase.balance_due, payment_date: dayjs(), payment_method: 'Cash' }); setIsPaymentModalVisible(true); };
@@ -197,12 +170,17 @@ const showEditModal = () => {
     returnForm.setFieldsValue({ return_date: dayjs(), notes: '' });
     setSelectedReturnItems([]);
     
-    // --- FIX: Sirf Available Items dikhayen ---
-    // Hum items list ko filter nahi kar rahe, balke Table ko batayenge ke kin ko dikhana hai.
     // Behtar ye hai ke hum Table ke dataSource ko filter karein.
     setIsReturnModalVisible(true);
 };
-    const handleReturnSubmit = async (values) => { if (selectedReturnItems.length === 0) { notification.warning({ message: 'No Items Selected', description: 'Please select at least one item to return.' }); return; } try { const returnData = { purchase_id: id, item_ids: selectedReturnItems, return_date: values.return_date.format('YYYY-MM-DD'), notes: values.notes || null, }; await DataService.createPurchaseReturn(returnData); notification.success({ message: 'Success', description: 'Items returned successfully!' }); setIsReturnModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: error.message || 'Failed to process return.' }); } };
+    const handleReturnSubmit = async (values) => { if (selectedReturnItems.length === 0) { notification.warning({ message: 'No Items Selected', description: 'Please select at least one item to return.' }); return; } try {
+        const returnData = {
+            purchase_id: id,
+            items_with_qty: selectedReturnItems, 
+            return_date: values.return_date.format('YYYY-MM-DD'),
+            notes: values.notes || null,
+        };
+        await DataService.createPurchaseReturn(returnData); notification.success({ message: 'Success', description: 'Items returned successfully!' }); setIsReturnModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: error.message || 'Failed to process return.' }); } };
     const returnItemSelection = {
         onChange: (selectedRowKeys) => {
             setSelectedReturnItems(selectedRowKeys);
@@ -326,12 +304,46 @@ const showEditModal = () => {
             />
         )}
             <Modal title="Return Items to Supplier" open={isReturnModalVisible} onCancel={() => setIsReturnModalVisible(false)} onOk={returnForm.submit} okText="Process Return" width={800} okButtonProps={{ danger: true }}><Form form={returnForm} layout="vertical" onFinish={handleReturnSubmit} style={{ marginTop: '24px' }}><Form.Item name="return_date" label="Return Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="notes" label="Reason for Return (Optional)"><Input.TextArea rows={2} placeholder="e.g., Damaged items, wrong model, etc." /></Form.Item><Title level={5} style={{ marginTop: '16px' }}>Select Items to Return</Title><Table 
-    rowSelection={{ type: 'checkbox', ...returnItemSelection }} 
-    columns={itemColumns} 
-    dataSource={items.filter(i => i.status !== 'Returned')} // Sirf wo jo Returned nahi hain
+    dataSource={items.filter(i => i.status !== 'Returned' && i.available_qty > 0)} 
     rowKey="id" 
     pagination={false} 
-    size="small" 
+    size="small"
+    columns={[
+        { title: 'Product', dataIndex: 'product_name' },
+        { 
+            title: 'Available', 
+            dataIndex: 'available_qty', 
+            render: (qty) => <Tag color="blue">{qty} in stock</Tag> 
+        },
+        {
+            title: 'Return Qty',
+            key: 'return_qty',
+            render: (_, record) => (
+                <InputNumber 
+                    min={0} 
+                    max={record.available_qty} 
+                    defaultValue={0}
+                    onChange={(val) => {
+                        const current = selectedReturnItems.filter(i => i.inventory_id !== record.id);
+                        if (val > 0) {
+                            setSelectedReturnItems([...current, { inventory_id: record.id, qty: val, price: record.purchase_price }]);
+                        } else {
+                            setSelectedReturnItems(current);
+                        }
+                    }}
+                />
+            )
+        },
+        { 
+            title: 'Refund', 
+            key: 'refund', 
+            align: 'right',
+            render: (_, record) => {
+                const selected = selectedReturnItems.find(i => i.inventory_id === record.id);
+                return formatCurrency((selected?.qty || 0) * record.purchase_price, profile?.currency);
+            }
+        }
+    ]}
 />
 </Form></Modal>
         </div>

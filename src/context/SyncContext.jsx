@@ -424,11 +424,36 @@ export const SyncProvider = ({ children }) => {
                 const { error: itemsError } = await supabase.from('sale_items').insert(itemsWithRealId);
                 if (itemsError) throw itemsError;
 
-                const { error: invError } = await supabase
+                // Inventory Update on Server (Bulk System Logic - FIXED)
+                for (const updateInfo of inventory_ids) {
+                  // Check karein ke data ID hai ya Object
+                  const invId = typeof updateInfo === 'object' ? updateInfo.id : updateInfo;
+                  const qtyToMinus = typeof updateInfo === 'object' ? updateInfo.qtySold : 1;
+
+                  const { data: currentInv } = await supabase
                     .from('inventory')
-                    .update({ status: 'sold' })
-                    .in('id', inventory_ids);
-                if (invError) throw invError;
+                    .select('available_qty, sold_qty, imei')
+                    .eq('id', invId)
+                    .single();
+                  
+                  if (currentInv) {
+                    if (currentInv.imei) {
+                      await supabase.from('inventory')
+                        .update({ status: 'Sold', available_qty: 0, sold_qty: 1 })
+                        .eq('id', invId);
+                    } else {
+                      const newAvail = Math.max(0, (currentInv.available_qty || 0) - qtyToMinus);
+                      const newSold = (currentInv.sold_qty || 0) + qtyToMinus;
+                      await supabase.from('inventory')
+                        .update({ 
+                          available_qty: newAvail, 
+                          sold_qty: newSold,
+                          status: newAvail === 0 ? 'Sold' : 'Available'
+                        })
+                        .eq('id', invId);
+                    }
+                  }
+                }
                 await db.sale_items.where('sale_id').equals(saleData.id).delete();
             }
             
@@ -479,7 +504,7 @@ export const SyncProvider = ({ children }) => {
             else if (item.action === 'create_bulk_payment') {
                 const realSupplierId = idMap[item.data.supplier_id] || item.data.supplier_id;
                 const { error: supError } = await supabase.rpc('record_bulk_supplier_payment', {
-                    p_local_id: item.data.p_local_id,
+                    p_local_id: item.data.local_id,
                     p_supplier_id: realSupplierId,
                     p_amount: item.data.amount,
                     p_payment_method: item.data.payment_method,
@@ -559,47 +584,30 @@ export const SyncProvider = ({ children }) => {
                 error = supError;
             }
 
-            // --- NAYA CODE: Return Sync (FIXED MATCHING) ---
-            // Ab Action ka naam 'process_purchase_return' hai
+            // --- NAYA CODE: Return Sync (Bulk Quantity Support) ---
             else if (item.action === 'process_purchase_return') {
                 
-                // Data ab 'p_' prefix ke saath aa raha hai (DataService se match karein)
-                const { p_purchase_id, p_item_ids, p_return_date, p_notes } = item.data;
+                const { p_purchase_id, p_return_items, p_return_date, p_notes } = item.data;
 
-                // 1. Asli IDs dhoondein (Mapping check karein)
+                // 1. Asli Purchase ID dhoondein
                 const realPurchaseId = idMap[p_purchase_id] || p_purchase_id;
                 
-                // Items ki IDs ko map karein
-                const realItemIds = p_item_ids.map(id => idMap[id] || id);
+                // 2. Har item ki inventory_id ko map karein (agar wo local UUID thi)
+                const mappedReturnItems = p_return_items.map(retItem => ({
+                    ...retItem,
+                    inventory_id: idMap[retItem.inventory_id] || retItem.inventory_id
+                }));
 
-                // Sirf Numeric IDs filter karein (Safety)
-                const validItemIds = realItemIds.filter(id => !isNaN(id));
-
-                if (validItemIds.length > 0) {
-                    // 2. Server RPC Call
-                    // Note: Parameters ke naam wahi hain jo SQL function mein hain
-                    const { error: supError } = await supabase.rpc('process_purchase_return', {
-                        p_purchase_id: realPurchaseId,
-                        p_item_ids: validItemIds,
-                        p_return_date: p_return_date,
-                        p_notes: p_notes
-                    });
-                    error = supError;
-                }
+                // 3. Server RPC Call (Naye Parameters ke sath)
+                const { error: supError } = await supabase.rpc('process_purchase_return', {
+                    p_purchase_id: realPurchaseId,
+                    p_return_items: mappedReturnItems,
+                    p_return_date: p_return_date,
+                    p_notes: p_notes
+                });
+                error = supError;
             }
-
-            // --- Undo Return Sync ---
-            else if (item.action === 'undo_return_item') {
-                const { p_inventory_id } = item.data;
-                const realInvId = idMap[p_inventory_id] || p_inventory_id;
-                
-                if (!isNaN(realInvId)) {
-                    const { error: supError } = await supabase.rpc('undo_return_item', {
-                        p_inventory_id: realInvId
-                    });
-                    error = supError;
-                }
-            }
+            
 
             // --- CASH ADJUSTMENTS SYNC ---
             else if (item.table_name === 'cash_adjustments' && item.action === 'create') {
@@ -730,7 +738,11 @@ export const SyncProvider = ({ children }) => {
                 const { id: localReturnId, ...returnData } = return_record;
                 if (idMap[returnData.customer_id]) returnData.customer_id = idMap[returnData.customer_id];
                 
-                const { data: insertedReturn, error: retError } = await supabase.from('sale_returns').upsert([returnData], { onConflict: 'local_id' }).select().single();
+                const { data: insertedReturn, error: retError } = await supabase
+                    .from('sale_returns')
+                    .upsert([returnData], { onConflict: 'local_id' })
+                    .select()
+                    .single();
                 if (retError) throw retError;
 
                 const itemsWithRealId = items.map(i => {
@@ -746,8 +758,27 @@ export const SyncProvider = ({ children }) => {
                 const { error: payError } = await supabase.from('customer_payments').insert([payData]);
                 if (payError) throw payError;
 
-                const { error: invError } = await supabase.from('inventory').update({ status: 'available' }).in('id', inventory_ids);
-                if (invError) throw invError;
+                // Server Inventory Update for Returns (Bulk Logic)
+                for (const retItem of items) {
+                  const { data: currentInv } = await supabase
+                    .from('inventory')
+                    .select('available_qty, sold_qty, imei')
+                    .eq('id', retItem.inventory_id)
+                    .single();
+                  
+                  if (currentInv) {
+                    const qtyToReturn = retItem.quantity || 1;
+                    if (currentInv.imei) {
+                      await supabase.from('inventory').update({ status: 'Available', available_qty: 1, sold_qty: 0 }).eq('id', retItem.inventory_id);
+                    } else {
+                      await supabase.from('inventory').update({ 
+                        available_qty: (currentInv.available_qty || 0) + qtyToReturn, 
+                        sold_qty: Math.max(0, (currentInv.sold_qty || 0) - qtyToReturn),
+                        status: 'Available'
+                      }).eq('id', retItem.inventory_id);
+                    }
+                  }
+                }
 
                 await db.sale_returns.delete(localReturnId);
                 await db.sale_return_items.where('return_id').equals(localReturnId).delete();

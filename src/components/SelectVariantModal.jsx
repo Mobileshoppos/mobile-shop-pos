@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Table, Button, App, Tag, Space, InputNumber } from 'antd';
+import { PlusOutlined, CheckOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
 
-const SelectVariantModal = ({ visible, onCancel, onOk, product }) => {
+const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
     const { profile } = useAuth();
     const { message } = App.useApp();
     const [variants, setVariants] = useState([]);
@@ -33,7 +34,8 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product }) => {
                         if (!grouped[key]) {
                             grouped[key] = { ...item, inventory_ids: [], stock: 0, key: key };
                         }
-                        grouped[key].stock += 1;
+                        // Ab hum 1 jama karne ke bajaye available_qty jama karenge
+                        grouped[key].stock += (item.available_qty || 0);
                         grouped[key].inventory_ids.push(item.id);
                     });
                     setVariants(Object.values(grouped));
@@ -92,27 +94,64 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product }) => {
             key: 'details',
             render: (_, record) => (
                 <Space wrap>
-                    {record.item_attributes && Object.entries(record.item_attributes).map(([key, value]) => (
-                        <Tag key={key}>{`${key}: ${value}`}</Tag>
-                    ))}
-                    {record.imei && <Tag color="purple">{`IMEI: ${record.imei}`}</Tag>}
+                    {record.item_attributes && Object.entries(record.item_attributes).map(([key, value]) => {
+                        // 1. IMEI aur Serial wale tags ko yahan se filter karein taake double na ho
+                        const upperKey = key.toUpperCase();
+                        if (upperKey.includes('IMEI') || upperKey.includes('SERIAL')) return null;
+                        
+                        // 2. Sirf 'value' dikhayein (e.g., "8" ya "White"), label nahi
+                        return <Tag key={key}>{value}</Tag>;
+                    })}
+                    
+                    {/* 3. IMEI ko alag se Purple tag mein dikhayein (Bina "IMEI:" label ke) */}
+                    {record.imei && <Tag color="purple">{record.imei}</Tag>}
                 </Space>
             )
         },
         { title: 'In Stock', dataIndex: 'stock', key: 'stock', align: 'center' },
         { title: 'Sale Price', dataIndex: 'sale_price', key: 'sale_price', align: 'right', render: (price) => formatCurrency(price, profile?.currency) },
         {
-            title: 'Quantity to Add',
+            title: 'Select Item',
             key: 'action',
             align: 'center',
-            render: (_, record) => (
-                <InputNumber
-                    min={0}
-                    max={record.stock}
-                    defaultValue={0}
-                    onChange={(value) => handleQuantityChange(record.key, value || 0)}
-                />
-            )
+            render: (_, record) => {
+                // 1. Check karein ke kya yeh item abhi Modal mein select hua hai?
+                const isSelectedNow = selectedVariants.some(v => v.key === record.key);
+                
+                // 2. Check karein ke kya yeh item pehle se POS Cart mein mojood hai?
+                // IMEI items ke liye hum inventory_id match karte hain
+                const isAlreadyInCart = cart?.some(cartItem => 
+                    record.imei 
+                        ? record.inventory_ids.includes(cartItem.inventory_id) 
+                        : cartItem.variant_id === record.variant_id
+                );
+
+                if (record.imei) {
+                    // CASE 1: IMEI Based Product
+                    if (isAlreadyInCart) {
+                        return <Tag color="purple" icon={<CheckOutlined />}>In Cart</Tag>;
+                    }
+                    return (
+                        <Button 
+                            type={isSelectedNow ? "primary" : "default"}
+                            icon={isSelectedNow ? <CheckOutlined /> : <PlusOutlined />}
+                            onClick={() => handleQuantityChange(record.key, isSelectedNow ? 0 : 1)}
+                        >
+                            {isSelectedNow ? "Selected" : "Add"}
+                        </Button>
+                    );
+                } else {
+                    // CASE 2: Bulk Product (Charger/Cable) -> Purana InputNumber dikhayein
+                    return (
+                        <InputNumber
+                            min={0}
+                            max={record.stock}
+                            value={selectedVariants.find(v => v.key === record.key)?.quantity || 0}
+                            onChange={(value) => handleQuantityChange(record.key, value || 0)}
+                        />
+                    );
+                }
+            }
         }
     ];
 

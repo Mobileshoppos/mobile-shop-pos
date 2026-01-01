@@ -351,7 +351,15 @@ const Dashboard = () => {
                 {timeRange === 'today' ? "Today's" : "Total"} profit after expenses
             </div>
             <div style={{ marginTop: 3 }}>
-              <Tag color="non" style={{ fontSize: '11px', borderRadius: '4px' }}>
+              <Tag 
+                style={{ 
+                  fontSize: '11px', 
+                  borderRadius: '4px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.2)', // Halka transparent background
+                  color: 'white', // Text hamesha safaid rahega
+                  border: 'none' 
+                }}
+              >
                 Margin: {stats?.profitMargin?.toFixed(1)}%
               </Tag>
             </div>
@@ -385,8 +393,14 @@ const Dashboard = () => {
       innerRadius={0.6}
       label={false}
       legend={false}
+      theme={isDarkMode ? 'dark' : 'light'}
       tooltip={{
         formatter: (datum) => ({ name: datum.type, value: formatCurrency(datum.value, profile?.currency) }),
+        domStyles: isDarkMode ? {
+            'g2-tooltip': { backgroundColor: '#333', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' },
+            'g2-tooltip-title': { color: '#fff' },
+            'g2-tooltip-list-item': { color: '#fff' }
+        } : undefined
       }}
       padding="auto"
       autoFit

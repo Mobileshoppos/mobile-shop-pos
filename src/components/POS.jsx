@@ -107,14 +107,14 @@ const POS = () => {
 
           if (itemsMap.has(key)) {
             const existing = itemsMap.get(key);
-            existing.display_quantity += 1;
-            existing.ids.push(variant.id);
+          existing.display_quantity += (variant.available_qty || 0); // 1 ki jagah available_qty jama karein
+          existing.ids.push(variant.id);
             if (variant.imei) existing.imeis.push(variant.imei);
           } else {
             itemsMap.set(key, {
-              ...variant,
-              display_quantity: 1,
-              ids: [variant.id],
+            ...variant,
+            display_quantity: variant.available_qty || 0, // 1 ki jagah available_qty rakhein
+            ids: [variant.id],
               imeis: variant.imei ? [variant.imei] : [],
               // Important for Cart:
               product_id: product.id,
@@ -356,14 +356,13 @@ const POS = () => {
         // Hum ID ke bajaye Attributes aur Price match karenge
         const parentProduct = allProducts.find(p => p.id === item.product_id);
         const realStockCount = parentProduct 
-            ? parentProduct.variants.filter(v => 
-                // Attributes match karein (JSON stringify sab se asaan tareeqa hai compare karne ka)
-                JSON.stringify(v.item_attributes || {}) === JSON.stringify(item.item_attributes || {}) &&
-                // Price bhi match karein (taake sahi variant mile)
-                v.sale_price === item.sale_price &&
-                // Sirf Available stock ginein
-                (v.status || 'available').toLowerCase() === 'available'
-              ).length
+            ? parentProduct.variants
+                .filter(v => 
+                    JSON.stringify(v.item_attributes || {}) === JSON.stringify(item.item_attributes || {}) &&
+                    v.sale_price === item.sale_price &&
+                    (v.status || 'available').toLowerCase() === 'available'
+                )
+                .reduce((sum, v) => sum + (v.available_qty || 0), 0) // Rows ginne ki bajaye qty jama karein
             : 0;
         // -------------------------------
 
@@ -487,12 +486,13 @@ const POS = () => {
           // --- STOCK CHECK LOGIC (FIXED) ---
           const parentProduct = allProducts.find(p => p.id === item.product_id);
           const realStockCount = parentProduct 
-              ? parentProduct.variants.filter(v => 
-                  // Attributes aur Price match karein
-                  JSON.stringify(v.item_attributes || {}) === JSON.stringify(item.item_attributes || {}) &&
-                  v.sale_price === item.sale_price &&
-                  (v.status || 'available').toLowerCase() === 'available'
-                ).length
+              ? parentProduct.variants
+                  .filter(v => 
+                      JSON.stringify(v.item_attributes || {}) === JSON.stringify(item.item_attributes || {}) &&
+                      v.sale_price === item.sale_price &&
+                      (v.status || 'available').toLowerCase() === 'available'
+                  )
+                  .reduce((sum, v) => sum + (v.available_qty || 0), 0) // Qty jama karein
               : 0;
 
           if (value > realStockCount) {
@@ -576,35 +576,34 @@ const POS = () => {
                     price_at_sale: cartItem.sale_price,
                     user_id: user.id
                 });
-                inventoryIdsToUpdate.push(inventoryId);
+                inventoryIdsToUpdate.push({ id: inventoryId, qtySold: 1 });
             } else {
-                const availableItems = await db.inventory
+                // Bulk Item: Sirf wo row dhoondein jis mein kafi quantity ho
+                const batchItem = await db.inventory
                     .where('product_id').equals(cartItem.product_id)
-                    .filter(item => (item.status || '').toLowerCase() === 'available') 
-                    .limit(cartItem.quantity)
-                    .toArray();
+                    .filter(item => 
+                        (item.status || '').toLowerCase() === 'available' && 
+                        (item.available_qty || 0) >= cartItem.quantity &&
+                        JSON.stringify(item.item_attributes || {}) === JSON.stringify(cartItem.item_attributes || {})
+                    )
+                    .first();
 
-                if (availableItems.length < cartItem.quantity) {
+                if (!batchItem) {
                      throw new Error(`Not enough stock locally for ${cartItem.product_name}.`);
                 }
 
-                for (const invItem of availableItems) {
-                    allSaleItemsToInsert.push({
-                        id: crypto.randomUUID(),
-                        sale_id: saleId,
-                        inventory_id: invItem.id,
-                        product_id: invItem.product_id,
-                        
-                        // *** YEH NAYA COLUMN HAI ***
-                        product_name_snapshot: cartItem.product_name,
-                        // ***************************
-
-                        quantity: 1,
-                        price_at_sale: cartItem.sale_price,
-                        user_id: user.id
-                    });
-                    inventoryIdsToUpdate.push(invItem.id);
-                }
+                allSaleItemsToInsert.push({
+                    id: crypto.randomUUID(),
+                    sale_id: saleId,
+                    inventory_id: batchItem.id,
+                    product_id: cartItem.product_id,
+                    product_name_snapshot: cartItem.product_name,
+                    quantity: cartItem.quantity, // Poori quantity ek hi row mein
+                    price_at_sale: cartItem.sale_price,
+                    user_id: user.id
+                });
+                // Hum ID aur bechi gayi quantity dono save kar rahe hain
+                inventoryIdsToUpdate.push({ id: batchItem.id, qtySold: cartItem.quantity });
             }
           }
 
@@ -612,8 +611,23 @@ const POS = () => {
           await db.sales.add(saleRecord);
           if (db.sale_items) await db.sale_items.bulkAdd(allSaleItemsToInsert);
           
-          for (const id of inventoryIdsToUpdate) {
-              await db.inventory.update(id, { status: 'sold' });
+          // B. Inventory Update (Bulk System Logic)
+          for (const updateInfo of inventoryIdsToUpdate) {
+              // Agar IMEI hai to updateInfo sirf ID hogi, agar Bulk hai to object hoga
+              const invId = typeof updateInfo === 'object' ? updateInfo.id : updateInfo;
+              const qtyToMinus = typeof updateInfo === 'object' ? updateInfo.qtySold : 1;
+
+              const invItem = await db.inventory.get(invId);
+              if (invItem) {
+                  const newAvail = Math.max(0, (invItem.available_qty || 0) - qtyToMinus);
+                  const newSold = (invItem.sold_qty || 0) + qtyToMinus;
+                  
+                  await db.inventory.update(invId, {
+                      available_qty: newAvail,
+                      sold_qty: newSold,
+                      status: newAvail === 0 ? 'Sold' : 'Available'
+                  });
+              }
           }
 
           // Balance Update
@@ -1052,8 +1066,8 @@ const POS = () => {
               <div style={{ marginBottom: '16px' }}>
                 <Text type="secondary" style={{ display: 'block', marginBottom: '8px' }}>Receive Money In:</Text>
                 <Radio.Group onChange={(e) => setCashOrBank(e.target.value)} value={cashOrBank} buttonStyle="solid">
-                  <Radio.Button value="Cash">Cash (Galla)</Radio.Button>
-                  <Radio.Button value="Bank">Bank / EasyPaisa</Radio.Button>
+                  <Radio.Button value="Cash">Cash</Radio.Button>
+                  <Radio.Button value="Bank">Bank / Online</Radio.Button>
                   </Radio.Group>
               </div>
               )}
@@ -1137,7 +1151,7 @@ const POS = () => {
         </Col>
       </Row>
       <Modal title="Add a New Customer" open={isAddCustomerModalOpen} onCancel={() => setIsAddCustomerModalOpen(false)} onOk={() => addForm.submit()} okText="Save Customer"><Form form={addForm} layout="vertical" onFinish={handleAddCustomer}><Form.Item name="name" label="Full Name" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="phone_number" label="Phone Number" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="address" label="Address (Optional)"><Input.TextArea rows={3} /></Form.Item></Form></Modal>
-      {isVariantModalOpen && <SelectVariantModal visible={isVariantModalOpen} onCancel={() => setIsVariantModalOpen(false)} onOk={handleVariantsSelected} product={productForVariantSelection} />}
+      {isVariantModalOpen && <SelectVariantModal visible={isVariantModalOpen} onCancel={() => setIsVariantModalOpen(false)} onOk={handleVariantsSelected} product={productForVariantSelection} cart={cart} />}
     </>
   );
 };
