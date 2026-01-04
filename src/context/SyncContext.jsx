@@ -333,6 +333,9 @@ export const SyncProvider = ({ children }) => {
                 const { purchase, items } = item.data;
                 // Supplier ID check karein (Agar abhi change hui hai)
                 const realSupplierId = idMap[purchase.supplier_id] || purchase.supplier_id;
+                if (typeof realSupplierId === 'string') {
+                  console.log("Waiting for Supplier ID mapping..."); continue;
+                }
                 
                 const updatedItems = items.map(i => ({
                     ...i,
@@ -397,6 +400,9 @@ export const SyncProvider = ({ children }) => {
                 if (idMap[saleData.customer_id]) {
                     saleData.customer_id = idMap[saleData.customer_id];
                 }
+                if (typeof saleData.customer_id === 'string' && saleData.customer_id !== '1') {
+                  console.log("Waiting for Customer ID mapping..."); continue;
+                }
 
                 const { data: insertedSale, error: saleError } = await supabase
                     .from('sales')
@@ -406,7 +412,6 @@ export const SyncProvider = ({ children }) => {
 
                 if (saleError) throw saleError;
 
-                // 2. ITEMS FIX (Yahan tabdeeli hai): 
                 // Hum Item ki 'id' nikaal denge, taake Supabase error na de.
                 const itemsWithRealId = items.map(i => {
                     // 'id' aur 'sale_id' dono nikaal dein
@@ -619,7 +624,7 @@ export const SyncProvider = ({ children }) => {
 
             else if (item.table_name === 'daily_closings' && item.action === 'create') {
                 const { id, ...closingData } = item.data;
-                const { error: supError } = await supabase.from('daily_closings').upsert([adjustmentData], { onConflict: 'local_id' });
+                const { error: supError } = await supabase.from('daily_closings').upsert([closingData], { onConflict: 'local_id' });
                 error = supError;
                 if (!error) await db.daily_closings.delete(id);
             }
@@ -789,7 +794,7 @@ export const SyncProvider = ({ children }) => {
               await db.sync_queue.delete(item.id);
               console.log(`Synced item ${item.id} successfully.`);
             } else {
-              console.error('Sync item failed:', error);
+              console.error('Sync item failed:', error); await db.sync_queue.update(item.id, { status: 'error', last_error: error.message || 'Unknown error' });
             }
           } catch (err) {
             console.error('Sync processing error:', err);
