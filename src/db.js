@@ -7,36 +7,36 @@ export const db = new Dexie('MobileShopDB');
 // Note: Hum sirf wohi columns likhte hain jin se hamein search ya filter karna ho.
 // Baqi data khud ba khud save ho jata hai.
 
-db.version(16).stores({
+db.version(17).stores({
   // --- Business Data Tables (Jo Supabase se sync honge) ---
   
   // Products: ID, Category, Name aur Barcode se search karne ke liye
-  products: 'id, category_id, name, barcode, user_id, is_active', 
+  products: 'id, category_id, name, barcode, user_id, is_active, updated_at', 
   
   // Categories
-  categories: 'id, user_id, name',
+  categories: 'id, user_id, name, updated_at',
   
   // Customers: Phone number se dhoondne ke liye
-  customers: 'id, phone, name, user_id',
+  customers: 'id, phone, name, user_id, updated_at',
   
   // Suppliers
-  suppliers: 'id, name, user_id',
+  suppliers: 'id, name, user_id, updated_at',
   
   // Purchases (Khareedari)
-  purchases: 'id, supplier_id, purchase_date, user_id',
+  purchases: 'id, supplier_id, purchase_date, user_id, updated_at',
   purchase_items: 'id, purchase_id, product_id', // Purchase ke andar kya items thay
   
   // Sales (Farokht)
-  sales: 'id, customer_id, sale_date, user_id, payment_method',
+  sales: 'id, customer_id, sale_date, user_id, payment_method, updated_at',
   sale_items: 'id, sale_id, product_id, product_name_snapshot',  // Sale ke andar kya items thay
   
   // Expenses (Akhrajat)
-  expenses: 'id, category_id, expense_date, user_id, payment_method',
+  expenses: 'id, category_id, expense_date, user_id, payment_method, updated_at',
   expense_categories: 'id, user_id',
 
-  inventory: 'id, product_id, purchase_id, status, user_id, variant_id, imei, available_qty, sold_qty', 
-  customer_payments: 'id, customer_id, user_id, payment_method',
-  sale_returns: 'id, sale_id, customer_id, user_id',
+  inventory: 'id, product_id, purchase_id, status, user_id, variant_id, imei, available_qty, sold_qty, updated_at', 
+  customer_payments: 'id, customer_id, user_id, payment_method, updated_at',
+  sale_returns: 'id, sale_id, customer_id, user_id, updated_at',
   sale_return_items: 'id, return_id, inventory_id',
   purchase_return_items: 'id, return_id, product_id',
   credit_payouts: 'id, customer_id, user_id, payment_method',
@@ -45,8 +45,8 @@ db.version(16).stores({
   product_variants: 'id, product_id, barcode',
   supplier_refunds: 'id, supplier_id, refund_date, user_id, payment_method',
   id_mappings: '++id, local_id, server_id, table_name',
-  cash_adjustments: 'id, user_id, type, payment_method, created_at, transfer_to',
-  daily_closings: 'id, user_id, closing_date, created_at',
+  cash_adjustments: 'id, user_id, type, payment_method, created_at, transfer_to, updated_at',
+  daily_closings: 'id, user_id, closing_date, created_at, updated_at',
   
   // --- Offline System Tables (Jo sirf Local rahenge) ---
   

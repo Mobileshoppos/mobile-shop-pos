@@ -61,6 +61,17 @@ export const SyncProvider = ({ children }) => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [pendingCount]);
 
+  // Naya Helper: Yeh check karega ke record queue mein to nahi?
+  const smartPut = async (tableName, data, pendingIds) => {
+    if (!data || !Array.isArray(data)) return;
+    for (const record of data) {
+      // Agar yeh record abhi upload hona baqi hai (queue mein hai), to isay touch na karo
+      if (!pendingIds.has(record.id) && !pendingIds.has(record.local_id)) {
+        await db[tableName].put(record);
+      }
+    }
+  };
+
   // --- DOWNLOAD FUNCTION ---
   const syncAllData = async () => {
     if (!navigator.onLine) return;
@@ -69,77 +80,70 @@ export const SyncProvider = ({ children }) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      // 1. Aakhri sync ka waqt nikalna (Delta Sync)
+      const settings = await db.user_settings.get('last_sync');
+      const lastSyncTime = settings ? settings.value : new Date(0).toISOString();
+      
+      // 2. Queue mein majood IDs ki list (Conflict Handling)
+      const queueItems = await db.sync_queue.toArray();
+      const pendingIds = new Set(queueItems.map(item => item.data?.id || item.data?.local_id));
+
+      console.log(`Syncing started (Delta Sync since: ${lastSyncTime})...`);
 
       console.log('Syncing started (Downloading)...');
 
       // 1. Categories
-      const { data: categories } = await supabase.rpc('get_user_categories_with_settings');
-      if (categories) await db.categories.bulkPut(categories);
+      const { data: categories } = await supabase.from('categories').select('*').or(`user_id.eq.${user.id},user_id.is.null`).gt('updated_at', lastSyncTime);
+      await smartPut('categories', categories, pendingIds);
 
       // 2. Products
-      const { data: baseProducts } = await supabase.from('products').select('*').eq('user_id', user.id);
-      const { data: viewProducts } = await supabase.from('products_with_quantity').select('*'); 
-
-      if (baseProducts) {
-        const viewMap = {};
-        if (viewProducts) {
-            viewProducts.forEach(vp => { viewMap[vp.id] = vp; });
-        }
-        const mergedProducts = baseProducts.map(p => {
-            const viewData = viewMap[p.id] || {};
-            return {
-                ...p,
-                quantity: viewData.quantity || 0,
-                min_sale_price: viewData.min_sale_price || p.sale_price,
-                max_sale_price: viewData.max_sale_price || p.sale_price
-            };
-        });
-        await db.products.bulkPut(mergedProducts);
-      }
+      const { data: products } = await supabase.from('products').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('products', products, pendingIds);
+      
 
       const { data: variants } = await supabase.from('product_variants').select('*');
       if (variants) await db.product_variants.bulkPut(variants);
 
       // 3. Inventory
-      const { data: inventoryItems } = await supabase.from('inventory').select('*').eq('user_id', user.id);
-      if (inventoryItems) await db.inventory.bulkPut(inventoryItems);
+      const { data: inventoryItems } = await supabase.from('inventory').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('inventory', inventoryItems, pendingIds);
 
       // 4. Customers
-      const { data: customers } = await supabase.from('customers_with_balance').select('*');
-      if (customers) await db.customers.bulkPut(customers);
+      const { data: customers } = await supabase.from('customers_with_balance').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('customers', customers, pendingIds);
 
       // 5. Suppliers & Expenses
-      const { data: suppliers } = await supabase.from('suppliers_with_balance').select('*');
-      if (suppliers) await db.suppliers.bulkPut(suppliers);
-      const { data: supPayments } = await supabase.from('supplier_payments').select('*').eq('user_id', user.id);
-      if (supPayments) await db.supplier_payments.bulkPut(supPayments);
-      const { data: attributes } = await supabase.from('category_attributes').select('*');
-      if (attributes) await db.category_attributes.bulkPut(attributes);
-      const { data: expCats } = await supabase.from('expense_categories').select('*').or(`user_id.eq.${user.id},user_id.is.null`);
-      if (expCats) await db.expense_categories.bulkPut(expCats);
-      const { data: expenses } = await supabase.from('expenses').select('*').eq('user_id', user.id);
-      if (expenses) await db.expenses.bulkPut(expenses);
-      const { data: adjustments } = await supabase.from('cash_adjustments').select('*').eq('user_id', user.id);
-      if (adjustments) await db.cash_adjustments.bulkPut(adjustments);
-      const { data: closings } = await supabase.from('daily_closings').select('*').eq('user_id', user.id);
-      if (closings) await db.daily_closings.bulkPut(closings);
+      const { data: suppliers } = await supabase.from('suppliers_with_balance').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('suppliers', suppliers, pendingIds);
+      const { data: supPayments } = await supabase.from('supplier_payments').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('supplier_payments', supPayments, pendingIds);
+      const { data: attributes } = await supabase.from('category_attributes').select('*').gt('updated_at', lastSyncTime);
+      await smartPut('category_attributes', attributes, pendingIds);
+      const { data: expCats } = await supabase.from('expense_categories').select('*').or(`user_id.eq.${user.id},user_id.is.null`).gt('updated_at', lastSyncTime);
+      await smartPut('expense_categories', expCats, pendingIds);
+      const { data: expenses } = await supabase.from('expenses').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('expenses', expenses, pendingIds);
+      const { data: adjustments } = await supabase.from('cash_adjustments').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('cash_adjustments', adjustments, pendingIds);
+      const { data: closings } = await supabase.from('daily_closings').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('daily_closings', closings, pendingIds);
 
       // 6. Purchases
-      const { data: purchases } = await supabase.from('purchases').select('*').eq('user_id', user.id);
-      if (purchases) await db.purchases.bulkPut(purchases);
+      const { data: purchases } = await supabase.from('purchases').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('purchases', purchases, pendingIds);
 
       // 7. Sales & Items
-      const { data: sales } = await supabase.from('sales').select('*').eq('user_id', user.id);
-      if (sales) await db.sales.bulkPut(sales);
-      const { data: saleItems } = await supabase.from('sale_items').select('*').eq('user_id', user.id);
-      if (saleItems) await db.sale_items.bulkPut(saleItems);
+      const { data: sales } = await supabase.from('sales').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('sales', sales, pendingIds);
+      const { data: saleItems } = await supabase.from('sale_items').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('sale_items', saleItems, pendingIds);
 
       // 8. Payments, Returns & Payouts
-      const { data: payments } = await supabase.from('customer_payments').select('*').eq('user_id', user.id);
-      if (payments) await db.customer_payments.bulkPut(payments);
+      const { data: payments } = await supabase.from('customer_payments').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('customer_payments', payments, pendingIds);
       
-      const { data: returns } = await supabase.from('sale_returns').select('*').eq('user_id', user.id);
-      if (returns) await db.sale_returns.bulkPut(returns);
+      const { data: returns } = await supabase.from('sale_returns').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('sale_returns', returns, pendingIds);
       
       const { data: returnItems } = await supabase.from('sale_return_items').select('*');
       if (returnItems) await db.sale_return_items.bulkPut(returnItems);
@@ -147,9 +151,11 @@ export const SyncProvider = ({ children }) => {
       const { data: purReturnItems } = await supabase.from('purchase_return_items').select('*');
       if (purReturnItems) await db.purchase_return_items.bulkPut(purReturnItems);
 
-      const { data: payouts } = await supabase.from('credit_payouts').select('*').eq('user_id', user.id);
-      if (payouts) await db.credit_payouts.bulkPut(payouts);
+      const { data: payouts } = await supabase.from('credit_payouts').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('credit_payouts', payouts, pendingIds);
 
+      // Naya sync time save karein agli dafa ke liye
+      await db.user_settings.put({ id: 'last_sync', value: new Date().toISOString() });
       console.log('Syncing completed successfully!');
       
     } catch (error) {

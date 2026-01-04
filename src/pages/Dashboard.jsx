@@ -668,7 +668,7 @@ const Dashboard = () => {
           <Form.Item name="payment_method" label="Where?" rules={[{ required: true }]}>
             <Radio.Group buttonStyle="solid">
               <Radio.Button value="Cash">Cash</Radio.Button>
-              <Radio.Button value="Bank">Bank</Radio.Button>
+              <Radio.Button value="Bank">Bank / Online</Radio.Button>
             </Radio.Group>
           </Form.Item>
 
