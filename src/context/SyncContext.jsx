@@ -83,6 +83,7 @@ export const SyncProvider = ({ children }) => {
       // 1. Aakhri sync ka waqt nikalna (Delta Sync)
       const settings = await db.user_settings.get('last_sync');
       const lastSyncTime = settings ? settings.value : new Date(0).toISOString();
+      const { data: serverNow } = await supabase.rpc('get_server_time');
       
       // 2. Queue mein majood IDs ki list (Conflict Handling)
       const queueItems = await db.sync_queue.toArray();
@@ -154,8 +155,8 @@ export const SyncProvider = ({ children }) => {
       const { data: payouts } = await supabase.from('credit_payouts').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('credit_payouts', payouts, pendingIds);
 
-      // Naya sync time save karein agli dafa ke liye
-      await db.user_settings.put({ id: 'last_sync', value: new Date().toISOString() });
+      // Professional Way: Agli dafa ke liye wahi waqt save karein jo sync shuru hone par server ne bataya tha
+      await db.user_settings.put({ id: 'last_sync', value: serverNow });
       console.log('Syncing completed successfully!');
       
     } catch (error) {
@@ -635,12 +636,28 @@ export const SyncProvider = ({ children }) => {
                 if (!error) await db.daily_closings.delete(id);
             }
 
-            // Expense Categories & Expenses (Standard Logic)
             else if (item.table_name === 'expense_categories' && item.action === 'create') {
-                const { id, ...catData } = item.data;
-                const { error: supError } = await supabase.from('expense_categories').upsert([catData], { onConflict: 'local_id' });
+                const { id: localId, ...catData } = item.data;
+                const { data: insertedCat, error: supError } = await supabase
+                    .from('expense_categories')
+                    .upsert([catData], { onConflict: 'local_id' })
+                    .select()
+                    .single();
+                
                 error = supError;
-                if (!error) await db.expense_categories.delete(id);
+
+                if (!error && insertedCat) {
+                    const newServerId = insertedCat.id;
+                    // 1. Nayi ID ko mapping mein save karein
+                    await updateMapping(localId, newServerId, 'expense_categories');
+                    // 2. Tamam local expenses mein purani ID ko nayi ID se badal dein
+                    await db.expenses.where('category_id').equals(localId).modify({ category_id: newServerId });
+
+                    // 3. Local record ko server ID ke sath swap karein
+                    const catToSave = { ...item.data, id: newServerId, ...insertedCat };
+                    await db.expense_categories.put(catToSave);
+                    await db.expense_categories.delete(localId);
+                }
             }
             else if (item.table_name === 'expense_categories' && item.action === 'update') {
                 const { id, name } = item.data;
@@ -656,10 +673,24 @@ export const SyncProvider = ({ children }) => {
                 }
             }
             else if (item.table_name === 'expenses' && item.action === 'create') {
-                const { id, ...expenseData } = item.data;
+                const expenseData = { ...item.data };
+                const { id: localId } = expenseData;
+                delete expenseData.id;
+
+                // 1. Check karein ke kya iski category ki asli ID mil gayi hai?
+                if (idMap[expenseData.category_id]) {
+                    expenseData.category_id = idMap[expenseData.category_id];
+                }
+
+                // 2. Agar abhi bhi UUID hai, to intezar karo jab tak category sync na ho jaye
+                if (typeof expenseData.category_id === 'string') {
+                    console.log("Waiting for Expense Category ID mapping...");
+                    continue; 
+                }
+
                 const { error: supError } = await supabase.from('expenses').upsert([expenseData], { onConflict: 'local_id' });
                 error = supError;
-                if (!error) await db.expenses.delete(id);
+                if (!error) await db.expenses.delete(localId);
             }
             else if (item.table_name === 'expenses' && item.action === 'update') {
                 const { id, ...updates } = item.data;
@@ -689,11 +720,10 @@ export const SyncProvider = ({ children }) => {
                 error = supError;
 
                 if (!error && insertedCat) {
-                    // 2. YAHAN HAI FIX: Nayi ID ko Map mein save karein
-                    // Taake agle items (Attributes) ko pata chal sake ke Abba ki nayi ID kya hai
                     await updateMapping(localId, insertedCat.id, 'categories');
-
-                    // 3. Local DB se purani ID wala record delete karein
+                    
+                    // Professional Swap: Pehle asli record save karein, phir purana delete karein
+                    await db.categories.put(insertedCat);
                     await db.categories.delete(localId);
                 }
             }
@@ -712,21 +742,27 @@ export const SyncProvider = ({ children }) => {
                  }
             }
             
-            // --- FIX: Attributes Sync Logic Updated ---
             else if (item.table_name === 'category_attributes' && item.action === 'create') {
-                const { id, ...attrData } = item.data;
+                const { id: localId, ...attrData } = item.data;
                 
-                // Yahan hum check kar rahe hain ke kya Category ID server wali ID se replace honi chahiye?
-                // idMap wo list hai jisme hum ne nayi IDs save ki hoti hain
                 if (idMap[attrData.category_id]) {
                     attrData.category_id = idMap[attrData.category_id];
                 }
 
-                const { error: supError } = await supabase.from('category_attributes').insert([attrData]);
+                // Server par insert karein aur naya data (asli ID ke sath) wapis mangwayein
+                const { data: insertedAttr, error: supError } = await supabase
+                    .from('category_attributes')
+                    .insert([attrData])
+                    .select()
+                    .single();
+                
                 error = supError;
                 
-                // Agar kamyab ho jaye to local ID delete kar dein
-                if (!error) await db.category_attributes.delete(id);
+                if (!error && insertedAttr) {
+                    // Professional Swap: Purana temporary record delete karein aur server wala asli record save karein
+                    await db.category_attributes.delete(localId);
+                    await db.category_attributes.put(insertedAttr);
+                }
             }
 
             else if (item.table_name === 'category_attributes' && item.action === 'update') {

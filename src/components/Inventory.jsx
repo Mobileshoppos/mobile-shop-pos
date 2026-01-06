@@ -362,8 +362,7 @@ const Inventory = () => {
           // 1. Local DB Update
           await db.products.update(editingProductModel.id, {
               name: values.name,
-              brand: values.brand,
-              category_id: values.category_id
+              brand: values.brand
           });
 
           // 2. Server Update (Supabase)
@@ -372,8 +371,7 @@ const Inventory = () => {
                   .from('products')
                   .update({
                       name: values.name,
-                      brand: values.brand,
-                      category_id: values.category_id
+                      brand: values.brand
                   })
                   .eq('id', editingProductModel.id);
               
@@ -982,7 +980,6 @@ const Inventory = () => {
   </Form>
 </Modal>
 
-{/* --- PRODUCT NAME EDIT MODAL (START) --- */}
       <Modal
         title="Edit Product Details"
         open={isProductEditModalOpen}
@@ -993,16 +990,8 @@ const Inventory = () => {
         <Form form={productEditForm} layout="vertical" onFinish={handleProductModelUpdate}>
           <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="brand" label="Brand"><Input /></Form.Item>
-          <Form.Item name="category_id" label="Category" rules={[{ required: true }]}>
-              <Select>
-                  {categories.map(c => <Option key={c.id} value={c.id}>{c.name}</Option>)}
-              </Select>
-          </Form.Item>
         </Form>
       </Modal>
-      {/* --- PRODUCT NAME EDIT MODAL (END) --- */}
-
-      {/* Iske neeche AddPurchaseForm hoga, usay mat chherein */}
       
       {/* MODAL 3: ADD STOCK (PURCHASE FORM) */}
 {isPurchaseModalOpen && (
