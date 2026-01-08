@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { db } from '../db';
 import { supabase } from '../supabaseClient';
+import Logger from '../utils/logger';
 
 const SyncContext = createContext();
 
@@ -178,9 +179,8 @@ export const SyncProvider = ({ children }) => {
 
   // --- UPLOAD FUNCTION (Fixed: Lock + Suppliers Swap) ---
   const processSyncQueue = async () => {
-  // 1. LOCK: Agar internet nahi hai YA Ref Lock laga hua hai, to ruk jayen.
-  // Hum 'isSyncing' state ke bajaye 'isSyncingRef.current' check karenge jo foran kaam karta hai.
   if (!navigator.onLine || isSyncingRef.current) return;
+  const startTime = Date.now();
 
   // 2. Lock lagayen (Ref aur State dono)
   isSyncingRef.current = true; // Foran Lock
@@ -836,7 +836,20 @@ export const SyncProvider = ({ children }) => {
               await db.sync_queue.delete(item.id);
               console.log(`Synced item ${item.id} successfully.`);
             } else {
-              console.error('Sync item failed:', error); await db.sync_queue.update(item.id, { status: 'error', last_error: error.message || 'Unknown error' });
+              // --- SMART ERROR LOGGING START ---
+              let userGuide = "Sync mein masla aaya hai, system dubara koshish karega.";
+              
+              if (error.message?.includes('foreign key')) {
+                userGuide = "Kuch purana data (Category ya Supplier) abhi sync nahi hua. Aap thora intezar karein, app isay khud theek kar degi.";
+              } else if (error.message?.includes('unique constraint') || error.code === '23505') {
+                userGuide = "Yeh record pehle hi server par majood hai. System isay khud merge kar raha hai.";
+              }
+
+              // Logger ko report bhejna
+              Logger.error('sync', `Sync failed for ${item.table_name}`, error, userGuide);
+              // --- SMART ERROR LOGGING END ---
+
+              await db.sync_queue.update(item.id, { status: 'error', last_error: error.message || 'Unknown error' });
             }
           } catch (err) {
             console.error('Sync processing error:', err);
@@ -848,8 +861,14 @@ export const SyncProvider = ({ children }) => {
     } catch (err) {
         console.error("Critical Sync Error:", err);
     } finally {
-    // 3. LOCK KHOL DEIN
-    isSyncingRef.current = false; // Ref Lock khol dein
+    const duration = Date.now() - startTime; // Kitna waqt laga
+    
+    // Agar queue mein items thay, tabhi performance report bhejein
+    if (pendingCount > 0) {
+      Logger.info('sync_performance', `Sync completed in ${duration}ms`, `Internet Speed: ${duration < 3000 ? 'Tez (Fast)' : 'Ahista (Slow)'}`);
+    }
+
+    isSyncingRef.current = false;
     setIsSyncing(false);
   }
 };

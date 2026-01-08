@@ -434,6 +434,11 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
     try {
       const values = await form.validateFields(['supplier_id', 'notes', 'amount_paid', 'payment_method']);
       if (purchaseItems.length === 0) { message.error("Please add at least one item."); return; }
+      // Check if Supplier is not yet synced (Security Guard)
+      if (typeof values.supplier_id === 'string' && isNaN(values.supplier_id)) {
+      message.warning("New supplier is still being uploaded to the server. Please wait 2-3 seconds and try saving again.");
+      return;
+     }
       
       setIsSubmitting(true);
 

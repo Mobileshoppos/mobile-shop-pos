@@ -28,6 +28,7 @@ import { supabase } from './supabaseClient';
 import { darkThemeTokens, lightThemeTokens } from './theme/themeConfig';
 import SideMenu from './components/SideMenu';
 import Dashboard from './pages/Dashboard';
+import SystemLogs from './pages/SystemLogs';
 
 const { Content } = Layout;
 
@@ -140,6 +141,7 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route path="settings" element={<SettingsPage />} />
         <Route path="subscription" element={<SubscriptionPage />} />
         <Route path="*" element={<Navigate to="/" />} />
+        <Route path="/logs" element={<SystemLogs />} />
       </Route>
     </Routes>
   );
