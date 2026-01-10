@@ -159,6 +159,10 @@ export const SyncProvider = ({ children }) => {
       // Professional Way: Agli dafa ke liye wahi waqt save karein jo sync shuru hone par server ne bataya tha
       await db.user_settings.put({ id: 'last_sync', value: serverNow });
       console.log('Syncing completed successfully!');
+      // Naya: Agar koi data mismatch hai to local UI ko refresh karne ka signal dein
+      if (categories?.length > 0 || products?.length > 0) {
+        window.dispatchEvent(new CustomEvent('local-db-updated'));
+      }
       
     } catch (error) {
       console.error('Sync failed:', error);
@@ -187,8 +191,10 @@ export const SyncProvider = ({ children }) => {
   setIsSyncing(true); // UI ke liye
 
   try {
-        const queueItems = await db.sync_queue.toArray();
-        setPendingCount(queueItems.length);
+        const allQueueItems = await db.sync_queue.toArray();
+        // Sirf wo items lein jo 3 dafa se kam fail hue hain
+        const queueItems = allQueueItems.filter(item => (item.retry_count || 0) < 3);
+        setPendingCount(allQueueItems.length);
         
         if (queueItems.length === 0) {
             await syncAllData();
@@ -395,78 +401,46 @@ export const SyncProvider = ({ children }) => {
             }
 
             // 3. Sales Create (FINAL FIX: Custom Invoice ID + Auto Item IDs)
-            // 3. Sales Create (FINAL FIX: Custom Invoice ID + Auto Item IDs)
+            // 3. Sales Create (FIXED: Atomic RPC with Error Logging)
             else if (item.table_name === 'sales' && item.action === 'create_full_sale') {
                 const { sale, items, inventory_ids } = item.data;
                 
-                // 1. Sale ID (Invoice Number) ko waise hi rakhein
                 const saleData = { ...sale }; 
-
-                // *** YEH HAI WOH FIX ***
-                // Agar Customer ID hamari memory mein hai, to naya wala ID use karein
                 if (idMap[saleData.customer_id]) {
                     saleData.customer_id = idMap[saleData.customer_id];
                 }
+
                 if (typeof saleData.customer_id === 'string' && saleData.customer_id !== '1') {
-                  console.log("Waiting for Customer ID mapping..."); continue;
+                    console.log("Waiting for Customer ID mapping..."); continue;
                 }
 
-                const { data: insertedSale, error: saleError } = await supabase
-                    .from('sales')
-                    .upsert([saleData], { onConflict: 'local_id' }) 
-                    .select()
-                    .single();
-
-                if (saleError) throw saleError;
-
-                // Hum Item ki 'id' nikaal denge, taake Supabase error na de.
-                const itemsWithRealId = items.map(i => {
-                    // 'id' aur 'sale_id' dono nikaal dein
+                const mappedItems = items.map(i => {
                     const { id, sale_id, ...itemData } = i;
-                    
-                    const realProductId = idMap[itemData.product_id] || itemData.product_id;
-
                     return { 
-                        ...itemData, // Is mein ab 'id' nahi hai (Good!)
-                        product_id: realProductId, 
-                        sale_id: saleData.id // Link wohi Invoice ID se hoga
+                        ...itemData,
+                        product_id: idMap[itemData.product_id] || itemData.product_id,
+                        inventory_id: idMap[itemData.inventory_id] || itemData.inventory_id
                     };
                 });
 
-                const { error: itemsError } = await supabase.from('sale_items').insert(itemsWithRealId);
-                if (itemsError) throw itemsError;
+                const mappedInventoryUpdates = inventory_ids.map(inv => ({
+                    id: idMap[inv.id] || inv.id,
+                    qtySold: inv.qtySold
+                }));
 
-                // Inventory Update on Server (Bulk System Logic - FIXED)
-                for (const updateInfo of inventory_ids) {
-                  // Check karein ke data ID hai ya Object
-                  const invId = typeof updateInfo === 'object' ? updateInfo.id : updateInfo;
-                  const qtyToMinus = typeof updateInfo === 'object' ? updateInfo.qtySold : 1;
+                const { error: rpcError } = await supabase.rpc('process_sale_atomic', {
+                    p_sale_record: saleData,
+                    p_sale_items: mappedItems,
+                    p_inventory_updates: mappedInventoryUpdates
+                });
 
-                  const { data: currentInv } = await supabase
-                    .from('inventory')
-                    .select('available_qty, sold_qty, imei')
-                    .eq('id', invId)
-                    .single();
-                  
-                  if (currentInv) {
-                    if (currentInv.imei) {
-                      await supabase.from('inventory')
-                        .update({ status: 'Sold', available_qty: 0, sold_qty: 1 })
-                        .eq('id', invId);
-                    } else {
-                      const newAvail = Math.max(0, (currentInv.available_qty || 0) - qtyToMinus);
-                      const newSold = (currentInv.sold_qty || 0) + qtyToMinus;
-                      await supabase.from('inventory')
-                        .update({ 
-                          available_qty: newAvail, 
-                          sold_qty: newSold,
-                          status: newAvail === 0 ? 'Sold' : 'Available'
-                        })
-                        .eq('id', invId);
-                    }
-                  }
+                if (rpcError) {
+                    // --- YEH LINE ERROR DIKHAYEGI ---
+                    console.error("❌ ATOMIC SYNC ERROR:", rpcError.message);
+                    error = rpcError; 
+                } else {
+                    console.log("✅ Sale Synced Successfully!");
                 }
-                await db.sale_items.where('sale_id').equals(saleData.id).delete();
             }
             
             // --- OTHER TABLES (Standard Logic) ---
@@ -845,11 +819,16 @@ export const SyncProvider = ({ children }) => {
                 userGuide = "Yeh record pehle hi server par majood hai. System isay khud merge kar raha hai.";
               }
 
-              // Logger ko report bhejna
-              Logger.error('sync', `Sync failed for ${item.table_name}`, error, userGuide);
+              // Naya: Error message mein ID bhi shamil karein taake user ko pata chale kaun sa record hai
+              const recordId = item.data?.id || item.data?.local_id || 'Unknown ID';
+              Logger.error('sync', `Sync failed for ${item.table_name} (ID: ${recordId})`, error, userGuide);
               // --- SMART ERROR LOGGING END ---
 
-              await db.sync_queue.update(item.id, { status: 'error', last_error: error.message || 'Unknown error' });
+              await db.sync_queue.update(item.id, { 
+                status: 'error', 
+                last_error: error.message || 'Unknown error',
+                retry_count: (item.retry_count || 0) + 1 // Ek ginti barha dein
+              });
             }
           } catch (err) {
             console.error('Sync processing error:', err);

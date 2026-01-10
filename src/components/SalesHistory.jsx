@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Typography, Tag, App, Button, Tooltip } from 'antd';
+import { Card, Table, Typography, Tag, App, Button, Tooltip, Space } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
@@ -7,12 +7,14 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
 import { printThermalReceipt } from '../utils/thermalPrinter';
+import { useSync } from '../context/SyncContext';
 
 const { Title, Text } = Typography;
 
 const SalesHistory = () => {
   const { profile } = useAuth();
   const { message } = App.useApp();
+  const { processSyncQueue } = useSync();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPrinting, setIsPrinting] = useState(null);
@@ -22,32 +24,43 @@ const SalesHistory = () => {
       try {
         setLoading(true);
         
-        // 1. Saari Sales Local DB se layein
+        // 1. Sales aur Sync Queue dono layein
         const localSales = await db.sales.toArray();
+        const queueItems = await db.sync_queue.where('table_name').equals('sales').toArray();
         
-        // 2. Har Sale ke liye Customer ka naam aur Items ki ginti karein
+        // 2. Har Sale ke liye details aur Sync Status check karein
         const formattedSales = await Promise.all(localSales.map(async (sale) => {
             const customer = await db.customers.get(sale.customer_id);
-            
-            // Items ginnay ke liye
             const items = await db.sale_items.where('sale_id').equals(sale.id).toArray();
-            const totalItems = items.reduce((sum, i) => sum + (i.quantity || 0), 0);
+            const totalItems = items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
+
+            // --- NAYA: Sync Status Check ---
+            // Dekhein ke kya yeh sale abhi queue mein hai?
+            const queueItem = queueItems.find(q => q.data.sale.id === sale.id);
+            let status = 'synced'; // Default: Synced
+            let errorMsg = null;
+
+            if (queueItem) {
+                status = queueItem.status === 'error' ? 'error' : 'pending';
+                errorMsg = queueItem.last_error;
+            }
 
             return {
-                sale_id: sale.id, // UUID
+                sale_id: sale.id,
                 created_at: sale.created_at || sale.sale_date,
                 customer_name: customer ? customer.name : 'Walk-in Customer',
                 total_items: totalItems,
                 total_amount: sale.total_amount,
                 payment_status: sale.payment_status,
                 salesperson_name: 'Admin',
-                payment_method: sale.payment_method || 'Cash'
+                payment_method: sale.payment_method || 'Cash',
+                // Nayi fields
+                sync_status: status,
+                sync_error: errorMsg
             };
         }));
 
-        // 3. Date ke hisaab se sort karein (Newest first)
         formattedSales.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
         setSales(formattedSales);
       } catch (error) {
         message.error('Error fetching sales history: ' + error.message);
@@ -153,6 +166,13 @@ const SalesHistory = () => {
     }
   };
 
+  const handleManualRetry = async () => {
+    message.info('Retrying sync...');
+    await processSyncQueue();
+    // Refresh the list after retry
+    window.location.reload(); 
+  };
+
   const columns = [
     {
       title: '#',
@@ -163,6 +183,22 @@ const SalesHistory = () => {
       align: 'center',
       // Ab ID Number hai (e.g., 1732336800123), to hum slice nahi karenge
       render: (text) => <Text code>{text}</Text>
+    },
+    {
+      title: 'Sync',
+      dataIndex: 'sync_status',
+      key: 'sync_status',
+      width: 100,
+      align: 'center',
+      render: (status, record) => {
+        if (status === 'synced') return <Tag color="green">Synced</Tag>;
+        if (status === 'pending') return <Tag color="orange">Pending</Tag>;
+        return (
+          <Tooltip title={record.sync_error || "Sync failed"}>
+            <Tag color="red" style={{ cursor: 'help' }}>Error</Tag>
+          </Tooltip>
+        );
+      }
     },
     {
       title: (
@@ -239,13 +275,28 @@ const SalesHistory = () => {
       width: 80,
       align: 'center',
       render: (_, record) => (
-        <Tooltip title="Reprint Receipt">
-          <Button 
-            icon={<PrinterOutlined />} 
-            onClick={() => handleReprint(record.sale_id)}
-            loading={isPrinting === record.sale_id}
-          />
-        </Tooltip>
+        <Space>
+          {/* Agar sync fail hai ya pending hai, to Retry button dikhao */}
+          {(record.sync_status === 'error' || record.sync_status === 'pending') && (
+            <Tooltip title="Retry Sync">
+              <Button 
+                type="primary"
+                danger={record.sync_status === 'error'}
+                icon={<ReloadOutlined />} 
+                size="small"
+                onClick={handleManualRetry}
+              />
+            </Tooltip>
+          )}
+          
+          <Tooltip title="Reprint Receipt">
+            <Button 
+              icon={<PrinterOutlined />} 
+              onClick={() => handleReprint(record.sale_id)}
+              loading={isPrinting === record.sale_id}
+            />
+          </Tooltip>
+        </Space>
       ),
     },
   ];

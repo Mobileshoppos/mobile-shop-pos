@@ -9,10 +9,11 @@ const { Title, Text } = Typography;
 
 const SystemLogs = () => {
   const { token } = theme.useToken();
-  const { modal } = App.useApp();
+  const { modal, notification } = App.useApp();
   
   const [logs, setLogs] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
+  const [stuckItems, setStuckItems] = useState([]);
   const [filterLevel, setFilterLevel] = useState(null);
   const [searchText, setSearchText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,22 +22,34 @@ const SystemLogs = () => {
   const [selectedLog, setSelectedLog] = useState(null);
 
   const fetchLogs = async () => {
+    // Agar internet nahi hai, to server se logs mangne ki koshish hi na karein
+    if (!navigator.onLine) {
+      console.log("App is offline. Skipping logs fetch.");
+      return;
+    }
+
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data: profile } = await supabase.from('profiles').select('is_admin').single();
       const adminStatus = profile?.is_admin || false;
       setIsAdmin(adminStatus);
 
       let query = supabase.from('system_logs').select('*');
       if (!adminStatus) {
-        const { data: { user } } = await supabase.auth.getUser();
         query = query.eq('user_id', user.id);
       }
 
       const { data, error } = await query.order('created_at', { ascending: false }).limit(100);
       if (!error) setLogs(data);
+      
     } catch (err) {
-      console.error("Error fetching logs:", err);
+      // Sirf tab error dikhayein jab internet ho aur phir bhi masla aaye
+      if (navigator.onLine) {
+        console.error("Error fetching logs:", err);
+      }
     } finally {
       setLoading(false);
     }
@@ -57,8 +70,19 @@ const SystemLogs = () => {
   };
 
   const checkLocalQueue = async () => {
-    const count = await db.sync_queue.count();
-    setPendingCount(count);
+    const allItems = await db.sync_queue.toArray();
+    setPendingCount(allItems.length);
+    
+    // Sirf wo items nikaalein jo 3 ya us se zyada dafa fail ho chuke hain
+    const stuck = allItems.filter(item => (item.retry_count || 0) >= 3);
+    setStuckItems(stuck);
+  };
+
+  const retrySyncItem = async (id) => {
+    // Retry ka matlab hai retry_count ko wapis 0 kar dena
+    await db.sync_queue.update(id, { retry_count: 0, status: 'pending' });
+    notification.success({ message: 'Retry Started', description: 'System is trying to sync this item again.' });
+    checkLocalQueue();
   };
 
   useEffect(() => {
@@ -205,6 +229,47 @@ const SystemLogs = () => {
           pagination={{ pageSize: 10, simple: true }}
           scroll={{ x: 600 }}
         />
+        {/* Stuck Sync Items Section (Professional View) */}
+        {stuckItems.length > 0 && (
+          <div style={{ marginTop: '32px', padding: '16px', border: `1px solid ${token.colorErrorOutline}`, borderRadius: token.borderRadiusLG, background: token.colorErrorBg }}>
+            <Title level={4} style={{ color: token.colorError, marginTop: 0 }}>
+              <BugOutlined /> Stuck Sync Items (Needs Attention)
+            </Title>
+            <Text type="secondary">Yeh wo items hain jo 3 dafa sync hone mein nakam rahe. Aap "Retry" daba kar dobara koshish kar sakte hain.</Text>
+            
+            <Table 
+              style={{ marginTop: '16px' }}
+              size="small"
+              dataSource={stuckItems}
+              rowKey="id"
+              pagination={false}
+              columns={[
+                { title: 'Type', dataIndex: 'table_name', key: 'type', render: (t) => <b>{t.toUpperCase()}</b> },
+                { title: 'Action', dataIndex: 'action', key: 'action' },
+                { 
+    title: 'Record ID', 
+    key: 'record_id', 
+    render: (_, record) => <Text copyable>{record.data?.id || record.data?.local_id || 'N/A'}</Text> 
+  },
+                { title: 'Last Error', dataIndex: 'last_error', key: 'error', ellipsis: true, render: (e) => <Text danger>{e}</Text> },
+                {
+                  title: 'Retry',
+                  key: 'retry',
+                  render: (_, record) => (
+                    <Button 
+                      type="primary" 
+                      size="small" 
+                      icon={<ReloadOutlined />} 
+                      onClick={() => retrySyncItem(record.id)}
+                    >
+                      Retry
+                    </Button>
+                  )
+                }
+              ]}
+            />
+          </div>
+        )}
       </Card>
 
       {/* Details Modal */}

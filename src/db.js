@@ -7,7 +7,7 @@ export const db = new Dexie('MobileShopDB');
 // Note: Hum sirf wohi columns likhte hain jin se hamein search ya filter karna ho.
 // Baqi data khud ba khud save ho jata hai.
 
-db.version(17).stores({
+db.version(18).stores({
   // --- Business Data Tables (Jo Supabase se sync honge) ---
   
   // Products: ID, Category, Name aur Barcode se search karne ke liye
@@ -52,7 +52,7 @@ db.version(17).stores({
   
   // Sync Queue: Jab internet na ho, to naya data yahan qatar (queue) mein lagega
   // ++id ka matlab hai number khud barhta rahega (1, 2, 3...)
-  sync_queue: '++id, table_name, action, status', 
+  sync_queue: '++id, table_name, action, status, retry_count', 
   
   // Offline Session: User ka login data yahan save hoga taake offline mein bhi app khule
   offline_session: 'id', 
