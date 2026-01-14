@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layout, Tag, theme, Tooltip, Button, Badge, Space } from 'antd';
+import { Layout, Tag, theme, Tooltip, Button, Badge, Space, Modal, List, Typography } from 'antd';
 import { 
   ShopOutlined, 
   CrownOutlined, 
@@ -10,8 +10,10 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSync } from '../context/SyncContext';
+import { db } from '../db';
 
 const { Header } = Layout;
+const { Text } = Typography;
 
 const titleContainerStyle = {
   display: 'flex',
@@ -25,7 +27,15 @@ const titleContainerStyle = {
 // Hum ne yahan 'collapsed' aur 'setCollapsed' receive kiya hai App.jsx se
 const AppHeader = ({ collapsed, setCollapsed }) => {
   const { profile, isPro, stockCount, lowStockCount } = useAuth();
-  const { pendingCount } = useSync();
+  const { pendingCount, stuckCount, retryAll } = useSync();
+  const [isSyncModalOpen, setIsSyncModalOpen] = React.useState(false);
+  const [stuckItems, setStuckItems] = React.useState([]);
+
+  const showSyncCenter = async () => {
+  const items = await db.sync_queue.filter(item => (item.retry_count || 0) >= 3).toArray();
+  setStuckItems(items);
+  setIsSyncModalOpen(true);
+};
   
   const { token } = theme.useToken();
   const navigate = useNavigate();
@@ -42,75 +52,113 @@ const AppHeader = ({ collapsed, setCollapsed }) => {
     backgroundColor: token.colorPrimary,
     color: token.colorTextLightSolid,
   };
+return (
+    <>
+      <Header style={{ padding: '0 16px', background: 'none' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '100%' }}>
+          
+          {/* Left Side: Menu Button + Shop Name */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+              <Button
+                type="text"
+                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                onClick={() => setCollapsed(!collapsed)}
+                style={{ fontSize: '16px', width: 40, height: 40, color: token.colorText }}
+              />
 
-  return (
-    <Header style={{ padding: '0 16px', background: 'none' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '100%' }}>
-        
-        {/* Left Side: Menu Button + Shop Name */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
-            
-            {/* YEH HAI WO NAYA BUTTON */}
-            <Button
-              type="text"
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setCollapsed(!collapsed)}
-              style={{
-                fontSize: '16px',
-                width: 40,
-                height: 40,
-                color: token.colorText
-              }}
-            />
+              <div style={titleContainerStyle} title={profile?.shop_name || 'My Shop'}>
+                <Tag icon={<ShopOutlined />} style={chipStyle}>
+                  {profile?.shop_name || 'My Shop'}
+                </Tag>
+              </div>
 
-            {/* Shop Name */}
-            <div 
-              style={titleContainerStyle}
-              title={profile?.shop_name || 'My Shop'}
-            >
-              <Tag 
-                icon={<ShopOutlined />} 
-                style={chipStyle}
+              {/* Sync Status Tags */}
+              <Space size={4}>
+                {stuckCount > 0 && (
+                  <Tooltip title={`${stuckCount} items stuck. Click to retry.`}>
+                    <Tag 
+                      color="red" 
+                      onClick={showSyncCenter}
+                      style={{ borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' }}
+                    >
+                      {stuckCount} Stuck!
+                    </Tag>
+                  </Tooltip>
+                )}
+
+                {pendingCount > 0 && (
+                  <Tooltip title={`${pendingCount} items syncing...`}>
+                    <Tag 
+                      color="orange" 
+                      style={{ borderRadius: '10px', animation: 'pulse 2s infinite' }}
+                    >
+                      {pendingCount} Syncing...
+                    </Tag>
+                  </Tooltip>
+                )}
+              </Space>
+          </div>
+
+          {/* Right Side: Icons & Subscription Button */}
+          <Space align="center" size="small">
+            <Tooltip title="Manage Subscription" placement="bottom">
+              <Button 
+                type={isPro ? 'primary' : 'default'} 
+                ghost={isPro}
+                icon={isPro ? <CrownOutlined /> : null}
+                onClick={() => navigate('/subscription')}
+                danger={!isPro && stockCount >= 50}
+                size="middle"
               >
-                {profile?.shop_name || 'My Shop'}
-              </Tag>
-            </div>
-            {pendingCount > 0 && (
-  <Tooltip title={`${pendingCount} items waiting to sync with server`}>
-    <Tag 
-      color="orange" 
-      style={{ 
-        marginLeft: 8, 
-        borderRadius: '10px', 
-        cursor: 'help',
-        animation: 'pulse 2s infinite' 
-      }}
-    >
-      {pendingCount} Syncing...
-    </Tag>
-  </Tooltip>
-)}
+                {isPro ? 'PRO' : `Stock: ${stockCount}/50`}
+              </Button>
+            </Tooltip>
+          </Space>
         </div>
+      </Header>
 
-        {/* Right Side: Icons & Subscription Button */}
-        <Space align="center" size="small">
-
-          <Tooltip title="Manage Subscription" placement="bottom">
-            <Button 
-              type={isPro ? 'primary' : 'default'} 
-              ghost={isPro}
-              icon={isPro ? <CrownOutlined /> : null}
-              onClick={() => navigate('/subscription')}
-              danger={!isPro && stockCount >= 50}
-              size="middle"
-            >
-              {isPro ? 'PRO' : `Stock: ${stockCount}/50`}
-            </Button>
-          </Tooltip>
-        </Space>
-
-      </div>
-    </Header>
+      {/* SYNC CENTER MODAL - Ab yeh return ke andar hai */}
+      <Modal
+        title="Sync Center - Stuck Items"
+        open={isSyncModalOpen}
+        onCancel={() => setIsSyncModalOpen(false)}
+        footer={[
+          <Button key="close" onClick={() => setIsSyncModalOpen(false)}>Close</Button>,
+          <Button key="retry" type="primary" onClick={() => { retryAll(); setIsSyncModalOpen(false); }}>
+            Retry All
+          </Button>
+        ]}
+      >
+        <List
+          itemLayout="horizontal"
+          dataSource={stuckItems}
+          renderItem={(item) => (
+            <List.Item>
+              <List.Item.Meta
+  title={
+    <Space direction="vertical" size={0}>
+      <Text strong>{item.table_name?.toUpperCase()} ({item.action})</Text>
+      <Text type="secondary" style={{ fontSize: '13px' }}>
+        {/* Yeh logic decide karega ke kya dikhana hai */}
+        {item.table_name === 'customers' && `Name: ${item.data?.name || 'Unknown'}`}
+        {item.table_name === 'products' && `Item: ${item.data?.name || 'Unknown'}`}
+        {item.table_name === 'sales' && `Amount: ${item.data?.sale?.total_amount || item.data?.total_amount || '0'}`}
+        {item.table_name === 'expenses' && `Expense: ${item.data?.title || 'Unknown'}`}
+        {item.table_name === 'purchases' && `Total: ${item.data?.purchase?.total_amount || '0'}`}
+      </Text>
+    </Space>
+  }
+  description={
+    <div style={{ color: 'red', fontSize: '11px', marginTop: '4px' }}>
+      Error: {item.last_error || 'Connection failed or server busy'}
+    </div>
+  }
+/>
+            </List.Item>
+          )}
+        />
+      </Modal>
+    </>
   );
 };
 

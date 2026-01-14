@@ -13,6 +13,7 @@ export const SyncProvider = ({ children }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [stuckCount, setStuckCount] = useState(0);
   const isSyncingRef = useRef(false);
   const idMappingRef = useRef({});
 
@@ -35,8 +36,10 @@ export const SyncProvider = ({ children }) => {
   // Yeh code har waqt check karega ke queue mein kitne items hain
   useEffect(() => {
     const refreshCount = async () => {
-      const count = await db.sync_queue.count();
-      setPendingCount(count);
+      const allItems = await db.sync_queue.toArray();
+      const stuck = allItems.filter(item => (item.retry_count || 0) >= 3).length;
+      setStuckCount(stuck);
+      setPendingCount(allItems.length - stuck); // Sirf wo jo abhi koshish mein hain
     };
 
     // Fauran check karein
@@ -159,6 +162,8 @@ export const SyncProvider = ({ children }) => {
       // Professional Way: Agli dafa ke liye wahi waqt save karein jo sync shuru hone par server ne bataya tha
       await db.user_settings.put({ id: 'last_sync', value: serverNow });
       console.log('Syncing completed successfully!');
+      // Safai muhim chalayein
+      await cleanupMappings();
       // Naya: Agar koi data mismatch hai to local UI ko refresh karne ka signal dein
       if (categories?.length > 0 || products?.length > 0) {
         window.dispatchEvent(new CustomEvent('local-db-updated'));
@@ -411,8 +416,22 @@ export const SyncProvider = ({ children }) => {
                 }
 
                 if (typeof saleData.customer_id === 'string' && saleData.customer_id !== '1') {
-                    console.log("Waiting for Customer ID mapping..."); continue;
-                }
+    // Check karein ke kya yeh customer queue mein stuck to nahi?
+    const isParentStuck = allQueueItems.find(q => 
+        (q.data?.id === saleData.customer_id || q.data?.local_id === saleData.customer_id) && 
+        (q.retry_count || 0) >= 3
+    );
+
+    if (isParentStuck) {
+    error = { message: "Waiting for Stuck Customer to sync first" };
+    // Yeh line Sale ko agay janay se rok degi (Server par janay se pehle)
+    await db.sync_queue.update(item.id, { status: 'error', last_error: error.message });
+    continue; 
+} else {
+    console.log("Waiting for Customer ID mapping..."); 
+    continue; 
+}
+}
 
                 const mappedItems = items.map(i => {
                     const { id, sale_id, ...itemData } = i;
@@ -841,6 +860,7 @@ export const SyncProvider = ({ children }) => {
         console.error("Critical Sync Error:", err);
     } finally {
     const duration = Date.now() - startTime; // Kitna waqt laga
+
     
     // Agar queue mein items thay, tabhi performance report bhejein
     if (pendingCount > 0) {
@@ -849,8 +869,48 @@ export const SyncProvider = ({ children }) => {
 
     isSyncingRef.current = false;
     setIsSyncing(false);
+
+    // Phase 5: UI Polish - Agar koi ruka hua data sync ho jaye to notification dikhayein
+    if (navigator.onLine && allQueueItems.length > 0 && stuckCount > 0) {
+      const remainingStuck = await db.sync_queue.filter(item => (item.retry_count || 0) >= 3).count();
+      if (remainingStuck === 0) {
+         Logger.info('sync', 'All stuck items resolved!');
+      }
+    }
   }
 };
+
+const retryAll = async () => {
+    // Tamam stuck items ki ginti wapis 0 kar dein
+    await db.sync_queue.where('retry_count').aboveOrEqual(3).modify({ retry_count: 0, status: 'pending' });
+    processSyncQueue(); // Dobara sync shuru karein
+  };
+
+  // Phase 5: Safai Muhim - Purani mappings ko delete karna
+  const cleanupMappings = async () => {
+    try {
+      console.log("Starting Mapping Cleanup...");
+      // 1. Tamam mappings layein
+      const allMappings = await db.id_mappings.toArray();
+      // 2. Sync queue mein majood items layein
+      const queueItems = await db.sync_queue.toArray();
+      
+      // Queue mein maujood tamam local_ids ka aik set banayein (fast search ke liye)
+      const pendingLocalIds = new Set(queueItems.map(item => item.data?.local_id || item.data?.id));
+
+      let deletedCount = 0;
+      for (const mapping of allMappings) {
+        // Agar yeh mapping queue mein kisi pending kaam ke liye zaroori NAHI hai, to delete kar den
+        if (!pendingLocalIds.has(mapping.local_id)) {
+          await db.id_mappings.delete(mapping.id);
+          deletedCount++;
+        }
+      }
+      console.log(`Cleanup finished. Deleted ${deletedCount} obsolete mappings.`);
+    } catch (err) {
+      console.error("Cleanup failed:", err);
+    }
+  };
 
   useEffect(() => {
     const handleOnline = () => {
@@ -886,7 +946,7 @@ export const SyncProvider = ({ children }) => {
   }, []);
 
   return (
-    <SyncContext.Provider value={{ isOnline, isSyncing, pendingCount, syncAllData, processSyncQueue }}>
+    <SyncContext.Provider value={{ isOnline, isSyncing, pendingCount, stuckCount, retryAll, syncAllData, processSyncQueue }}>
       {children}
     </SyncContext.Provider>
   );
