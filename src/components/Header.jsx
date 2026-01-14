@@ -29,13 +29,23 @@ const AppHeader = ({ collapsed, setCollapsed }) => {
   const { profile, isPro, stockCount, lowStockCount } = useAuth();
   const { pendingCount, stuckCount, retryAll } = useSync();
   const [isSyncModalOpen, setIsSyncModalOpen] = React.useState(false);
+  const isSyncMenuOpen = isSyncModalOpen;
   const [stuckItems, setStuckItems] = React.useState([]);
 
-  const showSyncCenter = async () => {
-  const items = await db.sync_queue.filter(item => (item.retry_count || 0) >= 3).toArray();
-  setStuckItems(items);
-  setIsSyncModalOpen(true);
-};
+  // Naya Logic: Jaise hi stuckCount badle, list khud refresh ho jaye
+  React.useEffect(() => {
+    const refreshStuckList = async () => {
+      if (isSyncModalOpen) {
+        const items = await db.sync_queue.filter(item => (item.retry_count || 0) >= 3).toArray();
+        setStuckItems(items);
+      }
+    };
+    refreshStuckList();
+  }, [stuckCount, isSyncMenuOpen]); // stuckCount badalne par chalega
+
+  const showSyncCenter = () => {
+    setIsSyncModalOpen(true);
+  };
   
   const { token } = theme.useToken();
   const navigate = useNavigate();

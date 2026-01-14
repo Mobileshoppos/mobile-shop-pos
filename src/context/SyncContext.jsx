@@ -162,8 +162,6 @@ export const SyncProvider = ({ children }) => {
       // Professional Way: Agli dafa ke liye wahi waqt save karein jo sync shuru hone par server ne bataya tha
       await db.user_settings.put({ id: 'last_sync', value: serverNow });
       console.log('Syncing completed successfully!');
-      // Safai muhim chalayein
-      await cleanupMappings();
       // Naya: Agar koi data mismatch hai to local UI ko refresh karne ka signal dein
       if (categories?.length > 0 || products?.length > 0) {
         window.dispatchEvent(new CustomEvent('local-db-updated'));
@@ -190,13 +188,14 @@ export const SyncProvider = ({ children }) => {
   const processSyncQueue = async () => {
   if (!navigator.onLine || isSyncingRef.current) return;
   const startTime = Date.now();
+  let allQueueItems = [];
 
   // 2. Lock lagayen (Ref aur State dono)
   isSyncingRef.current = true; // Foran Lock
   setIsSyncing(true); // UI ke liye
 
   try {
-        const allQueueItems = await db.sync_queue.toArray();
+        allQueueItems = await db.sync_queue.toArray();
         // Sirf wo items lein jo 3 dafa se kam fail hue hain
         const queueItems = allQueueItems.filter(item => (item.retry_count || 0) < 3);
         setPendingCount(allQueueItems.length);
@@ -464,19 +463,35 @@ export const SyncProvider = ({ children }) => {
             
             // --- OTHER TABLES (Standard Logic) ---
             
-            // Customer Payments
+            // Customer Payments (Fixed: Waiting for Customer)
             else if (item.table_name === 'customer_payments' && item.action === 'create') {
                 const { id: localId, ...paymentData } = item.data;
+                
+                // Check karein ke asli Customer ID mil gayi?
                 if (idMap[paymentData.customer_id]) paymentData.customer_id = idMap[paymentData.customer_id];
+                
+                if (typeof paymentData.customer_id === 'string') {
+                    console.log("Waiting for Customer ID mapping...");
+                    continue; 
+                }
+
                 const { error: supError } = await supabase.from('customer_payments').upsert([paymentData], { onConflict: 'local_id' });
                 error = supError;
                 if (!error) await db.customer_payments.delete(localId);
             }
 
-            // Credit Payouts
+            // Credit Payouts (Fixed: Waiting for Customer)
             else if (item.table_name === 'credit_payouts' && item.action === 'create') {
                 const { id: localId, ...payoutData } = item.data;
+                
+                // Check karein ke asli Customer ID mil gayi?
                 if (idMap[payoutData.customer_id]) payoutData.customer_id = idMap[payoutData.customer_id];
+
+                if (typeof payoutData.customer_id === 'string') {
+                    console.log("Waiting for Customer ID mapping...");
+                    continue; 
+                }
+
                 const { error: supError } = await supabase.from('credit_payouts').upsert([payoutData], { onConflict: 'local_id' });
                 error = supError;
                 if (!error) await db.credit_payouts.delete(localId);
@@ -675,10 +690,20 @@ export const SyncProvider = ({ children }) => {
                     expenseData.category_id = idMap[expenseData.category_id];
                 }
 
-                // 2. Agar abhi bhi UUID hai, to intezar karo jab tak category sync na ho jaye
+                // 2. Agar abhi bhi UUID hai, to check karein ke kahin Category stuck to nahi?
                 if (typeof expenseData.category_id === 'string') {
-                    console.log("Waiting for Expense Category ID mapping...");
-                    continue; 
+                    const isParentStuck = allQueueItems.find(q => 
+                        (q.data?.id === expenseData.category_id || q.data?.local_id === expenseData.category_id) && 
+                        (q.retry_count || 0) >= 3
+                    );
+
+                    if (isParentStuck) {
+                        await db.sync_queue.update(item.id, { status: 'error', last_error: "Waiting for Stuck Expense Category to sync first" });
+                        continue; 
+                    } else {
+                        console.log("Waiting for Expense Category ID mapping...");
+                        continue; 
+                    }
                 }
 
                 const { error: supError } = await supabase.from('expenses').upsert([expenseData], { onConflict: 'local_id' });
@@ -772,10 +797,21 @@ export const SyncProvider = ({ children }) => {
                  }
             }
 
-            // Sale Returns
+            // Sale Returns (Fixed: Waiting for Sale Logic)
             else if (item.table_name === 'sale_returns' && item.action === 'create_full_return') {
                 const { return_record, items, payment_record, inventory_ids } = item.data;
                 const { id: localReturnId, ...returnData } = return_record;
+
+                // 1. Check karein ke kya iski Sale sync ho chuki hai?
+                const realSaleId = idMap[returnData.sale_id] || returnData.sale_id;
+                if (typeof realSaleId === 'string') {
+                    // Agar Sale abhi tak UUID hai, to intezar karein
+                    console.log("Waiting for Sale ID mapping...");
+                    continue; 
+                }
+                returnData.sale_id = realSaleId; // Asli ID set karein
+
+                // 2. Customer ID map karein
                 if (idMap[returnData.customer_id]) returnData.customer_id = idMap[returnData.customer_id];
                 
                 const { data: insertedReturn, error: retError } = await supabase
@@ -884,32 +920,6 @@ const retryAll = async () => {
     // Tamam stuck items ki ginti wapis 0 kar dein
     await db.sync_queue.where('retry_count').aboveOrEqual(3).modify({ retry_count: 0, status: 'pending' });
     processSyncQueue(); // Dobara sync shuru karein
-  };
-
-  // Phase 5: Safai Muhim - Purani mappings ko delete karna
-  const cleanupMappings = async () => {
-    try {
-      console.log("Starting Mapping Cleanup...");
-      // 1. Tamam mappings layein
-      const allMappings = await db.id_mappings.toArray();
-      // 2. Sync queue mein majood items layein
-      const queueItems = await db.sync_queue.toArray();
-      
-      // Queue mein maujood tamam local_ids ka aik set banayein (fast search ke liye)
-      const pendingLocalIds = new Set(queueItems.map(item => item.data?.local_id || item.data?.id));
-
-      let deletedCount = 0;
-      for (const mapping of allMappings) {
-        // Agar yeh mapping queue mein kisi pending kaam ke liye zaroori NAHI hai, to delete kar den
-        if (!pendingLocalIds.has(mapping.local_id)) {
-          await db.id_mappings.delete(mapping.id);
-          deletedCount++;
-        }
-      }
-      console.log(`Cleanup finished. Deleted ${deletedCount} obsolete mappings.`);
-    } catch (err) {
-      console.error("Cleanup failed:", err);
-    }
   };
 
   useEffect(() => {

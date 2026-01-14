@@ -61,6 +61,16 @@ const ExpenseCategories = () => {
 
   const handleOk = async (values) => {
     try {
+      // Duplicate Check (Local level par check karein ke naam pehle se to nahi?)
+      const isDuplicate = categories.some(cat => 
+        cat.name.toLowerCase().trim() === values.name.toLowerCase().trim() && 
+        cat.id !== editingCategory?.id
+      );
+
+      if (isDuplicate) {
+        return message.error('A category with this name already exists!');
+      }
+
       if (editingCategory) {
         // Update (Offline)
         await DataService.updateExpenseCategory(editingCategory.id, values.name);
