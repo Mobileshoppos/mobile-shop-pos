@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Typography,
   Table,
@@ -35,6 +35,17 @@ const Expenses = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [form] = Form.useForm();
+  const expenseTitleInputRef = useRef(null);
+
+  // Modal khulne par cursor Title field mein le jane ki logic
+  useEffect(() => {
+    if (isModalOpen) {
+      const timer = setTimeout(() => {
+        expenseTitleInputRef.current?.focus();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isModalOpen]);
 
   const getData = useCallback(async () => {
     try {
@@ -153,7 +164,7 @@ const Expenses = () => {
       <Modal title={editingExpense ? 'Edit Expense' : 'Add a New Expense'} open={isModalOpen} onCancel={handleCancel} onOk={() => form.submit()} okText="Save">
         <Form form={form} layout="vertical" onFinish={handleOk}>
           <Form.Item name="title" label="Title / Description" rules={[{ required: true }]}>
-            <Input />
+            <Input ref={expenseTitleInputRef} />
           </Form.Item>
           <Form.Item name="amount" label="Amount" rules={[{ required: true }]}>
             <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={1} />

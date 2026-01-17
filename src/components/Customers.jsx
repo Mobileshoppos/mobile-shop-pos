@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
-  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag
+  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag, Dropdown, Menu, Tooltip
 } from 'antd';
-import { UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined } from '@ant-design/icons';
+import { UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined, MoreOutlined, EditOutlined, ReloadOutlined, InboxOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -15,6 +16,11 @@ const { Title, Text } = Typography;
 
 const Customers = () => {
   const { message, modal } = AntApp.useApp();
+  const [searchParams] = useSearchParams();
+  const searchInputRef = useRef(null);
+  const invoiceSearchInputRef = useRef(null);
+  const customerNameInputRef = useRef(null);
+
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { user, profile } = useAuth();
   const { processSyncQueue } = useSync();
@@ -25,9 +31,13 @@ const Customers = () => {
   const [isLedgerModalOpen, setIsLedgerModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const [ledgerData, setLedgerData] = useState([]);
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [editingCustomer, setEditingCustomer] = useState(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedSale, setSelectedSale] = useState(null);
   const [returnableItems, setReturnableItems] = useState([]);
   const [selectedReturnItems, setSelectedReturnItems] = useState([]);
@@ -43,13 +53,48 @@ const Customers = () => {
   const [cashOrBank, setCashOrBank] = useState('Cash');
   const [paymentForm] = Form.useForm();
   const [returnForm] = Form.useForm();
+  // --- FOCUS LOGIC (Corrected Position) ---
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (isInvoiceSearchModalOpen) {
+      const timer = setTimeout(() => {
+        invoiceSearchInputRef.current?.focus();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isInvoiceSearchModalOpen]);
+  useEffect(() => {
+    if (isAddModalOpen) {
+      const timer = setTimeout(() => {
+        customerNameInputRef.current?.focus();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isAddModalOpen]);
 
   const getCustomers = async () => {
     try {
       setLoading(true);
-      // Local DB se customers uthayein
-      const data = await db.customers.toArray();
-      // Naam ke hisaab se sort karein
+      let data = await db.customers.toArray();
+      
+      // 1. Archive Filter
+      data = data.filter(c => showArchived ? c.is_active === false : c.is_active !== false);
+
+      // 2. Search Filter (Name ya Phone se dhoondna)
+      if (searchTerm) {
+        const lowerSearch = searchTerm.toLowerCase();
+        data = data.filter(c => 
+          (c.name && c.name.toLowerCase().includes(lowerSearch)) || 
+          (c.phone_number && c.phone_number.includes(lowerSearch))
+        );
+      }
+      
       setCustomers(data.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (error) { 
       message.error('Error fetching customers: ' + error.message); 
@@ -58,39 +103,52 @@ const Customers = () => {
     }
   };
 
-  useEffect(() => { if (user) getCustomers(); }, [user]);
+  useEffect(() => { if (user) getCustomers(); }, [user, showArchived, refreshTrigger, searchTerm]);
+  // Dashboard shortcut ke liye logic
+  useEffect(() => {
+    if (searchParams.get('openReturn') === 'true') {
+      setIsInvoiceSearchModalOpen(true);
+    }
+  }, [searchParams]);
+
+  const showEditModal = (customer) => {
+    setEditingCustomer(customer);
+    addForm.setFieldsValue(customer);
+    setIsAddModalOpen(true);
+  };
 
   const handleAddCustomer = async (values) => {
     try {
-      // 1. Naya Customer Object banayein
-      const newCustomer = { 
-          ...values, 
-          id: crypto.randomUUID(), 
-          local_id: crypto.randomUUID(),
-          user_id: user.id, 
-          balance: 0 
-      };
+      if (editingCustomer) {
+        // EDIT MODE
+        await DataService.updateCustomer(editingCustomer.id, values);
+        message.success('Customer updated successfully!');
+      } else {
+        // ADD MODE
+        const newCustomer = { 
+            ...values, 
+            id: crypto.randomUUID(), 
+            local_id: crypto.randomUUID(),
+            user_id: user.id, 
+            balance: 0 
+        };
+        await db.customers.add(newCustomer);
+        await db.sync_queue.add({
+            table_name: 'customers',
+            action: 'create',
+            data: newCustomer
+        });
+        message.success('Customer added successfully!');
+      }
 
-      // 2. Local DB mein save karein
-      await db.customers.add(newCustomer);
-      
-      // 3. Sync Queue mein daalein
-      await db.sync_queue.add({
-          table_name: 'customers',
-          action: 'create',
-          data: newCustomer
-      });
-
-      message.success('Customer added successfully!');
       setIsAddModalOpen(false);
+      setEditingCustomer(null);
       addForm.resetFields();
-      
-      // List update karein aur upload trigger karein
       await getCustomers();
       processSyncQueue();
 
     } catch (error) { 
-      message.error('Error adding customer: ' + error.message); 
+      message.error('Error saving customer: ' + error.message); 
     }
   };
 
@@ -200,6 +258,35 @@ const Customers = () => {
 
     } catch (error) {
       message.error('Failed to settle credit: ' + error.message);
+    }
+  };
+
+  const handleDeleteCustomer = (customer) => {
+    modal.confirm({
+      title: 'Delete Customer?',
+      icon: <DeleteOutlined />,
+      content: `Are you sure you want to delete ${customer.name}? This cannot be undone.`,
+      okText: 'Yes, Delete',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          await DataService.deleteCustomer(customer.id);
+          message.success('Customer deleted');
+          setRefreshTrigger(prev => prev + 1);
+        } catch (error) {
+          message.error(error.message);
+        }
+      }
+    });
+  };
+
+  const handleToggleArchive = async (customer) => {
+    try {
+      await DataService.toggleArchiveCustomer(customer.id, !showArchived);
+      message.success(showArchived ? 'Customer restored' : 'Customer archived');
+      setRefreshTrigger(prev => prev + 1);
+    } catch (error) {
+      message.error(error.message);
     }
   };
 
@@ -318,14 +405,27 @@ const handleCloseInvoiceSearchModal = () => {
       }
 
       setReturnableItems(itemsWithDetails);
-
+      if (selectedCustomer && selectedCustomer.name === 'Walk-in Customer') {
+          setRefundCashNow(true);
+      } else {
+          setRefundCashNow(false);
+      }
+      
     } catch (error) {
       console.error(error);
       message.error("Error preparing return: " + error.message);
       setIsReturnModalOpen(false);
     }
   };
-  const handleReturnCancel = () => { setIsReturnModalOpen(false); setSelectedSale(null); setReturnableItems([]); setSelectedReturnItems([]); returnForm.resetFields(); };
+
+  const handleReturnCancel = () => { 
+    setIsReturnModalOpen(false); 
+    setSelectedSale(null); 
+    setReturnableItems([]); 
+    setSelectedReturnItems([]); 
+    returnForm.resetFields();
+    setRefundCashNow(false);
+  };
 
   const handleConfirmReturn = async (values) => {
 
@@ -362,10 +462,10 @@ const handleCloseInvoiceSearchModal = () => {
           inventory_id: i.inventory_id,
           product_id: i.product_id,
           price_at_return: i.price_at_sale,
-          quantity: i.return_qty // Naya column
+          quantity: i.return_qty 
       }));
 
-      // 3. Payment (Credit) Record Banayein
+      // 3. Payment (Credit) Record Banayein (Yeh hamesha banega taake Ledger maintain rahe)
       const paymentId = crypto.randomUUID();
       const paymentRecord = {
         id: paymentId,
@@ -377,14 +477,12 @@ const handleCloseInvoiceSearchModal = () => {
         created_at: new Date().toISOString()
       };
 
-      // --- NAYA CODE START (Inventory & Sync Fix) ---
-
       // 4. Local DB mein Save karein
       await db.sale_returns.add(returnRecord);
       if (db.sale_return_items) await db.sale_return_items.bulkAdd(itemsToInsert);
       await db.customer_payments.add(paymentRecord);
 
-      // 5. Inventory Update (Local - Bulk System Logic for Customer Return)
+      // 5. Inventory Update
       const inventoryIdsToUpdate = itemsToInsert.map(i => i.inventory_id); 
       for (const item of itemsToInsert) {
           const invItem = await db.inventory.get(item.inventory_id);
@@ -392,7 +490,6 @@ const handleCloseInvoiceSearchModal = () => {
               if (invItem.imei) {
                   await db.inventory.update(item.inventory_id, { status: 'Available', available_qty: 1, sold_qty: 0 });
               } else {
-                  // Jitne units wapis aaye (item.quantity), utne hi adjust karein
                   const qtyReturned = item.quantity || 1;
                   await db.inventory.update(item.inventory_id, { 
                       available_qty: (invItem.available_qty || 0) + qtyReturned, 
@@ -403,32 +500,63 @@ const handleCloseInvoiceSearchModal = () => {
           }
       }
 
-      // 6. Balance Update (UI & Local DB)
-      const currentCustomer = await db.customers.get(selectedSale.customer_id);
-      if (currentCustomer) {
-          const newBalance = (currentCustomer.balance || 0) - totalRefundAmount;
-          await db.customers.update(selectedSale.customer_id, { balance: newBalance });
+      // 6. Balance Update (Step 1: Credit dena)
+      let currentCustomer = await db.customers.get(selectedSale.customer_id);
+      let newBalance = (currentCustomer.balance || 0) - totalRefundAmount; // Credit diya
+      
+      // --- NAYA LOGIC: Checkbox Check ---
+      let payoutRecord = null;
+      if (refundCashNow) {
+          // Agar user ne kaha "Abhi Cash Wapis Karo"
+          const payoutId = crypto.randomUUID();
+          payoutRecord = {
+              id: payoutId,
+              local_id: payoutId,
+              customer_id: selectedSale.customer_id,
+              amount_paid: totalRefundAmount, // Positive Amount (Cash Out)
+              payment_method: 'Cash',
+              remarks: `Auto-Refund for Return #${returnId}`,
+              user_id: user.id,
+              created_at: new Date().toISOString() // Thora sa time gap taake ledger mein baad mein aaye
+          };
+
+          // Payout Save Karein
+          await db.credit_payouts.add(payoutRecord);
           
-          setCustomers(prev => prev.map(c => 
-              c.id === selectedSale.customer_id ? { ...c, balance: newBalance } : c
-          ));
+          // Balance wapis barha dein (Credit diya phir Cash de diya = 0 change)
+          newBalance = newBalance + totalRefundAmount; 
       }
 
-      // 7. Sync Queue mein daalein (Ab hum poora return data bhejenge)
+      // Final Balance Save Karein
+      await db.customers.update(selectedSale.customer_id, { balance: newBalance });
+      setCustomers(prev => prev.map(c => 
+          c.id === selectedSale.customer_id ? { ...c, balance: newBalance } : c
+      ));
+
+      // 7. Sync Queue Update
       await db.sync_queue.add({
           table_name: 'sale_returns',
-          action: 'create_full_return', // Naya Action
+          action: 'create_full_return',
           data: {
               return_record: returnRecord,
               items: itemsToInsert,
               payment_record: paymentRecord,
-              inventory_ids: inventoryIdsToUpdate
+              inventory_ids: inventoryIdsToUpdate,
+              // Agar payout hua hai to wo bhi bhejein (Server ko handle karna hoga ya alag queue item banana hoga)
+              // Behtar hai hum Payout ko alag queue item banayein taake server logic simple rahe
           }
       });
 
-      // --- NAYA CODE END ---
+      // Agar Payout hua hai to usay bhi Queue mein daalein
+      if (payoutRecord) {
+          await db.sync_queue.add({
+              table_name: 'credit_payouts',
+              action: 'create',
+              data: payoutRecord
+          });
+      }
 
-      message.success(`Return successful! ${formatCurrency(totalRefundAmount, profile?.currency)} credited.`);
+      message.success(`Return successful! ${refundCashNow ? 'Cash refunded.' : 'Credit added.'}`);
       handleReturnCancel();
       
       if (selectedCustomer) {
@@ -446,7 +574,8 @@ const handleCloseInvoiceSearchModal = () => {
   
   const totalRefundAmount = useMemo(() => selectedReturnItems.reduce((sum, i) => sum + (i.return_qty * i.price_at_sale), 0), [selectedReturnItems]);
   
-  const [returnHistory, setReturnHistory] = useState([]); // File ke shuru mein state add karein
+  const [returnHistory, setReturnHistory] = useState([]);
+  const [refundCashNow, setRefundCashNow] = useState(false);
 
   const handleViewLedger = async (customer) => {
     setSelectedCustomer(customer);
@@ -454,20 +583,52 @@ const handleCloseInvoiceSearchModal = () => {
     try {
         setLedgerLoading(true);
 
+        // 1. Data Fetching
         const sales = await db.sales.where('customer_id').equals(customer.id).toArray();
         const payments = await db.customer_payments.where('customer_id').equals(customer.id).toArray();
+        const payouts = await db.credit_payouts.where('customer_id').equals(customer.id).toArray();
         const returns = await db.sale_returns.where('customer_id').equals(customer.id).toArray();
         const allReturnItems = await db.sale_return_items.toArray();
         
-        // Return history ko state mein save karein (Full Details ke sath)
+        // --- OPTIMIZED CODE (BATCH FETCHING) ---
+        // 1. Saare Items, Products aur Inventory ko pehle hi ek saath mangwa lein
+        const saleIds = sales.map(s => s.id);
+        const allSaleItems = await db.sale_items.where('sale_id').anyOf(saleIds).toArray();
+        
+        const productIds = allSaleItems.map(i => i.product_id);
+        const inventoryIds = allSaleItems.map(i => i.inventory_id);
+
+        const [allProducts, allInventory] = await Promise.all([
+            db.products.where('id').anyOf(productIds).toArray(),
+            db.inventory.where('id').anyOf(inventoryIds).toArray()
+        ]);
+
+        // 2. Maps banayein taake loop mein dhoondne mein waqt na lage
+        const productMap = {};
+        allProducts.forEach(p => productMap[p.id] = p);
+        
+        const inventoryMap = {};
+        allInventory.forEach(i => inventoryMap[i.id] = i);
+
+        // 3. Memory mein data jorein (Ab yahan koi 'await' nahi hai, yeh foran hoga)
+        const salesWithDetails = sales.map(sale => {
+            const items = allSaleItems.filter(i => i.sale_id === sale.id);
+            const itemsWithFullDetails = items.map(item => ({
+                ...item,
+                products: productMap[item.product_id] || { name: 'Unknown Product' },
+                inventory: inventoryMap[item.inventory_id] || {}
+            }));
+            return { ...sale, sale_items: itemsWithFullDetails };
+        });
+        // --- OPTIMIZATION END ---
+
+        // Return history logic
         const history = [];
         for (const ret of returns) {
             const items = allReturnItems.filter(ri =>
                 String(ri.return_id) === String(ret.id) ||
                 (ret.local_id && String(ri.return_id) === String(ret.local_id))
             );
-
-            // Har item ke liye Product aur Inventory details dhoondein
             const itemsWithFullDetails = await Promise.all(items.map(async (ri) => {
                 const product = await db.products.get(ri.product_id);
                 const inventory = await db.inventory.get(ri.inventory_id);
@@ -482,16 +643,9 @@ const handleCloseInvoiceSearchModal = () => {
         }
         setReturnHistory(history);
 
-        const salesWithDetails = await Promise.all(sales.map(async (sale) => {
-            const items = await db.sale_items.where('sale_id').equals(sale.id).toArray();
-            const itemsWithFullDetails = await Promise.all(items.map(async (item) => {
-                const product = await db.products.get(item.product_id);
-                const inventoryItem = await db.inventory.get(item.inventory_id);
-                return { ...item, products: product || { name: 'Unknown Product' }, inventory: inventoryItem || {} };
-            }));
-            return { ...sale, sale_items: itemsWithFullDetails };
-        }));
-
+        // 2. Transactions Banana
+        
+        // Note: Yahan hum 'sales' ki bajaye 'salesWithDetails' use kar rahe hain
         const salesTx = salesWithDetails.map(s => ({ 
             type: 'sale', date: s.created_at || s.sale_date, 
             description: `Sale (Invoice #${s.id})`, 
@@ -505,19 +659,16 @@ const handleCloseInvoiceSearchModal = () => {
             let returnDetails = null;
 
             if (isReturn) {
-                // Return record dhoondein jo is payment ke waqt bana tha
                 const relatedReturn = returns.find(r => 
                     r.id === p.local_id || r.id === p.id || 
-                    (Math.abs(new Date(r.created_at) - new Date(p.created_at)) < 5000) // 5 seconds gap safety
+                    (Math.abs(new Date(r.created_at) - new Date(p.created_at)) < 5000)
                 );
                 
                 if (relatedReturn) {
                     description = `Return Credit (Inv #${relatedReturn.sale_id})`;
-                    // History se wo items uthayein jo is return se talluq rakhte hain
                     const itemsFromHistory = history.filter(h => 
                         String(h.return_id) === String(relatedReturn.id)
                     );
-                    
                     returnDetails = {
                         ...relatedReturn,
                         sale_return_items: itemsFromHistory
@@ -533,12 +684,21 @@ const handleCloseInvoiceSearchModal = () => {
                 description: description,
                 debit: 0,
                 credit: Math.abs(p.amount_paid),
-                // Hum details mein return_details bhi bhej rahe hain taake expand hone par details nazar aayein
-                details: { ...p, return_details: returnDetails } 
+                details: { ...p, return_details: returnDetails }
             };
         });
 
-        const allTx = [...salesTx, ...paymentsTx].sort((a, b) => new Date(a.date) - new Date(b.date));
+        const payoutsTx = payouts.map(p => ({
+            type: 'payout',
+            date: p.created_at,
+            description: `Cash Refund / Payout`,
+            debit: Number(p.amount_paid),
+            credit: 0,
+            details: p
+        }));
+
+        // 3. Merge & Sort
+        const allTx = [...salesTx, ...paymentsTx, ...payoutsTx].sort((a, b) => new Date(a.date) - new Date(b.date));
         
         let runningBalance = 0;
         const finalLedger = allTx.map(tx => {
@@ -578,6 +738,40 @@ const handleCloseInvoiceSearchModal = () => {
             </Button>
           ) : null}
 
+          <Dropdown 
+            trigger={['click']}
+            menu={{
+              items: [
+                {
+                  key: 'edit',
+                  label: 'Edit Details',
+                  icon: <EditOutlined />,
+                  // Agar naam "Walk-in Customer" hai to Edit band kar dein
+                  disabled: record.name === 'Walk-in Customer', 
+                  onClick: () => showEditModal(record)
+                },
+                {
+                  key: 'archive',
+                  label: showArchived ? 'Restore Customer' : 'Archive Customer',
+                  icon: showArchived ? <ReloadOutlined /> : <InboxOutlined />,
+                  // Walk-in ko archive bhi nahi karne dena chahiye
+                  disabled: record.name === 'Walk-in Customer', 
+                  onClick: () => handleToggleArchive(record)
+                },
+                {
+                  key: 'delete',
+                  label: 'Delete Customer',
+                  icon: <DeleteOutlined />,
+                  danger: true,
+                  // Walk-in ko delete karna sakht mana hai
+                  disabled: record.name === 'Walk-in Customer', 
+                  onClick: () => handleDeleteCustomer(record)
+                }
+              ]
+            }}
+          >
+            <Button type="text" icon={<MoreOutlined style={{ fontSize: '20px' }} />} />
+          </Dropdown>
         </Space>
       ) 
     }
@@ -694,27 +888,66 @@ const handleCloseInvoiceSearchModal = () => {
     <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0' }}>
         Customer Management
     </Title>
-    <Space direction={isMobile ? 'vertical' : 'horizontal'} style={{ width: isMobile ? '100%' : 'auto' }}>
-    <Button
-        type="primary"
-        ghost // Yeh button ko thora alag dikhayega
-        icon={<SwapOutlined />} // Return ka icon
-        size="large"
-        onClick={() => setIsInvoiceSearchModalOpen(true)} // Naye popup ko kholega
-        style={{ width: isMobile ? '100%' : 'auto' }}
-    >
-        Return by Invoice
-    </Button>
-    <Button
-        type="primary"
-        icon={<UserAddOutlined />}
-        size="large"
-        onClick={() => setIsAddModalOpen(true)}
-        style={{ width: isMobile ? '100%' : 'auto' }}
-    >
-        Add Customer
-    </Button>
-</Space>
+
+    {/* Computer (Desktop) ke liye Search Bar */}
+    {!isMobile && (
+      <Input
+        ref={searchInputRef}
+        placeholder="Search by Name or Phone..."
+        prefix={<SearchOutlined />}
+        style={{ width: 300, marginLeft: 20 }}
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        allowClear
+      />
+    )}
+
+    {/* Mobile ke liye Search Bar (Sirf mobile par nazar aayega) */}
+    {isMobile && (
+      <Input
+        ref={searchInputRef}
+        placeholder="Search by Name or Phone..."
+        prefix={<SearchOutlined />}
+        style={{ marginBottom: '16px', width: '100%' }}
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        allowClear
+      />
+    )}
+    <div style={{ 
+        display: 'flex', 
+        flexDirection: isMobile ? 'column' : 'row', 
+        alignItems: 'center', 
+        gap: '12px',
+        width: isMobile ? '100%' : 'auto' 
+    }}>
+        {/* Return aur Archive Buttons - Ye hamesha ek hi row mein rahenge */}
+        <Space size="middle">
+            <Button 
+                icon={<SwapOutlined />} 
+                onClick={() => setIsInvoiceSearchModalOpen(true)} 
+                title="Return by Invoice"
+            />
+            <Button 
+                icon={showArchived ? <ReloadOutlined /> : <InboxOutlined />} 
+                onClick={() => setShowArchived(!showArchived)} 
+                type={showArchived ? 'primary' : 'default'}
+                danger={showArchived}
+                title={showArchived ? 'Back to Active' : 'View Archived'}
+            />
+        </Space>
+
+        {/* Add Customer Button */}
+        <Button
+            type="primary"
+            icon={<UserAddOutlined />}
+            size="large"
+            onClick={() => setIsAddModalOpen(true)}
+            style={{ width: isMobile ? '100%' : 'auto' }}
+        >
+            Add Customer
+        </Button>
+    </div>
 </div> {isMobile ? (
     <List
         loading={loading}
@@ -750,6 +983,37 @@ const handleCloseInvoiceSearchModal = () => {
                     </Button>
                   ) : null}
 
+                  <Dropdown 
+                    trigger={['click']}
+                    menu={{
+                      items: [
+                        {
+                          key: 'edit',
+                          label: 'Edit Details',
+                          icon: <EditOutlined />,
+                          disabled: customer.name === 'Walk-in Customer',
+                          onClick: () => showEditModal(customer)
+                        },
+                        {
+                          key: 'archive',
+                          label: showArchived ? 'Restore Customer' : 'Archive Customer',
+                          icon: showArchived ? <ReloadOutlined /> : <InboxOutlined />,
+                          disabled: customer.name === 'Walk-in Customer',
+                          onClick: () => handleToggleArchive(customer)
+                        },
+                        {
+                          key: 'delete',
+                          label: 'Delete Customer',
+                          icon: <DeleteOutlined />,
+                          danger: true,
+                          disabled: customer.name === 'Walk-in Customer',
+                          onClick: () => handleDeleteCustomer(customer)
+                        }
+                      ]
+                    }}
+                  >
+                    <Button icon={<MoreOutlined />} style={{ flex: 0.3 }} />
+                  </Dropdown>
                 </Space>
             </div>
             </Card>
@@ -758,7 +1022,11 @@ const handleCloseInvoiceSearchModal = () => {
     />
     ) : (
     <Table columns={customerColumns} dataSource={customers} loading={loading} rowKey="id" />
-)} <Modal title="Add New Customer" open={isAddModalOpen} onCancel={() => setIsAddModalOpen(false)} onOk={() => addForm.submit()} okText="Save"> <Form form={addForm} layout="vertical" onFinish={handleAddCustomer}><Form.Item name="name" label="Full Name" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="phone_number" label="Phone" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="address" label="Address"><Input.TextArea /></Form.Item></Form> </Modal> <Modal
+)} <Modal title={editingCustomer ? "Edit Customer" : "Add New Customer"} open={isAddModalOpen} onCancel={() => setIsAddModalOpen(false)} onOk={() => addForm.submit()} okText="Save"> 
+  <Form form={addForm} layout="vertical" onFinish={handleAddCustomer}>
+    <Form.Item name="name" label="Full Name" rules={[{ required: true }]}>
+      <Input ref={customerNameInputRef} />
+    </Form.Item><Form.Item name="phone_number" label="Phone" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="address" label="Address"><Input.TextArea /></Form.Item></Form> </Modal> <Modal
     title={`Ledger: ${selectedCustomer?.name}`}
     open={isLedgerModalOpen}
     onCancel={() => setIsLedgerModalOpen(false)}
@@ -863,7 +1131,23 @@ const handleCloseInvoiceSearchModal = () => {
         }
     ]}
 />
-   <Form form={returnForm} layout="vertical" onFinish={handleConfirmReturn} style={{ marginTop: '24px' }}> <Form.Item name="reason" label="Reason for Return"><Input.TextArea /></Form.Item> </Form> <Descriptions bordered><Descriptions.Item label="Total Credit"><Title level={4} style={{margin:0, color: '#52c41a'}}>{formatCurrency(totalRefundAmount, profile?.currency)}</Title></Descriptions.Item></Descriptions> </Modal> <Modal
+   <Form form={returnForm} layout="vertical" onFinish={handleConfirmReturn} style={{ marginTop: '24px' }}> <Form.Item name="reason" label="Reason for Return"><Input.TextArea /></Form.Item> </Form> <Descriptions bordered><Descriptions.Item label="Total Credit"><Title level={4} style={{margin:0, color: '#52c41a'}}>{formatCurrency(totalRefundAmount, profile?.currency)}</Title></Descriptions.Item></Descriptions> 
+    <div style={{ marginTop: '16px', padding: '12px', border: '1px solid #d9d9d9', borderRadius: '6px' }}>
+      <Checkbox 
+        checked={refundCashNow} 
+        onChange={(e) => setRefundCashNow(e.target.checked)}
+      >
+        <Text strong>Refund Cash Immediately (Settle Credit Now)</Text>
+      </Checkbox>
+      <div style={{ marginLeft: '24px', marginTop: '4px' }}>
+        <Text type="secondary" style={{ fontSize: '12px' }}>
+          {refundCashNow 
+            ? "Cash will be deducted from your drawer immediately." 
+            : "Amount will be added to customer's credit balance."}
+        </Text>
+      </div>
+   </div>
+   </Modal> <Modal
   title={`Settle Credit for: ${selectedCustomer?.name}`}
   open={isPayoutModalOpen}
   onCancel={handlePayoutCancel}
@@ -911,9 +1195,9 @@ const handleCloseInvoiceSearchModal = () => {
           rules={[{ required: true, message: 'Please scan or enter the invoice number!' }]}
         >
           <Input 
+            ref={invoiceSearchInputRef}
             style={{ width: '100%' }} 
             placeholder="Click here and scan receipt..." 
-            autoFocus 
             autoComplete="off"
           />
         </Form.Item>

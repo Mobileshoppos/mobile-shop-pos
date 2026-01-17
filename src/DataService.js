@@ -11,15 +11,10 @@ const DataService = {
     // Agar showArchivedOnly true hai, to sirf 'false' wale dikhao. Warna 'true' wale.
     const products = allProducts.filter(p => showArchivedOnly ? p.is_active === false : p.is_active !== false);
     
-    
-    // Inventory se wo items layein jo BIKAY NAHI hain (Available)
-    const allInventoryItems = await db.inventory.toArray();
-    
-    const availableItems = allInventoryItems.filter(item => {
-        const status = (item.status || '').toLowerCase();
-        // Ab hum sirf wo items dikhayenge jin ki available_qty 0 se zyada hai
-        return status === 'available' && (item.available_qty > 0); 
-    });
+        const availableItems = await db.inventory
+        .where('status').anyOf('Available', 'available')
+        .filter(item => item.available_qty > 0)
+        .toArray();
 
     // 2. Categories Map
     const categoryMap = {};
@@ -129,6 +124,31 @@ const DataService = {
   async updateInventoryItem(id, updates) {
     await db.inventory.update(id, updates);
     await db.sync_queue.add({ table_name: 'inventory', action: 'update', data: { id, ...updates } });
+    return true;
+  },
+
+  // Quick Edit: Barcode aur Sale Price ko aik saath offline-first update karne ke liye
+  async updateQuickEdit(variantId, inventoryIds, updates) {
+    // A. Master Variant update karein (Dexie + Queue)
+    await db.product_variants.update(variantId, { 
+      barcode: updates.barcode, 
+      sale_price: updates.sale_price 
+    });
+    await db.sync_queue.add({ 
+      table_name: 'product_variants', 
+      action: 'update', 
+      data: { id: variantId, barcode: updates.barcode, sale_price: updates.sale_price } 
+    });
+
+    // B. Mojooda Stock (Inventory) ki Sale Price update karein (Dexie + Queue)
+    for (const invId of inventoryIds) {
+      await db.inventory.update(invId, { sale_price: updates.sale_price });
+      await db.sync_queue.add({ 
+        table_name: 'inventory', 
+        action: 'update', 
+        data: { id: invId, sale_price: updates.sale_price } 
+      });
+    }
     return true;
   },
 
@@ -465,6 +485,75 @@ async addCustomer(customerData) {
     });
     
     return customerData;
+  },
+
+  async updateCustomer(id, updates) {
+    // 1. Local database update karein
+    await db.customers.update(id, updates);
+    
+    // 2. Sync queue mein 'update' ka action daalein
+    await db.sync_queue.add({
+      table_name: 'customers',
+      action: 'update',
+      data: { id, ...updates }
+    });
+    return true;
+  },
+
+  // --- NAYA FUNCTION: Customer Archive / Unarchive ---
+  async toggleArchiveCustomer(id, shouldArchive) {
+    const newStatus = !shouldArchive; 
+    await db.customers.update(id, { is_active: newStatus });
+
+    await db.sync_queue.add({
+      table_name: 'customers',
+      action: 'update',
+      data: { id, is_active: newStatus }
+    });
+    return true;
+  },
+
+  // --- BULLETPROOF CUSTOMER DELETE (With Full History Checks) ---
+  async deleteCustomer(id) {
+    // 1. Check: Kya customer ka balance bilkul 0 hai?
+    const customer = await db.customers.get(id);
+    if (customer && Math.abs(customer.balance || 0) > 0.01) {
+      throw new Error("Cannot delete: This customer has a pending balance (Udhaar).");
+    }
+
+    // 2. Check: Kya iski koi Sales History hai?
+    const hasSales = await db.sales.where('customer_id').equals(id).count();
+    if (hasSales > 0) {
+      throw new Error("Cannot delete: This customer has sales records. Please Archive them instead.");
+    }
+
+    // 3. Check: Kya iski koi Payment History hai?
+    const hasPayments = await db.customer_payments.where('customer_id').equals(id).count();
+    if (hasPayments > 0) {
+      throw new Error("Cannot delete: This customer has payment records in the ledger. Use Archive.");
+    }
+
+    // 4. Check: Kya iski koi Returns History hai?
+    const hasReturns = await db.sale_returns.where('customer_id').equals(id).count();
+    if (hasReturns > 0) {
+      throw new Error("Cannot delete: This customer has sales return history. Use Archive.");
+    }
+
+    // 5. Check: Kya iska koi Payout (Refund) record hai?
+    const hasPayouts = await db.credit_payouts.where('customer_id').equals(id).count();
+    if (hasPayouts > 0) {
+      throw new Error("Cannot delete: This customer has credit payout records. Use Archive.");
+    }
+
+    // Agar upar wale saare checks PASS ho jayein (yani customer bilkul naya hai aur koi kaam nahi hua)
+    // Sirf tab hi delete karein.
+    await db.customers.delete(id);
+    await db.sync_queue.add({
+      table_name: 'customers',
+      action: 'delete',
+      data: { id }
+    });
+    return true;
   },
 
   async processSale(salePayload) {
@@ -1656,7 +1745,28 @@ async addCustomer(customerData) {
         date, 
         amount: Math.max(0, map[date]) 
     }));
-  }
+  },
+
+  async getOrCreateWalkInCustomer() {
+    // 1. Pehle Local DB mein check karein
+    let walkIn = await db.customers
+        .filter(c => c.name === 'Walk-in Customer')
+        .first();
+
+    // 2. Agar nahi mila, to naya banayein
+    if (!walkIn) {
+        const newCustomer = {
+            name: 'Walk-in Customer',
+            phone_number: '0000000000',
+            address: 'General Customer',
+            balance: 0
+        };
+        // Hum apna hi addCustomer function use karenge jo Sync Queue handle karta hai
+        walkIn = await this.addCustomer(newCustomer);
+    }
+    
+    return walkIn;
+  },
 
 };
 

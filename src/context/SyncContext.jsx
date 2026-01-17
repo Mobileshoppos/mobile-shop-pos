@@ -273,8 +273,16 @@ export const SyncProvider = ({ children }) => {
                 const { error: supError } = await supabase.from('inventory').update(updates).eq('id', id);
                 error = supError;
             }
+
+            // Product Variants Update (Quick Edit Sync - With Mapping Safety)
+            else if (item.table_name === 'product_variants' && item.action === 'update') {
+                const { id, ...updates } = item.data;
+                // Check karein ke agar ID local UUID hai to asli server ID istemal karein
+                const realId = idMap[id] || id; 
+                const { error: supError } = await supabase.from('product_variants').update(updates).eq('id', realId);
+                error = supError;
+            }
             
-            // --- SUPPLIERS (FIXED NOW) ---
             // Hum ne yahan wohi logic lagaya hai jo Products/Customers ke liye tha
             else if (item.table_name === 'suppliers' && item.action === 'create') {
                 const { id: localId, balance_due, credit_balance, ...supplierData } = item.data;
@@ -343,6 +351,21 @@ export const SyncProvider = ({ children }) => {
                     // 3. Purana Customer (Local ID wala) delete karein
                     await db.customers.delete(localId);
                 }
+            }
+
+            // Customer Update Sync
+            else if (item.table_name === 'customers' && item.action === 'update') {
+                const { id, ...updates } = item.data;
+                const realId = idMappingRef.current[id] || id;
+                const { error: supError } = await supabase.from('customers').update(updates).eq('id', realId);
+                error = supError;
+            }
+
+            // Customer Delete Sync
+            else if (item.table_name === 'customers' && item.action === 'delete') {
+                const realId = idMappingRef.current[item.data.id] || item.data.id;
+                const { error: supError } = await supabase.from('customers').delete().eq('id', realId);
+                error = supError;
             }
 
             // --- PURCHASES (Already Fixed) ---

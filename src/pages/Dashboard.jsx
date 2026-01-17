@@ -11,6 +11,7 @@ import {
   DollarCircleOutlined,
   TrophyOutlined,
   ArrowUpOutlined,
+  SwapOutlined,
   ArrowDownOutlined,
   HistoryOutlined,
   CheckCircleOutlined,
@@ -383,31 +384,32 @@ const Dashboard = () => {
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
             {renderTrend(stats?.expensesGrowth)}
-            <div style={{ height: 80, marginTop: 5 }}>
+             <div style={{ 
+  marginTop: 12, 
+  paddingTop: 8, 
+  borderTop: '1px solid rgba(255,255,255,0.2)',
+  height: '75px', // Card ki lambai hamesha itni hi rahegi
+  overflowY: 'auto', // Agar list lambi ho jaye to scrollbar aa jayega
+  scrollbarWidth: 'none', // Firefox mein scrollbar chhupane ke liye
+  msOverflowStyle: 'none' // IE/Edge mein scrollbar chhupane ke liye
+}}>
+  {/* CSS for Chrome/Safari scrollbar hiding */}
+  <style>{`
+    div::-webkit-scrollbar { display: none; }
+  `}</style>
+
   {stats?.expenseBreakdown?.length > 0 ? (
-    <Pie
-      data={stats.expenseBreakdown}
-      angleField="value"
-      colorField="type"
-      radius={1}
-      innerRadius={0.6}
-      label={false}
-      legend={false}
-      theme={isDarkMode ? 'dark' : 'light'}
-      tooltip={{
-        formatter: (datum) => ({ name: datum.type, value: formatCurrency(datum.value, profile?.currency) }),
-        domStyles: isDarkMode ? {
-            'g2-tooltip': { backgroundColor: '#333', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' },
-            'g2-tooltip-title': { color: '#fff' },
-            'g2-tooltip-list-item': { color: '#fff' }
-        } : undefined
-      }}
-      padding="auto"
-      autoFit
-    />
+    stats.expenseBreakdown.map((item, index) => (
+      <div key={index} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: 6 }}>
+        <span style={{ opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }}>
+          {item.type}:
+        </span>
+        <span style={{ fontWeight: 'bold' }}>{formatCurrency(item.value, profile?.currency)}</span>
+      </div>
+    ))
   ) : (
     <div style={{ textAlign: 'center', paddingTop: 20, fontSize: '11px', opacity: 0.6 }}>
-      No expenses to show
+      No expenses recorded
     </div>
   )}
 </div>
@@ -460,26 +462,29 @@ const Dashboard = () => {
           <Card variant="borderless" style={{ borderRadius: 5 }}>
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
               <Title level={5} style={{ margin: 0 }}>Quick Actions</Title>
-              <Space wrap>
-                <Button type="primary" icon={<ShoppingOutlined />} onClick={() => navigate('/pos')}>
-                  New Sale
-                </Button>
-                <Button icon={<PlusOutlined />} onClick={() => navigate('/purchases')}>
-                  Purchase
-                </Button>
-                <Button icon={<TeamOutlined />} onClick={() => navigate('/suppliers')}>
-                  Suppliers
-                </Button>
-                <Button icon={<DollarCircleOutlined />} onClick={() => navigate('/expenses')}>
-                  Expenses
-                </Button>
-                <Button 
-  icon={<CheckCircleOutlined />} 
-  style={{ backgroundColor: '#52c41a', color: 'white', border: 'none' }}
-  onClick={() => setIsClosingModalOpen(true)}
->
-  Close Register
-</Button>
+              <Space wrap size="middle">
+                <Tooltip title="New Sale">
+                  <Button type="primary" icon={<ShoppingOutlined />} onClick={() => navigate('/pos')} />
+                </Tooltip>
+                <Tooltip title="Return Item">
+                  <Button icon={<SwapOutlined />} onClick={() => navigate('/customers?openReturn=true')} />
+                </Tooltip>
+                <Tooltip title="Purchase">
+                  <Button icon={<PlusOutlined />} onClick={() => navigate('/purchases')} />
+                </Tooltip>
+                <Tooltip title="Suppliers">
+                  <Button icon={<TeamOutlined />} onClick={() => navigate('/suppliers')} />
+                </Tooltip>
+                <Tooltip title="Expenses">
+                  <Button icon={<DollarCircleOutlined />} onClick={() => navigate('/expenses')} />
+                </Tooltip>
+                <Tooltip title="Close Register">
+                  <Button 
+                    icon={<CheckCircleOutlined />} 
+                    style={{ backgroundColor: '#52c41a', color: 'white', border: 'none' }}
+                    onClick={() => setIsClosingModalOpen(true)} 
+                  />
+                </Tooltip>
               </Space>
             </div>
           </Card>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Typography, Tag, App, Button, Tooltip, Space } from 'antd';
-import { PrinterOutlined } from '@ant-design/icons';
+import { PrinterOutlined, ReloadOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
 import { useAuth } from '../context/AuthContext';
@@ -23,21 +23,45 @@ const SalesHistory = () => {
     const fetchSalesHistory = async () => {
       try {
         setLoading(true);
+
+        // 1. SAFE FETCH: Saara data le aao (Index issue se bachne ke liye)
+        const allRawSales = await db.sales.toArray();
+
+        // 2. JS SORT: Memory mein sort aur limit karein (Guaranteed Data)
+        const localSales = allRawSales
+            .sort((a, b) => new Date(b.created_at || b.sale_date) - new Date(a.created_at || a.sale_date))
+            .slice(0, 50); // Sirf top 50 uthayen
         
-        // 1. Sales aur Sync Queue dono layein
-        const localSales = await db.sales.toArray();
+        // 3. Sync Queue layein
         const queueItems = await db.sync_queue.where('table_name').equals('sales').toArray();
+
+        // 4. BATCH FETCHING (Optimization - Fast Data Loading)
+        const customerIds = localSales.map(s => s.customer_id).filter(id => id);
+        const saleIds = localSales.map(s => s.id);
+
+        const [allCustomers, allSaleItems] = await Promise.all([
+            db.customers.where('id').anyOf(customerIds).toArray(),
+            db.sale_items.where('sale_id').anyOf(saleIds).toArray()
+        ]);
+
+        // 5. MAPPING (Data Jorna)
+        const customerMap = {};
+        allCustomers.forEach(c => { customerMap[c.id] = c; });
+
+        const itemsMap = {};
+        allSaleItems.forEach(item => {
+            if (!itemsMap[item.sale_id]) itemsMap[item.sale_id] = [];
+            itemsMap[item.sale_id].push(item);
+        });
         
-        // 2. Har Sale ke liye details aur Sync Status check karein
-        const formattedSales = await Promise.all(localSales.map(async (sale) => {
-            const customer = await db.customers.get(sale.customer_id);
-            const items = await db.sale_items.where('sale_id').equals(sale.id).toArray();
+        // 6. FINAL FORMATTING
+        const formattedSales = localSales.map((sale) => {
+            const customer = customerMap[sale.customer_id];
+            const items = itemsMap[sale.id] || [];
             const totalItems = items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
 
-            // --- NAYA: Sync Status Check ---
-            // Dekhein ke kya yeh sale abhi queue mein hai?
             const queueItem = queueItems.find(q => q.data.sale.id === sale.id);
-            let status = 'synced'; // Default: Synced
+            let status = 'synced';
             let errorMsg = null;
 
             if (queueItem) {
@@ -54,13 +78,11 @@ const SalesHistory = () => {
                 payment_status: sale.payment_status,
                 salesperson_name: 'Admin',
                 payment_method: sale.payment_method || 'Cash',
-                // Nayi fields
                 sync_status: status,
                 sync_error: errorMsg
             };
-        }));
-
-        formattedSales.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        });
+        
         setSales(formattedSales);
       } catch (error) {
         message.error('Error fetching sales history: ' + error.message);

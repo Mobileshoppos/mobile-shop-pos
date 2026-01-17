@@ -533,6 +533,14 @@ const POS = () => {
         
         try {
           setIsSubmitting(true);
+          // --- PROFESSIONAL LOGIC ---
+          let finalCustomerId = selectedCustomer;
+          
+          if (!finalCustomerId) {
+              // DataService se kaho ke Walk-in Customer la kar de (Chahe dhoonde ya banaye)
+              const walkIn = await DataService.getOrCreateWalkInCustomer();
+              finalCustomerId = walkIn.id;
+          }
           
           // *** FINAL LOGIC: 6-Digit Device-Safe ID ***
           // Hum naya utility function use kar rahe hain jo Device ID aur Random Number
@@ -545,7 +553,7 @@ const POS = () => {
           const saleRecord = { 
               id: saleId, 
               local_id: crypto.randomUUID(),
-              customer_id: selectedCustomer || 1, 
+              customer_id: finalCustomerId, 
               subtotal, 
               discount: discountAmount, 
               total_amount: grandTotal, 
@@ -631,11 +639,11 @@ const POS = () => {
           }
 
           // Balance Update
-          if (paymentMethod === 'Unpaid' && selectedCustomer) {
-              const customer = await db.customers.get(selectedCustomer);
+          if (paymentMethod === 'Unpaid' && finalCustomerId) {
+              const customer = await db.customers.get(finalCustomerId);
               if (customer) {
                   const newBalance = (customer.balance || 0) + udhaarAmount;
-                  await db.customers.update(selectedCustomer, { balance: newBalance });
+                  await db.customers.update(finalCustomerId, { balance: newBalance });
               }
           }
 

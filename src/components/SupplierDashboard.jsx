@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
@@ -253,6 +253,9 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
 
 const SupplierDashboard = () => {
     const { token } = theme.useToken();
+    const searchInputRef = useRef(null);
+    const supplierNameInputRef = useRef(null);
+
     const { processSyncQueue } = useSync();
     const { profile } = useAuth();
     const isMobile = useMediaQuery('(max-width: 768px)');
@@ -265,6 +268,22 @@ const SupplierDashboard = () => {
     const [editingSupplier, setEditingSupplier] = useState(null);
     const [form] = Form.useForm();
     const [searchTerm, setSearchTerm] = useState('');
+    // --- FOCUS LOGIC (Corrected Position) ---
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            searchInputRef.current?.focus();
+        }, 100);
+        return () => clearTimeout(timer);
+    }, []);
+
+    useEffect(() => {
+        if (isModalVisible) {
+            const timer = setTimeout(() => {
+                supplierNameInputRef.current?.focus();
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [isModalVisible]);
 
     useEffect(() => {
     if (isModalVisible) { // Agar modal khula hua hai
@@ -393,6 +412,7 @@ const SupplierDashboard = () => {
                         <div style={{ padding: '8px 0 16px 0' }}>
                             <Flex gap="small">
                                 <Input
+                                    ref={searchInputRef}
                                     placeholder="Search supplier..."
                                     prefix={<SearchOutlined />}
                                     value={searchTerm}
@@ -425,6 +445,7 @@ const SupplierDashboard = () => {
                         <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
                             <Flex gap="small">
                                 <Input
+                                    ref={searchInputRef}
                                     placeholder="Search supplier..."
                                     prefix={<SearchOutlined />}
                                     value={searchTerm}
@@ -458,7 +479,9 @@ const SupplierDashboard = () => {
 
             <Modal title={editingSupplier ? "Edit Supplier" : "Add New Supplier"} open={isModalVisible} onOk={handleModalOk} onCancel={() => setIsModalVisible(false)} okText="Save" destroyOnHidden>
                 <Form form={form} layout="vertical" name="supplier_form" style={{ marginTop: 24 }}>
-                    <Form.Item name="name" label="Supplier Name" rules={[{ required: true }]}><Input /></Form.Item>
+                    <Form.Item name="name" label="Supplier Name" rules={[{ required: true }]}>
+                        <Input ref={supplierNameInputRef} />
+                    </Form.Item>
                     <Form.Item name="contact_person" label="Contact Person"><Input /></Form.Item>
                     <Form.Item name="phone" label="Phone Number"><Input /></Form.Item>
                     <Form.Item name="address" label="Address"><Input.TextArea rows={2} /></Form.Item>

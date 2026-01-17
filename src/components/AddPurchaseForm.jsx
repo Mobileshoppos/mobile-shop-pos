@@ -298,6 +298,15 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
                     cashSupplier = serverSupplier;
                 } 
               }
+              // DOUBLE CHECK: Agar list mein nahi mila, to DB mein check karein
+              if (!cashSupplier) {
+                  cashSupplier = await db.suppliers.filter(s => s.name.trim().toLowerCase() === 'cash purchase').first();
+                  if (cashSupplier) {
+                      allSuppliers.push(cashSupplier);
+                  }
+              }
+
+              // Agar ab bhi nahi mila, tab hi naya banayein
               if (!cashSupplier) {
                  const newSupplierData = { name: 'Cash Purchase', address: 'Market / Walk-in', phone: '' };
                  const createdSupplier = await DataService.addSupplier(newSupplierData);
@@ -434,17 +443,33 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
     try {
       const values = await form.validateFields(['supplier_id', 'notes', 'amount_paid', 'payment_method']);
       if (purchaseItems.length === 0) { message.error("Please add at least one item."); return; }
-      // Check if Supplier is not yet synced (Security Guard)
-      if (typeof values.supplier_id === 'string' && isNaN(values.supplier_id)) {
-      message.warning("New supplier is still being uploaded to the server. Please wait 2-3 seconds and try saving again.");
-      return;
-     }
       
       setIsSubmitting(true);
+      // --- NAYA FIX: ID Handle Karna ---
+      let finalSupplierId = values.supplier_id;
+
+      // Agar ID String (Local) hai, to Server se Asli ID dhoond kar layein
+      if (typeof finalSupplierId === 'string') {
+          // Hum server se kehte hain: "Cash Purchase" wale ki asli ID do
+          const { data: serverSup } = await supabase
+              .from('suppliers')
+              .select('id')
+              .ilike('name', 'Cash Purchase')
+              .maybeSingle();
+          
+          if (serverSup) {
+              finalSupplierId = serverSup.id; // Asli ID mil gayi!
+          } else {
+              // Agar server par bhi nahi mila, to ab hum kuch nahi kar sakte
+              message.error("Supplier syncing... Please try again in a moment.");
+              setIsSubmitting(false);
+              return;
+          }
+      }
 
       const payload = {
         p_local_id: crypto.randomUUID(),
-        p_supplier_id: values.supplier_id,
+        p_supplier_id: finalSupplierId,
         p_notes: values.notes || null,
         p_inventory_items: purchaseItems.map(({ name, brand, categories, category_is_imei_based, ...item }) => item)
       };

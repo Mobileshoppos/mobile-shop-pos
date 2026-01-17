@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu } from 'antd';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined } from '@ant-design/icons';
@@ -321,13 +321,16 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
 
 const Inventory = () => {
   const [showArchived, setShowArchived] = useState(false);
+  const searchInputRef = useRef(null);
+  const productNameInputRef = useRef(null);
+
   const { isDarkMode } = useTheme();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [searchParams] = useSearchParams();
   const { processSyncQueue } = useSync();
   const showLowStockOnly = searchParams.get('low_stock') === 'true';
   const location = useLocation();
-  const { message, modal } = App.useApp();
+  const { message, modal, notification } = App.useApp();
   const { user, profile } = useAuth();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
@@ -410,6 +413,22 @@ const Inventory = () => {
   const [sortBy, setSortBy] = useState('name_asc');
   
   const selectedCategoryId = Form.useWatch('category_id', productForm);
+  // --- FOCUS LOGIC (Corrected Position) ---
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (isProductModalOpen) {
+      const timer = setTimeout(() => {
+        productNameInputRef.current?.focus();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isProductModalOpen]);
 
   useEffect(() => {
     if (!user) return;
@@ -551,6 +570,15 @@ const Inventory = () => {
 
   // --- ADD STOCK HANDLER (Updated to fetch Barcode) ---
   const handleAddStockClick = async (item) => {
+    // 1. Internet Check (Notification Style)
+    if (!navigator.onLine) {
+        notification.error({
+            message: 'Offline',
+            description: 'You need an internet connection to add new stock.',
+        });
+        return; // Yahin ruk jao
+    }
+
     // Check karein ke kya yeh Variant hai ya Main Product?
     const isVariant = item.product_id ? true : false;
     
@@ -708,78 +736,51 @@ const Inventory = () => {
   };
 
     const handleQuickEditOk = async (values) => {
-      try {
-          if (!editingItem || !editingItem.ids) return;
+    try {
+      if (!editingItem || !editingItem.ids) return;
 
-          // 1. ID Dhoondna
-          let variantId = editingItem.variant_id;
-          if (!variantId && editingItem.ids.length > 0) {
-              const localItem = await db.inventory.get(editingItem.ids[0]);
-              if (localItem) variantId = localItem.variant_id;
-          }
-
-          if (!variantId) throw new Error("Item ID not found.");
-
-          // --- STEP 1: DUPLICATE CHECK (Local DB) ---
-          // Update karne se pehle check karein ke kya yeh barcode kisi AUR item ka to nahi?
-          if (values.barcode) {
-              // Hum check kar rahe hain ke kya koi aisa item hai jiska barcode same ho, MAGAR ID alag ho
-              const duplicateItem = await db.product_variants
-                  .where('barcode').equals(values.barcode)
-                  .filter(item => item.id !== variantId) // Apne aap ko ignore karein
-                  .first();
-
-              if (duplicateItem) {
-                  throw new Error(`This Barcode "${values.barcode}" is already assigned to another item. Duplicates are not allowed.`);
-              }
-          }
-
-          // --- STEP 2: LOCAL UPDATE ---
-          await db.product_variants.update(variantId, {
-              barcode: values.barcode || null,
-              sale_price: values.sale_price
-          });
-
-          // Stock Prices Sync
-          const updates = { sale_price: values.sale_price };
-          for (const id of editingItem.ids) {
-              await DataService.updateInventoryItem(id, updates);
-          }
-
-          // --- STEP 3: SERVER UPDATE (With Error Handling) ---
-          if (navigator.onLine) {
-              const { error: masterError } = await supabase
-                  .from('product_variants')
-                  .update({
-                      barcode: values.barcode || null,
-                      sale_price: values.sale_price
-                  })
-                  .eq('id', variantId);
-
-              if (masterError) {
-                  // Agar Server ne kaha "Duplicate", to hum Error throw karenge
-                  if (masterError.code === '23505') { // 23505 = Unique Violation Code
-                      // Hamein Local change ko wapis revert karna chahiye ya user ko batana chahiye
-                      throw new Error("Server Error: Yeh Barcode pehle se mojood hai. (Duplicate)");
-                  }
-                  console.error("Server sync failed:", masterError);
-              }
-          }
-
-          // Agar yahan tak pohanch gaye, to sab theek hai
-          message.success('Item updated successfully!');
-          setIsEditModalOpen(false);
-          setEditingItem(null);
-          processSyncQueue();
-          
-          setSearchText(prev => prev ? prev + ' ' : ' ');
-          setTimeout(() => setSearchText(prev => prev.trim()), 10);
-
-      } catch (error) {
-          console.error(error);
-          // Yahan ab User ko Laal Rang ka Error nazar aayega Success ki jagah
-          message.error(error.message);
+      // 1. ID Dhoondna
+      let variantId = editingItem.variant_id;
+      if (!variantId && editingItem.ids.length > 0) {
+        const localItem = await db.inventory.get(editingItem.ids[0]);
+        if (localItem) variantId = localItem.variant_id;
       }
+
+      if (!variantId) throw new Error("Item ID not found.");
+
+      // 2. OFFLINE DUPLICATE BARCODE CHECK
+      if (values.barcode) {
+        const duplicateItem = await db.product_variants
+          .where('barcode').equals(values.barcode)
+          .filter(item => item.id !== variantId)
+          .first();
+
+        if (duplicateItem) {
+          throw new Error(`Barcode "${values.barcode}" is already in use by another product.`);
+        }
+      }
+
+      // 3. OFFLINE-FIRST UPDATE (Dexie + Queue)
+      // Hum naya DataService function use kar rahe hain jo Barcode aur Price dono handle karega
+      await DataService.updateQuickEdit(variantId, editingItem.ids, {
+        barcode: values.barcode || null,
+        sale_price: values.sale_price
+      });
+
+      // 4. UI SUCCESS
+      message.success('Item updated successfully (Offline-ready)!');
+      setIsEditModalOpen(false);
+      setEditingItem(null);
+      
+      // Sync process karein agar internet ho
+      if (navigator.onLine) processSyncQueue();
+      
+      // List Refresh signal
+      setRefreshTrigger(prev => prev + 1);
+
+    } catch (error) {
+      message.error(error.message);
+    }
   };
   
   const isSmartPhoneCategorySelected = categories.find(c => c.id === selectedCategoryId)?.name === 'Smart Phones & Tablets';
@@ -796,6 +797,7 @@ const Inventory = () => {
           {/* 1. Search Box (Sab se bada) */}
           <Col xs={24} sm={8} md={9}>
             <Input 
+              ref={searchInputRef}
               placeholder="Search or Scan..." 
               prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
               value={searchText} 
@@ -929,7 +931,9 @@ const Inventory = () => {
         okText="Save Model"
       >
         <Form form={productForm} layout="vertical" onFinish={handleProductOk} style={{marginTop: '24px'}}>
-          <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="name" label="Product Name" rules={[{ required: true }]}>
+            <Input ref={productNameInputRef} />
+          </Form.Item>
           <Form.Item name="category_id" label="Category" rules={[{ required: true }]}><Select placeholder="Select...">{categories.map(c => (<Option key={c.id} value={c.id}>{c.name}</Option>))}</Select></Form.Item>
           <Form.Item name="brand" label="Brand" rules={[{ required: true }]}><Input /></Form.Item>
           {!isSmartPhoneCategorySelected && (
