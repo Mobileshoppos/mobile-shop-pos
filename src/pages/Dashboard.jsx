@@ -293,6 +293,11 @@ const Dashboard = () => {
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
             {renderTrend(stats?.salesGrowth)}
+            {stats?.totalReturnFees > 0 && (
+              <div style={{ marginTop: 8, fontSize: '12px', opacity: 0.8, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 4 }}>
+                Incl. {formatCurrency(stats.totalReturnFees, profile?.currency)} Return Fees
+              </div>
+            )}
           </Card>
         </Col>
 
@@ -363,6 +368,11 @@ const Dashboard = () => {
               >
                 Margin: {stats?.profitMargin?.toFixed(1)}%
               </Tag>
+              {stats?.totalReturnFees > 0 && (
+                <Tag style={{ fontSize: '11px', borderRadius: '4px', backgroundColor: 'rgba(255, 255, 255, 0.2)', color: 'white', border: 'none', marginLeft: 4 }}>
+                  Fees: {formatCurrency(stats.totalReturnFees, profile?.currency)}
+                </Tag>
+              )}
             </div>
 
             {/* Divider aur Gross Profit - Yeh ab alag nazar aayega */}

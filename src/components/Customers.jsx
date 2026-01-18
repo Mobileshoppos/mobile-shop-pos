@@ -53,6 +53,15 @@ const Customers = () => {
   const [cashOrBank, setCashOrBank] = useState('Cash');
   const [paymentForm] = Form.useForm();
   const [returnForm] = Form.useForm();
+  const [returnHistory, setReturnHistory] = useState([]);
+  const [refundCashNow, setRefundCashNow] = useState(false);
+  const [returnFee, setReturnFee] = useState(0);
+  const maxAllowedFee = useMemo(() => {
+    const gross = selectedReturnItems.reduce((sum, i) => sum + (i.return_qty * i.price_at_sale), 0);
+    const ratio = (selectedSale?.discount || 0) / (selectedSale?.subtotal || 1);
+    return Number((gross - (gross * ratio)).toFixed(2));
+  }, [selectedReturnItems, selectedSale]);
+
   // --- FOCUS LOGIC (Corrected Position) ---
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -450,6 +459,7 @@ const handleCloseInvoiceSearchModal = () => {
           sale_id: selectedSale.id,
           customer_id: selectedSale.customer_id,
           total_refund_amount: totalRefundAmount,
+          return_fee: returnFee,
           reason: values.reason,
           user_id: user.id,
           created_at: new Date().toISOString()
@@ -572,10 +582,17 @@ const handleCloseInvoiceSearchModal = () => {
     }
   };
   
-  const totalRefundAmount = useMemo(() => selectedReturnItems.reduce((sum, i) => sum + (i.return_qty * i.price_at_sale), 0), [selectedReturnItems]);
+  const totalRefundAmount = useMemo(() => {
+    const grossRefund = selectedReturnItems.reduce((sum, i) => sum + (i.return_qty * i.price_at_sale), 0);
+    const subtotal = selectedSale?.subtotal || grossRefund || 1;
+    const discountRatio = (selectedSale?.discount || 0) / subtotal;
+    const refundDiscount = grossRefund * discountRatio;
+    const netRefundable = grossRefund - refundDiscount;
+    
+    // Safety Lock: Agar fee zyada ho jaye to refund 0 ho jayega, negative nahi.
+    return Math.max(0, netRefundable - returnFee);
+  }, [selectedReturnItems, selectedSale, returnFee]);
   
-  const [returnHistory, setReturnHistory] = useState([]);
-  const [refundCashNow, setRefundCashNow] = useState(false);
 
   const handleViewLedger = async (customer) => {
     setSelectedCustomer(customer);
@@ -665,7 +682,8 @@ const handleCloseInvoiceSearchModal = () => {
                 );
                 
                 if (relatedReturn) {
-                    description = `Return Credit (Inv #${relatedReturn.sale_id})`;
+                    const feeText = relatedReturn.return_fee > 0 ? ` (Fee: ${formatCurrency(relatedReturn.return_fee, profile?.currency)} deducted)` : '';
+                    description = `Return Credit (Inv #${relatedReturn.sale_id})${feeText}`;
                     const itemsFromHistory = history.filter(h => 
                         String(h.return_id) === String(relatedReturn.id)
                     );
@@ -849,7 +867,15 @@ const handleCloseInvoiceSearchModal = () => {
             <Title level={5} style={{ margin: 0 }}>Items in this Invoice</Title>
             <Button icon={<SwapOutlined />} type="primary" ghost onClick={() => openReturnModal(record.details)}>Return Items</Button>
           </div>
-          <Table columns={saleItemCols} dataSource={record.details.sale_items} pagination={false} rowKey="id" style={{marginTop: '8px'}} />
+          <>
+            <Table columns={saleItemCols} dataSource={record.details.sale_items} pagination={false} rowKey="id" style={{marginTop: '8px'}} />
+            {record.details.discount > 0 && (
+              <div style={{ textAlign: 'right', marginTop: '12px', paddingRight: '24px' }}>
+                <Text type="secondary" style={{ fontSize: '14px' }}>Invoice Discount: </Text>
+                <Text type="danger" strong style={{ fontSize: '14px' }}>- {formatCurrency(record.details.discount, profile?.currency)}</Text>
+              </div>
+            )}
+          </>
         </Card>
       );
     }
@@ -867,8 +893,12 @@ const handleCloseInvoiceSearchModal = () => {
         <Card size="small" style={{ margin: '8px 0' }}>
           <Descriptions title={`Return Details`} bordered size="small" column={1}>
             <Descriptions.Item label="Reason for Return">{returnDetails.reason || <Text type="secondary">No reason provided.</Text>}</Descriptions.Item>
-            {/* --- YAHAN TABDEELI HUI HAI --- */}
-            <Descriptions.Item label="Total Credit Amount"><strong>{formatCurrency(record.credit, profile?.currency)}</strong></Descriptions.Item>
+            {returnDetails.return_fee > 0 && (
+              <Descriptions.Item label="Restocking Fee Charged">
+                <Text type="danger">{formatCurrency(returnDetails.return_fee, profile?.currency)}</Text>
+              </Descriptions.Item>
+            )}
+            <Descriptions.Item label="Final Refund Amount"><strong>{formatCurrency(record.credit, profile?.currency)}</strong></Descriptions.Item>
           </Descriptions>
           <Title level={5} style={{ marginTop: '16px' }}>Items Returned in this Transaction</Title>
           <Table columns={returnItemCols} dataSource={returnDetails.sale_return_items} pagination={false} rowKey="id" style={{marginTop: '8px'}}/>
@@ -1088,7 +1118,7 @@ const handleCloseInvoiceSearchModal = () => {
     <Radio.Button value="Bank">Bank / Online</Radio.Button>
   </Radio.Group>
 </Form.Item>
-</Form> </Modal> <Modal title={`Return for Invoice #${selectedSale?.id}`} open={isReturnModalOpen} onCancel={handleReturnCancel} onOk={() => returnForm.submit()} okText="Confirm Return" confirmLoading={isReturnSubmitting} okButtonProps={{ disabled: selectedReturnItems.length === 0 }}> 
+</Form> </Modal> <Modal title={`Return for Invoice #${selectedSale?.id}`} open={isReturnModalOpen} onCancel={handleReturnCancel} onOk={() => returnForm.submit()} okText="Confirm Return" confirmLoading={isReturnSubmitting} okButtonProps={{ disabled: selectedReturnItems.length === 0 || returnFee > maxAllowedFee }}> 
   <Table 
     dataSource={returnableItems} 
     rowKey="sale_item_id" 
@@ -1126,12 +1156,39 @@ const handleCloseInvoiceSearchModal = () => {
             align: 'right',
             render: (_, record) => {
                 const selected = selectedReturnItems.find(i => i.sale_item_id === record.sale_item_id);
-                return formatCurrency((selected?.return_qty || 0) * record.price_at_sale, profile?.currency);
+                const grossItemRefund = (selected?.return_qty || 0) * record.price_at_sale;
+                if (!selectedSale || !selectedSale.discount) return formatCurrency(grossItemRefund, profile?.currency);
+                const discountRatio = selectedSale.discount / (selectedSale.subtotal || 1);
+                const netItemRefund = grossItemRefund - (grossItemRefund * discountRatio);
+                return formatCurrency(netItemRefund, profile?.currency);
             }
         }
     ]}
 />
-   <Form form={returnForm} layout="vertical" onFinish={handleConfirmReturn} style={{ marginTop: '24px' }}> <Form.Item name="reason" label="Reason for Return"><Input.TextArea /></Form.Item> </Form> <Descriptions bordered><Descriptions.Item label="Total Credit"><Title level={4} style={{margin:0, color: '#52c41a'}}>{formatCurrency(totalRefundAmount, profile?.currency)}</Title></Descriptions.Item></Descriptions> 
+   <Form form={returnForm} layout="vertical" onFinish={handleConfirmReturn} style={{ marginTop: '24px' }}>
+     <Row gutter={16}>
+       <Col span={12}>
+         <Form.Item 
+           label="Restocking Fee (Optional)"
+           validateStatus={returnFee > maxAllowedFee ? 'error' : ''}
+           help={returnFee > maxAllowedFee ? `Fee cannot be more than the net price (${formatCurrency(maxAllowedFee, profile?.currency)})` : ''}
+         >
+           <InputNumber 
+             style={{ width: '100%' }} 
+             prefix={profile?.currency} 
+             value={returnFee} 
+             onChange={(val) => setReturnFee(val || 0)} 
+             min={0}
+           />
+         </Form.Item>
+       </Col>
+       <Col span={12}>
+         <Form.Item name="reason" label="Reason for Return">
+           <Input placeholder="e.g. Change of mind" />
+         </Form.Item>
+       </Col>
+     </Row>
+   </Form> <Descriptions bordered><Descriptions.Item label="Total Credit"><Title level={4} style={{margin:0, color: '#52c41a'}}>{formatCurrency(totalRefundAmount, profile?.currency)}</Title></Descriptions.Item></Descriptions> 
     <div style={{ marginTop: '16px', padding: '12px', border: '1px solid #d9d9d9', borderRadius: '6px' }}>
       <Checkbox 
         checked={refundCashNow} 

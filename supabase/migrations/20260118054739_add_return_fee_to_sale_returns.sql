@@ -1,0 +1,1 @@
+ALTER TABLE public.sale_returns ADD COLUMN return_fee NUMERIC DEFAULT 0;

@@ -43,7 +43,6 @@ const DataService = {
       const catName = categoryMap[product.category_id] || 'Uncategorized';
       const productVariants = variantsMap[product.id] || [];
 
-      // --- NAYA CODE: Average Purchase Price Calculation ---
       // Hum dekhenge ke stock mein jo items pare hain, unki khareed qeemat kya thi
       let totalPurchaseVal = 0;
       let count = 0;
@@ -55,7 +54,6 @@ const DataService = {
       });
       // Agar stock hai to average nikaalo, warna 0
       const avgPurchasePrice = count > 0 ? (totalPurchaseVal / count) : 0;
-      // -----------------------------------------------------
 
       // Sale Price Calculation
       let minPrice = product.min_sale_price;
@@ -176,16 +174,13 @@ const DataService = {
         }
     }
 
-    // --- YEH NAYA CHECK HAI (START) ---
     // 4. Check: Kya yeh kabhi Supplier ko Wapis (Return) kiya gaya?
-    // Yeh wo check hai jo uss laal rang walay error ko rokega.
     if (db.purchase_return_items) {
         const hasReturns = await db.purchase_return_items.where('product_id').equals(id).count();
         if (hasReturns > 0) {
              throw new Error("Cannot delete: This product has been returned to a supplier (Purchase Return History).");
         }
     }
-    // --- YEH NAYA CHECK HAI (END) ---
 
     // 5. Agar charon (4) checks pass ho gaye, tab hi delete karein.
     await db.products.delete(id);
@@ -281,14 +276,11 @@ const DataService = {
     if (db.supplier_refunds) {
         refunds = await db.supplier_refunds.where('supplier_id').equals(supplierId).toArray();
     }
-
-    // --- SMART CALCULATIONS (Asaan Tareeqa) ---
     
     // 1. Total Business: Saari kharidari (Purchases) ko jama karein
     const calculatedTotalBusiness = purchases.reduce((sum, p) => sum + (p.total_amount || 0), 0);
 
     // 2. Total Paid: Ledger mein jitni payments hain, un sab ko jama karein
-    // Is se "Total Paid" hamesha Ledger se match karega
     const calculatedTotalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
     // 3. Stats tayyar karein (Jo screen par nazar aayenge)
@@ -346,7 +338,6 @@ const DataService = {
     // 3. Items dhoondein
     let itemsData = await db.inventory.where('purchase_id').equals(purchase.id).toArray();
 
-    // --- FIX: Duplicates Safai Logic ---
     // Check karein: Kya Server se Asli Items (Number IDs) aa chuke hain?
     const hasServerItems = itemsData.some(item => !isNaN(item.id));
     
@@ -360,9 +351,8 @@ const DataService = {
             db.inventory.bulkDelete(garbageIds); 
         }
         
-        itemsData = realItems; // List ko update karein
+        itemsData = realItems;
     }
-    // -----------------------------------
 
     // 4. Product Names jorein
     const formattedItems = await Promise.all(itemsData.map(async (item) => {
@@ -416,7 +406,7 @@ async createNewPurchase(purchasePayload) {
     total_amount: purchasePayload.p_inventory_items.reduce((sum, item) => sum + (item.quantity * item.purchase_price), 0),
     amount_paid: 0,
     balance_due: purchasePayload.p_inventory_items.reduce((sum, item) => sum + (item.quantity * item.purchase_price), 0),
-    status: 'received', // Filhal hum maan rahe hain ke maal mil gaya
+    status: 'received',
     notes: purchasePayload.p_notes
   };
 
@@ -427,7 +417,7 @@ async createNewPurchase(purchasePayload) {
     purchase_id: purchaseId,
     product_id: item.product_id,
     quantity: item.quantity,
-    available_qty: item.quantity, // Naya column: Shuru mein saara maal available hai
+    available_qty: item.quantity,
     sold_qty: 0,
     purchase_price: item.purchase_price,
     sale_price: item.sale_price,
@@ -443,7 +433,6 @@ async createNewPurchase(purchasePayload) {
       await db.purchase_items.bulkAdd(itemsData);
   }
 
-  // --- NEW CODE: Update Supplier Balance Locally ---
   // Purchase add hote hi hum supplier ka balance update karenge taake UI foran change ho
   const supplier = await db.suppliers.get(purchasePayload.p_supplier_id);
   if (supplier) {
@@ -581,7 +570,7 @@ async addCustomer(customerData) {
       sale_id: saleId,
       inventory_id: item.inventory_id,
       product_id: item.product_id,
-      quantity: 1, // POS mein usually 1 item 1 row hoti hai agar unique ho
+      quantity: 1,
       price_at_sale: item.price_at_sale,
       user_id: salePayload.user_id
     }));
@@ -697,8 +686,8 @@ async addCustomer(customerData) {
     // C. Status ka Map banayein
     const statusMap = {};
     dbItems.forEach(i => {
-        statusMap[i.id] = i.status;          // Number ID
-        statusMap[String(i.id)] = i.status;  // Text ID
+        statusMap[i.id] = i.status;
+        statusMap[String(i.id)] = i.status;
     });
 
     // D. Ab Total Karein
@@ -840,7 +829,7 @@ async addCustomer(customerData) {
     await db.sync_queue.add({
         table_name: 'supplier_payments',
         action: 'create_bulk_payment',
-        data: paymentWithId // Hum ID bhi bhej rahe hain taake baad mein delete kar sakein
+        data: paymentWithId
     });
 
     // 4. Supplier ka Balance aur Total Paid update karein
@@ -1515,6 +1504,7 @@ async addCustomer(customerData) {
     // 4. Net Sales Calculation
     const rawSalesCurrent = currentSalesData.reduce((sum, s) => sum + (s.total_amount || 0), 0);
     const rawReturnsCurrent = currentReturnsData.reduce((sum, r) => sum + (r.total_refund_amount || 0), 0);
+    const totalReturnFeesCurrent = currentReturnsData.reduce((sum, r) => sum + (Number(r.return_fee) || 0), 0);
     const netSalesCurrent = rawSalesCurrent - rawReturnsCurrent;
 
     const rawSalesPrevious = previousSalesData.reduce((sum, s) => sum + (s.total_amount || 0), 0);
@@ -1631,16 +1621,14 @@ async addCustomer(customerData) {
     // Total Payables (Suppliers + Customers jinko wapis karna hai)
     // Business mein yeh dono "Liabilities" hain.
     const totalLiabilities = totalSupplierPayables + totalCustomerCredits;
-    const totalInventoryValue = inventory.filter(i => (i.status || '').toLowerCase() === 'available').reduce((sum, i) => sum + (i.purchase_price || 0), 0);
-
-    // ---------------------------------------------------------------
+    const totalInventoryValue = inventory.filter(i => (i.status || '').toLowerCase() === 'available').reduce((sum, i) => sum + ((i.purchase_price || 0) * (i.available_qty || 0)), 0);
 
     // 8. Low Stock
     const stockCounts = {};
     inventory.forEach(item => {
         const status = (item.status || '').toLowerCase();
         if (status === 'available') {
-            const qty = item.quantity ? Number(item.quantity) : 1;
+            const qty = item.available_qty !== undefined ? Number(item.available_qty) : 1;
             stockCounts[item.product_id] = (stockCounts[item.product_id] || 0) + qty;
         }
     });
@@ -1687,6 +1675,7 @@ async addCustomer(customerData) {
 
     return {
         totalSales: netSalesCurrent,
+        totalReturnFees: totalReturnFeesCurrent,
         salesGrowth,
         cashInHand,
         bankBalance,
@@ -1712,7 +1701,7 @@ async addCustomer(customerData) {
   async getLast7DaysSales() {
     // 1. Sales aur Returns dono layein
     const sales = await db.sales.toArray();
-    const returns = await db.sale_returns.toArray(); // <--- NAYA: Returns bhi layein
+    const returns = await db.sale_returns.toArray();
     
     const map = {};
     
@@ -1720,7 +1709,7 @@ async addCustomer(customerData) {
     for(let i=6; i>=0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+        const dateStr = d.toISOString().split('T')[0];
         map[dateStr] = 0;
     }
 
