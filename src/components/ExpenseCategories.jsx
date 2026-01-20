@@ -113,28 +113,19 @@ const ExpenseCategories = () => {
       key: 'actions',
       width: 150,
       align: 'center',
-      render: (_, record) => {
-        if (record.user_id) {
-          return (
-            <Space>
-              <Button size="small" icon={<EditOutlined />} onClick={() => showModal(record)} />
-              <Popconfirm
-                title="Delete this category?"
-                description="This cannot be undone."
-                onConfirm={() => handleDelete(record.id)}
-                okText="Yes" cancelText="No"
-              >
-                <Button size="small" danger icon={<DeleteOutlined />} />
-              </Popconfirm>
-            </Space>
-          );
-        }
-        return (
-          <Tooltip title="Default categories cannot be edited or deleted.">
-            <span style={{ color: '#666', cursor: 'not-allowed' }}>Default</span>
-          </Tooltip>
-        );
-      },
+      render: (_, record) => (
+        <Space>
+          <Button size="small" icon={<EditOutlined />} onClick={() => showModal(record)} />
+          <Popconfirm
+            title="Delete this category?"
+            description="This cannot be undone."
+            onConfirm={() => handleDelete(record.id)}
+            okText="Yes" cancelText="No"
+          >
+            <Button size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
     },
   ];
 

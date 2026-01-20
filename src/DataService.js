@@ -1,7 +1,161 @@
 import { supabase } from './supabaseClient';
 import { db } from './db';
 
+// --- DEFAULT CATEGORIES BLUEPRINT ---
+const DEFAULT_CATEGORIES = [
+  {
+    name: 'Smartphones',
+    is_imei_based: true,
+    attributes: [
+      { attribute_name: 'Condition', attribute_type: 'select', options: 'New,Certified Pre-Owned,Used', is_required: true },
+      { attribute_name: 'Network Status', attribute_type: 'select', options: 'Unlocked,Carrier Locked', is_required: true },
+      { attribute_name: 'Storage', attribute_type: 'select', options: '64GB,128GB,256GB,512GB,1TB', is_required: true },
+      { attribute_name: 'RAM', attribute_type: 'select', options: '4GB,6GB,8GB,12GB,16GB', is_required: true },
+      { attribute_name: 'Color', attribute_type: 'text', options: null, is_required: false }
+    ]
+  },
+  {
+    name: 'Tablets',
+    is_imei_based: true,
+    attributes: [
+      { attribute_name: 'Connectivity', attribute_type: 'select', options: 'Wi-Fi Only,Wi-Fi + Cellular', is_required: true },
+      { attribute_name: 'Storage', attribute_type: 'select', options: '64GB,128GB,256GB,512GB,1TB', is_required: true },
+      { attribute_name: 'Condition', attribute_type: 'select', options: 'New,Used', is_required: true }
+    ]
+  },
+  {
+    name: 'Wearables',
+    is_imei_based: true,
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Smartwatch,Fitness Tracker', is_required: true },
+      { attribute_name: 'Case Size', attribute_type: 'text', options: null, is_required: false },
+      { attribute_name: 'Connectivity', attribute_type: 'select', options: 'GPS,GPS + Cellular', is_required: false }
+    ]
+  },
+  {
+    name: 'Audio',
+    is_imei_based: false,
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'TWS Earbuds,Headphones,Bluetooth Speakers', is_required: true },
+      { attribute_name: 'Warranty', attribute_type: 'text', options: null, is_required: false }
+    ]
+  },
+  {
+    name: 'Power & Cables',
+    is_imei_based: false,
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Wall Charger,Power Bank,Wireless Charger,Cable', is_required: true },
+      { attribute_name: 'Interface', attribute_type: 'select', options: 'USB-C,Lightning,Micro-USB', is_required: false }
+    ]
+  },
+  {
+    name: 'Protection & Style',
+    is_imei_based: false,
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Protective Case,Screen Protector,Lens Protector', is_required: true }
+    ]
+  }
+];
+
+// --- DEFAULT EXPENSE CATEGORIES BLUEPRINT ---
+const DEFAULT_EXPENSE_CATEGORIES = [
+  { name: 'Rent or Lease' },
+  { name: 'Utilities' },
+  { name: 'Salaries & Wages' },
+  { name: 'Marketing & Advertising' },
+  { name: 'Office Supplies' },
+  { name: 'Maintenance & Repairs' },
+  { name: 'Software & Subscriptions' },
+  { name: 'Miscellaneous' }
+];
+
 const DataService = {
+  isInitializing: false,
+  async initializeUserCategories(userId) {
+    if (!userId || this.isInitializing) return;
+    this.isInitializing = true;
+
+    try {
+      // 1. SAB SE PEHLE SERVER SE POOCHEIN: Kya initialization ho chuki hai?
+      const { data: profile, error: profError } = await supabase
+        .from('profiles')
+        .select('categories_initialized')
+        .eq('user_id', userId)
+        .single();
+
+      // Agar server keh raha hai ke pehle hi ho chuka hai, to yahin ruk jao
+      if (profError || profile?.categories_initialized) {
+        return;
+      }
+
+      console.log("Checking for missing standard categories...");
+
+      // 2. Local Database se check karein (Duplicate protection)
+      const existingCats = await db.categories.where('user_id').equals(userId).toArray();
+      const existingExpCats = await db.expense_categories.where('user_id').equals(userId).toArray();
+
+      const existingCatNames = existingCats.map(c => c.name.toLowerCase().trim());
+      const existingExpCatNames = existingExpCats.map(c => c.name.toLowerCase().trim());
+
+      // 3. PRODUCT CATEGORIES LOOP
+      for (const catTemplate of DEFAULT_CATEGORIES) {
+        if (existingCatNames.includes(catTemplate.name.toLowerCase().trim())) continue;
+
+        const categoryId = crypto.randomUUID();
+        const categoryData = {
+          id: categoryId,
+          local_id: categoryId,
+          name: catTemplate.name,
+          is_imei_based: catTemplate.is_imei_based,
+          user_id: userId,
+          updated_at: new Date().toISOString()
+        };
+
+        await db.categories.add(categoryData);
+        await db.sync_queue.add({ table_name: 'categories', action: 'create', data: categoryData });
+
+        for (const attrTemplate of catTemplate.attributes) {
+          const attributeData = {
+            id: crypto.randomUUID(),
+            category_id: categoryId,
+            attribute_name: attrTemplate.attribute_name,
+            attribute_type: attrTemplate.attribute_type,
+            options: attrTemplate.options ? attrTemplate.options.split(',') : null,
+            is_required: attrTemplate.is_required,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          await db.category_attributes.add(attributeData);
+          await db.sync_queue.add({ table_name: 'category_attributes', action: 'create', data: attributeData });
+        }
+      }
+
+      // 4. EXPENSE CATEGORIES LOOP
+      for (const expCat of DEFAULT_EXPENSE_CATEGORIES) {
+        if (existingExpCatNames.includes(expCat.name.toLowerCase().trim())) continue;
+
+        const expCatId = crypto.randomUUID();
+        const expCatData = {
+          id: expCatId,
+          local_id: expCatId,
+          name: expCat.name,
+          user_id: userId,
+          updated_at: new Date().toISOString()
+        };
+        await db.expense_categories.add(expCatData);
+        await db.sync_queue.add({ table_name: 'expense_categories', action: 'create', data: expCatData });
+      }
+
+      // 5. Server par flag update kar dein
+      await supabase.from('profiles').update({ categories_initialized: true }).eq('user_id', userId);
+      
+      console.log("Smart Initialization complete.");
+    } catch (error) {
+      console.error("Initialization failed:", error);
+    } finally {
+      this.isInitializing = false;
+    }
+  },
 
   // Hum ne parameter 'showArchivedOnly' add kiya hai
   async getInventoryData(showArchivedOnly = false) { 
@@ -1232,6 +1386,11 @@ async addCustomer(customerData) {
   },
 
   async getExpenseCategories() {
+    // Check karein aur initialize karein agar zaroorat ho
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await this.initializeUserCategories(user.id);
+    }
     return await db.expense_categories.toArray();
   },
 
@@ -1331,12 +1490,17 @@ async addCustomer(customerData) {
   // --- PRODUCT CATEGORIES & ATTRIBUTES SECTION ---
 
   async getProductCategories() {
-    // 1. Local Categories layein
+    // --- NAYA INITIALIZATION CHECK ---
+    // Pehle check karein ke kya user logged in hai?
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      // Agar user hai, to initialization function ko call karein
+      // Ye function khud hi check kar lega ke agar categories pehle se hain to kuch nahi karega
+      await this.initializeUserCategories(user.id);
+    }
+
+    // 1. Local Categories layein (Ab is mein initialization ke baad naye records honge)
     const categories = await db.categories.orderBy('name').toArray();
-    
-    // 2. Default Categories (Jinka user_id null ho) aur User ki Categories alag karein
-    // Note: Local DB mein shayad 'null' user_id wale records na hon agar sync ne unhein download nahi kiya.
-    // Lekin hum ne SyncContext mein 'or' condition laga di thi, to ab wo bhi honge.
     
     return categories;
   },

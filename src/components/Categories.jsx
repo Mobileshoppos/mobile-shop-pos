@@ -36,22 +36,8 @@ const Categories = () => {
     try {
       setLoadingCategories(true);
       const data = await DataService.getProductCategories();
-
-      // --- DUPLICATE CHUPANE KA LOGIC ---
-      // 1. Pehle un categories ke naam ki list banayein jo User ne khud banayi hain
-      const userCategoryNames = data.filter(c => c.user_id).map(c => c.name);
-
-      // 2. Ab list ko filter karein
-      const filteredData = data.filter(c => {
-        // Agar yeh User ki apni category hai, to isay dikhao
-        if (c.user_id) return true;
-        
-        // Agar yeh Default category hai, to sirf tab dikhao agar User ke paas same naam ki category NAHI hai
-        return !userCategoryNames.includes(c.name);
-      });
-      // ----------------------------------
-
-      setCategories(filteredData);
+      // Ab humein koi filter nahi chahiye kyunke saari categories user ki apni hain
+      setCategories(data);
     } catch (error) { 
       message.error('Error fetching categories: ' + error.message); 
     } finally { 
@@ -72,49 +58,7 @@ const Categories = () => {
     finally { setLoadingAttributes(false); }
   }, [message]);
 
-  const cloneDefaultCategory = async (categoryToClone) => {
-    try {
-      message.loading('Customizing category...', 1);
-      const categoryLocalId = crypto.randomUUID();
-      const { data: newCategoryId, error } = await supabase.rpc('clone_category_for_user', { p_local_id: categoryLocalId, source_category_id: categoryToClone.id });
-      if (error) throw error;
-      
-      message.destroy();
-      message.success(`'${categoryToClone.name}' is now ready for customization.`);
-      
-      // Naya data tayyar kiya
-      const newCategoryData = { ...categoryToClone, id: newCategoryId, local_id: categoryLocalId, user_id: user.id };
-      
-      // --- YEH LINE ADD KARNI HAI (Start) ---
-      // Hum Local DB (Dexie) mein bhi yeh naya record daal rahe hain taake foran nazar aaye
-      await db.categories.put(newCategoryData);
-      // --- YEH LINE ADD KARNI HAI (End) ---
-
-      await getCategories(); // Ab yeh list ko refresh karega to naya item nazar aayega
-      
-      setSelectedCategory(newCategoryData);
-      await getAttributesForCategory(newCategoryId);
-      
-      return newCategoryData;
-
-    } catch (err) {
-      message.destroy();
-      message.error("Internet connection is required to customize this category.");
-      return null;
-    }
-  }
-
   const showCategoryModal = async (category = null) => {
-    if (category && !category.user_id) {
-        const newClonedCategory = await cloneDefaultCategory(category);
-        if (newClonedCategory) {
-            setEditingCategory(newClonedCategory);
-            categoryForm.setFieldsValue({ name: newClonedCategory.name, is_imei_based: newClonedCategory.is_imei_based });
-            setIsCategoryModalOpen(true);
-        }
-        return;
-    }
-    
     setEditingCategory(category);
     if (category) {
       categoryForm.setFieldsValue({ name: category.name, is_imei_based: category.is_imei_based });
@@ -162,12 +106,6 @@ const Categories = () => {
   };
   
   const showAttributeModal = async (attribute = null) => {
-    let currentCategory = selectedCategory;
-    if (currentCategory && !currentCategory.user_id) {
-        currentCategory = await cloneDefaultCategory(currentCategory);
-        if (!currentCategory) return;
-    }
-    
     setEditingAttribute(attribute);
     if (attribute) {
       attributeForm.setFieldsValue({
@@ -219,11 +157,7 @@ const Categories = () => {
   };
 
   const categoryColumns = [
-    { title: 'Category Name', dataIndex: 'name', key: 'name',
-      render: (text, record) => (
-        <span>{text} {!record.user_id && <Text type="secondary">(Default)</Text>}</span>
-      )
-    },
+    { title: 'Category Name', dataIndex: 'name', key: 'name' },
     { 
       title: 'Stock Type', dataIndex: 'is_imei_based', key: 'is_imei_based', align: 'center',
       render: (is_imei_based) => is_imei_based 
@@ -234,14 +168,12 @@ const Categories = () => {
       title: 'Actions', key: 'actions', width: 120, align: 'center',
       render: (_, record) => (
         <Space>
-          <Tooltip title={record.user_id ? "Edit Category Name" : "Customize this Category"}>
+          <Tooltip title="Edit Category">
             <Button size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); showCategoryModal(record); }} />
           </Tooltip>
-          {record.user_id && (
-            <Popconfirm title="Delete this category?" onConfirm={(e) => { e.stopPropagation(); handleDeleteCategory(record.id); }} onCancel={(e) => e.stopPropagation()} okText="Yes" cancelText="No">
-              <Button size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
-            </Popconfirm>
-          )}
+          <Popconfirm title="Delete this category?" onConfirm={(e) => { e.stopPropagation(); handleDeleteCategory(record.id); }} onCancel={(e) => e.stopPropagation()} okText="Yes" cancelText="No">
+            <Button size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
+          </Popconfirm>
         </Space>
       ),
     },
