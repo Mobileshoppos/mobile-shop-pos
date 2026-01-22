@@ -272,7 +272,7 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
   size="small" 
   style={{ marginLeft: '8px', color: '#52c41a', fontSize: '16px' }} 
   onClick={() => onAddStock(variant)} 
-  title="Add Stock"
+  title="Add Stock / Add New Variants"
 />
 <Button 
   type="text" 
@@ -936,9 +936,6 @@ const Inventory = () => {
           </Form.Item>
           <Form.Item name="category_id" label="Category" rules={[{ required: true }]}><Select placeholder="Select...">{categories.map(c => (<Option key={c.id} value={c.id}>{c.name}</Option>))}</Select></Form.Item>
           <Form.Item name="brand" label="Brand" rules={[{ required: true }]}><Input /></Form.Item>
-          {!isSmartPhoneCategorySelected && (
-            <Form.Item name="barcode" label="Barcode (Optional)"><Input placeholder="Scan..." /></Form.Item>
-          )}
           <Row gutter={16}>
             <Col span={12}>
                 <Form.Item name="purchase_price" label="Default Purchase Price">

@@ -523,13 +523,9 @@ const POS = () => {
     if (paymentMethod === 'Unpaid' && amountPaid > grandTotal) { message.error('Amount paid cannot be greater than the grand total.'); return; }
     
     const udhaarAmount = grandTotal - amountPaid;
-    const confirmMessage = `Subtotal: ${formatCurrency(subtotal, profile?.currency)}\nDiscount: ${formatCurrency(discountAmount, profile?.currency)}\n--------------------\nGrand Total: ${formatCurrency(grandTotal, profile?.currency)}\n` + (paymentMethod === 'Unpaid' && udhaarAmount > 0 ? `Amount Paid: ${formatCurrency(amountPaid, profile?.currency)}\nNew Udhaar: ${formatCurrency(udhaarAmount, profile?.currency)}\n` : '') + `\nProceed?`;
-
-    modal.confirm({
-      title: 'Confirm Sale',
-      content: <pre style={{ whiteSpace: 'pre-wrap' }}>{confirmMessage}</pre>,
-      onOk: async () => {
-        let saleDataForReceipt = null;
+    
+    // Confirmation Modal hata diya gaya hai taake sale foran complete ho
+    let saleDataForReceipt = null;
         
         try {
           setIsSubmitting(true);
@@ -750,8 +746,6 @@ const POS = () => {
 
         if (searchInputRef.current) { searchInputRef.current.focus(); }
         setIsSubmitting(false);
-      }
-    });
   };
 
   const subtotal = cart.reduce((sum, item) => sum + (item.sale_price * item.quantity), 0);

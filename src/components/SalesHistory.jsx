@@ -197,11 +197,10 @@ const SalesHistory = () => {
 
   const columns = [
     {
-      title: '#',
+      title: 'Inv: #',
       dataIndex: 'sale_id',
       key: 'sale_id',
-      fixed: 'left',
-      width: 90, // Thora chora karein
+      width: 90,
       align: 'center',
       // Ab ID Number hai (e.g., 1732336800123), to hum slice nahi karenge
       render: (text) => <Text code>{text}</Text>
@@ -293,8 +292,7 @@ const SalesHistory = () => {
     {
       title: 'Actions',
       key: 'actions',
-      fixed: 'right',
-      width: 80,
+      width: 120, // Is ki width thori barha di taake buttons sahi nazar aayein
       align: 'center',
       render: (_, record) => (
         <Space>
@@ -334,7 +332,7 @@ const SalesHistory = () => {
           loading={loading}
           rowKey="sale_id"
           pagination={{ pageSize: 10 }}
-          scroll={{ x: 1300 }}
+          scroll={{ x: 'max-content' }}
         />
       </Card>
     </>

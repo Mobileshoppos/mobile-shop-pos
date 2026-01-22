@@ -476,11 +476,11 @@ const Dashboard = () => {
                 <Tooltip title="New Sale">
                   <Button type="primary" icon={<ShoppingOutlined />} onClick={() => navigate('/pos')} />
                 </Tooltip>
+                <Tooltip title="Add Stock (Inventory)">
+                  <Button icon={<PlusOutlined />} onClick={() => navigate('/inventory')} />
+                </Tooltip>
                 <Tooltip title="Return Item">
                   <Button icon={<SwapOutlined />} onClick={() => navigate('/customers?openReturn=true')} />
-                </Tooltip>
-                <Tooltip title="Purchase">
-                  <Button icon={<PlusOutlined />} onClick={() => navigate('/purchases')} />
                 </Tooltip>
                 <Tooltip title="Suppliers">
                   <Button icon={<TeamOutlined />} onClick={() => navigate('/suppliers')} />

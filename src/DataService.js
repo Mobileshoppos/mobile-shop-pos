@@ -367,8 +367,18 @@ const DataService = {
     return true;
   },
   
-  async getSuppliers() {
-    const suppliers = await db.suppliers.toArray();
+  async getSuppliers(showArchivedOnly = false) {
+    const allSuppliers = await db.suppliers.toArray();
+    // Filter: Agar showArchivedOnly true hai to is_active === false wale dikhao
+    const suppliers = allSuppliers.filter(s => {
+      if (showArchivedOnly) {
+        // Sirf wo dikhao jin ka is_active saaf tor par 'false' ho
+        return s.is_active === false;
+      } else {
+        // Wo dikhao jo 'false' nahi hain (yani true hain ya jin ka abhi set nahi hua)
+        return s.is_active !== false;
+      }
+    });
     return suppliers.sort((a, b) => a.name.localeCompare(b.name));
   },
 
@@ -398,7 +408,38 @@ const DataService = {
     return { id, ...updatedData };
   },
 
+  async toggleArchiveSupplier(id, shouldArchive) {
+    const newStatus = !shouldArchive; 
+    await db.suppliers.update(id, { is_active: newStatus });
+
+    await db.sync_queue.add({
+      table_name: 'suppliers',
+      action: 'update',
+      data: { id, is_active: newStatus }
+    });
+    return true;
+  },
+
   async deleteSupplier(id) {
+    // 1. Check: Kya is supplier ki koi Purchase History hai?
+    const hasPurchases = await db.purchases.where('supplier_id').equals(id).count();
+    if (hasPurchases > 0) {
+      throw new Error("Cannot delete: This supplier has purchase records. Please Archive them instead.");
+    }
+
+    // 2. Check: Kya is ki koi Payment History hai?
+    const hasPayments = await db.supplier_payments.where('supplier_id').equals(id).count();
+    if (hasPayments > 0) {
+      throw new Error("Cannot delete: This supplier has payment records in the ledger. Use Archive.");
+    }
+
+    // 3. Check: Kya is ka koi Refund record hai?
+    const hasRefunds = await db.supplier_refunds.where('supplier_id').equals(id).count();
+    if (hasRefunds > 0) {
+      throw new Error("Cannot delete: This supplier has refund records. Use Archive.");
+    }
+
+    // Agar saare checks pass ho jayein, tab hi delete karein
     await db.suppliers.delete(id);
     
     await db.sync_queue.add({

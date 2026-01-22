@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input, Space, Popconfirm, Radio } from 'antd';
+import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input, Space, Popconfirm, Radio, Checkbox } from 'antd';
 import { ArrowLeftOutlined, DollarCircleOutlined, EditOutlined, RollbackOutlined, DeleteOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
@@ -303,7 +303,7 @@ const showEditModal = () => {
                 editingItems={items}       // Purane items bhejein
             />
         )}
-            <Modal title="Return Items to Supplier" open={isReturnModalVisible} onCancel={() => setIsReturnModalVisible(false)} onOk={returnForm.submit} okText="Process Return" width={800} okButtonProps={{ danger: true }}><Form form={returnForm} layout="vertical" onFinish={handleReturnSubmit} style={{ marginTop: '24px' }}><Form.Item name="return_date" label="Return Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="notes" label="Reason for Return (Optional)"><Input.TextArea rows={2} placeholder="e.g., Damaged items, wrong model, etc." /></Form.Item><Title level={5} style={{ marginTop: '16px' }}>Select Items to Return</Title><Table 
+            <Modal title="Return Items to Supplier" open={isReturnModalVisible} onCancel={() => setIsReturnModalVisible(false)} onOk={returnForm.submit} okText="Process Return" width={1000} okButtonProps={{ danger: true }}><Form form={returnForm} layout="vertical" onFinish={handleReturnSubmit} style={{ marginTop: '24px' }}><Form.Item name="return_date" label="Return Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="notes" label="Reason for Return (Optional)"><Input.TextArea rows={2} placeholder="e.g., Damaged items, wrong model, etc." /></Form.Item><Title level={5} style={{ marginTop: '16px' }}>Select Items to Return</Title><Table 
     dataSource={items.filter(i => i.status !== 'Returned' && i.available_qty > 0)} 
     rowKey="id" 
     pagination={false} 
@@ -311,36 +311,68 @@ const showEditModal = () => {
     columns={[
         { title: 'Product', dataIndex: 'product_name' },
         { 
+            title: 'IMEI/Serial', 
+            dataIndex: 'imei', 
+            render: (imei) => imei ? <Text code>{imei}</Text> : <Text type="secondary">-</Text>
+        },
+        { 
             title: 'Available', 
             dataIndex: 'available_qty', 
             render: (qty) => <Tag color="blue">{qty} in stock</Tag> 
         },
         {
-            title: 'Return Qty',
+            title: 'Select / Qty',
             key: 'return_qty',
-            render: (_, record) => (
-                <InputNumber 
-                    min={0} 
-                    max={record.available_qty} 
-                    defaultValue={0}
-                    onChange={(val) => {
-                        const current = selectedReturnItems.filter(i => i.inventory_id !== record.id);
-                        if (val > 0) {
-                            setSelectedReturnItems([...current, { inventory_id: record.id, qty: val, price: record.purchase_price }]);
-                        } else {
-                            setSelectedReturnItems(current);
-                        }
-                    }}
-                />
-            )
+            render: (_, record) => {
+                const isImeiItem = !!record.imei;
+                const isSelected = selectedReturnItems.some(i => i.inventory_id === record.id);
+
+                if (isImeiItem) {
+                    return (
+                        <Checkbox 
+                            checked={isSelected}
+                            onChange={(e) => {
+                                const checked = e.target.checked;
+                                const current = selectedReturnItems.filter(i => i.inventory_id !== record.id);
+                                if (checked) {
+                                    // Jab select ho to qty 1 set karein
+                                    setSelectedReturnItems([...current, { inventory_id: record.id, qty: 1, price: record.purchase_price, product_id: record.product_id }]);
+                                } else {
+                                    setSelectedReturnItems(current);
+                                }
+                            }}
+                        />
+                    );
+                }
+
+                return (
+                    <InputNumber 
+                        min={0} 
+                        max={record.available_qty} 
+                        value={selectedReturnItems.find(i => i.inventory_id === record.id)?.qty || 0}
+                        onChange={(val) => {
+                            const current = selectedReturnItems.filter(i => i.inventory_id !== record.id);
+                            if (val > 0) {
+                                setSelectedReturnItems([...current, { inventory_id: record.id, qty: val, price: record.purchase_price, product_id: record.product_id }]);
+                            } else {
+                                setSelectedReturnItems(current);
+                            }
+                        }}
+                    />
+                );
+            }
         },
         { 
             title: 'Refund', 
             key: 'refund', 
             align: 'right',
             render: (_, record) => {
+                // selectedReturnItems state se is item ki qty dhoondein
                 const selected = selectedReturnItems.find(i => i.inventory_id === record.id);
-                return formatCurrency((selected?.qty || 0) * record.purchase_price, profile?.currency);
+                const qty = selected ? selected.qty : 0;
+                return <Text strong style={{ color: qty > 0 ? '#52c41a' : 'inherit' }}>
+                    {formatCurrency(qty * record.purchase_price, profile?.currency)}
+                </Text>;
             }
         }
     ]}

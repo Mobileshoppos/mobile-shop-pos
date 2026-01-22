@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Radio
+  Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Radio, Collapse, Tag
 } from 'antd';
 import { DeleteOutlined, BarcodeOutlined, EditOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
@@ -251,16 +251,24 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedProductAttributes, setSelectedProductAttributes] = useState([]);
   const [editingItemIndex, setEditingItemIndex] = useState(null);
+  const selectedSupplierId = Form.useWatch('supplier_id', form);
+  const selectedSupplier = suppliers.find(s => s.id === selectedSupplierId);
+  const isCashPurchase = selectedSupplier?.name?.toLowerCase() === 'cash purchase';
   
   const totalAmount = purchaseItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.purchase_price || 0)), 0);
 
-  // Amount Paid Auto-Fill Logic
+  // Amount Paid Smart Logic
   useEffect(() => {
     if (visible && !editingPurchase) {
-        // Sirf naye purchase mein auto-fill karein
-        form.setFieldsValue({ amount_paid: totalAmount });
+        if (isCashPurchase) {
+            // Rule 1: Cash purchase hai to poori raqam khud bhar do aur Cash select kar lo
+            form.setFieldsValue({ amount_paid: totalAmount, payment_method: 'Cash' });
+        } else {
+            // Rule 2: Agar koi aur supplier hai to field khali rakho
+            form.setFieldsValue({ amount_paid: null });
+        }
     }
-  }, [totalAmount, visible, form, editingPurchase]);
+  }, [totalAmount, visible, form, editingPurchase, isCashPurchase]);
 
   const getProductsWithCategory = useCallback(async () => {
     try {
@@ -660,32 +668,55 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
             }}
           />
           <Divider />
-          <Title level={5}>Payment Record</Title>
-          <Row gutter={16} style={{ background: 'transparent', padding: '16px', borderRadius: '8px' }}>
-              <Col span={12}>
-                  <Form.Item 
-    name="amount_paid" 
-    label="Amount Paid Now" 
-    help={editingPurchase ? "To adjust payment, use 'Record Payment' or 'Refund' options." : null} // User ko batane ke liye
-    rules={[{ required: true, message: 'Please enter amount (0 if unpaid)' }]}
->
-    <InputNumber 
-        style={{ width: '100%' }} 
-        prefix={profile?.currency ? `${profile.currency} ` : ''} 
-        min={0} 
-        disabled={!!editingPurchase} 
-    />
-</Form.Item>
-              </Col>
-              <Col span={12}>
-                  <Form.Item name="payment_method" label="Paid From" rules={[{ required: true }]} initialValue="Cash">
-    <Radio.Group buttonStyle="solid">
-        <Radio.Button value="Cash">Cash</Radio.Button>
-        <Radio.Button value="Bank">Bank / Online</Radio.Button>
-    </Radio.Group>
-</Form.Item>
-              </Col>
-          </Row>
+          <Collapse 
+            ghost 
+            defaultActiveKey={isCashPurchase ? [] : ['1']} // Cash purchase par band rahega, doosron par khula
+            items={[{
+              key: '1',
+              label: <Text strong style={{ fontSize: '16px' }}>Payment Record {isCashPurchase && <Tag color="green" style={{marginLeft: '10px'}}>Automatic Paid</Tag>}</Text>,
+              children: (
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Form.Item 
+                      name="amount_paid" 
+                      label="Amount Paid Now" 
+                      help={isCashPurchase ? "Locked for Cash Purchase" : `Max allowed: ${formatCurrency(totalAmount, profile?.currency)}`}
+                      rules={[
+                        { required: true, message: 'Please enter amount' },
+                        // === SECURITY FIX: Yeh rule ghalat raqam save nahi hone dega ===
+                        {
+                          validator: (_, value) => {
+                            if (value > totalAmount) {
+                              return Promise.reject(`Amount cannot be more than ${formatCurrency(totalAmount, profile?.currency)}`);
+                            }
+                            return Promise.resolve();
+                          },
+                        }
+                      ]}
+                    >
+                      <InputNumber 
+                        style={{ width: '100%' }} 
+                        prefix={profile?.currency ? `${profile.currency} ` : ''} 
+                        min={0} 
+                        // max hata diya gaya hai taake auto-correction na ho
+                        disabled={!!editingPurchase || isCashPurchase} 
+                        placeholder="Enter amount paid"
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item name="payment_method" label="Paid From" rules={[{ required: true }]}>
+                      {/* === RULE CHANGE: disabled hata diya gaya taake user select kar sake === */}
+                      <Radio.Group buttonStyle="solid">
+                        <Radio.Button value="Cash">Cash</Radio.Button>
+                        <Radio.Button value="Bank">Bank / Online</Radio.Button>
+                      </Radio.Group>
+                    </Form.Item>
+                  </Col>
+                </Row>
+              )
+            }]}
+          />
         </Form>
       </Modal>
       {isItemModalVisible && 

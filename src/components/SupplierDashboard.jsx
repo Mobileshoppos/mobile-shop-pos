@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
+import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List, Dropdown } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, MoreOutlined, ReloadOutlined, InboxOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -263,11 +263,13 @@ const SupplierDashboard = () => {
     const [suppliers, setSuppliers] = useState([]);
     const [selectedSupplierId, setSelectedSupplierId] = useState(null);
     const [loading, setLoading] = useState(true);
-    const { notification } = AntApp.useApp();
+    const { notification, modal } = AntApp.useApp();
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [editingSupplier, setEditingSupplier] = useState(null);
     const [form] = Form.useForm();
     const [searchTerm, setSearchTerm] = useState('');
+    const [showArchived, setShowArchived] = useState(false);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
     // --- FOCUS LOGIC (Corrected Position) ---
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -298,7 +300,7 @@ const SupplierDashboard = () => {
     const fetchSuppliers = useCallback(async (selectIdAfterFetch = null) => {
         setLoading(true);
         try {
-            const data = await DataService.getSuppliers();
+            const data = await DataService.getSuppliers(showArchived);
             setSuppliers(data || []);
             
             if (selectIdAfterFetch) {
@@ -308,9 +310,22 @@ const SupplierDashboard = () => {
             }
         } catch (error) { notification.error({ message: 'Error', description: 'Failed to fetch suppliers list.' });
         } finally { setLoading(false); }
-    }, [notification, selectedSupplierId, isMobile]);
+    }, [notification, selectedSupplierId, isMobile, showArchived]);
 
-    useEffect(() => { fetchSuppliers(); }, []);
+    useEffect(() => { fetchSuppliers(); }, [showArchived, refreshTrigger]);
+
+    const handleToggleArchive = async (supplier) => {
+        try {
+            await DataService.toggleArchiveSupplier(supplier.id, !showArchived);
+            notification.success({ 
+                message: 'Success', 
+                description: showArchived ? 'Supplier restored' : 'Supplier archived' 
+            });
+            setRefreshTrigger(prev => prev + 1);
+        } catch (error) {
+            notification.error({ message: 'Error', description: error.message });
+        }
+    };
 
     const handleAddNew = () => { setEditingSupplier(null); setIsModalVisible(true); };
     const handleEdit = (supplier) => { setEditingSupplier(supplier); setIsModalVisible(true); };
@@ -319,7 +334,7 @@ const SupplierDashboard = () => {
             await DataService.deleteSupplier(supplierId);
             notification.success({ message: 'Success', description: 'Supplier deleted successfully.' });
             if(selectedSupplierId === supplierId) setSelectedSupplierId(null); fetchSuppliers();
-        } catch (error) { notification.error({ message: 'Error', description: 'Failed to delete supplier.' }); }
+        } catch (error) { notification.error({ message: 'Action Denied', description: error.message }); }
     };
     const handleModalOk = async () => {
         try {
@@ -376,10 +391,49 @@ const SupplierDashboard = () => {
                             <Text type="secondary">{selectedSupplier.address}</Text>
                         </div>
                          <Space style={{ marginTop: isMobile ? '16px' : '0' }}>
-                             <Button icon={<EditOutlined />} onClick={() => handleEdit(selectedSupplier)}>Edit</Button>
-                            <Popconfirm title={`Delete "${selectedSupplier.name}"?`} description="This cannot be undone." onConfirm={() => handleDelete(selectedSupplier.id)} okText="Yes, Delete" cancelText="No">
-                                 <Button icon={<DeleteOutlined />} danger>Delete</Button>
-                            </Popconfirm>
+                            <Dropdown 
+                                trigger={['click']}
+                                menu={{
+                                    items: [
+                                        {
+                                            key: 'edit',
+                                            label: 'Edit Details',
+                                            icon: <EditOutlined />,
+                                            // Security Check: Agar naam "Cash Purchase" hai to Edit band kar dein
+                                            disabled: selectedSupplier.name === 'Cash Purchase', 
+                                            onClick: () => handleEdit(selectedSupplier)
+                                        },
+                                        {
+                                            key: 'archive',
+                                            label: showArchived ? 'Restore Supplier' : 'Archive Supplier',
+                                            icon: showArchived ? <ReloadOutlined /> : <InboxOutlined />,
+                                            // Security Check: Cash Purchase ko archive nahi kiya ja sakta
+                                            disabled: selectedSupplier.name === 'Cash Purchase', 
+                                            onClick: () => handleToggleArchive(selectedSupplier)
+                                        },
+                                        {
+                                            key: 'delete',
+                                            label: 'Delete Supplier',
+                                            icon: <DeleteOutlined />,
+                                            danger: true,
+                                            // Security Check: Cash Purchase ko delete karna sakht mana hai
+                                            disabled: selectedSupplier.name === 'Cash Purchase', 
+                                            onClick: () => {
+                                                modal.confirm({
+                                                    title: 'Delete Supplier?',
+                                                    icon: <DeleteOutlined />,
+                                                    content: `Are you sure you want to delete ${selectedSupplier.name}? This cannot be undone.`,
+                                                    okText: 'Yes, Delete',
+                                                    okType: 'danger',
+                                                    onOk: () => handleDelete(selectedSupplier.id)
+                                                });
+                                            }
+                                        }
+                                    ]
+                                }}
+                            >
+                                <Button type="text" icon={<MoreOutlined style={{ fontSize: '20px' }} />} />
+                            </Dropdown>
                         </Space>
                     </Flex>
                     <div style={{ marginTop: '32px' }}>
@@ -392,7 +446,16 @@ const SupplierDashboard = () => {
 
     return (
         <Layout style={{ background: 'transparent' }}>
-            <Title level={2} style={{ margin: '0 0 16px 0' }}>Suppliers Dashboard</Title>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <Title level={2} style={{ margin: 0 }}>Suppliers Dashboard</Title>
+                <Button 
+                    icon={showArchived ? <ReloadOutlined /> : <InboxOutlined />} 
+                    onClick={() => setShowArchived(!showArchived)} 
+                    type={showArchived ? 'primary' : 'default'}
+                    danger={showArchived}
+                    title={showArchived ? 'Back to Active' : 'View Archived'}
+                />
+            </div>
             
             <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
                 <Col xs={24} sm={12}>
