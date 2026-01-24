@@ -15,6 +15,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { db } from '../db'; // Database ko import kiya
 
 const { Title } = Typography;
 
@@ -26,6 +27,7 @@ const ExpenseCategories = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
+  const [isCategoryInUse, setIsCategoryInUse] = useState(false);
   const [form] = Form.useForm();
 
   const getCategories = useCallback(async () => {
@@ -47,7 +49,16 @@ const ExpenseCategories = () => {
     getCategories();
   }, [getCategories]);
 
-  const showModal = (category = null) => {
+  const showModal = async (category = null) => {
+    let inUse = false;
+    
+    // Agar Edit mode hai, to check karein ke kya is category mein expenses hain?
+    if (category) {
+      const count = await db.expenses.where('category_id').equals(category.id).count();
+      inUse = count > 0;
+    }
+
+    setIsCategoryInUse(inUse); // Lock set karein
     setEditingCategory(category);
     form.setFieldsValue(category ? { name: category.name } : { name: '' });
     setIsModalOpen(true);
@@ -140,8 +151,14 @@ const ExpenseCategories = () => {
       <Table columns={columns} dataSource={categories} loading={loading} rowKey="id" scroll={{ x: true }} />
       <Modal title={editingCategory ? 'Edit Category' : 'Add a New Category'} open={isModalOpen} onCancel={handleCancel} onOk={() => form.submit()} okText="Save">
         <Form form={form} layout="vertical" onFinish={handleOk}>
-          <Form.Item name="name" label="Category Name" rules={[{ required: true, message: 'Please enter the category name!' }]}>
-            <Input />
+          <Form.Item 
+            name="name" 
+            label="Category Name" 
+            rules={[{ required: true, message: 'Please enter the category name!' }]}
+            help={isCategoryInUse ? "This category is in use and cannot be renamed." : ""}
+            validateStatus={isCategoryInUse ? "warning" : ""}
+          >
+            <Input disabled={isCategoryInUse} placeholder="e.g. Rent, Salaries" />
           </Form.Item>
         </Form>
       </Modal>

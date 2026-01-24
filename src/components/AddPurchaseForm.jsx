@@ -34,6 +34,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
               sale_price: initialValues.sale_price,
               quantity: initialValues.quantity || 1,
               barcode: initialValues.barcode,
+              warranty_days: initialValues.warranty_days, // Nayi Line
               ...initialValues.item_attributes
           };
           if (isImeiCategory && initialValues.imei) {
@@ -46,8 +47,9 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
           // NEW ITEM
           setIsBarcodeLocked(false);
           const commonValues = {
-            purchase_price: product.default_purchase_price || '',
-            sale_price: product.default_sale_price || '',
+            purchase_price: product.purchase_price || '', // default_ hata diya
+            sale_price: product.sale_price || '',         // default_ hata diya
+            warranty_days: product.default_warranty_days || 0,
           };
           if (isImeiCategory) {
             form.setFieldsValue({ ...commonValues });
@@ -121,6 +123,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
             name: product.name,
             purchase_price: values.purchase_price,
             sale_price: values.sale_price,
+            warranty_days: values.warranty_days || 0,
             quantity: 1,
             imei: imei,
             item_attributes: { ...item_attributes, 'Serial / IMEI': imei },
@@ -136,6 +139,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
             name: product.name,
             purchase_price: values.purchase_price,
             sale_price: values.sale_price,
+            warranty_days: values.warranty_days || 0,
             quantity: values.quantity,
             item_attributes: item_attributes,
             barcode: values.barcode || null
@@ -180,6 +184,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                 <Row gutter={16}>
                     <Col span={12}><Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
                     <Col span={12}><Form.Item name="sale_price" label="Sale Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    <Col span={12}><Form.Item name="warranty_days" label="Supplier Warranty (Days)" tooltip="Enter warranty in number of days (e.g. 365 for 1 year)"><InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 365" /></Form.Item></Col>
                     {attributes.map(attr => <Col span={12} key={attr.id}>{renderAttributeField(attr)}</Col>)}
                 </Row>
                 <Divider />
@@ -198,6 +203,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                 <Row gutter={16}>
                     <Col span={12}><Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
                     <Col span={12}><Form.Item name="sale_price" label="Sale Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    <Col span={12}><Form.Item name="warranty_days" label="Supplier Warranty (Days)" tooltip="Enter warranty in number of days"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
                     <Col span={12}>
     <Form.Item 
         name="quantity" 
@@ -274,7 +280,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
     try {
       const { data, error } = await supabase
         .from('products')
-        .select(`id, name, brand, category_id, categories ( is_imei_based )`);
+        .select(`id, name, brand, category_id, purchase_price, sale_price, default_warranty_days, categories ( is_imei_based )`);
       if (error) throw error;
       return data.map(p => ({ ...p, category_is_imei_based: p.categories?.is_imei_based ?? false }));
     } catch (error) {

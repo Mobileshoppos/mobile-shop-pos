@@ -11,7 +11,7 @@ import {
   DollarCircleOutlined,
   TrophyOutlined,
   ArrowUpOutlined,
-  SwapOutlined,
+  SafetyCertificateOutlined,
   ArrowDownOutlined,
   HistoryOutlined,
   CheckCircleOutlined,
@@ -479,8 +479,8 @@ const Dashboard = () => {
                 <Tooltip title="Add Stock (Inventory)">
                   <Button icon={<PlusOutlined />} onClick={() => navigate('/inventory')} />
                 </Tooltip>
-                <Tooltip title="Return Item">
-                  <Button icon={<SwapOutlined />} onClick={() => navigate('/customers?openReturn=true')} />
+                <Tooltip title="Warranty & Claims">
+                  <Button icon={<SafetyCertificateOutlined />} onClick={() => navigate('/warranty')} />
                 </Tooltip>
                 <Tooltip title="Suppliers">
                   <Button icon={<TeamOutlined />} onClick={() => navigate('/suppliers')} />

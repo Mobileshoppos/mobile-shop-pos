@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip
+  Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip, Badge, Tag
 } from 'antd';
 import { PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
 import { printThermalReceipt } from '../utils/thermalPrinter';
-import { Tag } from 'antd';
 import SelectVariantModal from './SelectVariantModal';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
@@ -519,6 +518,7 @@ const POS = () => {
   // FINAL handleCompleteSale (With Debugging)
   const handleCompleteSale = async () => {
     if (cart.length === 0) return;
+    let allSaleItemsToInsert = []; // Variable ko yahan move kar diya
     if (paymentMethod === 'Unpaid' && !selectedCustomer) { message.error('Please select a customer for a credit (Pay Later) sale.'); return; }
     if (paymentMethod === 'Unpaid' && amountPaid > grandTotal) { message.error('Amount paid cannot be greater than the grand total.'); return; }
     
@@ -560,25 +560,31 @@ const POS = () => {
               created_at: saleDate
           };
 
-          const allSaleItemsToInsert = [];
           const inventoryIdsToUpdate = [];
 
           for (const cartItem of cart) {
             if (cartItem.imei) {
                 const inventoryId = cartItem.inventory_id || cartItem.id;
+                // Warranty Calculation
+                const parentProduct = allProducts.find(p => p.id === cartItem.product_id);
+                const warrantyDays = parentProduct?.default_warranty_days || 0;
+                let expiryDate = null;
+                if (warrantyDays > 0) {
+                    const d = new Date();
+                    d.setDate(d.getDate() + warrantyDays);
+                    expiryDate = d.toISOString();
+                }
+
                 allSaleItemsToInsert.push({
                     id: crypto.randomUUID(),
                     sale_id: saleId,
                     inventory_id: inventoryId,
                     product_id: cartItem.product_id,
-                    
-                    // *** YEH NAYA COLUMN HAI ***
                     product_name_snapshot: cartItem.product_name, 
-                    // ***************************
-
                     quantity: 1,
                     price_at_sale: cartItem.sale_price,
-                    user_id: user.id
+                    user_id: user.id,
+                    warranty_expiry: expiryDate // Naya Column
                 });
                 inventoryIdsToUpdate.push({ id: inventoryId, qtySold: 1 });
             } else {
@@ -596,15 +602,26 @@ const POS = () => {
                      throw new Error(`Not enough stock locally for ${cartItem.product_name}.`);
                 }
 
+                // Warranty Calculation for Bulk
+                const parentProductBulk = allProducts.find(p => p.id === cartItem.product_id);
+                const warrantyDaysBulk = parentProductBulk?.default_warranty_days || 0;
+                let expiryDateBulk = null;
+                if (warrantyDaysBulk > 0) {
+                    const d = new Date();
+                    d.setDate(d.getDate() + warrantyDaysBulk);
+                    expiryDateBulk = d.toISOString();
+                }
+
                 allSaleItemsToInsert.push({
                     id: crypto.randomUUID(),
                     sale_id: saleId,
                     inventory_id: batchItem.id,
                     product_id: cartItem.product_id,
                     product_name_snapshot: cartItem.product_name,
-                    quantity: cartItem.quantity, // Poori quantity ek hi row mein
+                    quantity: cartItem.quantity,
                     price_at_sale: cartItem.sale_price,
-                    user_id: user.id
+                    user_id: user.id,
+                    warranty_expiry: expiryDateBulk // Naya Column
                 });
                 // Hum ID aur bechi gayi quantity dono save kar rahe hain
                 inventoryIdsToUpdate.push({ id: batchItem.id, qtySold: cartItem.quantity });
@@ -686,13 +703,18 @@ const POS = () => {
                     : '';
 
                 if (!groupedItemsMap[key]) {
+                    // Find expiry date for this specific item
+                    const saleItemRecord = allSaleItemsToInsert.find(si => si.product_id === c.product_id);
+                    const expiryDate = saleItemRecord?.warranty_expiry;
+
                     groupedItemsMap[key] = {
                         name: c.product_name,
                         quantity: 0,
                         price_at_sale: c.sale_price,
                         total: 0,
                         imeis: [],
-                        attributes: attrValues // Attributes yahan save kiye
+                        attributes: attrValues,
+                        warranty_expiry: expiryDate // Warranty date yahan save ki
                     };
                 }
 
@@ -718,6 +740,7 @@ const POS = () => {
                  
                  customerName: customers.find(c => c.id === saleDataForReceipt.customer_id)?.name || 'Walk-in Customer',
                  saleDate: new Date().toISOString(),
+                 saleItems: allSaleItemsToInsert, // Warranty dates dikhane ke liye zaroori hai
                  amountPaid: saleDataForReceipt.amount_paid_at_sale,
                  paymentStatus: saleDataForReceipt.payment_status,
                  grandTotal: saleDataForReceipt.total_amount,
@@ -996,12 +1019,31 @@ const POS = () => {
                           <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
                             {/* Stock Count */}
                             <div style={{ marginRight: '8px', flexShrink: 0 }}>
-                              <Tag 
-                                style={{ margin: 0, fontSize: '11px', padding: '0 6px' }}
-                                color={variant.display_quantity > 0 ? "cyan" : "red"}
-                              >
-                                {variant.display_quantity}
-                              </Tag>
+                              <Space size={4}>
+                                <Tag 
+                                  style={{ margin: 0, fontSize: '11px', padding: '0 6px' }}
+                                  color={variant.display_quantity > 0 ? "cyan" : "red"}
+                                >
+                                  {variant.display_quantity}
+                                </Tag>
+                                
+                                {variant.warranty_days > 0 && (
+                                  (() => {
+                                    const purchaseDate = new Date(variant.created_at);
+                                    const expiryDate = new Date(purchaseDate);
+                                    expiryDate.setDate(expiryDate.getDate() + variant.warranty_days);
+                                    const isExpired = new Date() > expiryDate;
+                                    
+                                    return (
+                                      <Tooltip title={`${isExpired ? "Supplier Warranty Expired" : "Supplier Warranty Active"} (Till: ${expiryDate.toLocaleDateString()})`}>
+                                        <span style={{ marginLeft: '4px', cursor: 'pointer' }}>
+                                          <Badge status={isExpired ? "error" : "success"} />
+                                        </span>
+                                      </Tooltip>
+                                    );
+                                  })()
+                                )}
+                              </Space>
                             </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -1100,6 +1142,21 @@ const POS = () => {
                                 })}
                                 {/* IMEI/Serial ke liye alag se Tag (sirf value dikhayein) */}
                                 {item.imei && <Tag color="purple" key="imei">{item.imei}</Tag>}
+                                
+                                {item.warranty_days > 0 && (
+                                  (() => {
+                                    const expiry = new Date(item.created_at);
+                                    expiry.setDate(expiry.getDate() + item.warranty_days);
+                                    const isExpired = new Date() > expiry;
+                                    return (
+                                      <Tooltip title={`${isExpired ? "Supplier Warranty Expired" : "Supplier Warranty Active"} (Till: ${expiry.toLocaleDateString()})`}>
+                                        <span style={{ cursor: 'pointer', marginLeft: '8px' }}>
+                                          <Badge status={isExpired ? "error" : "success"} />
+                                        </span>
+                                      </Tooltip>
+                                    );
+                                  })()
+                                )}
                               </Space>
                             </div>
                           </Col>

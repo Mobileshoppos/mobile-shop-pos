@@ -600,6 +600,7 @@ const Inventory = () => {
         product_id: isVariant ? item.product_id : item.id,
         sale_price: item.sale_price,
         purchase_price: item.purchase_price,
+        warranty_days: item.default_warranty_days, // Yeh line shamil ki
         item_attributes: item.item_attributes || {},
         imei: item.imei || null,
         
@@ -620,7 +621,8 @@ const Inventory = () => {
           brand: product.brand,
           barcode: product.barcode,
           purchase_price: product.purchase_price,
-          sale_price: product.sale_price
+          sale_price: product.sale_price,
+          default_warranty_days: product.default_warranty_days
       });
       setIsProductModalOpen(true);
   };
@@ -631,7 +633,8 @@ const Inventory = () => {
         ...values,
         barcode: values.barcode || null,
         min_sale_price: values.sale_price,
-        max_sale_price: values.sale_price
+        max_sale_price: values.sale_price,
+        default_warranty_days: values.default_warranty_days || 0
       };
 
       if (editingProduct) {
@@ -945,6 +948,11 @@ const Inventory = () => {
             <Col span={12}>
                 <Form.Item name="sale_price" label="Default Sale Price">
                     <InputNumber style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
+                </Form.Item>
+            </Col>
+            <Col span={24}>
+                <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)" tooltip="How many days warranty do you usually give to customers for this product?">
+                    <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330 (for 11 months)" />
                 </Form.Item>
             </Col>
           </Row>

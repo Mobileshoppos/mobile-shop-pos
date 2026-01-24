@@ -19,6 +19,7 @@ import {
   ShopOutlined,       
   UserSwitchOutlined, 
   FileProtectOutlined,
+  SafetyCertificateOutlined, // Naya Icon
   ProfileOutlined,    
   ToolOutlined,
   DatabaseOutlined 
@@ -37,7 +38,10 @@ const menuItems = [
     // 3. POS
     { key: '/pos', icon: <ShoppingCartOutlined />, label: <Link to="/pos">Point of Sale</Link> },
 
-    // 4. Product Management Group
+    // 4. Warranty & Claims (Naya Button)
+    { key: '/warranty', icon: <SafetyCertificateOutlined />, label: <Link to="/warranty">Warranty & Claims</Link> },
+
+    // 5. Product Management Group
     {
       key: 'products',
       icon: <AppstoreOutlined />,

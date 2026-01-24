@@ -94,6 +94,9 @@ export const generateSaleReceipt = async (saleDetails, currency = 'PKR') => {
       if (item.attributes) itemName += `\n(${item.attributes})`;
       if (item.imeis && item.imeis.length > 0) itemName += `\nIMEI: ${item.imeis.join(', ')}`;
       else if (item.imei) itemName += `\nIMEI: ${item.imei}`;
+      if (item.warranty_expiry) {
+          itemName += `\nWarranty Till: ${new Date(item.warranty_expiry).toLocaleDateString()}`;
+      }
 
       return [
         itemName,

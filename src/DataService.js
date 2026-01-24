@@ -1962,6 +1962,94 @@ async addCustomer(customerData) {
     return walkIn;
   },
 
+  // --- WARRANTY & CLAIMS FUNCTIONS ---
+
+  // 1. Saare claims ki list mangwana
+  async getWarrantyClaims() {
+    const claims = await db.warranty_claims.toArray();
+    return claims.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  },
+
+  // 2. Naya claim register karna
+  async addWarrantyClaim(claimData) {
+    if (!claimData.id) claimData.id = crypto.randomUUID();
+    claimData.local_id = claimData.id;
+    claimData.created_at = new Date().toISOString();
+    claimData.updated_at = new Date().toISOString();
+
+    await db.warranty_claims.add(claimData);
+    await db.sync_queue.add({
+      table_name: 'warranty_claims',
+      action: 'create',
+      data: claimData
+    });
+    return claimData;
+  },
+
+  // 3. Claim ka status tabdeel karna (e.g. Sent to Supplier)
+  async updateWarrantyClaimStatus(id, newStatus) {
+    const updatedAt = new Date().toISOString();
+    await db.warranty_claims.update(id, { status: newStatus, updated_at: updatedAt });
+    const updatedClaim = await db.warranty_claims.get(id);
+    
+    await db.sync_queue.add({
+      table_name: 'warranty_claims',
+      action: 'update',
+      data: updatedClaim
+    });
+    return true;
+  },
+
+  // 4. IMEI scan karke mobile ki history nikalna (Sab se ahem function)
+  async lookupItemByIMEI(imei) {
+    // A. Inventory mein mobile dhoondein
+    const item = await db.inventory.where('imei').equals(imei).first();
+    if (!item) return null;
+
+    // B. Product ka naam aur brand layein
+    const product = await db.products.get(item.product_id);
+    
+    // C. Check karein ke ye kab bika tha
+    const saleItem = await db.sale_items.filter(si => si.inventory_id === item.id).first();
+    let saleDetails = null;
+    if (saleItem) {
+        saleDetails = await db.sales.get(saleItem.sale_id);
+    }
+
+    // D. Supplier ki maloomat (Warranty check karne ke liye)
+    const supplier = item.supplier_id ? await db.suppliers.get(item.supplier_id) : null;
+
+    return { item, product, saleItem, saleDetails, supplier };
+  },
+
+  // 5. Claim delete karna
+  async deleteWarrantyClaim(id) {
+    await db.warranty_claims.delete(id);
+    await db.sync_queue.add({
+      table_name: 'warranty_claims',
+      action: 'delete',
+      data: { id }
+    });
+    return true;
+  },
+
+  // 6. Invoice ID se warranty check karna (Bulk items ke liye)
+  async lookupByInvoice(invoiceId) {
+    const sale = await db.sales.get(Number(invoiceId));
+    if (!sale) return null;
+
+    const customer = await db.customers.get(sale.customer_id);
+    const saleItems = await db.sale_items.where('sale_id').equals(sale.id).toArray();
+
+    const itemsWithDetails = await Promise.all(saleItems.map(async (si) => {
+        const product = await db.products.get(si.product_id);
+        const inv = await db.inventory.get(si.inventory_id);
+        return { saleItem: si, product, inventory: inv };
+    }));
+
+    return { sale, customer, items: itemsWithDetails };
+  },
+
 };
 
 export default DataService;

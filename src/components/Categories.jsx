@@ -234,14 +234,25 @@ const Categories = () => {
 
       <Modal title={editingCategory ? 'Edit Category' : 'Add New Category'} open={isCategoryModalOpen} onCancel={handleCategoryModalCancel} onOk={() => categoryForm.submit()} okText="Save">
         <Form form={categoryForm} layout="vertical" onFinish={handleCategoryModalOk} style={{ marginTop: '24px' }}>
-          <Form.Item name="name" label="Category Name" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item 
+              name="name" 
+              label="Category Name" 
+              rules={[{ required: true }]}
+              help={editingCategory ? "Note: Renaming will update all existing products in this category." : ""}
+          >
+    <Input placeholder="e.g. Smartphones, Audio, Accessories" />
+        </Form.Item>
           <Form.Item 
             name="is_imei_based" 
             label="Stock Tracking Type"
             valuePropName="checked"
-            tooltip="Enable this if items in this category need to be tracked individually (e.g., by IMEI or Serial Number)."
+            tooltip={editingCategory ? "Tracking type cannot be changed once products are created." : "Enable this if items in this category need to be tracked individually."}
           >
-            <Switch checkedChildren="Per-Item (IMEI/Serial)" unCheckedChildren="By Quantity (Bulk)" />
+            <Switch 
+                checkedChildren="Per-Item (IMEI/Serial)" 
+                unCheckedChildren="By Quantity (Bulk)" 
+                disabled={!!editingCategory}
+            />
           </Form.Item>
         </Form>
       </Modal>

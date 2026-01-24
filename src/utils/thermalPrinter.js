@@ -79,6 +79,10 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
         } else if (item.imei) {
             imeiRow = `<div style="font-size: 10px; color: #000; margin-top: 2px;">IMEI: ${item.imei}</div>`;
         }
+        let warrantyRow = '';
+        if (item.warranty_expiry) {
+            warrantyRow = `<div style="font-size: 10px; color: #000; margin-top: 2px;">Warranty Till: ${new Date(item.warranty_expiry).toLocaleDateString()}</div>`;
+        }
 
         receiptContent += `
             <tr>
@@ -86,6 +90,7 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
                     <span style="font-weight: bold; font-size: 12px;">${item.name}</span>
                     ${attrRow}
                     ${imeiRow}
+                    ${warrantyRow}
                 </td>
                 <td style="text-align: center; padding-top: 6px; vertical-align: top;">${item.quantity}</td>
                 <td style="text-align: right; padding-top: 6px; vertical-align: top;">${formatNumber(item.price_at_sale * item.quantity)}</td>

@@ -159,6 +159,9 @@ export const SyncProvider = ({ children }) => {
       const { data: payouts } = await supabase.from('credit_payouts').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('credit_payouts', payouts, pendingIds);
 
+      const { data: claims } = await supabase.from('warranty_claims').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('warranty_claims', claims, pendingIds);
+
       // Professional Way: Agli dafa ke liye wahi waqt save karein jo sync shuru hone par server ne bataya tha
       await db.user_settings.put({ id: 'last_sync', value: serverNow });
       console.log('Syncing completed successfully!');
@@ -882,6 +885,13 @@ export const SyncProvider = ({ children }) => {
                 await db.sale_returns.delete(localReturnId);
                 await db.sale_return_items.where('return_id').equals(localReturnId).delete();
                 await db.customer_payments.delete(localPayId);
+            }
+
+            // --- Warranty Claims Sync ---
+            else if (item.table_name === 'warranty_claims' && (item.action === 'create' || item.action === 'update')) {
+                const { id, ...claimData } = item.data;
+                const { error: supError } = await supabase.from('warranty_claims').upsert([claimData], { onConflict: 'local_id' });
+                error = supError;
             }
 
             if (!error) {
