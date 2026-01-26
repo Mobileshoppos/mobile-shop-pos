@@ -30,6 +30,7 @@ import SideMenu from './components/SideMenu';
 import Dashboard from './pages/Dashboard';
 import SystemLogs from './pages/SystemLogs';
 import WarrantyClaims from './pages/WarrantyClaims';
+import DamagedStock from './pages/DamagedStock';
 
 const { Content } = Layout;
 
@@ -129,6 +130,7 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route index element={<Dashboard />} />
         <Route path="inventory" element={<Inventory />} />
         <Route path="warranty" element={<WarrantyClaims />} />
+        <Route path="/damaged-stock" element={<DamagedStock />} />
         <Route path="pos" element={<POS />} />
         <Route path="reports" element={<Reports />} />
         <Route path="customers" element={<Customers />} />

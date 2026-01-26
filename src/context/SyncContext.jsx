@@ -140,7 +140,11 @@ export const SyncProvider = ({ children }) => {
       // 7. Sales & Items
       const { data: sales } = await supabase.from('sales').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('sales', sales, pendingIds);
-      const { data: saleItems } = await supabase.from('sale_items').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      // Sale Items download logic (with fallback for missing updated_at)
+      const { data: saleItems } = await supabase.from('sale_items')
+        .select('*')
+        .eq('user_id', user.id)
+        .or(`updated_at.gt.${lastSyncTime},created_at.gt.${lastSyncTime}`);
       await smartPut('sale_items', saleItems, pendingIds);
 
       // 8. Payments, Returns & Payouts
@@ -890,7 +894,31 @@ export const SyncProvider = ({ children }) => {
             // --- Warranty Claims Sync ---
             else if (item.table_name === 'warranty_claims' && (item.action === 'create' || item.action === 'update')) {
                 const { id, ...claimData } = item.data;
-                const { error: supError } = await supabase.from('warranty_claims').upsert([claimData], { onConflict: 'local_id' });
+                const { data: insertedClaim, error: supError } = await supabase
+                    .from('warranty_claims')
+                    .upsert([claimData], { onConflict: 'local_id' })
+                    .select()
+                    .single();
+                
+                error = supError;
+                
+                if (!error && insertedClaim) {
+                    // 1. Asli server data (numeric ID ke saath) save karein
+                    await db.warranty_claims.put(insertedClaim);
+                    // 2. Agar purani ID (UUID) server ID se mukhtalif hai, to purana record mita dein
+                    if (id !== insertedClaim.id) {
+                        await db.warranty_claims.delete(id);
+                    }
+                }
+            }
+
+            // --- Warranty Claims Delete Sync ---
+            else if (item.table_name === 'warranty_claims' && item.action === 'delete') {
+                const realId = idMappingRef.current[item.data.id] || item.data.id;
+                const { error: supError } = await supabase
+                    .from('warranty_claims')
+                    .delete()
+                    .eq('id', realId);
                 error = supError;
             }
 

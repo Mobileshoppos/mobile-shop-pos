@@ -304,6 +304,48 @@ const DataService = {
     return true;
   },
 
+  // --- INVENTORY ADJUSTMENT (DAMAGED STOCK) ---
+  async markItemAsDamaged(inventoryId, qtyToMark, notes = "") {
+    // 1. Local DB se item nikalain
+    const item = await db.inventory.get(inventoryId);
+    if (!item) throw new Error("Item not found in inventory.");
+
+    // 2. Check karein ke kya itni quantity bachi bhi hai?
+    if (qtyToMark > item.available_qty) {
+      throw new Error(`Only ${item.available_qty} units available to mark as damaged.`);
+    }
+
+    // 3. Nayi quantities calculate karein
+    const newAvailable = item.available_qty - qtyToMark;
+    const newDamaged = (item.damaged_qty || 0) + qtyToMark;
+
+    // 4. Status tay karein (Agar sab kharab ho gaya aur bika kuch nahi, to status 'Damaged' kar dein)
+    let newStatus = item.status;
+    if (newAvailable === 0 && (item.sold_qty || 0) === 0 && (item.returned_qty || 0) === 0) {
+      newStatus = 'Damaged';
+    }
+
+    const updates = {
+      available_qty: newAvailable,
+      damaged_qty: newDamaged,
+      adjustment_notes: notes,
+      status: newStatus,
+      updated_at: new Date().toISOString()
+    };
+
+    // 5. Local Update
+    await db.inventory.update(inventoryId, updates);
+
+    // 6. Sync Queue mein daalain (Server update ke liye)
+    await db.sync_queue.add({
+      table_name: 'inventory',
+      action: 'update',
+      data: { id: inventoryId, ...updates }
+    });
+
+    return true;
+  },
+
 // --- NAYA DELETE FUNCTION ---
   async deleteProduct(id) {
     // 1. Check: Kya Stock (Inventory) mein yeh product majood hai?
@@ -1967,7 +2009,11 @@ async addCustomer(customerData) {
   // 1. Saare claims ki list mangwana
   async getWarrantyClaims() {
     const claims = await db.warranty_claims.toArray();
-    return claims.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    // local_id ke zariye duplicates khatam karein (Deduplication)
+    const uniqueMap = {};
+    claims.forEach(c => { uniqueMap[c.local_id] = c; });
+    
+    return Object.values(uniqueMap).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   },
 
   // 2. Naya claim register karna
@@ -2010,16 +2056,22 @@ async addCustomer(customerData) {
     const product = await db.products.get(item.product_id);
     
     // C. Check karein ke ye kab bika tha
-    const saleItem = await db.sale_items.filter(si => si.inventory_id === item.id).first();
+    const saleItem = await db.sale_items.filter(si => String(si.inventory_id) === String(item.id)).first();
     let saleDetails = null;
     if (saleItem) {
         saleDetails = await db.sales.get(saleItem.sale_id);
     }
 
-    // D. Supplier ki maloomat (Warranty check karne ke liye)
+    // D. Supplier ki maloomat
     const supplier = item.supplier_id ? await db.suppliers.get(item.supplier_id) : null;
 
-    return { item, product, saleItem, saleDetails, supplier };
+    // E. Customer ki maloomat (Agar bika hua hai)
+    let customer = null;
+    if (saleDetails && saleDetails.customer_id) {
+        customer = await db.customers.get(saleDetails.customer_id);
+    }
+
+    return { item, product, saleItem, saleDetails, supplier, customer };
   },
 
   // 5. Claim delete karna
@@ -2044,10 +2096,48 @@ async addCustomer(customerData) {
     const itemsWithDetails = await Promise.all(saleItems.map(async (si) => {
         const product = await db.products.get(si.product_id);
         const inv = await db.inventory.get(si.inventory_id);
-        return { saleItem: si, product, inventory: inv };
+        // Supplier details bhi nikaalain
+        const supplier = inv?.supplier_id ? await db.suppliers.get(inv.supplier_id) : null;
+        return { saleItem: si, product, inventory: inv, supplier };
     }));
 
     return { sale, customer, items: itemsWithDetails };
+  },
+
+  // 7. Damaged Stock Report mangwana
+  async getDamagedStockReport() {
+    const damagedItems = await db.inventory.filter(i => (i.damaged_qty || 0) > 0).toArray();
+    const report = await Promise.all(damagedItems.map(async (item) => {
+      const product = await db.products.get(item.product_id);
+      const supplier = item.supplier_id ? await db.suppliers.get(item.supplier_id) : null;
+      return {
+        ...item,
+        product_name: product?.name || 'Unknown',
+        brand: product?.brand || '',
+        supplier_name: supplier?.name || 'N/A',
+        invoice_id: item.purchase_id, 
+        total_loss: (item.damaged_qty || 0) * (item.purchase_price || 0)
+      };
+    }));
+    return report.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+  },
+
+  // 8. Damaged Stock ko wapis theek karna (Undo Adjustment)
+  async revertDamagedStock(inventoryId, qtyToRevert) {
+    const item = await db.inventory.get(inventoryId);
+    if (!item) throw new Error("Item not found.");
+    if (qtyToRevert > item.damaged_qty) throw new Error("Invalid revert quantity.");
+
+    const updates = {
+      available_qty: (item.available_qty || 0) + qtyToRevert,
+      damaged_qty: (item.damaged_qty || 0) - qtyToRevert,
+      status: 'Available', // Wapis bechne ke liye tayyar
+      updated_at: new Date().toISOString()
+    };
+
+    await db.inventory.update(inventoryId, updates);
+    await db.sync_queue.add({ table_name: 'inventory', action: 'update', data: { id: inventoryId, ...updates } });
+    return true;
   },
 
 };

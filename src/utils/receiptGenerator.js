@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import QRCode from 'qrcode'; // <--- IMPORT ADDED
 import { formatCurrency } from './currencyFormatter';
+import dayjs from 'dayjs';
 
 const safeString = (value) => String(value || '');
 
@@ -94,8 +95,8 @@ export const generateSaleReceipt = async (saleDetails, currency = 'PKR') => {
       if (item.attributes) itemName += `\n(${item.attributes})`;
       if (item.imeis && item.imeis.length > 0) itemName += `\nIMEI: ${item.imeis.join(', ')}`;
       else if (item.imei) itemName += `\nIMEI: ${item.imei}`;
-      if (item.warranty_expiry) {
-          itemName += `\nWarranty Till: ${new Date(item.warranty_expiry).toLocaleDateString()}`;
+      if (item.warranty_expiry && item.warranty_expiry !== null) {
+          itemName += `\nWarranty Till: ${dayjs(item.warranty_expiry).format('DD-MMM-YYYY')}`;
       }
 
       return [

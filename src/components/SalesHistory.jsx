@@ -116,7 +116,8 @@ const SalesHistory = () => {
               price_at_sale: item.price_at_sale,
               total: item.quantity * item.price_at_sale,
               imei: inventoryItem ? inventoryItem.imei : null,
-              item_attributes: inventoryItem ? inventoryItem.item_attributes : {} // Attributes laye
+              warranty_expiry: item.warranty_expiry,
+              item_attributes: inventoryItem ? inventoryItem.item_attributes : {} 
           };
       }));
 
@@ -141,7 +142,8 @@ const SalesHistory = () => {
                   price_at_sale: item.price_at_sale,
                   total: 0,
                   imeis: [],
-                  attributes: attrValues // Attributes save kiye
+                  attributes: attrValues,
+                  warranty_expiry: item.warranty_expiry
               };
           }
 

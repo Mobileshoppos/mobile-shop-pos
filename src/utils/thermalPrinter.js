@@ -1,6 +1,7 @@
 // src/utils/thermalPrinter.js
 
-import QRCode from 'qrcode'; // <--- IMPORT ADDED
+import QRCode from 'qrcode'; 
+import dayjs from 'dayjs';
 
 // Note: Yeh function ab 'async' hai
 export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
@@ -80,8 +81,8 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
             imeiRow = `<div style="font-size: 10px; color: #000; margin-top: 2px;">IMEI: ${item.imei}</div>`;
         }
         let warrantyRow = '';
-        if (item.warranty_expiry) {
-            warrantyRow = `<div style="font-size: 10px; color: #000; margin-top: 2px;">Warranty Till: ${new Date(item.warranty_expiry).toLocaleDateString()}</div>`;
+        if (item.warranty_expiry && item.warranty_expiry !== null) {
+            warrantyRow = `<div style="font-size: 10px; color: #000; margin-top: 2px;">Warranty Till: ${dayjs(item.warranty_expiry).format('DD-MMM-YYYY')}</div>`;
         }
 
         receiptContent += `

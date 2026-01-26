@@ -28,6 +28,7 @@ const SettingsPage = () => {
   // Nayi State for Warranty Policy
   const [warrantyPolicy, setWarrantyPolicy] = useState(DEFAULT_POLICY);
   const [qrCodeEnabled, setQrCodeEnabled] = useState(true);
+  const [warrantySystemEnabled, setWarrantySystemEnabled] = useState(true);
 
   const currencyOptions = [
     { value: 'PKR', label: 'PKR - Pakistani Rupee' },
@@ -47,6 +48,9 @@ const SettingsPage = () => {
       }
       if (profile.qr_code_enabled !== undefined) {
           setQrCodeEnabled(profile.qr_code_enabled);
+      }
+      if (profile.warranty_system_enabled !== undefined) {
+          setWarrantySystemEnabled(profile.warranty_system_enabled);
       }
       if (profile.low_stock_threshold) setLowStockThreshold(profile.low_stock_threshold);
       
@@ -73,6 +77,7 @@ const SettingsPage = () => {
       low_stock_threshold: lowStockThreshold,
       warranty_policy: warrantyPolicy,
       qr_code_enabled: qrCodeEnabled,
+      warranty_system_enabled: warrantySystemEnabled,
     };
 
     const result = await updateProfile(updates);
@@ -196,6 +201,20 @@ const SettingsPage = () => {
                         />
                     </Col>
                 </Row>
+                <Row align="middle" gutter={[16, 16]}>
+                    <Col xs={24} sm={6}>
+                        <Text strong>Enable Warranty System</Text>
+                        <Text type="secondary" style={{ display: 'block' }}>
+                            Turn off to hide all warranty related features.
+                        </Text>
+                    </Col>
+                    <Col xs={24} sm={18}>
+                        <Switch 
+                            checked={warrantySystemEnabled} 
+                            onChange={setWarrantySystemEnabled} 
+                        />
+                    </Col>
+                </Row>
                 <Divider />
 
                 {/* --- NAYA SECTION: Warranty Policy --- */}
@@ -275,8 +294,9 @@ const SettingsPage = () => {
                                 receiptFormat === profile.receipt_format &&
                                 lowStockAlerts === profile.low_stock_alerts_enabled &&
                                 lowStockThreshold === profile.low_stock_threshold &&
-                                warrantyPolicy === profile.warranty_policy && // Check if policy changed
-                                qrCodeEnabled === profile.qr_code_enabled
+                                warrantyPolicy === profile.warranty_policy && 
+                                qrCodeEnabled === profile.qr_code_enabled &&
+                                warrantySystemEnabled === profile.warranty_system_enabled
                             )}
                         >
                             Save General Settings

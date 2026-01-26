@@ -1,0 +1,1 @@
+ALTER TABLE "public"."profiles" ADD COLUMN IF NOT EXISTS "warranty_system_enabled" boolean DEFAULT true;

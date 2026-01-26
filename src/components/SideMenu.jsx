@@ -19,12 +19,14 @@ import {
   ShopOutlined,       
   UserSwitchOutlined, 
   FileProtectOutlined,
-  SafetyCertificateOutlined, // Naya Icon
+  SafetyCertificateOutlined,
   ProfileOutlined,    
   ToolOutlined,
-  DatabaseOutlined 
+  DatabaseOutlined,
+  AlertOutlined
 } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
+import { useAuth } from '../context/AuthContext';
 
 const { Sider } = Layout;
 
@@ -72,6 +74,7 @@ const menuItems = [
         { key: '/sales-history', icon: <HistoryOutlined />, label: <Link to="/sales-history">Sales History</Link> },
         { key: '/expenses', icon: <DollarCircleOutlined />, label: <Link to="/expenses">Expenses</Link> },
         { key: '/expense-categories', icon: <FileProtectOutlined />, label: <Link to="/expense-categories">Exp. Categories</Link> },
+        { key: '/damaged-stock', icon: <AlertOutlined />, label: <Link to="/damaged-stock">Damaged Stock</Link> },
       ]
     },
 
@@ -98,6 +101,7 @@ const rootSubmenuKeys = ['products', 'people', 'finance', 'settings_group'];
 
 const SideMenu = ({ collapsed, setCollapsed, isMobile, isDarkMode, toggleTheme }) => {
   const location = useLocation();
+  const { profile } = useAuth();
   
   // State: Kaunsa menu khula hai, shuru mein khali rakha hai (sab band)
   const [openKeys, setOpenKeys] = useState([]);
@@ -122,7 +126,16 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile, isDarkMode, toggleTheme }
     await supabase.auth.signOut();
   };
 
-  const processedMenuItems = menuItems.map(item => {
+  // 1. Pehle menu items ko filter karein (Warranty ON/OFF ke mutabiq)
+  const filteredMenuItems = menuItems.filter(item => {
+    if (item.key === '/warranty' && profile?.warranty_system_enabled === false) {
+      return false;
+    }
+    return true;
+  });
+
+  // 2. Phir filtered items par map chalayein (Mobile menu band karne ke liye)
+  const processedMenuItems = filteredMenuItems.map(item => {
     if (item.type === 'divider') return item;
     if (item.children) {
         return {

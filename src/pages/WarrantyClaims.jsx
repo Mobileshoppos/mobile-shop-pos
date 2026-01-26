@@ -118,6 +118,15 @@ const WarrantyClaims = () => {
                                     <>
                                         <Descriptions title="Item Information" bordered column={1} size="small">
                                             <Descriptions.Item label="Product">{lookupResult.product?.name}</Descriptions.Item>
+                                            <Descriptions.Item label="Customer">
+                                                {lookupResult.customer ? lookupResult.customer.name : (lookupResult.saleDetails ? 'Walk-in Customer' : 'N/A')}
+                                            </Descriptions.Item>
+                                            <Descriptions.Item label="Supplier">
+                                                <Text strong>{lookupResult.supplier?.name || 'N/A'}</Text>
+                                            </Descriptions.Item>
+                                            <Descriptions.Item label="Pur. Invoice #">
+                                                <Tag color="cyan">{lookupResult.item?.purchase_id || lookupResult.inventory?.purchase_id || 'N/A'}</Tag>
+                                            </Descriptions.Item>
                                             <Descriptions.Item label="Sold On">{lookupResult.saleDetails ? dayjs(lookupResult.saleDetails.created_at).format('DD-MMM-YYYY') : <Tag color="blue">In Stock</Tag>}</Descriptions.Item>
                                         </Descriptions>
                                         
@@ -174,11 +183,13 @@ const WarrantyClaims = () => {
                                                 <List.Item extra={
                                                     <Button size="small" type="link" onClick={() => {
                                                         setLookupResult({
-                                                            type: 'INVOICE', 
+                                                            type: 'IMEI', // Switch to detail view
                                                             product: entry.product,
                                                             item: entry.inventory,
                                                             saleItem: entry.saleItem,
-                                                            saleDetails: lookupResult.sale
+                                                            saleDetails: lookupResult.sale,
+                                                            supplier: entry.supplier, // Supplier transfer karein
+                                                            customer: lookupResult.customer // Customer transfer karein
                                                         });
                                                         setIsClaimModalOpen(true);
                                                     }}>Claim</Button>

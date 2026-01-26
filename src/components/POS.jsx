@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip, Badge, Tag
+  Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip, Badge, Tag, Checkbox
 } from 'antd';
 import { PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
@@ -10,6 +10,7 @@ import { printThermalReceipt } from '../utils/thermalPrinter';
 import SelectVariantModal from './SelectVariantModal';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
+import dayjs from 'dayjs';
 import { useSync } from '../context/SyncContext';
 import DataService from '../DataService';
 import { generateInvoiceId } from '../utils/idGenerator';
@@ -569,7 +570,8 @@ const POS = () => {
                 const parentProduct = allProducts.find(p => p.id === cartItem.product_id);
                 const warrantyDays = parentProduct?.default_warranty_days || 0;
                 let expiryDate = null;
-                if (warrantyDays > 0) {
+                // Agar Global system ON hai AUR user ne Checkbox tick NAHI kiya
+                if (profile?.warranty_system_enabled !== false && !cartItem.no_warranty && warrantyDays > 0) {
                     const d = new Date();
                     d.setDate(d.getDate() + warrantyDays);
                     expiryDate = d.toISOString();
@@ -703,9 +705,13 @@ const POS = () => {
                     : '';
 
                 if (!groupedItemsMap[key]) {
-                    // Find expiry date for this specific item
-                    const saleItemRecord = allSaleItemsToInsert.find(si => si.product_id === c.product_id);
-                    const expiryDate = saleItemRecord?.warranty_expiry;
+                    // Find the exact sale item record for this unit
+                    const saleItemRecord = allSaleItemsToInsert.find(si => 
+                        si.product_id === c.product_id && 
+                        si.inventory_id === (c.inventory_id || c.id)
+                    );
+                    
+                    const expiryDate = saleItemRecord?.warranty_expiry || null;
 
                     groupedItemsMap[key] = {
                         name: c.product_name,
@@ -714,7 +720,7 @@ const POS = () => {
                         total: 0,
                         imeis: [],
                         attributes: attrValues,
-                        warranty_expiry: expiryDate // Warranty date yahan save ki
+                        warranty_expiry: expiryDate 
                     };
                 }
 
@@ -1035,7 +1041,7 @@ const POS = () => {
                                     const isExpired = new Date() > expiryDate;
                                     
                                     return (
-                                      <Tooltip title={`${isExpired ? "Supplier Warranty Expired" : "Supplier Warranty Active"} (Till: ${expiryDate.toLocaleDateString()})`}>
+                                      <Tooltip title={`${isExpired ? "Supplier Warranty Expired" : "Supplier Warranty Active"} (Till: ${dayjs(expiryDate).format('DD-MMM-YYYY')})`}>
                                         <span style={{ marginLeft: '4px', cursor: 'pointer' }}>
                                           <Badge status={isExpired ? "error" : "success"} />
                                         </span>
@@ -1143,17 +1149,28 @@ const POS = () => {
                                 {/* IMEI/Serial ke liye alag se Tag (sirf value dikhayein) */}
                                 {item.imei && <Tag color="purple" key="imei">{item.imei}</Tag>}
                                 
-                                {item.warranty_days > 0 && (
+                                {/* Global Switch Check */}
+                                {profile?.warranty_system_enabled !== false && item.warranty_days > 0 && (
                                   (() => {
                                     const expiry = new Date(item.created_at);
                                     expiry.setDate(expiry.getDate() + item.warranty_days);
                                     const isExpired = new Date() > expiry;
                                     return (
-                                      <Tooltip title={`${isExpired ? "Supplier Warranty Expired" : "Supplier Warranty Active"} (Till: ${expiry.toLocaleDateString()})`}>
-                                        <span style={{ cursor: 'pointer', marginLeft: '8px' }}>
-                                          <Badge status={isExpired ? "error" : "success"} />
-                                        </span>
-                                      </Tooltip>
+                                      <Space size={8} style={{ marginLeft: '8px' }}>
+                                        <Tooltip title={`${isExpired ? "Supplier Warranty Expired" : "Supplier Warranty Active"} (Till: ${dayjs(expiry).format('DD-MMM-YYYY')})`}>
+                                          <span style={{ cursor: 'pointer' }}>
+                                            <Badge status={isExpired ? "error" : "success"} />
+                                          </span>
+                                        </Tooltip>
+                                        
+                                        {/* Individual Override Checkbox */}
+                                        <Checkbox 
+                                          checked={item.no_warranty} 
+                                          onChange={(e) => handleCartItemUpdate(item.variant_id, 'no_warranty', e.target.checked)}
+                                        >
+                                          <Text type="secondary" style={{fontSize: '10px'}}>No Warranty</Text>
+                                        </Checkbox>
+                                      </Space>
                                     );
                                   })()
                                 )}

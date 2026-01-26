@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
-import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu } from 'antd';
-import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined } from '@ant-design/icons';
+import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert } from 'antd';
+import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -46,7 +46,7 @@ const formatPriceRange = (min, max, currency) => {
   return `${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`;
 };
 
-const ProductList = ({ showArchived, products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel }) => {
+const ProductList = ({ showArchived, products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged }) => {
   const { profile } = useAuth();
   const { isDarkMode } = useTheme();
   
@@ -280,14 +280,20 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
   size="small" 
   style={{ marginLeft: '8px', color: '#1890ff', fontSize: '16px' }} 
   onClick={() => {
-      // 1. Product ki category dhoondein
       const cat = categories?.find(c => c.id === product.category_id);
-      // 2. Check karein ke wo IMEI based hai ya nahi
       const isImei = cat ? cat.is_imei_based : false;
-      // 3. Function ko batayein
       onQuickEdit(variant, isImei); 
   }}
   title="Edit Barcode/Price"
+/>
+<Button 
+  type="text" 
+  danger
+  icon={<AlertOutlined />} 
+  size="small" 
+  style={{ marginLeft: '8px', fontSize: '16px' }} 
+  onClick={() => onMarkDamaged(variant)} 
+  title="Mark as Damaged/Defective"
 />
                   </div>
                 ))}
@@ -353,7 +359,8 @@ const Inventory = () => {
       productEditForm.setFieldsValue({
           name: product.name,
           brand: product.brand,
-          category_id: product.category_id
+          category_id: product.category_id,
+          default_warranty_days: product.default_warranty_days // Nayi line
       });
       setIsProductEditModalOpen(true);
   };
@@ -362,32 +369,24 @@ const Inventory = () => {
       try {
           if (!editingProductModel) return;
 
-          // 1. Local DB Update
-          await db.products.update(editingProductModel.id, {
+          const updates = {
               name: values.name,
-              brand: values.brand
-          });
+              brand: values.brand,
+              default_warranty_days: values.default_warranty_days
+          };
 
-          // 2. Server Update (Supabase)
-          if (navigator.onLine) {
-              const { error } = await supabase
-                  .from('products')
-                  .update({
-                      name: values.name,
-                      brand: values.brand
-                  })
-                  .eq('id', editingProductModel.id);
-              
-              if (error) console.error("Server update failed:", error);
-          }
+          // Professional Way: DataService ka function use karein jo local DB + Sync Queue dono handle karta hai
+          await DataService.updateProduct(editingProductModel.id, updates);
 
-          message.success('Product details updated!');
+          message.success('Product details updated (Syncing...)!');
           setIsProductEditModalOpen(false);
           setEditingProductModel(null);
           
-          // Refresh List
-          setSearchText(prev => prev ? prev + ' ' : ' ');
-          setTimeout(() => setSearchText(prev => prev.trim()), 10);
+          // Sync process shuru karein taake console mein log nazar aaye
+          processSyncQueue();
+          
+          // List refresh
+          setRefreshTrigger(prev => prev + 1);
 
       } catch (error) {
           message.error("Update failed: " + error.message);
@@ -398,6 +397,11 @@ const Inventory = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [editForm] = Form.useForm();
+
+  // Damaged Stock States
+  const [isDamagedModalOpen, setIsDamagedModalOpen] = useState(false);
+  const [damagedItem, setDamagedItem] = useState(null);
+  const [damagedForm] = Form.useForm();
   
   // --- NAYE MODALS KI STATE ---
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -785,6 +789,24 @@ const Inventory = () => {
       message.error(error.message);
     }
   };
+
+  const handleMarkDamagedOk = async (values) => {
+    try {
+      if (!damagedItem || !damagedItem.ids) return;
+      
+      // Pehla available inventory record uthain
+      const invId = damagedItem.ids[0]; 
+
+      await DataService.markItemAsDamaged(invId, values.quantity, values.notes);
+      
+      message.success('Stock adjusted! Damaged quantity recorded.');
+      setIsDamagedModalOpen(false);
+      damagedForm.resetFields();
+      setRefreshTrigger(prev => prev + 1); // List refresh karein
+    } catch (error) {
+      message.error(error.message);
+    }
+  };
   
   const isSmartPhoneCategorySelected = categories.find(c => c.id === selectedCategoryId)?.name === 'Smart Phones & Tablets';
 
@@ -922,6 +944,11 @@ const Inventory = () => {
         onAddStock={handleAddStockClick}
         onQuickEdit={handleQuickEditClick}
         onEditProductModel={handleEditProductModelClick}
+        onMarkDamaged={(variant) => {
+            setDamagedItem(variant);
+            damagedForm.setFieldsValue({ quantity: 1 });
+            setIsDamagedModalOpen(true);
+        }}
         ProductList showArchived={showArchived}
       />
 
@@ -999,6 +1026,9 @@ const Inventory = () => {
         <Form form={productEditForm} layout="vertical" onFinish={handleProductModelUpdate}>
           <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="brand" label="Brand"><Input /></Form.Item>
+          <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)">
+            <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
+          </Form.Item>
         </Form>
       </Modal>
       
@@ -1017,6 +1047,37 @@ const Inventory = () => {
     initialData={purchaseInitialData}
   />
 )}
+
+{/* DAMAGED STOCK MODAL */}
+      <Modal
+        title={<span><AlertOutlined style={{color: 'red'}} /> Mark Stock as Damaged</span>}
+        open={isDamagedModalOpen}
+        onOk={damagedForm.submit}
+        onCancel={() => setIsDamagedModalOpen(false)}
+        okText="Confirm Adjustment"
+        okButtonProps={{ danger: true }}
+      >
+        <Form form={damagedForm} layout="vertical" onFinish={handleMarkDamagedOk}>
+          <Text type="secondary" style={{display: 'block', marginBottom: '15px'}}>
+            Product: <b>{damagedItem?.product_name}</b><br/>
+            Available: <b>{damagedItem?.display_quantity} units</b>
+          </Text>
+          
+          <Form.Item name="quantity" label="Quantity to mark as Damaged" rules={[{ required: true }]}>
+            <InputNumber min={1} max={damagedItem?.display_quantity} style={{ width: '100%' }} />
+          </Form.Item>
+
+          <Form.Item name="notes" label="Reason (Optional)">
+            <Input.TextArea placeholder="e.g. Screen broken, Water damage..." />
+          </Form.Item>
+          
+          <Alert 
+            message="This action will reduce your available stock and cannot be undone." 
+            type="warning" 
+            showIcon 
+          />
+        </Form>
+      </Modal>
     </>
   );
 };
