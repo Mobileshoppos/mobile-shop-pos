@@ -5,6 +5,7 @@ import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import dayjs from 'dayjs';
+import { generateDamagedReportPDF } from '../utils/damagedReportGenerator';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -119,7 +120,12 @@ const DamagedStock = () => {
                 </Col>
                 <Col>
                     <Space>
-                        <Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>
+                        <Button
+                            icon={<PrinterOutlined />}
+                            onClick={() => generateDamagedReportPDF(filteredData, { totalQty, totalLoss }, profile, dateRange)}
+                        >
+                            Download PDF
+                        </Button>
                         <Button type="primary" icon={<ReloadOutlined />} onClick={fetchReport}>Refresh</Button>
                     </Space>
                 </Col>
@@ -143,7 +149,7 @@ const DamagedStock = () => {
                 </Col>
             </Row>
 
-            <Card style={{ marginBottom: '16px' }} bodyStyle={{ padding: '12px' }}>
+            <Card style={{ marginBottom: '16px' }} styles={{ body: { padding: '12px' } }}>
                 <Row gutter={16} align="middle">
                     <Col xs={24} md={12}>
                         <Input 
@@ -163,15 +169,17 @@ const DamagedStock = () => {
                 </Row>
             </Card>
 
-            <Table 
-                dataSource={filteredData} 
-                columns={columns} 
+            <Card styles={{ body: { padding: 0 } }}>
+                <Table 
+                    dataSource={filteredData} 
+                    columns={columns} 
                 loading={loading} 
                 rowKey="id" 
                 size="middle"
                 pagination={{ pageSize: 15 }}
                 scroll={{ x: true }}
             />
+            </Card>
         </div>
     );
 };

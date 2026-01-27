@@ -69,8 +69,25 @@ export const SyncProvider = ({ children }) => {
   const smartPut = async (tableName, data, pendingIds) => {
     if (!data || !Array.isArray(data)) return;
     for (const record of data) {
-      // Agar yeh record abhi upload hona baqi hai (queue mein hai), to isay touch na karo
+      // 1. Check karein ke kya ye record sync queue mein to nahi?
       if (!pendingIds.has(record.id) && !pendingIds.has(record.local_id)) {
+        
+        // 2. DEDUPLICATION LOGIC: 
+        // Agar record mein local_id mojood hai, to pehle purana UUID wala record dhoondein
+        if (record.local_id) {
+            const existingRecord = await db[tableName]
+                .where('local_id')
+                .equals(record.local_id)
+                .first();
+
+            // 3. SWAP LOGIC:
+            // Agar purana record mil jaye aur uski asli ID server wali ID se mukhtalif ho
+            if (existingRecord && existingRecord.id !== record.id) {
+                await db[tableName].delete(existingRecord.id); // Purana UUID wala mita dein
+            }
+        }
+
+        // 4. Naya server wala record (asli ID ke saath) save karein
         await db[tableName].put(record);
       }
     }

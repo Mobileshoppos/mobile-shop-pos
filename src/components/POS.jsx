@@ -577,8 +577,10 @@ const POS = () => {
                     expiryDate = d.toISOString();
                 }
 
+                const itemLocalId = crypto.randomUUID();
                 allSaleItemsToInsert.push({
-                    id: crypto.randomUUID(),
+                    id: itemLocalId,
+                    local_id: itemLocalId, // Dono jagah same UUID jayegi
                     sale_id: saleId,
                     inventory_id: inventoryId,
                     product_id: cartItem.product_id,

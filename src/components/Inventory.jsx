@@ -1067,15 +1067,19 @@ const Inventory = () => {
             <InputNumber min={1} max={damagedItem?.display_quantity} style={{ width: '100%' }} />
           </Form.Item>
 
-          <Form.Item name="notes" label="Reason (Optional)">
+          <Form.Item
+            name="notes" 
+            label="Reason" 
+            rules={[{ required: true, message: 'Please provide a reason for adjustment' }]}
+          >
             <Input.TextArea placeholder="e.g. Screen broken, Water damage..." />
           </Form.Item>
           
-          <Alert 
-            message="This action will reduce your available stock and cannot be undone." 
-            type="warning" 
-            showIcon 
-          />
+          <Alert
+            message="This will reduce your available stock. You can revert this action from the Damaged Stock Report page if needed." 
+            type="info" 
+            showIcon
+         />
         </Form>
       </Modal>
     </>
