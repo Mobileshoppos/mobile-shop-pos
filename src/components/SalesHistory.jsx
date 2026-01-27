@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Typography, Tag, App, Button, Tooltip, Space } from 'antd';
-import { PrinterOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PrinterOutlined, ReloadOutlined, HistoryOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
 import { useAuth } from '../context/AuthContext';
@@ -324,8 +324,10 @@ const SalesHistory = () => {
   ];
 
   return (
-    <>
-      <Title level={2} style={{ marginBottom: '24px' }}>Sales History</Title>
+    <div style={{ padding: '24px' }}>
+      <Title level={2} style={{ marginBottom: '24px', marginLeft: '48px' }}>
+        <HistoryOutlined /> Sales History
+      </Title>
       <Card>
         {/* TABLE COMPONENT KO IS SE BADAL DEIN */}
         <Table
@@ -337,7 +339,7 @@ const SalesHistory = () => {
           scroll={{ x: 'max-content' }}
         />
       </Card>
-    </>
+    </div>
   );
 };
 

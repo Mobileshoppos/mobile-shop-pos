@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip, Badge, Tag, Checkbox
 } from 'antd';
-import { PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons';
+import { ShoppingCartOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
@@ -580,7 +580,7 @@ const POS = () => {
                 const itemLocalId = crypto.randomUUID();
                 allSaleItemsToInsert.push({
                     id: itemLocalId,
-                    local_id: itemLocalId, // Dono jagah same UUID jayegi
+                    local_id: itemLocalId, 
                     sale_id: saleId,
                     inventory_id: inventoryId,
                     product_id: cartItem.product_id,
@@ -830,7 +830,7 @@ const POS = () => {
   const handleResetCart = () => { modal.confirm({ title: 'Reset Bill?', content: 'Are you sure you want to remove all items from the current bill?', okText: 'Yes, Reset', cancelText: 'No', onOk: () => { setCart([]); setDiscount(0); setAmountPaid(0); setSelectedCustomer(null); message.success('Bill has been reset.'); } }); };
 
   return (
-    <>
+    <div style={{ padding: '24px' }}>
     <style>
         {`
           /* Scrollbar ki churai (width) */
@@ -853,7 +853,9 @@ const POS = () => {
           }
         `}
       </style>
-      <Title level={2} style={{ marginBottom: '5px', marginLeft: '48px', fontSize: '20px' }}>Point of Sale</Title>
+      <Title level={2} style={{ marginBottom: '5px', marginLeft: '48px' }}>
+            <ShoppingCartOutlined /> Point of Sale
+          </Title>
       <Row gutter={24}>
         <Col xs={24} md={14}>
           <Card styles={{ body: { padding: '12px' } }}>
@@ -1152,7 +1154,7 @@ const POS = () => {
                                 {item.imei && <Tag color="purple" key="imei">{item.imei}</Tag>}
                                 
                                 {/* Global Switch Check */}
-                                {profile?.warranty_system_enabled !== false && item.warranty_days > 0 && (
+                            {profile?.warranty_system_enabled !== false && item.warranty_days > 0 && (
                                   (() => {
                                     const expiry = new Date(item.created_at);
                                     expiry.setDate(expiry.getDate() + item.warranty_days);
@@ -1230,7 +1232,7 @@ const POS = () => {
       </Row>
       <Modal title="Add a New Customer" open={isAddCustomerModalOpen} onCancel={() => setIsAddCustomerModalOpen(false)} onOk={() => addForm.submit()} okText="Save Customer"><Form form={addForm} layout="vertical" onFinish={handleAddCustomer}><Form.Item name="name" label="Full Name" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="phone_number" label="Phone Number" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="address" label="Address (Optional)"><Input.TextArea rows={3} /></Form.Item></Form></Modal>
       {isVariantModalOpen && <SelectVariantModal visible={isVariantModalOpen} onCancel={() => setIsVariantModalOpen(false)} onOk={handleVariantsSelected} product={productForVariantSelection} cart={cart} />}
-    </>
+    </div>
   );
 };
 

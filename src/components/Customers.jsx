@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag, Dropdown, Menu, Tooltip
 } from 'antd';
-import { UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined, MoreOutlined, EditOutlined, ReloadOutlined, InboxOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
+import { UserSwitchOutlined, UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined, MoreOutlined, EditOutlined, ReloadOutlined, InboxOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -908,15 +908,15 @@ const handleCloseInvoiceSearchModal = () => {
     return null;
   };
   
-  return (<> <div style={{
+  return (<div style={{ padding: '24px' }}> <div style={{
     display: 'flex',
     flexDirection: isMobile ? 'column' : 'row',
     justifyContent: 'space-between',
     alignItems: isMobile ? 'flex-start' : 'center',
     marginBottom: '24px'
 }}>
-    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0' }}>
-        Customer Management
+    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0', marginLeft: '48px' }}>
+        <UserSwitchOutlined /> Customer Management
     </Title>
 
     {/* Computer (Desktop) ke liye Search Bar */}
@@ -1330,7 +1330,7 @@ const handleCloseInvoiceSearchModal = () => {
       </div>
     )}
 </Modal>
- </> 
+ </div> 
  );
 };
 

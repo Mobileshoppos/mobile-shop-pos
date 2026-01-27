@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table, Radio, Modal, Form, InputNumber, Input, App, Tooltip, Tabs } from 'antd';
 import {
+  HomeOutlined,
   ShoppingOutlined,
   RiseOutlined,
   FallOutlined,
@@ -264,11 +265,13 @@ const Dashboard = () => {
   };
 
   return (
-    <div style={{ padding: '0 8px' }}>
+    <div style={{ padding: '24px' }}>
       
       {/* HEADER WITH FILTERS */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
-        <Title level={2} style={{ margin: 0, marginLeft: '48px', fontSize: '20px' }}>Dashboard</Title>
+        <Title level={2} style={{ margin: 0, marginLeft: '48px' }}>
+          <HomeOutlined /> Dashboard
+        </Title>
         
         {/* Time Filter Buttons */}
         <Radio.Group value={timeRange} onChange={(e) => setTimeRange(e.target.value)} buttonStyle="solid">

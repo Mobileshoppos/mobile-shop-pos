@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, Row, Col, Typography, Button, List, Tag, Modal, Steps, Divider, Tooltip, Radio } from 'antd';
-import { CheckCircleOutlined, RocketOutlined, BankOutlined, WhatsAppOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, RocketOutlined, BankOutlined, WhatsAppOutlined, InfoCircleOutlined, CreditCardOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 
 const { Title, Text, Paragraph } = Typography;
@@ -29,8 +29,10 @@ const SubscriptionPage = () => {
   };
 
   return (
-    <div>
-      <Title level={2} style={{ marginBottom: '24px' }}>Manage Your Subscription</Title>
+    <div style={{ padding: '24px' }}>
+      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: '48px' }}>
+        <CreditCardOutlined /> Manage Your Subscription
+      </Title>
       
       <Row gutter={[24, 24]}>
         

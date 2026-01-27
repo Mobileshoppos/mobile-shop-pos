@@ -3,7 +3,7 @@ import {
   Typography, Table, Button, Modal, Form, Input, App as AntApp,
   Space, Popconfirm, Tooltip, Row, Col, Card, Empty, Select, Switch, Tag
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, MobileOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, MobileOutlined, TagsOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -162,7 +162,7 @@ const Categories = () => {
       title: 'Stock Type', dataIndex: 'is_imei_based', key: 'is_imei_based', align: 'center',
       render: (is_imei_based) => is_imei_based 
         ? <Tag icon={<MobileOutlined />} color="cyan">Per-Item</Tag> 
-        : <Tag icon={<AppstoreOutlined />} color="geekblue">Quantity</Tag>
+        : <Tag icon={<TagsOutlined />} color="geekblue">Quantity</Tag>
     },
     {
       title: 'Actions', key: 'actions', width: 120, align: 'center',
@@ -197,8 +197,10 @@ const Categories = () => {
   ];
 
   return (
-    <>
-      <Title level={2} style={{ margin: 0, marginBottom: '24px' }}>Manage Categories & Attributes</Title>
+    <div style={{ padding: '24px' }}>
+      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: '48px' }}>
+        <TagsOutlined /> Manage Categories & Attributes
+      </Title>
       <Row gutter={[24, 24]}>
         <Col span={isMobile ? 24 : 10}>
           <Card>
@@ -269,7 +271,7 @@ const Categories = () => {
           <Form.Item name="is_required" label="Is this field required?" valuePropName="checked"><Switch /></Form.Item>
         </Form>
       </Modal>
-    </>
+    </div>
   );
 };
 

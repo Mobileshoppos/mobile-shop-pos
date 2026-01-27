@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input, Space, Popconfirm, Radio, Checkbox } from 'antd';
-import { ArrowLeftOutlined, DollarCircleOutlined, EditOutlined, RollbackOutlined, DeleteOutlined } from '@ant-design/icons';
+import { FileTextOutlined, ArrowLeftOutlined, DollarCircleOutlined, EditOutlined, RollbackOutlined, DeleteOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -197,12 +197,14 @@ const showEditModal = () => {
     if (!purchase) return <Alert message="Not Found" description="No purchase found with this ID." type="warning" showIcon />;
 
     return (
-        <div>
+        <div style={{ padding: '24px' }}>
             <Breadcrumb items={[ { title: <Link to="/purchases">Purchases</Link> }, { title: `Purchase #${id}` } ]} style={{ marginBottom: '16px' }}/>
             <Card>
                 <Row justify="space-between" align="middle" style={{ flexDirection: isMobile ? 'column' : 'row', textAlign: isMobile ? 'center' : 'left' }}>
     <Col style={{ marginBottom: isMobile ? '16px' : '0' }}>
-        <Title level={2} style={{ margin: 0 }}>Purchase #{purchase.id}</Title>
+        <Title level={2} style={{ margin: 0 }}>
+            <FileTextOutlined /> Purchase #{purchase.id}
+        </Title>
         <Text type="secondary">Date: {new Date(purchase.purchase_date).toLocaleString()}</Text>
     </Col>
     <Col>

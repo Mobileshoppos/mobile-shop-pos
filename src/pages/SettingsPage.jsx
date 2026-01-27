@@ -1,6 +1,7 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
 import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio, Switch, Input } from 'antd';
+import { ToolOutlined } from '@ant-design/icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -131,8 +132,10 @@ const SettingsPage = () => {
   const currentBgContainerColor = isDarkMode ? darkTheme.colorBgContainer : lightTheme.colorBgContainer;
 
   return (
-    <div>
-      <Title level={2}>App Settings</Title>
+    <div style={{ padding: '24px' }}>
+      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: '48px' }}>
+        <ToolOutlined /> App Settings
+      </Title>
       <Text type="secondary">Change the look and feel of your application here.</Text>
 
       <Card title="Theme Customization" style={{ marginTop: 24 }}>

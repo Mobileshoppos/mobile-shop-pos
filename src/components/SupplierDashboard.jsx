@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List, Dropdown } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, MoreOutlined, ReloadOutlined, InboxOutlined } from '@ant-design/icons';
+import { ShopOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, MoreOutlined, ReloadOutlined, InboxOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -445,9 +445,11 @@ const SupplierDashboard = () => {
     };
 
     return (
-        <Layout style={{ background: 'transparent' }}>
+        <Layout style={{ background: 'transparent', padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <Title level={2} style={{ margin: 0 }}>Suppliers Dashboard</Title>
+                <Title level={2} style={{ margin: 0, marginLeft: '48px' }}>
+                    <ShopOutlined /> Suppliers Dashboard
+                </Title>
                 <Button 
                     icon={showArchived ? <ReloadOutlined /> : <InboxOutlined />} 
                     onClick={() => setShowArchived(!showArchived)} 

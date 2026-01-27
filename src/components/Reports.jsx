@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
-import { QuestionCircleOutlined } from '@ant-design/icons';
+import { QuestionCircleOutlined, PieChartOutlined } from '@ant-design/icons';
 import { Line, Pie } from '@ant-design/charts';
 
 const { Title, Text } = Typography;
@@ -148,8 +148,10 @@ const Reports = () => {
   const totalStockValue = products.reduce((sum, product) => sum + ((product.quantity || 0) * (product.avg_purchase_price || 0)), 0);
 
   return (
-    <>
-      <Title level={2} style={{ marginBottom: '24px' }}>Reports</Title>
+    <div style={{ padding: '24px' }}>
+      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: '48px' }}>
+        <PieChartOutlined /> Reports
+      </Title>
       <Space style={{ marginBottom: '16px' }}>
           <DatePicker.RangePicker
             value={dateRange}
@@ -328,7 +330,7 @@ const Reports = () => {
           pagination={false}
         />
       </Card>
-    </>
+    </div>
   );
 };
 

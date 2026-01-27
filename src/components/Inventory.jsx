@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
-import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert } from 'antd';
-import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined } from '@ant-design/icons';
+import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete } from 'antd';
+import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -410,6 +410,9 @@ const Inventory = () => {
   const [productForm] = Form.useForm();
   
   const [editingProduct, setEditingProduct] = useState(null);
+  const [nameSuggestions, setNameSuggestions] = useState([]);
+
+  
 
   const [searchText, setSearchText] = useState('');
   const [filterCategory, setFilterCategory] = useState(null);
@@ -417,6 +420,30 @@ const Inventory = () => {
   const [sortBy, setSortBy] = useState('name_asc');
   
   const selectedCategoryId = Form.useWatch('category_id', productForm);
+  const selectedBrand = Form.useWatch('brand', productForm);
+
+  // Jab bhi products load hon ya filters badlein, suggestions tayyar karein
+  useEffect(() => {
+    // 1. Pehle saare products lein
+    let filtered = products;
+
+    // 2. Agar Category select hai, to sirf us category ke products dikhao
+    if (selectedCategoryId) {
+      filtered = filtered.filter(p => p.category_id === selectedCategoryId);
+    }
+
+    // 3. Agar Brand likha hai, to sirf us brand ke products dikhao
+    if (selectedBrand) {
+      filtered = filtered.filter(p => p.brand?.toLowerCase().includes(selectedBrand.toLowerCase()));
+    }
+
+    // 4. Unique naamo ki list banayein (khali naamo ko nikaal kar)
+    const uniqueNames = Array.from(new Set(filtered.map(p => p.name)))
+      .filter(name => name) // Sirf wo jin ka naam majood ho
+      .map(name => ({ value: name }));
+      
+    setNameSuggestions(uniqueNames);
+  }, [selectedCategoryId, selectedBrand, products]);
   // --- FOCUS LOGIC (Corrected Position) ---
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -633,6 +660,23 @@ const Inventory = () => {
 
   const handleProductOk = async (values) => {
     try {
+      // --- DUPLICATE CHECK LOGIC ---
+      const duplicateInfo = await DataService.checkDuplicateProduct(
+        values.name, 
+        values.brand, 
+        values.category_id, 
+        editingProduct?.id
+      );
+
+      if (duplicateInfo) {
+        if (duplicateInfo.isActive) {
+          message.error(`"${values.name}" already exists in your active inventory!`);
+        } else {
+          message.warning(`"${values.name}" is in your Archived list. Please restore it from there instead of creating a new one.`);
+        }
+        return; 
+      }
+      // -----------------------------
       const productData = {
         ...values,
         barcode: values.barcode || null,
@@ -811,9 +855,11 @@ const Inventory = () => {
   const isSmartPhoneCategorySelected = categories.find(c => c.id === selectedCategoryId)?.name === 'Smart Phones & Tablets';
 
   return (
-    <>
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '16px' }}>
-        <Title level={2} style={{ marginBottom: isMobile ? '16px' : '0', fontSize: '20px', marginLeft: '48px' }}>{showLowStockOnly ? 'Low Stock Products' : 'Product Inventory'}</Title>
+    <div style={{ padding: '24px' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '24px' }}>
+        <Title level={2} style={{ margin: 0, marginLeft: '48px' }}>
+          <DatabaseOutlined /> {showLowStockOnly ? 'Low Stock Products' : 'Product Inventory'}
+        </Title>
         <Button type="primary" size="Normal" onClick={() => setIsProductModalOpen(true)} style={{ width: isMobile ? '100%' : 'auto' }}>Add New Product Model</Button>
       </div>
 
@@ -962,7 +1008,10 @@ const Inventory = () => {
       >
         <Form form={productForm} layout="vertical" onFinish={handleProductOk} style={{marginTop: '24px'}}>
           <Form.Item name="name" label="Product Name" rules={[{ required: true }]}>
-            <Input ref={productNameInputRef} />
+            <Input 
+              ref={productNameInputRef} 
+              placeholder="e.g. Apple 17" 
+            />
           </Form.Item>
           <Form.Item name="category_id" label="Category" rules={[{ required: true }]}><Select placeholder="Select...">{categories.map(c => (<Option key={c.id} value={c.id}>{c.name}</Option>))}</Select></Form.Item>
           <Form.Item name="brand" label="Brand" rules={[{ required: true }]}><Input /></Form.Item>
@@ -1082,7 +1131,7 @@ const Inventory = () => {
          />
         </Form>
       </Modal>
-    </>
+    </div>
   );
 };
 

@@ -11,7 +11,7 @@ import {
   Popconfirm,
   Tooltip
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, FileProtectOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -141,13 +141,15 @@ const ExpenseCategories = () => {
   ];
 
   return (
-    <>
+    <div style={{ padding: '24px' }}>
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', gap: '16px' }}>
-  <Title level={2} style={{ margin: 0, width: '100%', textAlign: isMobile ? 'center' : 'left' }}>Manage Expense Categories</Title>
-  <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()} block={isMobile}>
-    Add New Category
-  </Button>
-</div>
+        <Title level={2} style={{ margin: 0, marginLeft: '48px' }}>
+          <FileProtectOutlined /> Manage Expense Categories
+        </Title>
+        <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()} block={isMobile}>
+          Add New Category
+        </Button>
+      </div>
       <Table columns={columns} dataSource={categories} loading={loading} rowKey="id" scroll={{ x: true }} />
       <Modal title={editingCategory ? 'Edit Category' : 'Add a New Category'} open={isModalOpen} onCancel={handleCancel} onOk={() => form.submit()} okText="Save">
         <Form form={form} layout="vertical" onFinish={handleOk}>
@@ -162,7 +164,7 @@ const ExpenseCategories = () => {
           </Form.Item>
         </Form>
       </Modal>
-    </>
+    </div>
   );
 };
 

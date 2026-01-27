@@ -245,6 +245,26 @@ const DataService = {
     return { productsData: formattedProducts, categoriesData: categories };
   },
 
+  async checkDuplicateProduct(name, brand, categoryId, excludeId = null) {
+    const allProducts = await db.products.toArray();
+    
+    // Duplicate dhoondein
+    const duplicate = allProducts.find(p => 
+      p.name?.toLowerCase().trim() === name?.toLowerCase().trim() &&
+      p.brand?.toLowerCase().trim() === brand?.toLowerCase().trim() &&
+      p.category_id === categoryId &&
+      p.id !== excludeId
+    );
+    
+    if (!duplicate) return null;
+    
+    // Batayein ke status kya hai
+    return {
+      exists: true,
+      isActive: duplicate.is_active !== false
+    };
+  },
+
   async addProduct(productData) {
   // 1. Agar ID nahi hai, to hum khud ek unique ID banayenge (UUID)
   if (!productData.id) {

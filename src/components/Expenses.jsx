@@ -15,7 +15,7 @@ import {
   Radio,
   Tag
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
@@ -152,9 +152,11 @@ const Expenses = () => {
   ];
 
   return (
-    <>
+    <div style={{ padding: '24px' }}>
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', gap: '16px' }}>
-  <Title level={2} style={{ margin: 0, width: '100%' }}>Manage Expenses</Title>
+        <Title level={2} style={{ margin: 0, marginLeft: '48px' }}>
+          <DollarCircleOutlined /> Manage Expenses
+        </Title>
   <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()} block={isMobile}>
     Add New Expense
   </Button>
@@ -187,7 +189,7 @@ const Expenses = () => {
           </Form.Item>
         </Form>
       </Modal>
-    </>
+    </div>
   );
 };
 

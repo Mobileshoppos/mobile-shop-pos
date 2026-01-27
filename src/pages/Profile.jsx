@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Form, Input, Button, Card, Typography, Spin, App as AntApp, Divider } from 'antd';
-import { SaveOutlined, LockOutlined } from '@ant-design/icons';
+import { SaveOutlined, LockOutlined, ProfileOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
@@ -92,9 +92,13 @@ const Profile = () => {
   };
 
   return (
-    <Card>
-      <Title level={3}>Profile and Shop Information</Title>
-      <p>Keep your shop and personal details up to date.</p>
+    <div style={{ padding: '24px' }}>
+      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: '48px' }}>
+        <ProfileOutlined /> Profile
+      </Title>
+      <Card>
+        <Title level={4} style={{ marginTop: 0 }}>Profile and Shop Information</Title>
+        <p>Keep your shop and personal details up to date.</p>
       
       {/* Agar profile abhi load nahi hua to Spin dikhayein */}
       {!profile ? (
@@ -111,6 +115,7 @@ const Profile = () => {
         </>
       )}
     </Card>
+    </div>
   );
 };
 

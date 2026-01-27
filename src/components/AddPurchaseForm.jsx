@@ -47,8 +47,8 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
           // NEW ITEM
           setIsBarcodeLocked(false);
           const commonValues = {
-            purchase_price: product.purchase_price || '', // default_ hata diya
-            sale_price: product.sale_price || '',         // default_ hata diya
+            purchase_price: product.purchase_price || '', 
+            sale_price: product.sale_price || '', 
             warranty_days: product.default_warranty_days || 0,
           };
           if (isImeiCategory) {

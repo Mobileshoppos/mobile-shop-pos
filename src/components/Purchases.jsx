@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Table, Tag, Typography, Button, App as AntApp, Flex, List, Card, Row, Col } from 'antd';
-import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { FileTextOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import DataService from '../DataService';
 import AddPurchaseForm from './AddPurchaseForm';
@@ -119,7 +119,7 @@ const Purchases = () => {
     ];
 
     return (
-        <> {/* <-- Yahan Fragment istemal kiya gaya */}
+        <div style={{ padding: '24px' }}>
             {/* --- NAYI TABDEELIYAN (Step 3) --- */}
             <Flex
     justify="space-between"
@@ -127,8 +127,8 @@ const Purchases = () => {
     style={{ marginBottom: '24px' }}
     vertical={isMobile} // Yeh 'flex-direction: column' set kar dega agar mobile hai
 >
-    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0' }}>
-        Purchase History
+    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0', marginLeft: '48px' }}>
+        <FileTextOutlined /> Purchase History
     </Title>
     <Button 
         type="primary" 
@@ -202,7 +202,7 @@ const Purchases = () => {
         isMobile={isMobile}
     />
 )}
-        </>
+        </div>
     );
 };
 
