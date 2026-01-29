@@ -73,6 +73,7 @@ const SalesHistory = () => {
 
             return {
                 sale_id: sale.id,
+                invoice_id: sale.invoice_id, 
                 created_at: sale.created_at || sale.sale_date,
                 customer_name: customer ? customer.name : 'Walk-in Customer',
                 total_items: totalItems,
@@ -202,12 +203,11 @@ const SalesHistory = () => {
   const columns = [
     {
       title: 'Inv: #',
-      dataIndex: 'sale_id',
-      key: 'sale_id',
-      width: 90,
+      dataIndex: 'invoice_id', // <--- Change: sale_id se invoice_id
+      key: 'invoice_id',
+      width: 110,
       align: 'center',
-      // Ab ID Number hai (e.g., 1732336800123), to hum slice nahi karenge
-      render: (text) => <Text code>{text}</Text>
+      render: (text, record) => <Text code strong>{text || record.sale_id.slice(0, 8)}</Text>
     },
     {
       title: 'Sync',

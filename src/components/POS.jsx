@@ -538,11 +538,14 @@ const POS = () => {
           }
           
           const saleId = crypto.randomUUID();
+          // Naya ID generate karein (e.g. A-1234)
+          const shortInvoiceId = await generateInvoiceId(); 
           const saleDate = new Date().toISOString();
 
           const saleRecord = { 
               id: saleId, 
-              local_id: saleId, 
+              local_id: saleId,
+              invoice_id: shortInvoiceId, 
               customer_id: finalCustomerId, 
               subtotal: subtotal, 
               discount: discountAmount, 

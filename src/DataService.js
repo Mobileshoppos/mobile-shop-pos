@@ -2019,7 +2019,14 @@ async addCustomer(customerData) {
 
   // 6. Invoice ID se warranty check karna (Bulk items ke liye)
   async lookupByInvoice(invoiceId) {
-    const sale = await db.sales.get(invoiceId);
+    // Pehle Short ID (A-1234) se dhoondein
+    let sale = await db.sales.where('invoice_id').equals(invoiceId).first();
+    
+    // Agar na mile, to UUID se dhoondein
+    if (!sale) {
+        sale = await db.sales.get(invoiceId);
+    }
+    
     if (!sale) return null;
 
     const customer = await db.customers.get(sale.customer_id);

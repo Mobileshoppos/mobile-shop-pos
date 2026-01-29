@@ -311,8 +311,13 @@ const Customers = () => {
           searchInput = searchInput.split(':')[1];
       }
 
-      // Seedha ID se dhoondein (UUID String)
-      const saleData = await db.sales.get(searchInput);
+      // Pehle 'invoice_id' (A-1234) se dhoondein
+      let saleData = await db.sales.where('invoice_id').equals(searchInput).first();
+      
+      // Agar nahi mila, to shayad user ne lamba UUID dala ho, us se check karein
+      if (!saleData) {
+          saleData = await db.sales.get(searchInput);
+      }
 
       if (!saleData) {
         message.error(`Invoice ID #${searchInput} not found locally.`);

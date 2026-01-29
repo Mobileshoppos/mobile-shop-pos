@@ -6,7 +6,7 @@ import dayjs from 'dayjs';
 // Note: Yeh function ab 'async' hai
 export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
     const {
-        shopName, shopAddress, shopPhone, saleId, saleDate, customerName,
+        shopName, shopAddress, shopPhone, saleId, invoice_id, saleDate, customerName,
         items, subtotal, discount, grandTotal, amountPaid, footerMessage, showQrCode
     } = saleDetails;
 
@@ -43,7 +43,7 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
             <div style="font-size: 11px; margin-bottom: 8px;">
                 <div style="display: flex; justify-content: space-between;">
                     <span>Receipt #:</span>
-                    <span>${saleId}</span>
+                    <span>${invoice_id || saleId}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between;">
                     <span>Date:</span>

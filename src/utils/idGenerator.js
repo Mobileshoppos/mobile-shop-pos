@@ -1,82 +1,72 @@
 import { supabase } from '../supabaseClient';
+import { db } from '../db';
 
-// Yeh function Device ID layega (Local ya Server se)
-export const getDeviceId = async () => {
-  // 1. Pehle Local Storage check karein (Offline support ke liye)
-  let deviceId = localStorage.getItem('pos_device_id');
-  
-  // Agar ID pehle se hai, to wohi wapis karein
-  if (deviceId) {
-    return parseInt(deviceId);
-  }
+// 1. Yeh function Server se Unique Device ID layega aur usay Letter (A-Z) mein badal dega
+const getDeviceLetter = async () => {
+  // A. Pehle Local Storage check karein (Agar pehle se assigned hai)
+  let letter = localStorage.getItem('pos_device_letter');
+  if (letter) return letter;
 
-  // 2. Agar ID nahi hai (New Device ya Cache Cleared), to Server se maangein
+  // B. Agar nahi hai, to Server (Supabase) se maangein
   try {
-    // Iske liye internet zaroori hai.
-    // Usually jab cache clear hota hai to banda logout hota hai, to login ke liye net chahiye hi hota hai.
+    // Hum wahi purana table 'device_registry' use kar rahe hain
     const { data, error } = await supabase
       .from('device_registry')
-      .insert([{ device_info: navigator.userAgent }]) // Browser ki info bhej dein
+      .insert([{ device_info: navigator.userAgent }]) 
       .select()
       .single();
 
     if (error) throw error;
 
-    // 3. Naya ID mil gaya (e.g., 5)
-    let newId = data.id;
+    // Server ne ID diya (e.g., 1, 2, 3...)
+    const serverId = data.id;
+
+    // C. Number ko Letter banayen (Algorithm)
+    // 1 -> A, 2 -> B, ... 26 -> Z, 27 -> A (Loop)
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     
-    // Agar ID 99 se bara ho jaye, to hum usay chota kar lenge (Loop)
-    // Taake hamare 6 digits ka formula kharab na ho
-    if (newId > 99) {
-        newId = newId % 100; // e.g. 105 ban jayega 05
-        if (newId === 0) newId = 1;
-    }
-    
-    // Local Storage mein save karein
-    localStorage.setItem('pos_device_id', newId);
-    return newId;
+    // (serverId - 1) is liye kiya taake ID 1 ka index 0 bane (yani 'A')
+    const letterIndex = (serverId - 1) % 26; 
+    letter = alphabet[letterIndex];
+
+    // D. Hamesha ke liye save kar lein
+    localStorage.setItem('pos_device_letter', letter);
+    return letter;
 
   } catch (err) {
-    console.error("Error getting Device ID:", err);
-    // Agar Internet nahi hai aur ID bhi nahi hai (Bohot rare case), 
-    // to majboori mein Random ID lein (10-99 range mein)
-    const tempId = Math.floor(Math.random() * 90) + 10;
-    return tempId;
+    console.error("Error getting Device ID from Server:", err);
+    
+    // E. FALLBACK (Sirf tab jab pehli baar install karte waqt Internet na ho)
+    // Majboori mein random uthana parega, lekin yeh bohot rare case hai.
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
+    return randomLetter;
   }
 };
 
-// Yeh function 6 digit ka unique ID banayega
-export const generateInvoiceId = async (db) => {
-  // Device ID hasil karein
-  const deviceId = await getDeviceId();
+// 2. Yeh function poora Invoice ID banayega (e.g., A-4921)
+export const generateInvoiceId = async () => {
+  // Ab yeh function async hai kyunke yeh server call kar sakta hai
+  const letter = await getDeviceLetter(); 
   
   let isUnique = false;
-  let newId;
+  let finalId = "";
 
-  // Loop chalayein jab tak unique ID na mil jaye
+  // Jab tak unique ID na mil jaye
   while (!isUnique) {
-    let randomPart;
+    // 4 digits ka random number (1000 se 9999 tak)
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
     
-    // Logic: Total 6 Digits maintain karne hain
-    if (deviceId < 10) {
-        // Device ID 1 digit (e.g., 5) -> Random 10000-99999
-        // Result: 512345
-        randomPart = Math.floor(10000 + Math.random() * 90000);
-    } else {
-        // Device ID 2 digits (e.g., 12) -> Random 1000-9999
-        // Result: 123456
-        randomPart = Math.floor(1000 + Math.random() * 9000);
-    }
-    
-    // Combine karein
-    newId = Number(`${deviceId}${randomPart}`);
+    // Format: "A-4521"
+    finalId = `${letter}-${randomNum}`;
 
-    // Local DB check (Double safety)
-    const existing = await db.sales.get(newId);
+    // Local DB mein check karein
+    const existing = await db.sales.where('invoice_id').equals(finalId).first();
+    
     if (!existing) {
       isUnique = true;
     }
   }
   
-  return newId;
+  return finalId;
 };

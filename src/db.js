@@ -7,7 +7,7 @@ export const db = new Dexie('MobileShopDB');
 // Note: Hum sirf wohi columns likhte hain jin se hamein search ya filter karna ho.
 // Baqi data khud ba khud save ho jata hai.
 
-db.version(26).stores({
+db.version(27).stores({
   // --- Business Data Tables (Jo Supabase se sync honge) ---
   
   // Products: ID, Category, Name aur Barcode se search karne ke liye
@@ -27,7 +27,7 @@ db.version(26).stores({
   purchase_items: 'id, purchase_id, product_id', // Purchase ke andar kya items thay
   
   // Sales (Farokht)
-  sales: 'id, local_id, customer_id, sale_date, user_id, payment_method, updated_at',
+  sales: 'id, local_id, invoice_id, customer_id, sale_date, user_id, payment_method, updated_at',
   sale_items: 'id, local_id, sale_id, product_id, product_name_snapshot',
   
   // Expenses (Akhrajat)

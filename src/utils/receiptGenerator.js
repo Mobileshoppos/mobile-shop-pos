@@ -19,7 +19,7 @@ export const generateSaleReceipt = async (saleDetails, currency = 'PKR') => {
   });
 
   const {
-    shopName, shopAddress, shopPhone, saleId, saleDate, customerName,
+    shopName, shopAddress, shopPhone, saleId, invoice_id, saleDate, customerName,
     items, subtotal, discount, grandTotal, amountPaid, paymentStatus,
     footerMessage, showQrCode
   } = saleDetails;
@@ -81,7 +81,9 @@ export const generateSaleReceipt = async (saleDetails, currency = 'PKR') => {
   
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  doc.text(`Invoice #: ${safeString(saleId)}`, textRightMargin, startY + 6, { align: 'right' });
+  // Agar invoice_id (A-1234) hai to wo dikhao, warna saleId (UUID)
+  const displayId = invoice_id || saleId;
+  doc.text(`Invoice #: ${safeString(displayId)}`, textRightMargin, startY + 6, { align: 'right' });
   doc.text(`Date: ${new Date(saleDate).toLocaleString()}`, textRightMargin, startY + 11, { align: 'right' });
 
   // --- 3. ITEMS TABLE ---
