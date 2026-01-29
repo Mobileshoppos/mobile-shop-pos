@@ -244,29 +244,14 @@ export const SyncProvider = ({ children }) => {
           try {
             let error = null;
 
-            // --- PRODUCTS (Already Fixed) ---
+            // --- Products Create Sync (UUID Simplified) ---
             if (item.table_name === 'products' && item.action === 'create') {
-               const { id: localProdId, quantity, min_sale_price, max_sale_price, category_name, variants, ...cleanProductData } = item.data;
-               
-               const { data: insertedProduct, error: supError } = await supabase
+                // Faltu UI columns nikaal dein jo database mein nahi hain
+                const { quantity, min_sale_price, max_sale_price, category_name, variants, avg_purchase_price, ...cleanData } = item.data;
+                const { error: supError } = await supabase
                     .from('products')
-                    .upsert([cleanProductData], { onConflict: 'local_id' })
-                    .select()
-                    .single();
-               
-               error = supError;
-
-               if (!error && insertedProduct) {
-                   const newServerId = insertedProduct.id;
-                   await updateMapping(localProdId, newServerId, 'products');
-
-                   await db.inventory.where('product_id').equals(localProdId).modify({ product_id: newServerId });
-                   if (db.sale_items) await db.sale_items.where('product_id').equals(localProdId).modify({ product_id: newServerId });
-
-                   const productToSave = { ...item.data, id: newServerId, ...insertedProduct };
-                   await db.products.put(productToSave);
-                   await db.products.where('id').equals(localProdId).delete();
-               }
+                    .upsert([cleanData], { onConflict: 'id' });
+                error = supError;
             }
 
             // --- PRODUCT DELETE (NAYA CODE) ---
@@ -298,83 +283,28 @@ export const SyncProvider = ({ children }) => {
                 error = supError;
             }
 
-            // Product Variants Update (Quick Edit Sync - With Mapping Safety)
+            // --- Product Variants Update (UUID Simplified) ---
             else if (item.table_name === 'product_variants' && item.action === 'update') {
                 const { id, ...updates } = item.data;
-                // Check karein ke agar ID local UUID hai to asli server ID istemal karein
-                const realId = idMap[id] || id; 
-                const { error: supError } = await supabase.from('product_variants').update(updates).eq('id', realId);
+                const { error: supError } = await supabase.from('product_variants').update(updates).eq('id', id);
                 error = supError;
             }
             
-            // Hum ne yahan wohi logic lagaya hai jo Products/Customers ke liye tha
+            // --- Suppliers Create Sync (UUID Simplified) ---
             else if (item.table_name === 'suppliers' && item.action === 'create') {
-                const { id: localId, balance_due, credit_balance, ...supplierData } = item.data;
-                
-                // A. Server par bhejein
-                const { data: insertedSupplier, error: supError } = await supabase
+                const { balance_due, total_purchases, total_payments, ...cleanData } = item.data;
+                const { error: supError } = await supabase
                     .from('suppliers')
-                    .upsert([supplierData], { onConflict: 'local_id' })
-                    .select()
-                    .single();
-                
+                    .upsert([cleanData], { onConflict: 'id' });
                 error = supError;
-
-                // B. Agar upload kamyab ho
-                if (!error && insertedSupplier) {
-                    const newServerId = insertedSupplier.id;
-                    await updateMapping(localId, newServerId, 'suppliers');
-
-                    // 1. References Update Karein (Purchases & Payments)
-                    // Taake agar is supplier ki koi purchase offline hui thi to wo link ho jaye
-                    await db.purchases.where('supplier_id').equals(localId).modify({ supplier_id: newServerId });
-                    if (db.supplier_payments) {
-                        await db.supplier_payments.where('supplier_id').equals(localId).modify({ supplier_id: newServerId });
-                    }
-
-                    // 2. Local Record Swap Karein (Naya save, Purana delete)
-                    const supplierToSave = { ...item.data, id: newServerId, ...insertedSupplier };
-                    await db.suppliers.put(supplierToSave);
-                    await db.suppliers.delete(localId);
-                }
             }
 
-            // 4. Customers Create (FIXED: Swap Logic Added)
+            // --- Customers Create Sync (UUID Simplified) ---
             else if (item.table_name === 'customers' && item.action === 'create') {
-                const { id: localId, ...customerData } = item.data;
-                
-                // A. Server par upload karein
-                const { data: insertedCustomer, error: supError } = await supabase
+                const { error: supError } = await supabase
                     .from('customers')
-                    .upsert([customerData], { onConflict: 'local_id' })
-                    .select()
-                    .single();
-                
+                    .upsert([item.data], { onConflict: 'id' });
                 error = supError;
-
-                // B. Agar upload kamyab ho jaye
-                if (!error && insertedCustomer) {
-                    const newServerId = insertedCustomer.id;
-                    await updateMapping(localId, newServerId, 'customers'); 
-
-                    // 1. References Update Karein (Jahan jahan yeh customer use hua hai)
-                    await db.sales.where('customer_id').equals(localId).modify({ customer_id: newServerId });
-                    await db.customer_payments.where('customer_id').equals(localId).modify({ customer_id: newServerId });
-                    await db.sale_returns.where('customer_id').equals(localId).modify({ customer_id: newServerId });
-                    if (db.credit_payouts) await db.credit_payouts.where('customer_id').equals(localId).modify({ customer_id: newServerId });
-                    
-                    // 2. SWAP LOGIC (Yahan tabdeeli ki hai)
-                    // Naya Customer (Server ID ke sath) Local DB mein save karein
-                    const customerToSave = { 
-                        ...item.data,       // Purana data (balance waghera)
-                        id: newServerId,    // Nayi ID
-                        ...insertedCustomer // Server ka data
-                    };
-                    await db.customers.put(customerToSave);
-                    
-                    // 3. Purana Customer (Local ID wala) delete karein
-                    await db.customers.delete(localId);
-                }
             }
 
             // Customer Update Sync
@@ -392,156 +322,62 @@ export const SyncProvider = ({ children }) => {
                 error = supError;
             }
 
-            // --- PURCHASES (Already Fixed) ---
+            // --- Purchases Create Sync (UUID Simplified) ---
             else if (item.table_name === 'purchases' && item.action === 'create_full_purchase') {
                 const { purchase, items } = item.data;
-                // Supplier ID check karein (Agar abhi change hui hai)
-                const realSupplierId = idMap[purchase.supplier_id] || purchase.supplier_id;
-                if (typeof realSupplierId === 'string') {
-                  console.log("Waiting for Supplier ID mapping..."); continue;
-                }
-                
-                const updatedItems = items.map(i => ({
-                    ...i,
-                    product_id: idMap[i.product_id] || i.product_id
-                }));
                 const { error: supError } = await supabase.rpc('create_new_purchase', {
-                    p_local_id: item.data.p_local_id,
-                    p_supplier_id: realSupplierId, 
+                    p_local_id: purchase.id,
+                    p_supplier_id: purchase.supplier_id, 
                     p_notes: purchase.notes,
-                    p_inventory_items: updatedItems
+                    p_inventory_items: items
                 });
                 error = supError;
             }
 
-            // --- NAYA CODE: Purchase Edit Sync ---
+            // --- Purchase Edit Sync (UUID Simplified) ---
             else if (item.action === 'update_full_purchase') {
                 const { id, supplier_id, notes, amount_paid, items } = item.data;
-
-                // 1. IDs ko Map karein (Agar pehle sync ho chuki hain to Asli Server ID use karein)
-                const realPurchaseId = idMap[id] || id;
-                const realSupplierId = idMap[supplier_id] || supplier_id;
-
-                // 2. Items ko saaf karein (UUIDs hatayein)
-                const cleanItems = items.map(i => {
-                    // Agar ID number nahi hai (yani UUID hai), to null bhejein
-                    // Taake server samjhe yeh naya item hai
-                    let serverItemId = i.id;
-                    if (serverItemId && isNaN(serverItemId)) {
-                        serverItemId = null;
-                    }
-
-                    return {
-                        ...i,
-                        id: serverItemId, // Ab yeh ya to Number hoga ya Null
-                        product_id: idMap[i.product_id] || i.product_id
-                    };
-                });
-
-                // 3. Server RPC call karein
+                
                 const { error: supError } = await supabase.rpc('update_purchase_inventory', {
-                    p_purchase_id: realPurchaseId,
-                    p_supplier_id: realSupplierId,
+                    p_purchase_id: id,
+                    p_supplier_id: supplier_id,
                     p_notes: notes,
                     p_amount_paid: amount_paid,
-                    p_items: cleanItems,
+                    p_items: items,
                     p_local_id: item.data.p_local_id
                 });
-
                 error = supError;
             }
 
             // 3. Sales Create (FINAL FIX: Custom Invoice ID + Auto Item IDs)
-            // 3. Sales Create (FIXED: Atomic RPC with Error Logging)
+            // --- Sales Create Sync (UUID Simplified) ---
             else if (item.table_name === 'sales' && item.action === 'create_full_sale') {
                 const { sale, items, inventory_ids } = item.data;
                 
-                const saleData = { ...sale }; 
-                if (idMap[saleData.customer_id]) {
-                    saleData.customer_id = idMap[saleData.customer_id];
-                }
-
-                if (typeof saleData.customer_id === 'string' && saleData.customer_id !== '1') {
-    // Check karein ke kya yeh customer queue mein stuck to nahi?
-    const isParentStuck = allQueueItems.find(q => 
-        (q.data?.id === saleData.customer_id || q.data?.local_id === saleData.customer_id) && 
-        (q.retry_count || 0) >= 3
-    );
-
-    if (isParentStuck) {
-    error = { message: "Waiting for Stuck Customer to sync first" };
-    // Yeh line Sale ko agay janay se rok degi (Server par janay se pehle)
-    await db.sync_queue.update(item.id, { status: 'error', last_error: error.message });
-    continue; 
-} else {
-    console.log("Waiting for Customer ID mapping..."); 
-    continue; 
-}
-}
-
-                const mappedItems = items.map(i => {
-                    const { id, sale_id, ...itemData } = i;
-                    return { 
-                        ...itemData,
-                        product_id: idMap[itemData.product_id] || itemData.product_id,
-                        inventory_id: idMap[itemData.inventory_id] || itemData.inventory_id
-                    };
-                });
-
-                const mappedInventoryUpdates = inventory_ids.map(inv => ({
-                    id: idMap[inv.id] || inv.id,
-                    qtySold: inv.qtySold
-                }));
-
                 const { error: rpcError } = await supabase.rpc('process_sale_atomic', {
-                    p_sale_record: saleData,
-                    p_sale_items: mappedItems,
-                    p_inventory_updates: mappedInventoryUpdates
+                    p_sale_record: sale,
+                    p_sale_items: items,
+                    p_inventory_updates: inventory_ids
                 });
-
-                if (rpcError) {
-                    // --- YEH LINE ERROR DIKHAYEGI ---
-                    console.error("❌ ATOMIC SYNC ERROR:", rpcError.message);
-                    error = rpcError; 
-                } else {
-                    console.log("✅ Sale Synced Successfully!");
-                }
+                error = rpcError;
             }
             
             // --- OTHER TABLES (Standard Logic) ---
             
-            // Customer Payments (Fixed: Waiting for Customer)
+            // --- Customer Payments Sync (UUID Simplified) ---
             else if (item.table_name === 'customer_payments' && item.action === 'create') {
-                const { id: localId, ...paymentData } = item.data;
-                
-                // Check karein ke asli Customer ID mil gayi?
-                if (idMap[paymentData.customer_id]) paymentData.customer_id = idMap[paymentData.customer_id];
-                
-                if (typeof paymentData.customer_id === 'string') {
-                    console.log("Waiting for Customer ID mapping...");
-                    continue; 
-                }
-
-                const { error: supError } = await supabase.from('customer_payments').upsert([paymentData], { onConflict: 'local_id' });
+                const { error: supError } = await supabase
+                    .from('customer_payments')
+                    .upsert([item.data], { onConflict: 'id' });
                 error = supError;
-                if (!error) await db.customer_payments.delete(localId);
             }
 
-            // Credit Payouts (Fixed: Waiting for Customer)
+            // --- Credit Payouts Sync (UUID Simplified) ---
             else if (item.table_name === 'credit_payouts' && item.action === 'create') {
-                const { id: localId, ...payoutData } = item.data;
-                
-                // Check karein ke asli Customer ID mil gayi?
-                if (idMap[payoutData.customer_id]) payoutData.customer_id = idMap[payoutData.customer_id];
-
-                if (typeof payoutData.customer_id === 'string') {
-                    console.log("Waiting for Customer ID mapping...");
-                    continue; 
-                }
-
-                const { error: supError } = await supabase.from('credit_payouts').upsert([payoutData], { onConflict: 'local_id' });
+                const { error: supError } = await supabase
+                    .from('credit_payouts')
+                    .upsert([item.data], { onConflict: 'id' });
                 error = supError;
-                if (!error) await db.credit_payouts.delete(localId);
             }
 
             // Suppliers Update (Safety Filter Added)
@@ -567,19 +403,17 @@ export const SyncProvider = ({ children }) => {
                 }
             }
 
-            // Supplier Bulk Payment
+            // --- Supplier Bulk Payment Sync (UUID Simplified) ---
             else if (item.action === 'create_bulk_payment') {
-                const realSupplierId = idMap[item.data.supplier_id] || item.data.supplier_id;
                 const { error: supError } = await supabase.rpc('record_bulk_supplier_payment', {
-                    p_local_id: item.data.local_id,
-                    p_supplier_id: realSupplierId,
+                    p_local_id: item.data.id, // Ab 'id' hi local_id hai
+                    p_supplier_id: item.data.supplier_id,
                     p_amount: item.data.amount,
                     p_payment_method: item.data.payment_method,
                     p_payment_date: item.data.payment_date,
                     p_notes: item.data.notes
                 });
                 error = supError;
-                if (!error && item.data.id) await db.supplier_payments.delete(item.data.id);
             }
 
             // --- Edit Supplier Payment Sync (UPDATED) ---
@@ -614,24 +448,24 @@ export const SyncProvider = ({ children }) => {
                 }
             }
 
-            // Supplier Refund Sync
+            // --- Supplier Refund Sync (UUID Simplified) ---
             else if (item.action === 'create_refund') {
                 const { error: supError } = await supabase.rpc('record_supplier_refund', {
+                    p_local_id: item.data.id,
                     p_supplier_id: item.data.supplier_id,
                     p_amount: item.data.amount,
                     p_refund_date: item.data.refund_date,
-                    p_method: item.data.refund_method,
+                    p_method: item.data.payment_method || item.data.refund_method,
                     p_notes: item.data.notes
                 });
                 error = supError;
             }
             
-            // Purchase Payment
+            // --- Purchase Payment Sync (UUID Simplified) ---
             else if (item.action === 'create_purchase_payment') {
-                const realSupplierId = idMap[item.data.supplier_id] || item.data.supplier_id;
                 const { error: supError } = await supabase.rpc('record_purchase_payment', {
-                    p_local_id: item.data.local_id,
-                    p_supplier_id: realSupplierId,
+                    p_local_id: item.data.local_id || item.data.id, // Dono check karein
+                    p_supplier_id: item.data.supplier_id,
                     p_purchase_id: item.data.purchase_id,
                     p_amount: item.data.amount,
                     p_payment_method: item.data.payment_method,
@@ -651,24 +485,12 @@ export const SyncProvider = ({ children }) => {
                 error = supError;
             }
 
-            // --- NAYA CODE: Return Sync (Bulk Quantity Support) ---
+            // --- Purchase Return Sync (UUID Simplified) ---
             else if (item.action === 'process_purchase_return') {
-                
                 const { p_purchase_id, p_return_items, p_return_date, p_notes } = item.data;
-
-                // 1. Asli Purchase ID dhoondein
-                const realPurchaseId = idMap[p_purchase_id] || p_purchase_id;
-                
-                // 2. Har item ki inventory_id ko map karein (agar wo local UUID thi)
-                const mappedReturnItems = p_return_items.map(retItem => ({
-                    ...retItem,
-                    inventory_id: idMap[retItem.inventory_id] || retItem.inventory_id
-                }));
-
-                // 3. Server RPC Call (Naye Parameters ke sath)
                 const { error: supError } = await supabase.rpc('process_purchase_return', {
-                    p_purchase_id: realPurchaseId,
-                    p_return_items: mappedReturnItems,
+                    p_purchase_id: p_purchase_id,
+                    p_return_items: p_return_items,
                     p_return_date: p_return_date,
                     p_notes: p_notes
                 });
@@ -676,43 +498,28 @@ export const SyncProvider = ({ children }) => {
             }
             
 
-            // --- CASH ADJUSTMENTS SYNC ---
+            // --- Cash Adjustments Sync (UUID Simplified) ---
             else if (item.table_name === 'cash_adjustments' && item.action === 'create') {
-                const { id, ...adjustmentData } = item.data;
-                const { error: supError } = await supabase.from('cash_adjustments').upsert([adjustmentData], { onConflict: 'local_id' });
+                const { error: supError } = await supabase
+                    .from('cash_adjustments')
+                    .upsert([item.data], { onConflict: 'id' });
                 error = supError;
-                if (!error) await db.cash_adjustments.delete(id);
             }
 
+            // --- Daily Closings Sync (UUID Simplified) ---
             else if (item.table_name === 'daily_closings' && item.action === 'create') {
-                const { id, ...closingData } = item.data;
-                const { error: supError } = await supabase.from('daily_closings').upsert([closingData], { onConflict: 'local_id' });
+                const { error: supError } = await supabase
+                    .from('daily_closings')
+                    .upsert([item.data], { onConflict: 'id' });
                 error = supError;
-                if (!error) await db.daily_closings.delete(id);
             }
 
+            // --- Expense Categories Create Sync (UUID Simplified) ---
             else if (item.table_name === 'expense_categories' && item.action === 'create') {
-                const { id: localId, ...catData } = item.data;
-                const { data: insertedCat, error: supError } = await supabase
+                const { error: supError } = await supabase
                     .from('expense_categories')
-                    .upsert([catData], { onConflict: 'local_id' })
-                    .select()
-                    .single();
-                
+                    .upsert([item.data], { onConflict: 'id' });
                 error = supError;
-
-                if (!error && insertedCat) {
-                    const newServerId = insertedCat.id;
-                    // 1. Nayi ID ko mapping mein save karein
-                    await updateMapping(localId, newServerId, 'expense_categories');
-                    // 2. Tamam local expenses mein purani ID ko nayi ID se badal dein
-                    await db.expenses.where('category_id').equals(localId).modify({ category_id: newServerId });
-
-                    // 3. Local record ko server ID ke sath swap karein
-                    const catToSave = { ...item.data, id: newServerId, ...insertedCat };
-                    await db.expense_categories.put(catToSave);
-                    await db.expense_categories.delete(localId);
-                }
             }
             else if (item.table_name === 'expense_categories' && item.action === 'update') {
                 const { id, name } = item.data;
@@ -721,41 +528,20 @@ export const SyncProvider = ({ children }) => {
                     error = supError;
                 }
             }
+            // --- Expense Categories Delete Sync (UUID Fix) ---
             else if (item.table_name === 'expense_categories' && item.action === 'delete') {
-                if (!isNaN(item.data.id)) {
-                    const { error: supError } = await supabase.from('expense_categories').delete().eq('id', item.data.id);
-                    error = supError;
-                }
-            }
-            else if (item.table_name === 'expenses' && item.action === 'create') {
-                const expenseData = { ...item.data };
-                const { id: localId } = expenseData;
-                delete expenseData.id;
-
-                // 1. Check karein ke kya iski category ki asli ID mil gayi hai?
-                if (idMap[expenseData.category_id]) {
-                    expenseData.category_id = idMap[expenseData.category_id];
-                }
-
-                // 2. Agar abhi bhi UUID hai, to check karein ke kahin Category stuck to nahi?
-                if (typeof expenseData.category_id === 'string') {
-                    const isParentStuck = allQueueItems.find(q => 
-                        (q.data?.id === expenseData.category_id || q.data?.local_id === expenseData.category_id) && 
-                        (q.retry_count || 0) >= 3
-                    );
-
-                    if (isParentStuck) {
-                        await db.sync_queue.update(item.id, { status: 'error', last_error: "Waiting for Stuck Expense Category to sync first" });
-                        continue; 
-                    } else {
-                        console.log("Waiting for Expense Category ID mapping...");
-                        continue; 
-                    }
-                }
-
-                const { error: supError } = await supabase.from('expenses').upsert([expenseData], { onConflict: 'local_id' });
+                const { error: supError } = await supabase
+                    .from('expense_categories')
+                    .delete()
+                    .eq('id', item.data.id);
                 error = supError;
-                if (!error) await db.expenses.delete(localId);
+            }
+            // --- Expenses Create Sync (UUID Simplified) ---
+            else if (item.table_name === 'expenses' && item.action === 'create') {
+                const { error: supError } = await supabase
+                    .from('expenses')
+                    .upsert([item.data], { onConflict: 'id' });
+                error = supError;
             }
             else if (item.table_name === 'expenses' && item.action === 'update') {
                 const { id, ...updates } = item.data;
@@ -764,33 +550,21 @@ export const SyncProvider = ({ children }) => {
                     error = supError;
                 }
             }
+            // --- Expenses Delete Sync (UUID Fix) ---
             else if (item.table_name === 'expenses' && item.action === 'delete') {
-                if (!isNaN(item.data.id)) {
-                    const { error: supError } = await supabase.from('expenses').delete().eq('id', item.data.id);
-                    error = supError;
-                }
+                const { error: supError } = await supabase
+                    .from('expenses')
+                    .delete()
+                    .eq('id', item.data.id);
+                error = supError;
             }
 
-            // --- FIX: Categories Create Logic Updated ---
+            // --- Categories Create Sync (UUID Simplified) ---
             else if (item.table_name === 'categories' && item.action === 'create') {
-                const { id: localId, ...catData } = item.data;
-                
-                // 1. Insert karein aur Naya Data wapis mangwayein (.select().single())
-                const { data: insertedCat, error: supError } = await supabase
+                const { error: supError } = await supabase
                     .from('categories')
-                    .insert([catData])
-                    .select()
-                    .single();
-                
+                    .upsert([item.data], { onConflict: 'id' });
                 error = supError;
-
-                if (!error && insertedCat) {
-                    await updateMapping(localId, insertedCat.id, 'categories');
-                    
-                    // Professional Swap: Pehle asli record save karein, phir purana delete karein
-                    await db.categories.put(insertedCat);
-                    await db.categories.delete(localId);
-                }
             }
             
             else if (item.table_name === 'categories' && item.action === 'update') {
@@ -800,34 +574,21 @@ export const SyncProvider = ({ children }) => {
                     error = supError;
                 }
             }
+            // --- Categories Delete Sync (UUID Fix) ---
             else if (item.table_name === 'categories' && item.action === 'delete') {
-                 if (!isNaN(item.data.id)) {
-                    const { error: supError } = await supabase.from('categories').delete().eq('id', item.data.id);
-                    error = supError;
-                 }
+                const { error: supError } = await supabase
+                    .from('categories')
+                    .delete()
+                    .eq('id', item.data.id);
+                error = supError;
             }
             
+            // --- Category Attributes Create Sync (UUID Simplified) ---
             else if (item.table_name === 'category_attributes' && item.action === 'create') {
-                const { id: localId, ...attrData } = item.data;
-                
-                if (idMap[attrData.category_id]) {
-                    attrData.category_id = idMap[attrData.category_id];
-                }
-
-                // Server par insert karein aur naya data (asli ID ke sath) wapis mangwayein
-                const { data: insertedAttr, error: supError } = await supabase
+                const { error: supError } = await supabase
                     .from('category_attributes')
-                    .insert([attrData])
-                    .select()
-                    .single();
-                
+                    .upsert([item.data], { onConflict: 'id' });
                 error = supError;
-                
-                if (!error && insertedAttr) {
-                    // Professional Swap: Purana temporary record delete karein aur server wala asli record save karein
-                    await db.category_attributes.delete(localId);
-                    await db.category_attributes.put(insertedAttr);
-                }
             }
 
             else if (item.table_name === 'category_attributes' && item.action === 'update') {
@@ -837,96 +598,70 @@ export const SyncProvider = ({ children }) => {
                     error = supError;
                 }
             }
+            // --- Category Attributes Delete Sync (UUID Fix) ---
             else if (item.table_name === 'category_attributes' && item.action === 'delete') {
-                 if (!isNaN(item.data.id)) {
-                    const { error: supError } = await supabase.from('category_attributes').delete().eq('id', item.data.id);
-                    error = supError;
-                 }
-            }
-
-            // Sale Returns (Fixed: Waiting for Sale Logic)
-            else if (item.table_name === 'sale_returns' && item.action === 'create_full_return') {
-                const { return_record, items, payment_record, inventory_ids } = item.data;
-                const { id: localReturnId, ...returnData } = return_record;
-
-                // 1. Check karein ke kya iski Sale sync ho chuki hai?
-                const realSaleId = idMap[returnData.sale_id] || returnData.sale_id;
-                if (typeof realSaleId === 'string') {
-                    // Agar Sale abhi tak UUID hai, to intezar karein
-                    console.log("Waiting for Sale ID mapping...");
-                    continue; 
-                }
-                returnData.sale_id = realSaleId; // Asli ID set karein
-
-                // 2. Customer ID map karein
-                if (idMap[returnData.customer_id]) returnData.customer_id = idMap[returnData.customer_id];
-                
-                const { data: insertedReturn, error: retError } = await supabase
-                    .from('sale_returns')
-                    .upsert([returnData], { onConflict: 'local_id' })
-                    .select()
-                    .single();
-                if (retError) throw retError;
-
-                const itemsWithRealId = items.map(i => {
-                    const { id, return_id, ...itemData } = i;
-                    const realProductId = idMap[itemData.product_id] || itemData.product_id;
-                    return { ...itemData, product_id: realProductId, return_id: insertedReturn.id };
-                });
-                const { error: itemsError } = await supabase.from('sale_return_items').insert(itemsWithRealId);
-                if (itemsError) throw itemsError;
-
-                const { id: localPayId, ...payData } = payment_record;
-                if (idMap[payData.customer_id]) payData.customer_id = idMap[payData.customer_id];
-                const { error: payError } = await supabase.from('customer_payments').insert([payData]);
-                if (payError) throw payError;
-
-                // Server Inventory Update for Returns (Bulk Logic)
-                for (const retItem of items) {
-                  const { data: currentInv } = await supabase
-                    .from('inventory')
-                    .select('available_qty, sold_qty, imei')
-                    .eq('id', retItem.inventory_id)
-                    .single();
-                  
-                  if (currentInv) {
-                    const qtyToReturn = retItem.quantity || 1;
-                    if (currentInv.imei) {
-                      await supabase.from('inventory').update({ status: 'Available', available_qty: 1, sold_qty: 0 }).eq('id', retItem.inventory_id);
-                    } else {
-                      await supabase.from('inventory').update({ 
-                        available_qty: (currentInv.available_qty || 0) + qtyToReturn, 
-                        sold_qty: Math.max(0, (currentInv.sold_qty || 0) - qtyToReturn),
-                        status: 'Available'
-                      }).eq('id', retItem.inventory_id);
-                    }
-                  }
-                }
-
-                await db.sale_returns.delete(localReturnId);
-                await db.sale_return_items.where('return_id').equals(localReturnId).delete();
-                await db.customer_payments.delete(localPayId);
-            }
-
-            // --- Warranty Claims Sync ---
-            else if (item.table_name === 'warranty_claims' && (item.action === 'create' || item.action === 'update')) {
-                const { id, ...claimData } = item.data;
-                const { data: insertedClaim, error: supError } = await supabase
-                    .from('warranty_claims')
-                    .upsert([claimData], { onConflict: 'local_id' })
-                    .select()
-                    .single();
-                
+                const { error: supError } = await supabase
+                    .from('category_attributes')
+                    .delete()
+                    .eq('id', item.data.id);
                 error = supError;
+            }
+
+            // --- Sale Returns Sync (UUID Simplified & Inventory Fix) ---
+            else if (item.table_name === 'sale_returns' && item.action === 'create_full_return') {
+                const { return_record, items, payment_record } = item.data;
                 
-                if (!error && insertedClaim) {
-                    // 1. Asli server data (numeric ID ke saath) save karein
-                    await db.warranty_claims.put(insertedClaim);
-                    // 2. Agar purani ID (UUID) server ID se mukhtalif hai, to purana record mita dein
-                    if (id !== insertedClaim.id) {
-                        await db.warranty_claims.delete(id);
+                // 1. Save Return Record
+                const { error: retError } = await supabase.from('sale_returns').upsert([return_record], { onConflict: 'id' });
+                
+                if (retError) { 
+                    error = retError; 
+                } else {
+                    // 2. Save Return Items
+                    await supabase.from('sale_return_items').upsert(items, { onConflict: 'id' });
+                    // 3. Save Payment (Credit)
+                    await supabase.from('customer_payments').upsert([payment_record], { onConflict: 'id' });
+
+                    // 4. SERVER INVENTORY UPDATE (YEH HAI ASAL FIX JO MISSING THA)
+                    for (const retItem of items) {
+                        // Server se current status check karein
+                        const { data: invItem } = await supabase
+                            .from('inventory')
+                            .select('id, imei, sold_qty, available_qty')
+                            .eq('id', retItem.inventory_id)
+                            .single();
+
+                        if (invItem) {
+                            if (invItem.imei) {
+                                // IMEI Item: Wapis Available karein
+                                await supabase.from('inventory')
+                                    .update({ status: 'Available', available_qty: 1, sold_qty: 0 })
+                                    .eq('id', retItem.inventory_id);
+                            } else {
+                                // Bulk Item: Quantity wapis jama karein
+                                const qtyToReturn = retItem.quantity || 1;
+                                const newAvail = (invItem.available_qty || 0) + qtyToReturn;
+                                const newSold = Math.max(0, (invItem.sold_qty || 0) - qtyToReturn);
+                                
+                                await supabase.from('inventory')
+                                    .update({ 
+                                        available_qty: newAvail,
+                                        sold_qty: newSold,
+                                        status: 'Available' 
+                                    })
+                                    .eq('id', retItem.inventory_id);
+                            }
+                        }
                     }
                 }
+            }
+
+            // --- Warranty Claims Sync (UUID Simplified) ---
+            else if (item.table_name === 'warranty_claims' && (item.action === 'create' || item.action === 'update')) {
+                const { error: supError } = await supabase
+                    .from('warranty_claims')
+                    .upsert([item.data], { onConflict: 'id' });
+                error = supError;
             }
 
             // --- Warranty Claims Delete Sync ---

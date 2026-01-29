@@ -103,8 +103,7 @@ const DataService = {
 
         const categoryId = crypto.randomUUID();
         const categoryData = {
-          id: categoryId,
-          local_id: categoryId,
+          id: categoryId, // Asli UUID ID
           name: catTemplate.name,
           is_imei_based: catTemplate.is_imei_based,
           user_id: userId,
@@ -137,7 +136,6 @@ const DataService = {
         const expCatId = crypto.randomUUID();
         const expCatData = {
           id: expCatId,
-          local_id: expCatId,
           name: expCat.name,
           user_id: userId,
           updated_at: new Date().toISOString()
@@ -266,24 +264,20 @@ const DataService = {
   },
 
   async addProduct(productData) {
-  // 1. Agar ID nahi hai, to hum khud ek unique ID banayenge (UUID)
-  if (!productData.id) {
-    productData.id = crypto.randomUUID();
-    productData.local_id = productData.id;
-  }
+    if (!productData.id) productData.id = crypto.randomUUID();
 
-  // 2. Local DB mein save karein (hum 'put' use karenge jo zyada mehfooz hai)
-  await db.products.put(productData);
-  
-  // 3. Sync Queue mein daalein taake internet aane par upload ho sake
-  await db.sync_queue.add({
-    table_name: 'products',
-    action: 'create',
-    data: productData
-  });
+    // Local DB mein save karein
+    await db.products.put(productData);
+    
+    // Sync Queue mein daalein
+    await db.sync_queue.add({
+      table_name: 'products',
+      action: 'create',
+      data: productData
+    });
 
-  return true;
-},
+    return true;
+  },
 
  // Product Model Update
   async updateProduct(id, updates) {
@@ -445,9 +439,9 @@ const DataService = {
   },
 
   async addSupplier(supplierData) {
-    const newSupplier = { ...supplierData, id: crypto.randomUUID(), local_id: crypto.randomUUID(), balance_due: 0, credit_balance: 0 };
+    const newSupplier = { ...supplierData, id: crypto.randomUUID(), balance_due: 0, credit_balance: 0 };
     
-    await db.suppliers.add(newSupplier);
+    await db.suppliers.put(newSupplier);
     
     await db.sync_queue.add({
         table_name: 'suppliers',
@@ -514,12 +508,8 @@ const DataService = {
   },
 
   async getSupplierLedgerDetails(supplierId) {
-    let supplier = null;
-    if (!isNaN(supplierId)) {
-        supplier = await db.suppliers.get(parseInt(supplierId));
-    } else {
-        supplier = await db.suppliers.get(supplierId);
-    }
+    // Ab IDs hamesha String/UUID hain, is liye parseInt ki zaroorat nahi
+    const supplier = await db.suppliers.get(supplierId);
 
     // Data layein
     const purchases = await db.purchases.where('supplier_id').equals(supplierId).toArray();
@@ -579,37 +569,15 @@ const DataService = {
   },
   
   async getPurchaseDetails(purchaseId) {
-    // 1. Purchase dhoondein
-    let purchase = null;
-    if (!isNaN(purchaseId)) {
-        purchase = await db.purchases.get(parseInt(purchaseId));
-    } else {
-        purchase = await db.purchases.get(purchaseId);
-    }
-
+    // 1. Purchase dhoondein (Seedha ID se)
+    const purchase = await db.purchases.get(purchaseId);
     if (!purchase) throw new Error("Purchase not found locally");
 
     // 2. Supplier dhoondein
     const supplier = await db.suppliers.get(purchase.supplier_id);
     
     // 3. Items dhoondein
-    let itemsData = await db.inventory.where('purchase_id').equals(purchase.id).toArray();
-
-    // Check karein: Kya Server se Asli Items (Number IDs) aa chuke hain?
-    const hasServerItems = itemsData.some(item => !isNaN(item.id));
-    
-    if (hasServerItems) {
-        // Agar Asli Items majood hain, to Local UUIDs (Text IDs) ko filter kar dein
-        const realItems = itemsData.filter(item => !isNaN(item.id));
-        
-        // Jo Faltu Local Items (UUIDs) hain, unhein Database se bhi delete kar dein taake kachra saaf ho jaye
-        const garbageIds = itemsData.filter(item => isNaN(item.id)).map(i => i.id);
-        if (garbageIds.length > 0) {
-            db.inventory.bulkDelete(garbageIds); 
-        }
-        
-        itemsData = realItems;
-    }
+    const itemsData = await db.inventory.where('purchase_id').equals(purchase.id).toArray();
 
     // 4. Product Names jorein
     const formattedItems = await Promise.all(itemsData.map(async (item) => {
@@ -618,7 +586,6 @@ const DataService = {
             ...item,
             product_name: product ? product.name : 'Unknown Product',
             product_brand: product ? product.brand : '',
-            // Edit/Return forms ke liye zaroori fields
             purchase_price: item.purchase_price,
             sale_price: item.sale_price,
             imei: item.imei,
@@ -649,28 +616,23 @@ const DataService = {
   },
 
 async createNewPurchase(purchasePayload) {
-  // 1. Purchase ID khud banayein
   const purchaseId = crypto.randomUUID();
   const userId = (await supabase.auth.getUser()).data.user?.id;
 
-  // 2. Purchase Object banayein
   const purchaseData = {
     id: purchaseId,
-    local_id: purchaseId,
     user_id: userId,
     supplier_id: purchasePayload.p_supplier_id,
     purchase_date: new Date().toISOString(),
     total_amount: purchasePayload.p_inventory_items.reduce((sum, item) => sum + (item.quantity * item.purchase_price), 0),
     amount_paid: 0,
     balance_due: purchasePayload.p_inventory_items.reduce((sum, item) => sum + (item.quantity * item.purchase_price), 0),
-    status: 'received',
+    status: 'unpaid',
     notes: purchasePayload.p_notes
   };
 
-  // 3. Items Object banayein
   const itemsData = purchasePayload.p_inventory_items.map(item => ({
     id: crypto.randomUUID(),
-    local_id: crypto.randomUUID(),
     purchase_id: purchaseId,
     product_id: item.product_id,
     quantity: item.quantity,
@@ -680,37 +642,17 @@ async createNewPurchase(purchasePayload) {
     sale_price: item.sale_price,
     imei: item.imei || null,
     item_attributes: item.item_attributes,
-    barcode: item.barcode || null
+    user_id: userId,
+    status: 'Available'
   }));
 
-  // 4. Local DB mein save karein
   await db.purchases.add(purchaseData);
-  // Note: Hum ne 'purchase_items' table db.js mein banaya tha, wahan bhi save karein
-  if (db.purchase_items) {
-      await db.purchase_items.bulkAdd(itemsData);
-  }
+  await db.inventory.bulkAdd(itemsData);
 
-  // Purchase add hote hi hum supplier ka balance update karenge taake UI foran change ho
-  const supplier = await db.suppliers.get(purchasePayload.p_supplier_id);
-  if (supplier) {
-      const newBalance = (supplier.balance_due || 0) + purchaseData.total_amount;
-      const newTotalPurchases = (supplier.total_purchases || 0) + purchaseData.total_amount;
-
-      await db.suppliers.update(purchasePayload.p_supplier_id, {
-          balance_due: newBalance,
-          total_purchases: newTotalPurchases
-      });
-  }
-
-  // 5. Sync Queue mein daalein (Poora payload ek sath)
   await db.sync_queue.add({
     table_name: 'purchases', 
     action: 'create_full_purchase', 
-    data: {
-      p_local_id: purchaseId,
-      purchase: purchaseData,
-      items: itemsData
-    }
+    data: { purchase: purchaseData, items: itemsData }
   });
 
   return purchaseData;
@@ -718,7 +660,6 @@ async createNewPurchase(purchasePayload) {
 
 async addCustomer(customerData) {
     if (!customerData.id) customerData.id = crypto.randomUUID();
-    customerData.local_id = customerData.id;
     
     // Local Save
     await db.customers.put(customerData);
@@ -803,11 +744,9 @@ async addCustomer(customerData) {
   },
 
   async processSale(salePayload) {
-    // 1. IDs generate karein
     const saleId = crypto.randomUUID();
     const saleDate = new Date().toISOString();
 
-    // 2. Sale Record banayein
     const saleData = {
       id: saleId,
       user_id: salePayload.user_id,
@@ -817,53 +756,45 @@ async addCustomer(customerData) {
       total_amount: salePayload.total_amount,
       amount_paid_at_sale: salePayload.amount_paid_at_sale,
       payment_status: salePayload.payment_status,
-      sale_date: saleDate,
+      payment_method: salePayload.payment_method,
       created_at: saleDate
     };
 
-    // 3. Sale Items banayein
     const saleItemsData = salePayload.items.map(item => ({
       id: crypto.randomUUID(),
       sale_id: saleId,
       inventory_id: item.inventory_id,
       product_id: item.product_id,
-      quantity: 1,
+      product_name_snapshot: item.product_name,
+      quantity: item.quantity || 1,
       price_at_sale: item.price_at_sale,
-      user_id: salePayload.user_id
+      user_id: salePayload.user_id,
+      warranty_expiry: item.warranty_expiry || null
     }));
 
-    // 4. Inventory IDs ki list (jo bik chuki hain)
-    const soldInventoryIds = salePayload.items.map(i => i.inventory_id);
+    const inventoryUpdates = salePayload.items.map(i => ({
+      id: i.inventory_id,
+      qtySold: i.quantity || 1
+    }));
 
-    // --- LOCAL DB OPERATIONS ---
-    
-    // A. Sale Save karein
+    // A. Local DB mein Save karein
     await db.sales.add(saleData);
     if (db.sale_items) await db.sale_items.bulkAdd(saleItemsData);
 
-    // B. Inventory Update (Bulk aur IMEI dono ke liye)
+    // B. Local Inventory update karein
     for (const item of salePayload.items) {
-      const invItem = await db.inventory.get(item.inventory_id);
-      if (invItem) {
-        if (invItem.imei) {
-          // IMEI Based: Purana tareeqa (Poori row sold)
-          await db.inventory.update(item.inventory_id, { 
-            status: 'Sold', 
-            available_qty: 0, 
-            sold_qty: 1 
-          });
-        } else {
-          // Bulk Based: Quantity minus karein
-          const newAvailable = Math.max(0, (invItem.available_qty || 0) - 1);
-          const newSold = (invItem.sold_qty || 0) + 1;
-          await db.inventory.update(item.inventory_id, { 
-            available_qty: newAvailable, 
-            sold_qty: newSold,
-            // Agar saara maal bik jaye to status 'Sold' kar dein
-            status: newAvailable === 0 ? 'Sold' : 'Available'
-          });
+        const invItem = await db.inventory.get(item.inventory_id);
+        if (invItem) {
+            const qtySold = item.quantity || 1;
+            const newAvail = Math.max(0, (invItem.available_qty || 0) - qtySold);
+            const newSold = (invItem.sold_qty || 0) + qtySold;
+            
+            await db.inventory.update(item.inventory_id, {
+                available_qty: newAvail,
+                sold_qty: newSold,
+                status: newAvail === 0 ? 'Sold' : 'Available'
+            });
         }
-      }
     }
 
     // C. Sync Queue mein dalein
@@ -873,7 +804,7 @@ async addCustomer(customerData) {
       data: {
         sale: saleData,
         items: saleItemsData,
-        inventory_ids: soldInventoryIds
+        inventory_ids: inventoryUpdates
       }
     });
 
@@ -881,34 +812,33 @@ async addCustomer(customerData) {
   },
 
   async recordPurchasePayment(paymentData) {
-    if (!paymentData.local_id) paymentData.local_id = crypto.randomUUID();
-    // 1. Queue mein daalein (Upload ke liye)
+    // ID set karein agar nahi hai
+    if (!paymentData.id) paymentData.id = crypto.randomUUID();
+    if (!paymentData.local_id) paymentData.local_id = paymentData.id;
+
+    // 1. Queue mein daalein
     await db.sync_queue.add({
         table_name: 'supplier_payments',
         action: 'create_purchase_payment',
         data: paymentData
     });
 
-    // 2. *** LOCAL DB UPDATE (Offline UI ke liye) ***
+    // 2. Local DB Update
     const purchase = await db.purchases.get(paymentData.purchase_id);
-    
     if (purchase) {
         const newAmountPaid = (purchase.amount_paid || 0) + paymentData.amount;
-        const newBalance = purchase.total_amount - newAmountPaid;
+        const newBalance = (purchase.total_amount || 0) - newAmountPaid;
         
-        // Status bhi update karein
         let newStatus = 'unpaid';
         if (newBalance <= 0) newStatus = 'paid';
         else if (newAmountPaid > 0) newStatus = 'partially_paid';
 
-        // Database mein save karein
         await db.purchases.update(paymentData.purchase_id, {
             amount_paid: newAmountPaid,
             balance_due: newBalance,
             status: newStatus
         });
     }
-
     return true;
   },
 
@@ -925,65 +855,37 @@ async addCustomer(customerData) {
     return true;
   },
 
-  // --- NAYA FUNCTION: Offline-First Purchase Edit (CLEAN & DEBUGGED) ---
+  // --- Offline-First Purchase Edit (UUID COMPATIBLE) ---
   async updatePurchaseFully(purchaseId, payload) {
     const { supplier_id, notes, amount_paid, items } = payload;
 
-    // 1. Naya Total Calculate karein (Bulletproof Logic)
-
-    // A. ID ka Masla Hal Karein (Text vs Number)
-    const pIdNum = parseInt(purchaseId);
-    const pIdStr = String(purchaseId);
-
-    // B. Database se items layein (Dono IDs check karein)
+    // 1. Database se mojooda items layein
     const dbItems = await db.inventory
-        .filter(i => i.purchase_id === pIdNum || i.purchase_id === pIdStr)
+        .where('purchase_id').equals(purchaseId)
         .toArray();
     
-    // C. Status ka Map banayein
     const statusMap = {};
-    dbItems.forEach(i => {
-        statusMap[i.id] = i.status;
-        statusMap[String(i.id)] = i.status;
-    });
+    dbItems.forEach(i => { statusMap[i.id] = i.status; });
 
-    // D. Ab Total Karein
+    // 2. Naya Total Calculate karein
     const newTotal = items.reduce((sum, item) => {
-        // Asal status DB se lein, agar wahan nahi to Form se lein
-        // Agar item.id nahi hai, to Available samjhein
         const realStatus = (item.id && statusMap[item.id]) ? statusMap[item.id] : (item.status || 'Available');
-
-        // Agar item 'Returned' hai, to usay Total Bill mein shamil NA karein
-        if (realStatus && realStatus.toLowerCase() === 'returned') {
-            return sum;
-        }
-        
-        // Baqi sab (Available/Sold) ko jama karein
+        if (realStatus && realStatus.toLowerCase() === 'returned') return sum;
         return sum + ((item.quantity || 1) * (item.purchase_price || 0));
     }, 0);
 
     const newBalance = newTotal - (amount_paid || 0);
-    
-    // Status tay karein
     let newStatus = 'unpaid';
     if (newBalance <= 0) newStatus = 'paid';
     else if (amount_paid > 0) newStatus = 'partially_paid';
 
-    // 2. Purana Data layein
-    const oldPurchase = await db.purchases.get(purchaseId);
-    if (!oldPurchase) {
-        // Fallback: Try numeric ID
-        const oldPurchaseAlt = await db.purchases.get(pIdNum);
-        if (!oldPurchaseAlt) throw new Error("Purchase not found locally");
-    }
-    const purchaseToUpdate = oldPurchase || await db.purchases.get(pIdNum);
+    // 3. Purana Data layein
+    const purchaseToUpdate = await db.purchases.get(purchaseId);
+    if (!purchaseToUpdate) throw new Error("Purchase not found locally");
     const oldTotal = purchaseToUpdate.total_amount || 0;
 
-    // 3. Purchase Record Update (Local)
-    // Ensure ID is number for Dexie
-    const updateId = !isNaN(purchaseId) ? parseInt(purchaseId) : purchaseId;
-
-    await db.purchases.update(updateId, {
+    // 4. Purchase Record Update (Local)
+    await db.purchases.update(purchaseId, {
         supplier_id,
         notes,
         total_amount: newTotal,
@@ -992,8 +894,8 @@ async addCustomer(customerData) {
         status: newStatus
     });
 
-    // 4. Inventory Handle Karein (Local)
-    const existingItems = await db.inventory.where('purchase_id').equals(updateId).toArray();
+    // 5. Inventory Handle Karein (Local)
+    const existingItems = await db.inventory.where('purchase_id').equals(purchaseId).toArray();
     const existingIds = existingItems.map(i => i.id);
     const keptIds = []; 
 
@@ -1164,15 +1066,12 @@ async addCustomer(customerData) {
     return true;
   },
 
-  // --- UPDATED: Professional Bulk Return Function ---
+  // --- Professional Bulk Return Function (UUID Compatible) ---
   async createPurchaseReturn(returnData) {
     const { purchase_id, items_with_qty, return_date, notes } = returnData;
 
     // 1. Purchase dhoondein
-    let purchase = await db.purchases.get(purchase_id);
-    if (!purchase && !isNaN(purchase_id)) {
-        purchase = await db.purchases.get(parseInt(purchase_id));
-    }
+    const purchase = await db.purchases.get(purchase_id);
     if (!purchase) throw new Error("Purchase not found locally.");
 
     const realPurchaseId = purchase.id;
@@ -1544,10 +1443,9 @@ async addCustomer(customerData) {
 
   async addExpenseCategory(categoryData) {
     if (!categoryData.id) categoryData.id = crypto.randomUUID();
-    categoryData.local_id = categoryData.id;
     
     // Local DB mein save karein
-    await db.expense_categories.add(categoryData);
+    await db.expense_categories.put(categoryData);
     
     // Upload Queue mein dalein
     await db.sync_queue.add({
@@ -2066,7 +1964,7 @@ async addCustomer(customerData) {
     return true;
   },
 
-  // 4. IMEI scan karke mobile ki history nikalna (Sab se ahem function)
+  // 4. IMEI scan karke mobile ki history nikalna (UPDATED LOGIC)
   async lookupItemByIMEI(imei) {
     // A. Inventory mein mobile dhoondein
     const item = await db.inventory.where('imei').equals(imei).first();
@@ -2075,20 +1973,34 @@ async addCustomer(customerData) {
     // B. Product ka naam aur brand layein
     const product = await db.products.get(item.product_id);
     
-    // C. Check karein ke ye kab bika tha
-    const saleItem = await db.sale_items.filter(si => String(si.inventory_id) === String(item.id)).first();
-    let saleDetails = null;
-    if (saleItem) {
-        saleDetails = await db.sales.get(saleItem.sale_id);
-    }
-
-    // D. Supplier ki maloomat
+    // C. Supplier ki maloomat
     const supplier = item.supplier_id ? await db.suppliers.get(item.supplier_id) : null;
 
-    // E. Customer ki maloomat (Agar bika hua hai)
+    // D. Check karein ke Item ka Status kya hai?
+    let saleItem = null;
+    let saleDetails = null;
     let customer = null;
-    if (saleDetails && saleDetails.customer_id) {
-        customer = await db.customers.get(saleDetails.customer_id);
+
+    // Agar item 'Sold' hai, tab hi hum Sale dhoondenge.
+    // Agar 'Available' hai (yani return ho chuka hai), to hum sale nahi dikhayenge.
+    if (item.status === 'Sold') {
+        saleItem = await db.sale_items
+            .filter(si => String(si.inventory_id) === String(item.id))
+            .reverse() // Aakhri sale uthayen
+            .first();
+            
+        if (saleItem) {
+            saleDetails = await db.sales.get(saleItem.sale_id);
+            if (saleDetails && saleDetails.customer_id) {
+                customer = await db.customers.get(saleDetails.customer_id);
+            }
+        }
+    }
+
+    // Agar item Available hai, to Customer null hona chahiye
+    if (item.status === 'Available') {
+        customer = null;
+        saleDetails = null;
     }
 
     return { item, product, saleItem, saleDetails, supplier, customer };
@@ -2107,7 +2019,7 @@ async addCustomer(customerData) {
 
   // 6. Invoice ID se warranty check karna (Bulk items ke liye)
   async lookupByInvoice(invoiceId) {
-    const sale = await db.sales.get(Number(invoiceId));
+    const sale = await db.sales.get(invoiceId);
     if (!sale) return null;
 
     const customer = await db.customers.get(sale.customer_id);
@@ -2126,27 +2038,51 @@ async addCustomer(customerData) {
 
   // 7. Damaged Stock Report mangwana
   async getDamagedStockReport() {
+    // Yehi woh line thi jo Dexie ko ghalat ID bhej rahi thi.
+    // Hum sirf filter kar rahe hain, is liye yeh code theek hai.
     const damagedItems = await db.inventory.filter(i => (i.damaged_qty || 0) > 0).toArray();
-    const report = await Promise.all(damagedItems.map(async (item) => {
-      const product = await db.products.get(item.product_id);
-      const supplier = item.supplier_id ? await db.suppliers.get(item.supplier_id) : null;
+    
+    // Pehle hi saare products aur suppliers fetch kar lete hain
+    const productIds = damagedItems.map(i => i.product_id).filter(id => id);
+    const supplierIds = damagedItems.map(i => i.supplier_id).filter(id => id);
+    
+    // Batch fetching logic (UUIDs ke saath)
+    const [allProducts, allSuppliers] = await Promise.all([
+        db.products.where('id').anyOf(productIds).toArray(),
+        db.suppliers.where('id').anyOf(supplierIds).toArray()
+    ]);
+
+    const productMap = {};
+    allProducts.forEach(p => productMap[p.id] = p);
+    const supplierMap = {};
+    allSuppliers.forEach(s => supplierMap[s.id] = s);
+
+    const report = damagedItems.map((item) => {
+      const product = productMap[item.product_id];
+      const supplier = supplierMap[item.supplier_id];
+      
       return {
         ...item,
         product_name: product?.name || 'Unknown',
         brand: product?.brand || '',
         supplier_name: supplier?.name || 'N/A',
-        invoice_id: item.purchase_id, 
+        invoice_id: item.purchase_id, // Purchase ID bhi ab UUID hai
         total_loss: (item.damaged_qty || 0) * (item.purchase_price || 0)
       };
-    }));
+    });
     return report.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
   },
 
   // 8. Damaged Stock ko wapis theek karna (Undo Adjustment)
   async revertDamagedStock(inventoryId, qtyToRevert) {
+    // 1. Local DB se item nikalain (ID ab UUID hai, parseInt ki zaroorat nahi)
     const item = await db.inventory.get(inventoryId);
     if (!item) throw new Error("Item not found.");
-    if (qtyToRevert > item.damaged_qty) throw new Error("Invalid revert quantity.");
+
+    // 2. Check karein ke kya itni quantity bachi bhi hai?
+    if (qtyToRevert > item.damaged_qty) {
+      throw new Error("Invalid revert quantity.");
+    }
 
     const updates = {
       available_qty: (item.available_qty || 0) + qtyToRevert,
@@ -2155,8 +2091,16 @@ async addCustomer(customerData) {
       updated_at: new Date().toISOString()
     };
 
+    // 5. Local Update
     await db.inventory.update(inventoryId, updates);
-    await db.sync_queue.add({ table_name: 'inventory', action: 'update', data: { id: inventoryId, ...updates } });
+
+    // 6. Sync Queue mein daalain (Server update ke liye)
+    await db.sync_queue.add({
+      table_name: 'inventory',
+      action: 'update',
+      data: { id: inventoryId, ...updates }
+    });
+
     return true;
   },
 

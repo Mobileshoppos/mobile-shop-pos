@@ -459,27 +459,10 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
       if (purchaseItems.length === 0) { message.error("Please add at least one item."); return; }
       
       setIsSubmitting(true);
-      // --- NAYA FIX: ID Handle Karna ---
+      // --- UUID COMPATIBLE ID HANDLING ---
+      // Ab chunkay tamam IDs (Local aur Server) UUID Strings hain, 
+      // is liye hamein mazeed mapping ya server se re-fetch karne ki zaroorat nahi.
       let finalSupplierId = values.supplier_id;
-
-      // Agar ID String (Local) hai, to Server se Asli ID dhoond kar layein
-      if (typeof finalSupplierId === 'string') {
-          // Hum server se kehte hain: "Cash Purchase" wale ki asli ID do
-          const { data: serverSup } = await supabase
-              .from('suppliers')
-              .select('id')
-              .ilike('name', 'Cash Purchase')
-              .maybeSingle();
-          
-          if (serverSup) {
-              finalSupplierId = serverSup.id; // Asli ID mil gayi!
-          } else {
-              // Agar server par bhi nahi mila, to ab hum kuch nahi kar sakte
-              message.error("Supplier syncing... Please try again in a moment.");
-              setIsSubmitting(false);
-              return;
-          }
-      }
 
       const payload = {
         p_local_id: crypto.randomUUID(),

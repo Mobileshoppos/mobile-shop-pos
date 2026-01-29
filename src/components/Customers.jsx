@@ -304,26 +304,15 @@ const Customers = () => {
       setIsSearching(true);
       setSearchedSale(null); 
 
-      // User jo number likhega ya Scan karega
       let searchInput = values.invoiceId; 
       
-      // --- SMART SCAN LOGIC START ---
-      // Agar scanner ne "INV:123" bheja hai, to "INV:" hata dein
+      // Smart Scan Cleanup
       if (typeof searchInput === 'string' && searchInput.toUpperCase().startsWith('INV:')) {
-          searchInput = searchInput.split(':')[1]; // Sirf number utha lein
+          searchInput = searchInput.split(':')[1];
       }
-      // ------------------------------
 
-      let saleData = null;
-
-      // 1. Seedha Number se dhoondein
-      const searchId = Number(searchInput);
-      if (isNaN(searchId)) {
-          message.error("Please enter a valid numeric Invoice ID");
-          setIsSearching(false);
-          return;
-      }
-      saleData = await db.sales.get(searchId);
+      // Seedha ID se dhoondein (UUID String)
+      const saleData = await db.sales.get(searchInput);
 
       if (!saleData) {
         message.error(`Invoice ID #${searchInput} not found locally.`);
@@ -331,7 +320,7 @@ const Customers = () => {
         return;
       }
 
-      // 2. Details Jama Karein
+      // Details Jama Karein
       const customer = await db.customers.get(saleData.customer_id);
       const saleItems = await db.sale_items.where('sale_id').equals(saleData.id).toArray();
 
@@ -348,7 +337,6 @@ const Customers = () => {
 
       const fullSaleObject = {
           ...saleData,
-          // Hum saleData se ID utha rahe hain (jo ke 1 hogi)
           customer: customer || { id: saleData.customer_id, name: 'Walk-in Customer' },
           sale_items: itemsWithDetails
       };

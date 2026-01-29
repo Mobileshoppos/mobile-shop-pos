@@ -60,7 +60,9 @@ const SalesHistory = () => {
             const items = itemsMap[sale.id] || [];
             const totalItems = items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
 
-            const queueItem = queueItems.find(q => q.data.sale.id === sale.id);
+            const queueItem = queueItems.find(q => 
+                (q.data?.sale?.id === sale.id) || (q.data?.sale?.local_id === sale.id)
+            );
             let status = 'synced';
             let errorMsg = null;
 

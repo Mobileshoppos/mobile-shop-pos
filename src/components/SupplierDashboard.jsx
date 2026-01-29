@@ -94,32 +94,50 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
     const showPaymentModal = () => { paymentForm.setFieldsValue({ amount: supplier.balance_due > 0 ? supplier.balance_due : undefined, payment_date: dayjs(), payment_method: 'Cash', notes: null }); setIsPaymentModalVisible(true); };
     const handlePaymentSubmit = async (values) => {
         try {
-            // Date ko sahi format (ISO String) mein convert karein
+            const paymentId = crypto.randomUUID();
             const formattedValues = {
                 ...values,
                 payment_date: values.payment_date ? values.payment_date.toISOString() : new Date().toISOString()
             };
 
-            const paymentData = { local_id: crypto.randomUUID(), supplier_id: supplier.id, ...formattedValues };
+            const paymentData = { 
+                id: paymentId, 
+                local_id: paymentId, 
+                supplier_id: supplier.id, 
+                ...formattedValues 
+            };
+            
             await DataService.recordBulkSupplierPayment(paymentData);
             notification.success({ message: 'Success', description: 'Payment recorded!' });
-            setIsPaymentModalVisible(false); onRefresh();
-        } catch (error) { notification.error({ message: 'Error', description: error.message || 'Failed to record payment.' }); }
+            setIsPaymentModalVisible(false); 
+            onRefresh();
+        } catch (error) { 
+            notification.error({ message: 'Error', description: error.message || 'Failed to record payment.' }); 
+        }
     };
     const showRefundModal = () => { refundForm.setFieldsValue({ amount: supplier.credit_balance > 0 ? supplier.credit_balance : undefined, refund_date: dayjs(), refund_method: 'Cash', notes: 'Credit settlement' }); setIsRefundModalVisible(true); };
     const handleRefundSubmit = async (values) => {
         try {
-            // Date ko sahi format (ISO String) mein convert karein
+            const refundId = crypto.randomUUID();
             const formattedValues = {
                 ...values,
                 refund_date: values.refund_date ? values.refund_date.toISOString() : new Date().toISOString()
             };
 
-            const refundData = { local_id: crypto.randomUUID(), supplier_id: supplier.id, ...formattedValues };
+            const refundData = { 
+                id: refundId, 
+                local_id: refundId, 
+                supplier_id: supplier.id, 
+                ...formattedValues 
+            };
+            
             await DataService.recordSupplierRefund(refundData);
             notification.success({ message: 'Success', description: 'Refund recorded!' });
-            setIsRefundModalVisible(false); onRefresh();
-        } catch (error) { notification.error({ message: 'Error', description: error.message || 'Failed to record refund.' }); }
+            setIsRefundModalVisible(false); 
+            onRefresh();
+        } catch (error) { 
+            notification.error({ message: 'Error', description: error.message || 'Failed to record refund.' }); 
+        }
     };
 
     const ledgerColumns = [

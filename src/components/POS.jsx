@@ -530,28 +530,21 @@ const POS = () => {
         
         try {
           setIsSubmitting(true);
-          // --- PROFESSIONAL LOGIC ---
+          // --- CLEAN UUID LOGIC ---
           let finalCustomerId = selectedCustomer;
-          
           if (!finalCustomerId) {
-              // DataService se kaho ke Walk-in Customer la kar de (Chahe dhoonde ya banaye)
               const walkIn = await DataService.getOrCreateWalkInCustomer();
               finalCustomerId = walkIn.id;
           }
           
-          // *** FINAL LOGIC: 6-Digit Device-Safe ID ***
-          // Hum naya utility function use kar rahe hain jo Device ID aur Random Number
-          // mila kar hamesha unique 6-digit ID banayega.
-          const saleId = await generateInvoiceId(db);
-          // ********************************************
-
+          const saleId = crypto.randomUUID();
           const saleDate = new Date().toISOString();
 
           const saleRecord = { 
               id: saleId, 
-              local_id: crypto.randomUUID(),
+              local_id: saleId, 
               customer_id: finalCustomerId, 
-              subtotal, 
+              subtotal: subtotal, 
               discount: discountAmount, 
               total_amount: grandTotal, 
               payment_method: paymentMethod === 'Paid' ? cashOrBank : 'Cash',
