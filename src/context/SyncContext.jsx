@@ -139,6 +139,8 @@ export const SyncProvider = ({ children }) => {
       await smartPut('suppliers', suppliers, pendingIds);
       const { data: supPayments } = await supabase.from('supplier_payments').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('supplier_payments', supPayments, pendingIds);
+      const { data: supRefunds } = await supabase.from('supplier_refunds').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('supplier_refunds', supRefunds, pendingIds);
       const { data: attributes } = await supabase.from('category_attributes').select('*').gt('updated_at', lastSyncTime);
       await smartPut('category_attributes', attributes, pendingIds);
       const { data: expCats } = await supabase.from('expense_categories').select('*').or(`user_id.eq.${user.id},user_id.is.null`).gt('updated_at', lastSyncTime);
@@ -451,11 +453,11 @@ export const SyncProvider = ({ children }) => {
             // --- Supplier Refund Sync (UUID Simplified) ---
             else if (item.action === 'create_refund') {
                 const { error: supError } = await supabase.rpc('record_supplier_refund', {
-                    p_local_id: item.data.id,
+                    p_local_id: item.data.id || item.data.local_id,
                     p_supplier_id: item.data.supplier_id,
                     p_amount: item.data.amount,
-                    p_refund_date: item.data.refund_date,
-                    p_method: item.data.payment_method || item.data.refund_method,
+                    p_refund_date: item.data.refund_date || item.data.payment_date,
+                    p_method: item.data.payment_method || item.data.refund_method || 'Cash',
                     p_notes: item.data.notes
                 });
                 error = supError;
@@ -487,8 +489,9 @@ export const SyncProvider = ({ children }) => {
 
             // --- Purchase Return Sync (UUID Simplified) ---
             else if (item.action === 'process_purchase_return') {
-                const { p_purchase_id, p_return_items, p_return_date, p_notes } = item.data;
+                const { p_return_id, p_purchase_id, p_return_items, p_return_date, p_notes } = item.data;
                 const { error: supError } = await supabase.rpc('process_purchase_return', {
+                    p_return_id: p_return_id,
                     p_purchase_id: p_purchase_id,
                     p_return_items: p_return_items,
                     p_return_date: p_return_date,

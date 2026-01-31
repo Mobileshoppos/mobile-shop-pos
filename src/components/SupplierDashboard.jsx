@@ -32,11 +32,14 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
             // Yahan hum refunds bhi mangwa rahe hain
             const { supplier: calculatedSup, purchases, payments, refunds } = await DataService.getSupplierLedgerDetails(supplier.id);
             
-            setCalculatedStats(calculatedSup);
+            // Refund ka total nikaalna
+            const totalRefundsAmount = (refunds || []).reduce((sum, r) => sum + (r.amount || 0), 0);
+            
+            setCalculatedStats({ ...calculatedSup, total_refunds: totalRefundsAmount });
 
             const combinedData = [
                 ...(purchases || []).map(p => ({
-                    key: `pur-${p.id}`, date: p.purchase_date, type: 'Purchase', details: `Purchase #${p.id}`, debit: p.total_amount, credit: 0, link: `/purchases/${p.id}`
+                    key: `pur-${p.id}`, date: p.purchase_date, created_at: p.created_at, type: 'Purchase', details: `Purchase #${p.id}`, debit: p.total_amount, credit: 0, link: `/purchases/${p.id}`
                 })),
                 ...(payments || []).map(p => ({
                     key: `pay-${p.id}`, 
@@ -44,22 +47,38 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                     original_notes: p.notes, 
                     payment_method: p.payment_method,
                     date: p.payment_date, 
+                    created_at: p.created_at,
                     type: 'Payment', 
                     details: `Payment via ${p.payment_method}` + (p.notes ? ` (${p.notes})` : ''), 
                     debit: 0, 
                     credit: p.amount,
                 })),
-                // --- Refunds ko list mein shamil kiya ---
                 ...(refunds || []).map(r => ({
                     key: `ref-${r.id}`, 
                     date: r.refund_date, 
+                    created_at: r.created_at,
                     type: 'Refund', 
                     details: `Refund Received via ${r.refund_method || r.payment_method || 'Cash'}` + (r.notes ? ` (${r.notes})` : ''), 
-                    debit: 0, 
-                    credit: r.amount, 
+                    debit: r.amount, 
+                    credit: 0, 
                 }))
             ];
-            combinedData.sort((a, b) => new Date(b.date) - new Date(a.date)); setLedgerData(combinedData);
+           // A. Asal sequence (Oldest to Newest) ke liye created_at use karein
+            combinedData.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+            // B. Running Balance calculate karein (Wahi purana logic)
+            let currentBal = 0;
+            const dataWithRunningBalance = combinedData.map(item => {
+                currentBal += (Number(item.debit || 0) - Number(item.credit || 0));
+                return { ...item, running_balance: currentBal };
+            });
+
+            // C. Display ke liye ULAT (Newest on Top) kar dein
+            dataWithRunningBalance.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            
+            setLedgerData(dataWithRunningBalance);
+            
+            setLedgerData(dataWithRunningBalance);
         } catch (err) { notification.error({ message: 'Error', description: 'Failed to load supplier ledger.' });
         } finally { setLoading(false); }
     }, [supplier, notification]);
@@ -121,6 +140,17 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
         { title: 'Details', dataIndex: 'details', key: 'details', render: (text, record) => record.link ? <Link to={record.link}>{text}</Link> : text },
         { title: 'Debit', dataIndex: 'debit', key: 'debit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
         { title: 'Credit', dataIndex: 'credit', key: 'credit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
+        { 
+            title: 'Balance', 
+            dataIndex: 'running_balance', 
+            key: 'running_balance', 
+            align: 'right', 
+            render: (val) => (
+                <Text strong style={{ color: val > 0 ? '#cf1322' : '#52c41a' }}>
+                    {formatCurrency(val, profile?.currency)}
+                </Text>
+            )
+        },
     ];
     
     if (loading) return <div style={{ textAlign: 'center', padding: '50px' }}><Spin /></div>;
@@ -132,11 +162,12 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                 <Button danger icon={<MinusCircleOutlined />} onClick={showRefundModal} disabled={!supplier || supplier.credit_balance <= 0}> Record Refund </Button>
             </Space>
 
-            <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-                <Col xs={12} md={6}><Statistic title="Total Business" value={calculatedStats?.total_purchases || 0} formatter={() => formatCurrency(calculatedStats?.total_purchases || 0, profile?.currency)} /></Col>
-<Col xs={12} md={6}><Statistic title="Total Paid" value={calculatedStats?.total_payments || 0} formatter={() => formatCurrency(calculatedStats?.total_payments || 0, profile?.currency)} /></Col>
-                <Col xs={12} md={6}><Statistic title="Balance Due" value={supplier?.balance_due || 0} valueStyle={{ color: '#cf1322' }} formatter={() => formatCurrency(supplier?.balance_due || 0, profile?.currency)} /></Col>
-                <Col xs={12} md={6}><Statistic title="Your Credit" value={supplier?.credit_balance || 0} valueStyle={{ color: '#52c41a' }} formatter={() => formatCurrency(supplier?.credit_balance || 0, profile?.currency)} /></Col>
+            <Row gutter={[16, 16]} style={{ marginBottom: '24px', textAlign: 'center' }}>
+                <Col xs={12} sm={4}><Statistic title="Total Business" value={calculatedStats?.total_purchases || 0} formatter={() => formatCurrency(calculatedStats?.total_purchases || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={5}><Statistic title="Total Paid" value={calculatedStats?.total_payments || 0} valueStyle={{ color: '#1890ff' }} formatter={() => formatCurrency(calculatedStats?.total_payments || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={5}><Statistic title="Total Refunds" value={calculatedStats?.total_refunds || 0} valueStyle={{ color: '#faad14' }} formatter={() => formatCurrency(calculatedStats?.total_refunds || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={5}><Statistic title="Balance Due" value={supplier?.balance_due || 0} valueStyle={{ color: '#cf1322' }} formatter={() => formatCurrency(supplier?.balance_due || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={5}><Statistic title="Your Credit" value={supplier?.credit_balance || 0} valueStyle={{ color: '#52c41a' }} formatter={() => formatCurrency(supplier?.credit_balance || 0, profile?.currency)} /></Col>
             </Row>
 
             <Title level={4}>Transaction Ledger</Title>

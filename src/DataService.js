@@ -1174,13 +1174,14 @@ async addCustomer(customerData) {
     }
 
     // 5. Queue mein daalein (Server ke liye)
-    const serverPurchaseId = !isNaN(realPurchaseId) ? parseInt(realPurchaseId) : realPurchaseId;
+    const returnId = crypto.randomUUID();
     
     await db.sync_queue.add({
         table_name: 'purchase_returns',
         action: 'process_purchase_return',
         data: {
-            p_purchase_id: serverPurchaseId, 
+            p_return_id: returnId,
+            p_purchase_id: realPurchaseId, 
             p_return_items: items_with_qty, 
             p_return_date: return_date,
             p_notes: notes
@@ -1192,31 +1193,35 @@ async addCustomer(customerData) {
 
 
   async recordSupplierRefund(refundData) {
+    // FIX: Aik hi ID banayein jo har jagah use ho
+    const refundId = refundData.id || crypto.randomUUID();
+    const finalRefundData = { 
+        ...refundData, 
+        id: refundId, 
+        local_id: refundId,
+        created_at: refundData.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+    };
+
     // 1. Local Table mein save karein
     if (db.supplier_refunds) {
-        const localData = { 
-            ...refundData, 
-            id: crypto.randomUUID(), 
-            local_id: crypto.randomUUID(),
-            created_at: new Date().toISOString() // Dashboard calculation ke liye zaroori hai
-        };
-        await db.supplier_refunds.add(localData);
+        await db.supplier_refunds.put(finalRefundData);
     }
 
-    // 2. Local Supplier ka Credit Balance kam karein
-    const supplier = await db.suppliers.get(refundData.supplier_id);
+    // 2. Local Supplier ka Credit Balance update karein
+    const supplier = await db.suppliers.get(finalRefundData.supplier_id);
     if (supplier) {
-        const newCredit = (supplier.credit_balance || 0) - refundData.amount;
-        await db.suppliers.update(refundData.supplier_id, {
-            credit_balance: newCredit < 0 ? 0 : newCredit
+        const newCredit = (supplier.credit_balance || 0) - Number(finalRefundData.amount);
+        await db.suppliers.update(finalRefundData.supplier_id, {
+            credit_balance: Math.max(0, newCredit)
         });
     }
 
-    // 3. Queue mein daalein
+    // 3. Queue mein daalein (Server ke liye)
     await db.sync_queue.add({
         table_name: 'supplier_refunds',
         action: 'create_refund',
-        data: refundData
+        data: finalRefundData
     });
 
     return true;
