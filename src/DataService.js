@@ -616,46 +616,64 @@ const DataService = {
   },
 
 async createNewPurchase(purchasePayload) {
-  const purchaseId = crypto.randomUUID();
-  const userId = (await supabase.auth.getUser()).data.user?.id;
+    const purchaseId = purchasePayload.p_local_id || crypto.randomUUID();
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id;
 
-  const purchaseData = {
-    id: purchaseId,
-    user_id: userId,
-    supplier_id: purchasePayload.p_supplier_id,
-    purchase_date: new Date().toISOString(),
-    total_amount: purchasePayload.p_inventory_items.reduce((sum, item) => sum + (item.quantity * item.purchase_price), 0),
-    amount_paid: 0,
-    balance_due: purchasePayload.p_inventory_items.reduce((sum, item) => sum + (item.quantity * item.purchase_price), 0),
-    status: 'unpaid',
-    notes: purchasePayload.p_notes
-  };
+    const totalAmount = purchasePayload.p_inventory_items.reduce((sum, item) => 
+        sum + (Number(item.quantity) * Number(item.purchase_price)), 0);
 
-  const itemsData = purchasePayload.p_inventory_items.map(item => ({
-    id: crypto.randomUUID(),
-    purchase_id: purchaseId,
-    product_id: item.product_id,
-    quantity: item.quantity,
-    available_qty: item.quantity,
-    sold_qty: 0,
-    purchase_price: item.purchase_price,
-    sale_price: item.sale_price,
-    imei: item.imei || null,
-    item_attributes: item.item_attributes,
-    user_id: userId,
-    status: 'Available'
-  }));
+    const purchaseData = {
+        id: purchaseId,
+        local_id: purchaseId,
+        user_id: userId,
+        supplier_id: purchasePayload.p_supplier_id,
+        purchase_date: new Date().toISOString(),
+        total_amount: totalAmount,
+        amount_paid: 0,
+        balance_due: totalAmount,
+        status: 'unpaid',
+        notes: purchasePayload.p_notes,
+        updated_at: new Date().toISOString()
+    };
 
-  await db.purchases.add(purchaseData);
-  await db.inventory.bulkAdd(itemsData);
+    const itemsData = purchasePayload.p_inventory_items.map(item => {
+        const itemId = item.id || crypto.randomUUID();
+        return {
+            ...item,
+            id: itemId,
+            local_id: item.local_id || itemId, 
+            purchase_id: purchaseId,
+            user_id: userId,
+            status: 'Available',
+            available_qty: item.quantity,
+            sold_qty: 0,
+            returned_qty: 0,
+            damaged_qty: 0,
+            updated_at: new Date().toISOString()
+        };
+    });
 
-  await db.sync_queue.add({
-    table_name: 'purchases', 
-    action: 'create_full_purchase', 
-    data: { purchase: purchaseData, items: itemsData }
-  });
+    // Local DB mein save karein
+    await db.purchases.put(purchaseData);
+    await db.inventory.bulkPut(itemsData);
 
-  return purchaseData;
+    // Supplier ka balance local update karein
+    const supplier = await db.suppliers.get(purchasePayload.p_supplier_id);
+    if (supplier) {
+        await db.suppliers.update(purchasePayload.p_supplier_id, {
+            balance_due: (supplier.balance_due || 0) + totalAmount
+        });
+    }
+
+    // Sync Queue mein dalein taake internet aane par server update ho
+    await db.sync_queue.add({
+        table_name: 'purchases',
+        action: 'create_full_purchase',
+        data: { purchase: purchaseData, items: itemsData }
+    });
+
+    return purchaseId;
 },
 
 async addCustomer(customerData) {
@@ -813,31 +831,50 @@ async addCustomer(customerData) {
 
   async recordPurchasePayment(paymentData) {
     // ID set karein agar nahi hai
-    if (!paymentData.id) paymentData.id = crypto.randomUUID();
-    if (!paymentData.local_id) paymentData.local_id = paymentData.id;
+    const paymentId = paymentData.id || crypto.randomUUID();
+    const finalPaymentData = {
+        ...paymentData,
+        id: paymentId,
+        local_id: paymentId,
+        created_at: paymentData.created_at || new Date().toISOString()
+    };
 
-    // 1. Queue mein daalein
+    // 1. NAYA HISSA: Local Ledger Table mein save karein taake foran nazar aaye
+    if (db.supplier_payments) {
+        await db.supplier_payments.put(finalPaymentData);
+    }
+
+    // 2. Queue mein daalein (Server ke liye)
     await db.sync_queue.add({
         table_name: 'supplier_payments',
         action: 'create_purchase_payment',
-        data: paymentData
+        data: finalPaymentData
     });
 
-    // 2. Local DB Update
-    const purchase = await db.purchases.get(paymentData.purchase_id);
+    // 3. Local Purchase aur Supplier Update
+    const purchase = await db.purchases.get(finalPaymentData.purchase_id);
     if (purchase) {
-        const newAmountPaid = (purchase.amount_paid || 0) + paymentData.amount;
+        const newAmountPaid = (purchase.amount_paid || 0) + Number(finalPaymentData.amount);
         const newBalance = (purchase.total_amount || 0) - newAmountPaid;
         
         let newStatus = 'unpaid';
         if (newBalance <= 0) newStatus = 'paid';
         else if (newAmountPaid > 0) newStatus = 'partially_paid';
 
-        await db.purchases.update(paymentData.purchase_id, {
+        await db.purchases.update(finalPaymentData.purchase_id, {
             amount_paid: newAmountPaid,
             balance_due: newBalance,
             status: newStatus
         });
+
+        const supplier = await db.suppliers.get(finalPaymentData.supplier_id);
+        if (supplier) {
+            await db.suppliers.update(finalPaymentData.supplier_id, {
+                balance_due: Math.max(0, (supplier.balance_due || 0) - Number(finalPaymentData.amount)),
+                // Ledger ke stats theek karne ke liye total_payments bhi update karein
+                total_payments: (supplier.total_payments || 0) + Number(finalPaymentData.amount)
+            });
+        }
     }
     return true;
   },
@@ -902,22 +939,35 @@ async addCustomer(customerData) {
     const itemsToCreate = [];
     
     for (const item of items) {
-        if (item.id && !String(item.id).startsWith('new-')) {
+        // Check karein ke kya yeh ID waqayi hamare inventory table mein pehle se hai?
+        const isExisting = item.id ? await db.inventory.get(item.id) : null;
+
+        if (isExisting) {
             keptIds.push(item.id);
-            // Purane item ko update karein
+            
+            // Hisaab lagayein ke kitne bik chuke hain taake available sahi nikal sakay
+            const soldQty = isExisting.sold_qty || 0;
+            const returnedQty = isExisting.returned_qty || 0;
+            const damagedQty = isExisting.damaged_qty || 0;
+            const alreadyUsed = soldQty + returnedQty + damagedQty;
+
+            // Purane item ko update karein (Quantity ke saath)
             await db.inventory.update(item.id, {
                 product_id: item.product_id,
+                quantity: Number(item.quantity),
+                available_qty: Number(item.quantity) - alreadyUsed, // Nayi quantity mein se bikay hue nikaal dein
                 purchase_price: item.purchase_price,
                 sale_price: item.sale_price,
                 imei: item.imei,
-                item_attributes: item.item_attributes
+                item_attributes: item.item_attributes,
+                status: (Number(item.quantity) - alreadyUsed) <= 0 ? 'Sold' : 'Available'
             });
         } else {
             // Naya item create
             itemsToCreate.push({
                 id: crypto.randomUUID(),
                 local_id: crypto.randomUUID(),
-                purchase_id: updateId,
+                purchase_id: purchaseId,
                 product_id: item.product_id,
                 quantity: 1,
                 purchase_price: item.purchase_price,
@@ -961,7 +1011,7 @@ async addCustomer(customerData) {
         table_name: 'purchases',
         action: 'update_full_purchase',
         data: {
-            id: updateId,
+            id: purchaseId,
             p_local_id: crypto.randomUUID(),
             supplier_id,
             notes,

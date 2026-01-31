@@ -601,14 +601,6 @@ const Inventory = () => {
 
   // --- ADD STOCK HANDLER (Updated to fetch Barcode) ---
   const handleAddStockClick = async (item) => {
-    // 1. Internet Check (Notification Style)
-    if (!navigator.onLine) {
-        notification.error({
-            message: 'Offline',
-            description: 'You need an internet connection to add new stock.',
-        });
-        return; // Yahin ruk jao
-    }
 
     // Check karein ke kya yeh Variant hai ya Main Product?
     const isVariant = item.product_id ? true : false;

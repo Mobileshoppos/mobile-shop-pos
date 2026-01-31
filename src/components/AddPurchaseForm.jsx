@@ -245,7 +245,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
   const { profile } = useAuth();
   const { message } = App.useApp();
   const { refetchStockCount } = useAuth();
-  const { syncAllData } = useSync();
+  const { syncAllData, processSyncQueue } = useSync();
   const [form] = Form.useForm();
   
   const [suppliers, setSuppliers] = useState([]);
@@ -271,20 +271,26 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
             form.setFieldsValue({ amount_paid: totalAmount, payment_method: 'Cash' });
         } else {
             // Rule 2: Agar koi aur supplier hai to field khali rakho
-            form.setFieldsValue({ amount_paid: null });
+            form.setFieldsValue({ amount_paid: 0 });
         }
     }
   }, [totalAmount, visible, form, editingPurchase, isCashPurchase]);
 
   const getProductsWithCategory = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select(`id, name, brand, category_id, purchase_price, sale_price, default_warranty_days, categories ( is_imei_based )`);
-      if (error) throw error;
-      return data.map(p => ({ ...p, category_is_imei_based: p.categories?.is_imei_based ?? false }));
+      // Local DB se products aur categories uthayein
+      const localProducts = await db.products.toArray();
+      const localCategories = await db.categories.toArray();
+      
+      const categoryMap = {};
+      localCategories.forEach(c => { categoryMap[c.id] = c.is_imei_based; });
+
+      return localProducts.map(p => ({
+        ...p,
+        category_is_imei_based: categoryMap[p.category_id] ?? false
+      }));
     } catch (error) {
-      throw new Error("Error fetching products: " + error.message);
+      throw new Error("Error fetching products from local storage: " + error.message);
     }
   }, []);
 
@@ -377,7 +383,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
           setSelectedProduct(targetProduct);
           form.setFieldsValue({ product_id: targetProduct.id });
           const fetchAttributes = async () => {
-             const { data } = await supabase.from('category_attributes').select('*').eq('category_id', targetProduct.category_id);
+             // Internet (Supabase) ke bajaye local DB se attributes uthayein
+             const data = await db.category_attributes.where('category_id').equals(targetProduct.category_id).toArray();
              setSelectedProductAttributes(data || []);
              setTimeout(() => { setIsItemModalVisible(true); }, 200);
           };
@@ -400,13 +407,14 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
     if (!productId) { message.warning('Please select a product first.'); return; }
     const selectedProdInfo = products.find(p => p.id === productId);
     try {
-      const { data, error } = await supabase.from('category_attributes').select('*').eq('category_id', selectedProdInfo.category_id);
-      if (error) throw error;
-      setSelectedProductAttributes(data);
+      // Internet (Supabase) ke bajaye local DB se attributes uthayein
+      const data = await db.category_attributes.where('category_id').equals(selectedProdInfo.category_id).toArray();
+      
+      setSelectedProductAttributes(data || []);
       setSelectedProduct(selectedProdInfo);
       setIsItemModalVisible(true);
     } catch (error) {
-      message.error("Could not fetch attributes: " + error.message);
+      message.error("Could not fetch attributes from local storage: " + error.message);
     }
   };
 
@@ -416,10 +424,10 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
         const originalProduct = products.find(p => p.id === record.product_id);
         if (!originalProduct) return;
 
-        const { data: attrs, error } = await supabase.from('category_attributes').select('*').eq('category_id', originalProduct.category_id);
-        if (error) throw error;
+        // Local DB use karein
+        const attrs = await db.category_attributes.where('category_id').equals(originalProduct.category_id).toArray();
 
-        setSelectedProductAttributes(attrs);
+        setSelectedProductAttributes(attrs || []);
         setSelectedProduct(originalProduct);
         setEditingItemIndex(index);
         setIsItemModalVisible(true);
@@ -459,60 +467,45 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
       if (purchaseItems.length === 0) { message.error("Please add at least one item."); return; }
       
       setIsSubmitting(true);
-      // --- UUID COMPATIBLE ID HANDLING ---
-      // Ab chunkay tamam IDs (Local aur Server) UUID Strings hain, 
-      // is liye hamein mazeed mapping ya server se re-fetch karne ki zaroorat nahi.
-      let finalSupplierId = values.supplier_id;
+      const purchaseId = editingPurchase ? editingPurchase.id : crypto.randomUUID();
 
       const payload = {
-        p_local_id: crypto.randomUUID(),
-        p_supplier_id: finalSupplierId,
+        p_local_id: purchaseId,
+        p_supplier_id: values.supplier_id,
         p_notes: values.notes || null,
         p_inventory_items: purchaseItems.map(({ name, brand, categories, category_is_imei_based, ...item }) => item)
       };
 
       if (editingPurchase) {
-          // --- EDIT MODE ---
-          // Step 2 mein hum DataService.updatePurchaseFully banayenge.
-          // Abhi ke liye hum yahan rukte hain taake error na aaye.
-          
+          // --- EDIT MODE (Offline Ready) ---
           await DataService.updatePurchaseFully(editingPurchase.id, {
               supplier_id: values.supplier_id,
               notes: values.notes,
               amount_paid: values.amount_paid,
               items: purchaseItems
           });
-          
           message.success("Purchase updated successfully!");
-
       } else {
-          // --- CREATE MODE (Existing Logic) ---
-          const { data: rpcData, error } = await supabase.rpc('create_new_purchase', payload);
-          if (error) throw error;
+          // --- CREATE MODE (Offline Ready) ---
+          const rpcData = await DataService.createNewPurchase(payload);
 
           const amountPaid = values.amount_paid || 0;
           if (amountPaid > 0) {
-              let newPurchaseId = rpcData;
-              if (!newPurchaseId) {
-                  const { data: latestPurchase } = await supabase.from('purchases').select('id').eq('supplier_id', values.supplier_id).order('created_at', { ascending: false }).limit(1).single();
-                  newPurchaseId = latestPurchase?.id;
-              }
-              if (newPurchaseId) {
-                  await DataService.recordPurchasePayment({
-                    local_id: crypto.randomUUID(),
-                      supplier_id: values.supplier_id,
-                      purchase_id: newPurchaseId,
-                      amount: amountPaid,
-                      payment_method: values.payment_method,
-                      payment_date: new Date().toISOString(),
-                      notes: `Initial payment for Purchase #${newPurchaseId}`
-                  });
-              }
+              await DataService.recordPurchasePayment({
+                  local_id: crypto.randomUUID(),
+                  supplier_id: values.supplier_id,
+                  purchase_id: purchaseId,
+                  amount: amountPaid,
+                  payment_method: values.payment_method,
+                  payment_date: new Date().toISOString(),
+                  notes: `Initial payment for Purchase`
+              });
           }
           message.success("Purchase invoice created successfully!");
       }
 
-      await syncAllData();
+      // Sync process background mein chalta rahega
+      processSyncQueue();
       refetchStockCount();
       onPurchaseCreated();
 

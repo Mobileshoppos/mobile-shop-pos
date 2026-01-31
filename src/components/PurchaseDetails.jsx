@@ -149,18 +149,6 @@ const PurchaseDetails = () => {
     const showPaymentModal = () => { paymentForm.setFieldsValue({ amount: purchase.balance_due, payment_date: dayjs(), payment_method: 'Cash' }); setIsPaymentModalVisible(true); };
     const handlePaymentSubmit = async (values) => { try { if (values.amount > purchase.balance_due) { notification.warning({ message: 'Warning', description: 'Payment amount cannot be greater than the balance due.' }); return; } const paymentData = { local_id: crypto.randomUUID(), amount: values.amount, payment_date: values.payment_date.format('YYYY-MM-DD'), payment_method: values.payment_method, notes: values.notes || null, supplier_id: purchase.supplier_id, purchase_id: purchase.id, }; await DataService.recordPurchasePayment(paymentData); notification.success({ message: 'Success', description: 'Payment recorded successfully!' }); setIsPaymentModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to record payment.' }); } };
 const showEditModal = () => {
-        // --- NAYA CODE: Internet Check ---
-        if (!navigator.onLine) {
-            // Agar internet nahi hai, to yahi rok dein aur user ko bata dein
-            notification.warning({
-                message: 'Internet Required',
-                description: 'Internet connection required to edit.',
-            });
-            return;
-        }
-        // ---------------------------------
-
-        // Agar internet hai, to modal khol dein
         setIsEditModalVisible(true);
     };
     const handleUpdateSubmit = async (values) => { try { const updatedData = { notes: values.notes, items: editingItems, }; await DataService.updatePurchase(id, updatedData); notification.success({ message: 'Success', description: 'Purchase updated successfully!' }); setIsEditModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to update purchase.' }); } };
