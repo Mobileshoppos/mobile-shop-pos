@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List, Dropdown } from 'antd';
-import { ShopOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, MoreOutlined, ReloadOutlined, InboxOutlined } from '@ant-design/icons';
+import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List, Dropdown, Tabs, Descriptions, Divider } from 'antd';
+import { ShopOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, EyeOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
 import { useSync } from '../context/SyncContext';
+import { useTheme } from '../context/ThemeContext';
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -29,10 +30,8 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
     const fetchLedger = useCallback(async () => {
         if (!supplier?.id) return; setLoading(true);
         try {
-            // Yahan hum refunds bhi mangwa rahe hain
             const { supplier: calculatedSup, purchases, payments, refunds } = await DataService.getSupplierLedgerDetails(supplier.id);
             
-            // Refund ka total nikaalna
             const totalRefundsAmount = (refunds || []).reduce((sum, r) => sum + (r.amount || 0), 0);
             
             setCalculatedStats({ ...calculatedSup, total_refunds: totalRefundsAmount });
@@ -63,18 +62,30 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                     credit: 0, 
                 }))
             ];
-           // A. Asal sequence (Oldest to Newest) ke liye created_at use karein
-            combinedData.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+           // A. Calculation ke liye pehle purani se nayi tarteeb (Oldest to Newest)
+            combinedData.sort((a, b) => {
+                const timeDiff = new Date(a.created_at) - new Date(b.created_at);
+                if (timeDiff !== 0) return timeDiff;
+                // Agar waqt bilkul barabar ho (maslan Save Purchase par), to Purchase pehle rakho
+                const priority = { 'Purchase': 1, 'Return': 2, 'Payment': 3, 'Refund': 4 };
+                return (priority[a.type] || 0) - (priority[b.type] || 0);
+            });
 
-            // B. Running Balance calculate karein (Wahi purana logic)
+            // B. Running Balance calculate karein
             let currentBal = 0;
             const dataWithRunningBalance = combinedData.map(item => {
                 currentBal += (Number(item.debit || 0) - Number(item.credit || 0));
                 return { ...item, running_balance: currentBal };
             });
 
-            // C. Display ke liye ULAT (Newest on Top) kar dein
-            dataWithRunningBalance.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            // C. Display ke liye ULAT (Newest on Top) karein
+            dataWithRunningBalance.sort((a, b) => {
+                const timeDiff = new Date(b.created_at) - new Date(a.created_at);
+                if (timeDiff !== 0) return timeDiff;
+                // Tie-breaker: Agar waqt same ho, to Payment/Refund ko upar dikhao
+                const priority = { 'Refund': 4, 'Payment': 3, 'Return': 2, 'Purchase': 1 };
+                return (priority[b.type] || 0) - (priority[a.type] || 0);
+            });
             
             setLedgerData(dataWithRunningBalance);
             
@@ -109,7 +120,17 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
             notification.error({ message: 'Error', description: error.message || 'Failed to record payment.' }); 
         }
     };
-    const showRefundModal = () => { refundForm.setFieldsValue({ amount: supplier.credit_balance > 0 ? supplier.credit_balance : undefined, refund_date: dayjs(), refund_method: 'Cash', notes: 'Credit settlement' }); setIsRefundModalVisible(true); };
+    const showRefundModal = () => { 
+        const availableCredit = calculatedStats?.credit_balance || 0;
+
+        refundForm.setFieldsValue({ 
+            amount: availableCredit > 0 ? availableCredit : undefined, 
+            refund_date: dayjs(), 
+            refund_method: 'Cash', 
+            notes: 'Credit settlement' 
+        }); 
+        setIsRefundModalVisible(true); 
+    };
     const handleRefundSubmit = async (values) => {
         try {
             const refundId = crypto.randomUUID();
@@ -138,17 +159,17 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
         { title: 'Date', dataIndex: 'date', key: 'date', render: (d) => new Date(d).toLocaleDateString() },
         { title: 'Type', dataIndex: 'type', key: 'type', render: (t) => <Tag color={t === 'Purchase' ? 'volcano' : 'green'}>{t}</Tag> },
         { title: 'Details', dataIndex: 'details', key: 'details', render: (text, record) => record.link ? <Link to={record.link}>{text}</Link> : text },
-        { title: 'Debit', dataIndex: 'debit', key: 'debit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
-        { title: 'Credit', dataIndex: 'credit', key: 'credit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
+        { title: 'Debit (Bill)', dataIndex: 'debit', key: 'debit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
+        { title: 'Credit (Paid)', dataIndex: 'credit', key: 'credit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
         { 
             title: 'Balance', 
             dataIndex: 'running_balance', 
             key: 'running_balance', 
             align: 'right', 
             render: (val) => (
-                <Text strong style={{ color: val > 0 ? '#cf1322' : '#52c41a' }}>
+                <div className="nowrap-column" style={{ color: val > 0 ? '#cf1322' : '#52c41a' }}>
                     {formatCurrency(val, profile?.currency)}
-                </Text>
+                </div>
             )
         },
     ];
@@ -166,8 +187,8 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                 <Col xs={12} sm={4}><Statistic title="Total Business" value={calculatedStats?.total_purchases || 0} formatter={() => formatCurrency(calculatedStats?.total_purchases || 0, profile?.currency)} /></Col>
                 <Col xs={12} sm={5}><Statistic title="Total Paid" value={calculatedStats?.total_payments || 0} valueStyle={{ color: '#1890ff' }} formatter={() => formatCurrency(calculatedStats?.total_payments || 0, profile?.currency)} /></Col>
                 <Col xs={12} sm={5}><Statistic title="Total Refunds" value={calculatedStats?.total_refunds || 0} valueStyle={{ color: '#faad14' }} formatter={() => formatCurrency(calculatedStats?.total_refunds || 0, profile?.currency)} /></Col>
-                <Col xs={12} sm={5}><Statistic title="Balance Due" value={supplier?.balance_due || 0} valueStyle={{ color: '#cf1322' }} formatter={() => formatCurrency(supplier?.balance_due || 0, profile?.currency)} /></Col>
-                <Col xs={12} sm={5}><Statistic title="Your Credit" value={supplier?.credit_balance || 0} valueStyle={{ color: '#52c41a' }} formatter={() => formatCurrency(supplier?.credit_balance || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={5}><Statistic title="Balance Due" value={calculatedStats?.balance_due || 0} valueStyle={{ color: '#cf1322' }} formatter={() => formatCurrency(calculatedStats?.balance_due || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={5}><Statistic title="Your Credit" value={calculatedStats?.credit_balance || 0} valueStyle={{ color: '#52c41a' }} formatter={() => formatCurrency(calculatedStats?.credit_balance || 0, profile?.currency)} /></Col>
             </Row>
 
             <Title level={4}>Transaction Ledger</Title>
@@ -235,6 +256,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
 
 const SupplierDashboard = () => {
     const { token } = theme.useToken();
+    const { isDarkMode } = useTheme();
     const searchInputRef = useRef(null);
     const supplierNameInputRef = useRef(null);
 
@@ -252,6 +274,7 @@ const SupplierDashboard = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showArchived, setShowArchived] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [isViewModalVisible, setIsViewModalVisible] = useState(false);
     // --- FOCUS LOGIC (Corrected Position) ---
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -270,11 +293,11 @@ const SupplierDashboard = () => {
     }, [isModalVisible]);
 
     useEffect(() => {
-    if (isModalVisible) { // Agar modal khula hua hai
-        if (editingSupplier) { // Aur hum kisi supplier ko edit kar rahe hain
-            form.setFieldsValue(editingSupplier); // To uska data form mein daal do
-        } else { // Warna (yaani naya supplier add kar rahe hain)
-            form.resetFields(); // Form ko bilkul saaf kar do
+    if (isModalVisible) { 
+        if (editingSupplier) { 
+            form.setFieldsValue(editingSupplier); 
+        } else { 
+            form.resetFields(); 
         }
     }
 }, [isModalVisible, editingSupplier, form]);
@@ -368,7 +391,16 @@ const SupplierDashboard = () => {
                     )}
                     <Flex justify="space-between" align="start" wrap="wrap" gap="small">
                         <div style={{ flex: 1, minWidth: '250px' }}>
-                            <Title level={isMobile ? 3 : 2} style={{ margin: 0 }}>{selectedSupplier.name}</Title>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <Title level={isMobile ? 3 : 2} style={{ margin: 0 }}>{selectedSupplier.name}</Title>
+                                <Button 
+                                    type="text"
+                                    icon={<EyeOutlined style={{ fontSize: '22px', color: '#b8b9baff' }} />} 
+                                    onClick={() => setIsViewModalVisible(true)}
+                                    title="View Full Details"
+                                    style={{ padding: 0, height: 'auto' }}
+                                />
+                            </div>
                             <Text type="secondary">{selectedSupplier.contact_person} | {selectedSupplier.phone}</Text><br/>
                             <Text type="secondary">{selectedSupplier.address}</Text>
                         </div>
@@ -381,7 +413,6 @@ const SupplierDashboard = () => {
                                             key: 'edit',
                                             label: 'Edit Details',
                                             icon: <EditOutlined />,
-                                            // Security Check: Agar naam "Cash Purchase" hai to Edit band kar dein
                                             disabled: selectedSupplier.name === 'Cash Purchase', 
                                             onClick: () => handleEdit(selectedSupplier)
                                         },
@@ -389,7 +420,6 @@ const SupplierDashboard = () => {
                                             key: 'archive',
                                             label: showArchived ? 'Restore Supplier' : 'Archive Supplier',
                                             icon: showArchived ? <ReloadOutlined /> : <InboxOutlined />,
-                                            // Security Check: Cash Purchase ko archive nahi kiya ja sakta
                                             disabled: selectedSupplier.name === 'Cash Purchase', 
                                             onClick: () => handleToggleArchive(selectedSupplier)
                                         },
@@ -398,7 +428,6 @@ const SupplierDashboard = () => {
                                             label: 'Delete Supplier',
                                             icon: <DeleteOutlined />,
                                             danger: true,
-                                            // Security Check: Cash Purchase ko delete karna sakht mana hai
                                             disabled: selectedSupplier.name === 'Cash Purchase', 
                                             onClick: () => {
                                                 modal.confirm({
@@ -427,9 +456,40 @@ const SupplierDashboard = () => {
     };
 
     return (
-        <Layout style={{ background: 'transparent', padding: '24px' }}>
+        <>
+            <style>{`
+                .custom-scrollbar::-webkit-scrollbar {
+                    width: 6px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background: ${isDarkMode ? '#444' : '#ccc'};
+                    border-radius: 10px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: ${isDarkMode ? '#666' : '#999'};
+                }
+                
+                /* Sidebar Selected Item Fix */
+                .ant-menu-item-selected {
+                    background-color: ${isDarkMode ? '#111' : '#e6f7ff'} !important;
+                }
+                .ant-menu-item-selected .ant-typography {
+                    color: ${isDarkMode ? '#fff' : '#1890ff'} !important;
+                    font-weight: bold;
+                }
+
+                /* Table Balance Wrap Fix */
+                .nowrap-column {
+                    white-space: nowrap !important;
+                    font-weight: bold;
+                }
+            `}</style>
+            <Layout style={{ background: 'transparent', padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <Title level={2} style={{ margin: 0, marginLeft: '48px' }}>
+                <Title level={2} style={{ margin: 0, marginLeft: '48px', fontSize: '23px' }}>
                     <ShopOutlined /> Suppliers Dashboard
                 </Title>
                 <Button 
@@ -477,7 +537,7 @@ const SupplierDashboard = () => {
                                         onClick={() => setSelectedSupplierId(s.id)}
                                         style={{ cursor: 'pointer', padding: '12px 8px' }}
                                     >
-                                        <List.Item.Meta title={<Text>{s.name}</Text>} />
+                                        <List.Item.Meta title={<Text style={{ color: 'inherit' }}>{s.name}</Text>} />
                                         {s.balance_due > 0 && <Tag color="red">{formatCurrency(s.balance_due, profile?.currency)}</Tag>}
                                     </List.Item>
                                 )}
@@ -508,12 +568,14 @@ const SupplierDashboard = () => {
                                 selectedKeys={[String(selectedSupplierId)]}
                                 onClick={({ key }) => setSelectedSupplierId(key)}
                                 style={{ height: 'calc(100vh - 310px)', overflowY: 'auto', borderRight: 0, background: 'transparent' }}
+                                className="custom-scrollbar" // Scrollbar fix
                                 items={filteredSuppliers.map(s => ({
                                     key: s.id,
                                     label: (
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span>{s.name}</span>
-                                            {s.balance_due > 0 && <Tag color="red">{formatCurrency(s.balance_due, profile?.currency)}</Tag>}
+                                            {/* Text component khud hi light/dark mode ke mutabiq rang badal lega */}
+                                            <Text>{s.name}</Text>
+                                            {s.balance_due > 0 && <Tag color="red" style={{ fontSize: '10px' }}>{formatCurrency(s.balance_due, profile?.currency)}</Tag>}
                                         </div>
                                     )
                                 }))}
@@ -525,16 +587,163 @@ const SupplierDashboard = () => {
             )}
 
             <Modal title={editingSupplier ? "Edit Supplier" : "Add New Supplier"} open={isModalVisible} onOk={handleModalOk} onCancel={() => setIsModalVisible(false)} okText="Save" destroyOnHidden>
-                <Form form={form} layout="vertical" name="supplier_form" style={{ marginTop: 24 }}>
-                    <Form.Item name="name" label="Supplier Name" rules={[{ required: true }]}>
-                        <Input ref={supplierNameInputRef} />
-                    </Form.Item>
-                    <Form.Item name="contact_person" label="Contact Person"><Input /></Form.Item>
-                    <Form.Item name="phone" label="Phone Number"><Input /></Form.Item>
-                    <Form.Item name="address" label="Address"><Input.TextArea rows={2} /></Form.Item>
+                <Form form={form} layout="vertical" name="supplier_form" style={{ marginTop: 10 }}>
+                    <Tabs defaultActiveKey="1" items={[
+                        {
+                            key: '1',
+                            label: 'General',
+                            children: (
+                                <Row gutter={16}>
+                                    <Col span={24}>
+                                        <Form.Item name="name" label="Company" rules={[{ required: true }]} tooltip="Supplier or Business legal name">
+                                            <Input ref={supplierNameInputRef} placeholder="e.g. Samsung Global" />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item name="contact_person" label="Contact" tooltip="Primary person to contact">
+                                            <Input placeholder="John Doe" />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item name="tax_id" label="Tax ID" tooltip="VAT, GST, or NTN Number">
+                                            <Input placeholder="Tax Registration #" />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item name="email" label="Email" rules={[{ type: 'email' }]} tooltip="Business email address">
+                                            <Input placeholder="supplier@email.com" />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item name="phone" label="Phone" tooltip="Mobile or Landline number">
+                                            <Input placeholder="+123456789" />
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+                            )
+                        },
+                        {
+                            key: '2',
+                            label: 'Location',
+                            children: (
+                                <Row gutter={16}>
+                                    <Col span={24}>
+                                        <Form.Item name="address" label="Address" tooltip="Street and area details">
+                                            <Input.TextArea rows={2} placeholder="Building, Street..." />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item name="city" label="City" tooltip="City name">
+                                            <Input placeholder="New York" />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={12}>
+                                        <Form.Item name="country" label="Country" tooltip="Country name">
+                                            <Input placeholder="USA" />
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+                            )
+                        },
+                        {
+                            key: '3',
+                            label: 'Banking',
+                            children: (
+                                <Row gutter={16}>
+                                    <Col span={24}>
+                                        <Form.Item name="bank_name" label="Bank" tooltip="Supplier's bank name">
+                                            <Input placeholder="e.g. HBL, Barclays..." />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={24}>
+                                        <Form.Item name="bank_account_title" label="A/C Title" tooltip="Account holder name">
+                                            <Input placeholder="Account Title" />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={24}>
+                                        <Form.Item name="bank_account_no" label="A/C or IBAN" tooltip="Bank account number or International IBAN">
+                                            <Input placeholder="Account Number / IBAN" />
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
+                            )
+                        }
+                    ]} />
                 </Form>
             </Modal>
+            <Modal
+                title={null} 
+                open={isViewModalVisible}
+                onCancel={() => setIsViewModalVisible(false)}
+                footer={[
+                    <Button key="close" type="primary" onClick={() => setIsViewModalVisible(false)}>
+                        Close Profile
+                    </Button>
+                ]}
+                width={600}
+                centered
+            >
+                <div style={{ padding: '10px 0' }}>
+                    <div style={{ borderBottom: '2px solid #1890ff', paddingBottom: 15, marginBottom: 25 }}>
+                        <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
+                            {selectedSupplier?.name?.toUpperCase()}
+                        </Title>
+                        {selectedSupplier?.tax_id && (
+                            <Text type="secondary">Tax ID: {selectedSupplier.tax_id}</Text>
+                        )}
+                    </div>
+
+                    <Row gutter={[32, 24]}>
+                        <Col span={24}>
+                            <Divider orientation="left" plain><Text strong type="secondary">CONTACT INFORMATION</Text></Divider>
+                            <Descriptions column={2} bordered={false}>
+                                <Descriptions.Item label={<Text type="secondary">Contact Person</Text>} span={2}>
+                                    <Text strong>{selectedSupplier?.contact_person || 'N/A'}</Text>
+                                </Descriptions.Item>
+                                <Descriptions.Item label={<Text type="secondary">Email Address</Text>} span={2}>
+                                    <Text strong>{selectedSupplier?.email || 'N/A'}</Text>
+                                </Descriptions.Item>
+                                <Descriptions.Item label={<Text type="secondary">Phone Number</Text>} span={2}>
+                                    <Text strong>{selectedSupplier?.phone || 'N/A'}</Text>
+                                </Descriptions.Item>
+                            </Descriptions>
+                        </Col>
+
+                        <Col span={24}>
+                            <Divider orientation="left" plain><Text strong type="secondary">LOCATION DETAILS</Text></Divider>
+                            <Descriptions column={1} bordered={false}>
+                                <Descriptions.Item label={<Text type="secondary">Full Address</Text>}>
+                                    <Text strong>{selectedSupplier?.address || 'N/A'}</Text>
+                                </Descriptions.Item>
+                                <Descriptions.Item label={<Text type="secondary">City / Country</Text>}>
+                                    <Text strong>
+                                        {`${selectedSupplier?.city || ''}${selectedSupplier?.city && selectedSupplier?.country ? ', ' : ''}${selectedSupplier?.country || ''}` || 'N/A'}
+                                    </Text>
+                                </Descriptions.Item>
+                            </Descriptions>
+                        </Col>
+
+                        <Col span={24}>
+                            <div style={{ background: isDarkMode ? 'rgba(255,255,255,0.05)' : '#f5f5f5', padding: '15px', borderRadius: '8px', borderLeft: '4px solid #52c41a' }}>
+                                <Text strong style={{ display: 'block', marginBottom: 10, color: '#52c41a' }}>BANKING DETAILS</Text>
+                                <Descriptions column={1} size="small" bordered={false}>
+                                    <Descriptions.Item label={<Text type="secondary">Bank Name</Text>}>
+                                        <Text strong>{selectedSupplier?.bank_name || 'N/A'}</Text>
+                                    </Descriptions.Item>
+                                    <Descriptions.Item label={<Text type="secondary">Account Title</Text>}>
+                                        <Text strong>{selectedSupplier?.bank_account_title || 'N/A'}</Text>
+                                    </Descriptions.Item>
+                                    <Descriptions.Item label={<Text type="secondary">A/C or IBAN</Text>}>
+                                        <Text code style={{ fontSize: '14px' }}>{selectedSupplier?.bank_account_no || 'N/A'}</Text>
+                                    </Descriptions.Item>
+                                </Descriptions>
+                            </div>
+                        </Col>
+                    </Row>
+                </div>
+            </Modal>
         </Layout>
+        </>
     );
 };
 

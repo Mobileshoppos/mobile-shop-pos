@@ -164,8 +164,9 @@ const SalesHistory = () => {
       const receiptData = {
           shopName: profile?.shop_name || 'My Shop',
           shopAddress: profile?.address || '',
-          shopPhone: profile?.phone || '',
+          shopPhone: profile?.phone_number || '',
           saleId: sale.id,
+          invoice_id: sale.invoice_id,
           saleDate: sale.created_at || sale.sale_date,
           customerName: customer ? customer.name : 'Walk-in Customer',
           items: finalReceiptItems, 
@@ -327,7 +328,7 @@ const SalesHistory = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      <Title level={2} style={{ marginBottom: '24px', marginLeft: '48px' }}>
+      <Title level={2} style={{ marginBottom: '24px', marginLeft: '48px', fontSize: '23px' }}>
         <HistoryOutlined /> Sales History
       </Title>
       <Card>

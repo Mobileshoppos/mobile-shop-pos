@@ -154,7 +154,7 @@ const Expenses = () => {
   return (
     <div style={{ padding: '24px' }}>
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', gap: '16px' }}>
-        <Title level={2} style={{ margin: 0, marginLeft: '48px' }}>
+        <Title level={2} style={{ margin: 0, marginLeft: '48px', fontSize: '23px' }}>
           <DollarCircleOutlined /> Manage Expenses
         </Title>
   <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()} block={isMobile}>

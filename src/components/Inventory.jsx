@@ -791,15 +791,21 @@ const Inventory = () => {
 
       if (!variantId) throw new Error("Item ID not found.");
 
-      // 2. OFFLINE DUPLICATE BARCODE CHECK
+      // 2. OFFLINE DUPLICATE BARCODE CHECK (Smart Case-Insensitive)
+      // 2. OFFLINE DUPLICATE BARCODE CHECK (Smart, Case-Insensitive & Trimmed)
       if (values.barcode) {
+        const lowerBarcode = values.barcode.trim().toLowerCase();
+        
         const duplicateItem = await db.product_variants
-          .where('barcode').equals(values.barcode)
-          .filter(item => item.id !== variantId)
+          .filter(item => 
+            item.barcode?.trim().toLowerCase() === lowerBarcode && 
+            item.id !== variantId
+          )
           .first();
 
         if (duplicateItem) {
-          throw new Error(`Barcode "${values.barcode}" is already in use by another product.`);
+          message.error(`Barcode "${values.barcode}" is already assigned to a different product or variant.`);
+          return; // Yahin rok dein
         }
       }
 
@@ -811,7 +817,7 @@ const Inventory = () => {
       });
 
       // 4. UI SUCCESS
-      message.success('Item updated successfully (Offline-ready)!');
+      message.success('Item updated successfully!');
       setIsEditModalOpen(false);
       setEditingItem(null);
       
@@ -849,8 +855,8 @@ const Inventory = () => {
   return (
     <div style={{ padding: '24px' }}>
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '24px' }}>
-        <Title level={2} style={{ margin: 0, marginLeft: '48px' }}>
-          <DatabaseOutlined /> {showLowStockOnly ? 'Low Stock Products' : 'Product Inventory'}
+        <Title level={2} style={{ margin: 0, marginLeft: '48px', fontSize: '23px' }}>
+          <DatabaseOutlined /> {showLowStockOnly ? 'Low Stock Products' : 'Inventory'}
         </Title>
         <Button type="primary" size="Normal" onClick={() => setIsProductModalOpen(true)} style={{ width: isMobile ? '100%' : 'auto' }}>Add New Product Model</Button>
       </div>

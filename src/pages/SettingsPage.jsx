@@ -133,7 +133,7 @@ const SettingsPage = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: '48px' }}>
+      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: '48px', fontSize: '23px' }}>
         <ToolOutlined /> App Settings
       </Title>
       <Text type="secondary">Change the look and feel of your application here.</Text>

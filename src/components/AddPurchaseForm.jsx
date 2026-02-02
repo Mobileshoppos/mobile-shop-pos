@@ -15,9 +15,10 @@ const { Title, Text } = Typography;
 const { Option } = Select;
 
 // --- ITEM DETAIL MODAL (Chota Modal) ---
-const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialValues }) => {
+const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialValues, existingItems, editingItemIndex }) => {
   const { profile } = useAuth();
   const { isDarkMode } = useTheme();
+  const { message } = App.useApp(); 
   const [form] = Form.useForm();
   const [imeis, setImeis] = useState(['']);
   const imeiInputRefs = useRef([]);
@@ -114,6 +115,27 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
         const finalImeis = imeis.map(imei => imei.trim()).filter(imei => imei);
         if (finalImeis.length === 0) throw new Error("Please enter at least one IMEI/Serial.");
 
+        // --- SMART DOUBLE-LOCK CHECK ---
+        for (const imei of finalImeis) {
+            const lowerImei = imei.toLowerCase();
+
+            // 1. Check in Current Bill (Jo screen par list hai)
+            const duplicateInList = existingItems?.some((item, idx) => 
+                item.imei?.toLowerCase() === lowerImei && idx !== editingItemIndex
+            );
+
+            // 2. Check in Database (Jo pehle se dukan mein hai)
+            const existingInDb = await db.inventory
+                .filter(item => item.imei?.toLowerCase() === lowerImei && item.id !== initialValues?.id)
+                .first();
+
+            if (duplicateInList || existingInDb) {
+                message.error(`IMEI/Serial "${imei}" is already in this bill or in stock!`);
+                return;
+            }
+        }
+        // --- CHECK KHATAM ---
+
         finalItemsData = finalImeis.map(imei => ({
             // Agar edit kar rahe hain to purani ID sath rakhein (Server Safety)
             id: initialValues?.id || null, 
@@ -131,6 +153,47 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
         }));
 
       } else {
+        // --- PERFECT VARIANT IDENTITY CHECK (Barcode) ---
+        if (values.barcode) {
+            const lowerBarcode = values.barcode.toLowerCase();
+            
+            // Attributes ko sort karke string banana taake comparison sahi ho
+            const currentAttrsJson = JSON.stringify(Object.entries(item_attributes).sort());
+
+            // 1. Check in Database (Existing Products)
+            const variantInDb = await db.product_variants
+                .filter(v => v.barcode?.toLowerCase() === lowerBarcode)
+                .first();
+
+            if (variantInDb) {
+                const dbAttrsJson = JSON.stringify(Object.entries(variantInDb.attributes || {}).sort());
+                
+                // Agar Product ID mukhtalif hai YA Attributes mukhtalif hain, to yeh Duplicate hai
+                const isExactMatch = variantInDb.product_id === product.id && dbAttrsJson === currentAttrsJson;
+
+                if (!isExactMatch) {
+                    message.error(`Barcode "${values.barcode}" is already owned by a different product or variant. Each variant must have a unique barcode.`);
+                    return;
+                }
+            }
+
+            // 2. Check in Current Bill (List)
+            const itemInList = existingItems?.find((item, idx) => 
+                item.barcode?.toLowerCase() === lowerBarcode && idx !== editingItemIndex
+            );
+
+            if (itemInList) {
+                const listAttrsJson = JSON.stringify(Object.entries(item_list?.item_attributes || {}).sort());
+                const isExactMatchInList = itemInList.product_id === product.id && listAttrsJson === currentAttrsJson;
+
+                if (!isExactMatchInList) {
+                    message.error(`Barcode "${values.barcode}" is being used by a different variant in this bill.`);
+                    return;
+                }
+            }
+        }
+        // --- CHECK KHATAM ---
+
         finalItemsData = [{
             id: initialValues?.id || null,
             status: initialValues?.status || 'Available',
@@ -267,10 +330,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
   useEffect(() => {
     if (visible && !editingPurchase) {
         if (isCashPurchase) {
-            // Rule 1: Cash purchase hai to poori raqam khud bhar do aur Cash select kar lo
             form.setFieldsValue({ amount_paid: totalAmount, payment_method: 'Cash' });
         } else {
-            // Rule 2: Agar koi aur supplier hai to field khali rakho
             form.setFieldsValue({ amount_paid: 0 });
         }
     }
@@ -278,7 +339,6 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
 
   const getProductsWithCategory = useCallback(async () => {
     try {
-      // Local DB se products aur categories uthayein
       const localProducts = await db.products.toArray();
       const localCategories = await db.categories.toArray();
       
@@ -347,7 +407,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
                   supplier_id: editingPurchase.supplier_id,
                   notes: editingPurchase.notes,
                   amount_paid: editingPurchase.amount_paid,
-                  payment_method: 'Cash' // Default
+                  payment_method: 'Cash' 
               });
 
               // Items ko format karein (Bulk fields ke sath)
@@ -708,6 +768,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
           onOk={handleItemDetailsOk} 
           product={selectedProduct}
           attributes={selectedProductAttributes}
+          existingItems={purchaseItems}
+          editingItemIndex={editingItemIndex}
           initialValues={editingItemIndex !== null ? purchaseItems[editingItemIndex] : (initialData && !editingPurchase ? { ...initialData, quantity: 1 } : null)}
         />
       }

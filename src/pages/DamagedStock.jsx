@@ -114,7 +114,7 @@ const DamagedStock = () => {
         <div style={{ padding: '24px' }}>
             <Row justify="space-between" align="middle" style={{ marginBottom: '24px' }}>
                 <Col>
-                    <Title level={2} style={{ margin: 0, marginLeft: '48px' }}>
+                    <Title level={2} style={{ margin: 0, marginLeft: '48px', fontSize: '23px' }}>
                         <AlertOutlined style={{color: 'red'}} /> Damaged Stock Report
                     </Title>
                 </Col>

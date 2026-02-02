@@ -127,7 +127,7 @@ const Purchases = () => {
     style={{ marginBottom: '24px' }}
     vertical={isMobile} // Yeh 'flex-direction: column' set kar dega agar mobile hai
 >
-    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0', marginLeft: '48px' }}>
+    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0', marginLeft: '48px', fontSize: '23px' }}>
         <FileTextOutlined /> Purchase History
     </Title>
     <Button 

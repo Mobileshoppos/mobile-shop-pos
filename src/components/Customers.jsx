@@ -908,7 +908,7 @@ const handleCloseInvoiceSearchModal = () => {
     alignItems: isMobile ? 'flex-start' : 'center',
     marginBottom: '24px'
 }}>
-    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0', marginLeft: '48px' }}>
+    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0', marginLeft: '48px', fontSize: '23px' }}>
         <UserSwitchOutlined /> Customer Management
     </Title>
 
@@ -1111,7 +1111,7 @@ const handleCloseInvoiceSearchModal = () => {
     <Radio.Button value="Bank">Bank / Online</Radio.Button>
   </Radio.Group>
 </Form.Item>
-</Form> </Modal> <Modal title={`Return for Invoice #${selectedSale?.id}`} open={isReturnModalOpen} onCancel={handleReturnCancel} onOk={() => returnForm.submit()} okText="Confirm Return" confirmLoading={isReturnSubmitting} okButtonProps={{ disabled: selectedReturnItems.length === 0 || returnFee > maxAllowedFee }}> 
+</Form> </Modal> <Modal title={`Return for Invoice #${selectedSale?.invoice_id || selectedSale?.id}`} open={isReturnModalOpen} onCancel={handleReturnCancel} onOk={() => returnForm.submit()} okText="Confirm Return" confirmLoading={isReturnSubmitting} okButtonProps={{ disabled: selectedReturnItems.length === 0 || returnFee > maxAllowedFee }}> 
   <Table 
     dataSource={returnableItems} 
     rowKey="sale_item_id" 
@@ -1260,7 +1260,7 @@ const handleCloseInvoiceSearchModal = () => {
     ) : (
       // STAGE 2: JAB SALE MIL GAYI HO
       <div>
-        <Descriptions title={`Invoice #${searchedSale.id}`} bordered column={1} size="small">
+        <Descriptions title={`Invoice #${searchedSale.invoice_id || searchedSale.id}`} bordered column={1} size="small">
           <Descriptions.Item label="Customer">
             {searchedSale.customer ? searchedSale.customer.name : 'Walk-in Customer'}
           </Descriptions.Item>

@@ -192,7 +192,7 @@ const Dashboard = () => {
   };
 
   // --- Custom Styles for Cards ---
-  const cardStyle = { borderRadius: 5, border: 'none', color: 'white', height: '100%' };
+  const cardStyle = { borderRadius: 8, border: 'none', color: 'white', height: '100%', };
 
   // --- Graph Configuration (UPDATED FOR DARK MODE) ---
   const config = {
@@ -269,7 +269,7 @@ const Dashboard = () => {
       
       {/* HEADER WITH FILTERS */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
-        <Title level={2} style={{ margin: 0, marginLeft: '48px' }}>
+        <Title level={2} style={{ margin: 0, marginLeft: '48px',fontSize: '23px' }}>
           <HomeOutlined /> Dashboard
         </Title>
         
@@ -292,7 +292,7 @@ const Dashboard = () => {
               </span>}
               value={stats?.totalSales || 0}
               prefix={<ShoppingOutlined />}
-              valueStyle={{ color: 'white', fontWeight: 'bold' }}
+              valueStyle={{ color: 'white', fontWeight: 'bold', fontSize: '22px' }}
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
             {renderTrend(stats?.salesGrowth)}
@@ -315,7 +315,7 @@ const Dashboard = () => {
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Cash in Hand</span>}
               value={stats?.cashInHand || 0}
               prefix={<WalletOutlined />}
-              valueStyle={{ color: 'white', fontWeight: 'bold' }}
+              valueStyle={{ color: 'white', fontWeight: 'bold', fontSize: '21px' }}
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
               <Space size="small">
@@ -351,7 +351,7 @@ const Dashboard = () => {
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Net Profit</span>}
               value={stats?.netProfit || 0}
               prefix={<RiseOutlined />}
-              valueStyle={{ color: 'white', fontWeight: 'bold' }}
+              valueStyle={{ color: 'white', fontWeight: 'bold', fontSize: '22px' }}
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
             
@@ -393,7 +393,7 @@ const Dashboard = () => {
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Total Expenses</span>}
               value={stats?.totalExpenses || 0}
               prefix={<FallOutlined />}
-              valueStyle={{ color: 'white', fontWeight: 'bold' }}
+              valueStyle={{ color: 'white', fontWeight: 'bold', fontSize: '22px' }}
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
             {renderTrend(stats?.expensesGrowth)}
@@ -436,7 +436,7 @@ const Dashboard = () => {
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Total Receivables</span>}
               value={stats?.totalReceivables || 0}
               prefix={<UserOutlined />}
-              valueStyle={{ color: 'white', fontWeight: 'bold' }}
+              valueStyle={{ color: 'white', fontWeight: 'bold', fontSize: '22px' }}
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
              <div style={{ marginTop: 8, fontSize: '12px', opacity: 0.8 }}>

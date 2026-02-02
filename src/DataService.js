@@ -530,13 +530,19 @@ const DataService = {
     // 2. Total Paid: Ledger mein jitni payments hain, un sab ko jama karein
     const calculatedTotalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
-    // 3. Stats tayyar karein (Jo screen par nazar aayenge)
+    // 3. NAYA HISSA: Smart Calculation (Offline consistency ke liye)
+    const totalRefundsAmount = (refunds || []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+    const netPaid = calculatedTotalPaid - totalRefundsAmount;
+    const diff = netPaid - calculatedTotalBusiness;
+
     const supplierWithStats = {
         ...supplier,
         total_purchases: calculatedTotalBusiness,
         total_payments: calculatedTotalPaid,
-        credit_balance: supplier.credit_balance || 0,
-        balance_due: supplier.balance_due || 0
+        total_refunds: totalRefundsAmount,
+        // Agar payment zyada hai to Credit, agar business zyada hai to Balance Due
+        credit_balance: diff > 0 ? diff : 0,
+        balance_due: diff < 0 ? Math.abs(diff) : 0
     };
 
     return { supplier: supplierWithStats, purchases, payments, refunds };
@@ -1163,17 +1169,7 @@ async addCustomer(customerData) {
         status: (currentBalance - returnToClearDebt) <= 0 ? 'paid' : 'partially_paid'
     });
 
-    // 4. Supplier Credit Update
-    if (creditToAdd > 0) {
-        const supplier = await db.suppliers.get(purchase.supplier_id);
-        if (supplier) {
-            await db.suppliers.update(purchase.supplier_id, {
-                credit_balance: (supplier.credit_balance || 0) + creditToAdd
-            });
-        }
-    }
-
-    // 5. Queue mein daalein (Server ke liye)
+    // 4. Queue mein daalein (Server ke liye)
     const returnId = crypto.randomUUID();
     
     await db.sync_queue.add({

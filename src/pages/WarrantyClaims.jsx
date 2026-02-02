@@ -96,7 +96,7 @@ const WarrantyClaims = () => {
 
     return (
         <div style={{ padding: '24px' }}>
-            <Title level={2} style={{marginLeft: '48px'}}><SafetyCertificateOutlined /> Warranty & Claims Management</Title>
+            <Title level={2} style={{marginLeft: '48px', fontSize: '23px'}}><SafetyCertificateOutlined /> Warranty & Claims Management</Title>
             
             <Row gutter={[24, 24]}>
                 <Col xs={24} lg={10}>

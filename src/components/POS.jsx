@@ -24,8 +24,8 @@ const isSmartMatch = (text, search) => {
   if (!text || !search) return false;
   const cleanText = text.toString().toLowerCase();
   const cleanSearch = search.toString().toLowerCase();
-  if (cleanText.includes(cleanSearch)) return true; // Strict match
-  if (cleanSearch.length < 3) return false; // Chote words par risk na lein
+  if (cleanText.includes(cleanSearch)) return true; 
+  if (cleanSearch.length < 3) return false; 
   
   let searchIndex = 0;
   for (let i = 0; i < cleanText.length; i++) {
@@ -103,23 +103,22 @@ const POS = () => {
         const itemsMap = new Map();
         for (const variant of product.variants) {
           const attributesKey = createStableAttributeKey(variant.item_attributes);
-          const key = `${attributesKey}-${variant.sale_price}`; // Group by Attributes & Price
+          const key = `${attributesKey}-${variant.sale_price}`; 
 
           if (itemsMap.has(key)) {
             const existing = itemsMap.get(key);
-          existing.display_quantity += (variant.available_qty || 0); // 1 ki jagah available_qty jama karein
+          existing.display_quantity += (variant.available_qty || 0); 
           existing.ids.push(variant.id);
             if (variant.imei) existing.imeis.push(variant.imei);
           } else {
             itemsMap.set(key, {
             ...variant,
-            display_quantity: variant.available_qty || 0, // 1 ki jagah available_qty rakhein
+            display_quantity: variant.available_qty || 0, 
             ids: [variant.id],
               imeis: variant.imei ? [variant.imei] : [],
-              // Important for Cart:
               product_id: product.id,
               product_name: product.name,
-              variant_id: variant.id // Use first ID as reference
+              variant_id: variant.id 
             });
           }
         }
@@ -137,14 +136,10 @@ const POS = () => {
 
   // --- QUICK ADD HANDLER (SMART LOGIC) ---
   const handleVariantQuickAdd = (variantItem) => {
-    // Check 1: Kya yeh IMEI wala item hai?
     const isImeiItem = variantItem.category_is_imei_based || (variantItem.imeis && variantItem.imeis.length > 0);
 
     if (isImeiItem) {
-        // CASE: IMEI ITEM (Mobile Phones)
-        // Direct add na karein, balkeh Modal kholein taake user IMEI select kar sake
         
-        // Hamein parent product dhoondna hoga taake modal ko sahi data mile
         const parentProduct = allProducts.find(p => p.id === variantItem.product_id);
         
         if (parentProduct) {
@@ -152,8 +147,6 @@ const POS = () => {
             setIsVariantModalOpen(true);
         }
     } else {
-        // CASE: QUANTITY ITEM (Covers/Cables)
-        // Purana tareeqa: Foran cart mein daal do (Fast)
         handleVariantsSelected([variantItem]);
     }
   };
@@ -161,7 +154,6 @@ const POS = () => {
   useEffect(() => {
   if (!user) return;
 
-  // NAYA initialLoad (Offline-First)
   const initialLoad = async () => {
     setLoading(true);
     try {
@@ -227,7 +219,7 @@ const POS = () => {
       setAdvancedFilters(filters);
     } else {
       setAdvancedFilters([]);
-      setFilterAttributes({}); // Reset attributes if category removed
+      setFilterAttributes({}); 
     }
   }, [activeCategoryId, allProducts]);
 
@@ -256,7 +248,6 @@ const POS = () => {
         if (p.variants && p.variants.length > 0) {
             return p.variants.some(v => {
                 if (!v.item_attributes) return false;
-                // Har Tag ki value ko check karein (e.g. "Red", "A10")
                 return Object.values(v.item_attributes).some(val => 
                     isSmartMatch(val, searchTerm)
                 );
@@ -270,18 +261,15 @@ const POS = () => {
     // C. Price Range Filter (Updated for Variants)
     if (priceRange[0] !== null) {
       filtered = filtered.filter(p => {
-        // Agar variants hain to check karein ke kya koi bhi variant is price se zyada hai?
         if (p.variants && p.variants.length > 0) {
            return p.variants.some(v => v.sale_price >= priceRange[0]);
         }
-        // Agar variant nahi hai to main price check karein
         return (p.sale_price || 0) >= priceRange[0];
       });
     }
 
     if (priceRange[1] !== null) {
       filtered = filtered.filter(p => {
-        // Agar variants hain to check karein ke kya koi bhi variant is price se kam hai?
         if (p.variants && p.variants.length > 0) {
            return p.variants.some(v => v.sale_price <= priceRange[1]);
         }
@@ -294,7 +282,6 @@ const POS = () => {
       const attrValue = filterAttributes[attrKey];
       if (attrValue) {
         filtered = filtered.filter(p => {
-          // Check karein agar product ka koi bhi variant match karta hai
           return p.variants && p.variants.some(v => 
             v.item_attributes && v.item_attributes[attrKey] === attrValue
           );
@@ -353,7 +340,6 @@ const POS = () => {
         const { item, count } = groupedQuantityItems[variantId];
         
         // --- STOCK CHECK LOGIC (FIXED) ---
-        // Hum ID ke bajaye Attributes aur Price match karenge
         const parentProduct = allProducts.find(p => p.id === item.product_id);
         const realStockCount = parentProduct 
             ? parentProduct.variants
@@ -362,9 +348,8 @@ const POS = () => {
                     v.sale_price === item.sale_price &&
                     (v.status || 'available').toLowerCase() === 'available'
                 )
-                .reduce((sum, v) => sum + (v.available_qty || 0), 0) // Rows ginne ki bajaye qty jama karein
+                .reduce((sum, v) => sum + (v.available_qty || 0), 0) 
             : 0;
-        // -------------------------------
 
         const existingIndex = updatedCart.findIndex(ci => ci.variant_id === item.variant_id);
 
@@ -423,7 +408,7 @@ const POS = () => {
         if (variantItem) {
             const inventoryItem = await db.inventory
                 .where('variant_id').equals(variantItem.id)
-                .filter(i => (i.status || '').toLowerCase() === 'available') // Yahan pehle se theek tha
+                .filter(i => (i.status || '').toLowerCase() === 'available') 
                 .first();
 
             if (inventoryItem) {
@@ -483,7 +468,6 @@ const POS = () => {
     setCart(cart.map(item => {
       if (item.variant_id === variantId) {
         if (field === 'quantity') {
-          // --- STOCK CHECK LOGIC (FIXED) ---
           const parentProduct = allProducts.find(p => p.id === item.product_id);
           const realStockCount = parentProduct 
               ? parentProduct.variants
@@ -492,14 +476,13 @@ const POS = () => {
                       v.sale_price === item.sale_price &&
                       (v.status || 'available').toLowerCase() === 'available'
                   )
-                  .reduce((sum, v) => sum + (v.available_qty || 0), 0) // Qty jama karein
+                  .reduce((sum, v) => sum + (v.available_qty || 0), 0) 
               : 0;
 
           if (value > realStockCount) {
             message.warning(`Stock limit reached! Only ${realStockCount} available.`);
             return { ...item, quantity: realStockCount };
           }
-          // -------------------------------
         }
         return { ...item, [field]: value };
       }
@@ -519,7 +502,7 @@ const POS = () => {
   // FINAL handleCompleteSale (With Debugging)
   const handleCompleteSale = async () => {
     if (cart.length === 0) return;
-    let allSaleItemsToInsert = []; // Variable ko yahan move kar diya
+    let allSaleItemsToInsert = []; 
     if (paymentMethod === 'Unpaid' && !selectedCustomer) { message.error('Please select a customer for a credit (Pay Later) sale.'); return; }
     if (paymentMethod === 'Unpaid' && amountPaid > grandTotal) { message.error('Amount paid cannot be greater than the grand total.'); return; }
     
@@ -562,11 +545,9 @@ const POS = () => {
           for (const cartItem of cart) {
             if (cartItem.imei) {
                 const inventoryId = cartItem.inventory_id || cartItem.id;
-                // Warranty Calculation
                 const parentProduct = allProducts.find(p => p.id === cartItem.product_id);
                 const warrantyDays = parentProduct?.default_warranty_days || 0;
                 let expiryDate = null;
-                // Agar Global system ON hai AUR user ne Checkbox tick NAHI kiya
                 if (profile?.warranty_system_enabled !== false && !cartItem.no_warranty && warrantyDays > 0) {
                     const d = new Date();
                     d.setDate(d.getDate() + warrantyDays);
@@ -584,7 +565,7 @@ const POS = () => {
                     quantity: 1,
                     price_at_sale: cartItem.sale_price,
                     user_id: user.id,
-                    warranty_expiry: expiryDate // Naya Column
+                    warranty_expiry: expiryDate 
                 });
                 inventoryIdsToUpdate.push({ id: inventoryId, qtySold: 1 });
             } else {
@@ -606,7 +587,8 @@ const POS = () => {
                 const parentProductBulk = allProducts.find(p => p.id === cartItem.product_id);
                 const warrantyDaysBulk = parentProductBulk?.default_warranty_days || 0;
                 let expiryDateBulk = null;
-                if (warrantyDaysBulk > 0) {
+                
+                if (profile?.warranty_system_enabled !== false && !cartItem.no_warranty && warrantyDaysBulk > 0) {
                     const d = new Date();
                     d.setDate(d.getDate() + warrantyDaysBulk);
                     expiryDateBulk = d.toISOString();
@@ -694,7 +676,6 @@ const POS = () => {
                 const key = `${c.product_name}-${c.sale_price}`;
 
                 // Attributes ko format karein (e.g., "8GB, Black")
-                // Hum IMEI aur Serial ko filter kar rahe hain taake wo yahan show na hon
                 const attrValues = c.item_attributes 
                     ? Object.entries(c.item_attributes)
                         .filter(([k, v]) => !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial'))
@@ -731,20 +712,19 @@ const POS = () => {
              });
 
              const receiptItems = Object.values(groupedItemsMap);
-             // ---------------------------------------
 
              const receiptData = {
                  ...saleDataForReceipt,
                  shopName: profile?.shop_name || 'My Shop',
                  shopAddress: profile?.address || '',
-                 shopPhone: profile?.phone || '',
+                 shopPhone: profile?.phone_number || '',
                  saleId: saleDataForReceipt.id,
                  
                  items: receiptItems, 
                  
                  customerName: customers.find(c => c.id === saleDataForReceipt.customer_id)?.name || 'Walk-in Customer',
                  saleDate: new Date().toISOString(),
-                 saleItems: allSaleItemsToInsert, // Warranty dates dikhane ke liye zaroori hai
+                 saleItems: allSaleItemsToInsert, 
                  amountPaid: saleDataForReceipt.amount_paid_at_sale,
                  paymentStatus: saleDataForReceipt.payment_status,
                  grandTotal: saleDataForReceipt.total_amount,
@@ -849,7 +829,7 @@ const POS = () => {
           }
         `}
       </style>
-      <Title level={2} style={{ marginBottom: '5px', marginLeft: '48px' }}>
+      <Title level={2} style={{ marginBottom: '5px', marginLeft: '48px', fontSize: '23px' }}>
             <ShoppingCartOutlined /> Point of Sale
           </Title>
       <Row gutter={24}>
@@ -907,8 +887,8 @@ const POS = () => {
                   onClick={() => {
                     setActiveCategoryId(null);
                     setSearchTerm('');
-                    setPriceRange([null, null]); // Reset Price
-                    setFilterAttributes({});     // Reset Attrs
+                    setPriceRange([null, null]); 
+                    setFilterAttributes({});     
                     setDisplayedProducts(topSellingProducts);
                     if (searchInputRef.current) searchInputRef.current.focus();
                   }}
