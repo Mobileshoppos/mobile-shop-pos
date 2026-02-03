@@ -4,6 +4,7 @@ import { PrinterOutlined, ReloadOutlined, HistoryOutlined } from '@ant-design/ic
 import { supabase } from '../supabaseClient';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
 import { useAuth } from '../context/AuthContext';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
 import { printThermalReceipt } from '../utils/thermalPrinter';
@@ -13,6 +14,7 @@ const { Title, Text } = Typography;
 
 const SalesHistory = () => {
   const { profile } = useAuth();
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const { message } = App.useApp();
   const { processSyncQueue } = useSync();
   const [sales, setSales] = useState([]);
@@ -327,8 +329,8 @@ const SalesHistory = () => {
   ];
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Title level={2} style={{ marginBottom: '24px', marginLeft: '48px', fontSize: '23px' }}>
+    <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
+      <Title level={2} style={{ marginBottom: '24px', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
         <HistoryOutlined /> Sales History
       </Title>
       <Card>

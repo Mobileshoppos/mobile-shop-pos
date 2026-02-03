@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout, Modal } from 'antd';
 import { LockOutlined, MailOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const { Title } = Typography;
 const { Content } = Layout;
 
 const AuthPage = () => {
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const { message } = AntApp.useApp();
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -98,7 +100,7 @@ const AuthPage = () => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Content style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
+      <Content style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: isMobile ? '12px 8px' : '20px' }}>
         {/* --- TABDEELI: Card se saari hardcoded styles hata di hain --- */}
         <Card style={{ width: 400, maxWidth: '100%' }}>
           {/* --- TABDEELI: Title se hardcoded color hata diya hai --- */}

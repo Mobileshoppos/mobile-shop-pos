@@ -3,11 +3,13 @@ import { Typography, Input, Card, Row, Col, Button, Table, Tag, Space, App, Empt
 import { SearchOutlined, SafetyCertificateOutlined, ToolOutlined, HistoryOutlined, DeleteOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 
 const WarrantyClaims = () => {
+    const isMobile = useMediaQuery('(max-width: 768px)');
     const { message, modal } = App.useApp();
     const { user, profile } = useAuth();
     const [imeiSearch, setImeiSearch] = useState('');
@@ -95,8 +97,8 @@ const WarrantyClaims = () => {
     };
 
     return (
-        <div style={{ padding: '24px' }}>
-            <Title level={2} style={{marginLeft: '48px', fontSize: '23px'}}><SafetyCertificateOutlined /> Warranty & Claims Management</Title>
+        <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
+            <Title level={2} style={{marginLeft: isMobile ? '8px' : '48px', fontSize: '23px'}}><SafetyCertificateOutlined /> Warranty & Claims Management</Title>
             
             <Row gutter={[24, 24]}>
                 <Col xs={24} lg={10}>

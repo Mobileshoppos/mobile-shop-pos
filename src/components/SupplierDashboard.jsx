@@ -38,20 +38,36 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
 
             const combinedData = [
                 ...(purchases || []).map(p => ({
-                    key: `pur-${p.id}`, date: p.purchase_date, created_at: p.created_at, type: 'Purchase', details: `Purchase #${p.id}`, debit: p.total_amount, credit: 0, link: `/purchases/${p.id}`
+                    key: `pur-${p.id}`, 
+                    date: p.purchase_date, 
+                    created_at: p.created_at, 
+                    type: 'Purchase', 
+                    details: `Purchase #${p.invoice_id || p.id.slice(0, 8)}`, // <--- Added invoice_id
+                    debit: p.total_amount, 
+                    credit: 0, 
+                    link: `/purchases/${p.id}`
                 })),
-                ...(payments || []).map(p => ({
-                    key: `pay-${p.id}`, 
-                    id: p.id, 
-                    original_notes: p.notes, 
-                    payment_method: p.payment_method,
-                    date: p.payment_date, 
-                    created_at: p.created_at,
-                    type: 'Payment', 
-                    details: `Payment via ${p.payment_method}` + (p.notes ? ` (${p.notes})` : ''), 
-                    debit: 0, 
-                    credit: p.amount,
-                })),
+                ...(payments || []).map(p => {
+                    // Purchase dhoondein jis se yeh payment jurri hai
+                    const linkedPurchase = (purchases || []).find(pur => pur.id === p.purchase_id);
+                    const purchaseDisplayId = linkedPurchase ? (linkedPurchase.invoice_id || linkedPurchase.id.slice(0, 8)) : null;
+
+                    return {
+                        key: `pay-${p.id}`, 
+                        id: p.id, 
+                        original_notes: p.notes, 
+                        payment_method: p.payment_method,
+                        date: p.payment_date, 
+                        created_at: p.created_at,
+                        type: 'Payment', 
+                        // Details mein Purchase ID shamil karein
+                        details: `Payment via ${p.payment_method}` + 
+                                 (purchaseDisplayId ? ` (For Purchase #${purchaseDisplayId})` : '') +
+                                 (p.notes ? ` - ${p.notes}` : ''), 
+                        debit: 0, 
+                        credit: p.amount,
+                    };
+                }),
                 ...(refunds || []).map(r => ({
                     key: `ref-${r.id}`, 
                     date: r.refund_date, 
@@ -487,9 +503,9 @@ const SupplierDashboard = () => {
                     font-weight: bold;
                 }
             `}</style>
-            <Layout style={{ background: 'transparent', padding: '24px' }}>
+            <Layout style={{ background: 'transparent', padding: isMobile ? '12px 4px' : '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <Title level={2} style={{ margin: 0, marginLeft: '48px', fontSize: '23px' }}>
+                <Title level={2} style={{ margin: 0, marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
                     <ShopOutlined /> Suppliers Dashboard
                 </Title>
                 <Button 

@@ -3,6 +3,7 @@ import { Typography, Table, Card, App as AntApp, Row, Col, Statistic, Spin, Date
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
 import { QuestionCircleOutlined, PieChartOutlined } from '@ant-design/icons';
@@ -11,6 +12,7 @@ import { Line, Pie } from '@ant-design/charts';
 const { Title, Text } = Typography;
 
 const Reports = () => {
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const { message } = AntApp.useApp();
   const { user, profile } = useAuth();
   const [products, setProducts] = useState([]);
@@ -148,8 +150,8 @@ const Reports = () => {
   const totalStockValue = products.reduce((sum, product) => sum + ((product.quantity || 0) * (product.avg_purchase_price || 0)), 0);
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: '48px' }}>
+    <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
+      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: isMobile ? '8px' : '48px' }}>
         <PieChartOutlined /> Reports
       </Title>
       <Space style={{ marginBottom: '16px' }}>
@@ -164,28 +166,28 @@ const Reports = () => {
         {summaryLoading ? <div style={{ textAlign: 'center', padding: '48px' }}><Spin size="large" /></div> : (
           <>
           <Row gutter={[16, 24]}>
-            <Col xs={24} sm={12} md={6}>
+            <Col xs={24} sm={12} md={12}>
               <Statistic 
                 title={<>Total Revenue <Tooltip title="Total income from sales before any costs are deducted."><QuestionCircleOutlined /></Tooltip></>} 
                 value={summaryData.totalRevenue} 
                 formatter={() => formatCurrency(summaryData.totalRevenue, profile?.currency)} 
               />
             </Col>
-            <Col xs={24} sm={12} md={6}>
+            <Col xs={24} sm={12} md={12}>
               <Statistic 
                 title={<>Cost of Goods <Tooltip title="The direct cost of the products that were sold in the selected period."><QuestionCircleOutlined /></Tooltip></>} 
                 value={summaryData.totalCost} 
                 formatter={() => formatCurrency(summaryData.totalCost, profile?.currency)} 
               />
             </Col>
-            <Col xs={24} sm={12} md={6}>
+            <Col xs={24} sm={12} md={12}>
               <Statistic 
                 title={<>Gross Profit <Tooltip title="The profit after deducting the cost of goods. (Revenue - Cost of Goods)"><QuestionCircleOutlined /></Tooltip></>} 
                 value={summaryData.grossProfit} 
                 formatter={() => formatCurrency(summaryData.grossProfit, profile?.currency)} 
               />
             </Col>
-            <Col xs={24} sm={12} md={6}>
+            <Col xs={24} sm={12} md={12}>
               <Statistic 
                 title={<>Total Expenses <Tooltip title="All other business expenses recorded in the selected period (e.g., rent, bills)."><QuestionCircleOutlined /></Tooltip></>} 
                 value={summaryData.totalExpenses} 

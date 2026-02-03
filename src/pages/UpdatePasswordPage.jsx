@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Form, Input, Button, Card, Typography, App as AntApp, Layout, Progress } from 'antd'; // Progress ko shamil kiya
 import { LockOutlined } from '@ant-design/icons';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useNavigate, Link } from 'react-router-dom'; // Link ko shamil kiya
 
 const { Title } = Typography;
 const { Content } = Layout;
 
 const UpdatePasswordPage = () => {
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const { message } = AntApp.useApp();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -64,7 +66,7 @@ const UpdatePasswordPage = () => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Content style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
+      <Content style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: isMobile ? '12px 8px' : '20px' }}>
         <Card style={{ width: 400, maxWidth: '100%' }}>
           <Title level={3} style={{ textAlign: 'center' }}>Set a New Password</Title>
           <p style={{ textAlign: 'center', marginBottom: '24px' }}>Please enter your new password below.</p>

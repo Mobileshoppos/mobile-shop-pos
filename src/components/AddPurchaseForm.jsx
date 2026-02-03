@@ -405,6 +405,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
               
               form.setFieldsValue({
                   supplier_id: editingPurchase.supplier_id,
+                  invoice_id: editingPurchase.invoice_id, // <--- Added
                   notes: editingPurchase.notes,
                   amount_paid: editingPurchase.amount_paid,
                   payment_method: 'Cash' 
@@ -523,7 +524,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
   // --- SAVE LOGIC (UPDATED FOR EDITING) ---
   const handleSavePurchase = async () => {
     try {
-      const values = await form.validateFields(['supplier_id', 'notes', 'amount_paid', 'payment_method']);
+      // Hum ne 'invoice_id' ko validation list mein add kiya hai
+      const values = await form.validateFields(['supplier_id', 'invoice_id', 'notes', 'amount_paid', 'payment_method']);
       if (purchaseItems.length === 0) { message.error("Please add at least one item."); return; }
       
       setIsSubmitting(true);
@@ -532,6 +534,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
       const payload = {
         p_local_id: purchaseId,
         p_supplier_id: values.supplier_id,
+        p_invoice_id: values.invoice_id || null, // <--- Added
         p_notes: values.notes || null,
         p_inventory_items: purchaseItems.map(({ name, brand, categories, category_is_imei_based, ...item }) => item)
       };
@@ -540,6 +543,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
           // --- EDIT MODE (Offline Ready) ---
           await DataService.updatePurchaseFully(editingPurchase.id, {
               supplier_id: values.supplier_id,
+              invoice_id: values.invoice_id, // <--- Added
               notes: values.notes,
               amount_paid: values.amount_paid,
               items: purchaseItems
@@ -678,7 +682,16 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
         <Form form={form} layout="vertical" style={{ marginTop: '24px' }}>
           <Row gutter={16}>
             <Col span={12}><Form.Item name="supplier_id" label="Supplier" rules={[{ required: true }]}><Select placeholder="Select a supplier" loading={loading}>{(suppliers || []).map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}</Select></Form.Item></Col>
-            <Col span={12}><Form.Item name="notes" label="Notes / Bill #"><Input placeholder="e.g., Invoice #INV-12345" /></Form.Item></Col>
+            <Col span={12}>
+                <Form.Item name="invoice_id" label="Supplier Invoice #" tooltip="Enter the bill number from your supplier. If left empty, a unique ID will be generated.">
+                    <Input placeholder="e.g. INV-9988" />
+                </Form.Item>
+            </Col>
+            <Col span={24}>
+                <Form.Item name="notes" label="Internal Notes">
+                    <Input.TextArea rows={1} placeholder="Any extra information about this purchase..." />
+                </Form.Item>
+            </Col>
           </Row>
           <Divider />
           <Title level={5}>Add Products to Invoice</Title>

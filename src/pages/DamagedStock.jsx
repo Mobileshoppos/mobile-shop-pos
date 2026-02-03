@@ -3,6 +3,7 @@ import { Typography, Table, Card, Tag, App, Button, Space, Row, Col, Statistic, 
 import { AlertOutlined, ReloadOutlined, SearchOutlined, RollbackOutlined, PrinterOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { formatCurrency } from '../utils/currencyFormatter';
 import dayjs from 'dayjs';
 import { generateDamagedReportPDF } from '../utils/damagedReportGenerator';
@@ -14,6 +15,7 @@ const DamagedStock = () => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchText, setSearchText] = useState('');
+    const isMobile = useMediaQuery('(max-width: 768px)');
     
     // Default Range: Aaj se 30 din pehle tak
     const [dateRange, setDateRange] = useState([dayjs().subtract(1, 'month'), dayjs()]);
@@ -111,10 +113,10 @@ const DamagedStock = () => {
     ];
 
     return (
-        <div style={{ padding: '24px' }}>
+        <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
             <Row justify="space-between" align="middle" style={{ marginBottom: '24px' }}>
                 <Col>
-                    <Title level={2} style={{ margin: 0, marginLeft: '48px', fontSize: '23px' }}>
+                    <Title level={2} style={{ margin: 0, marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
                         <AlertOutlined style={{color: 'red'}} /> Damaged Stock Report
                     </Title>
                 </Col>
@@ -132,7 +134,7 @@ const DamagedStock = () => {
             </Row>
 
             <Row gutter={16} style={{ marginBottom: '24px' }}>
-                <Col span={8}>
+                <Col xs={24} sm={8}>
                     <Card size="small" style={{borderLeft: '4px solid #1890ff'}}>
                         <Statistic title="Total Damaged Units" value={totalQty} />
                     </Card>

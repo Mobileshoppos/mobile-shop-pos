@@ -5,6 +5,7 @@ import {
 import { ShoppingCartOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
 import { printThermalReceipt } from '../utils/thermalPrinter';
 import SelectVariantModal from './SelectVariantModal';
@@ -67,6 +68,7 @@ const POS = () => {
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState('Amount');
   const searchInputRef = useRef(null);
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
   const [productForVariantSelection, setProductForVariantSelection] = useState(null);
   const [allProducts, setAllProducts] = useState([]);
@@ -756,6 +758,14 @@ const POS = () => {
   };
 
   const subtotal = cart.reduce((sum, item) => sum + (item.sale_price * item.quantity), 0);
+  const isWalkIn = customers.find(c => c.id === selectedCustomer)?.name === 'Walk-in Customer';
+  // Agar Walk-in select ho jaye to payment method ko "Paid" par reset kar dein
+  useEffect(() => {
+    if (isWalkIn && paymentMethod === 'Unpaid') {
+      setPaymentMethod('Paid');
+      setAmountPaid(0);
+    }
+  }, [isWalkIn, paymentMethod]);
   let discountAmount = discountType === 'Amount' ? discount : (subtotal * discount) / 100;
   const grandTotal = Math.max(0, subtotal - discountAmount);
 
@@ -806,7 +816,7 @@ const POS = () => {
   const handleResetCart = () => { modal.confirm({ title: 'Reset Bill?', content: 'Are you sure you want to remove all items from the current bill?', okText: 'Yes, Reset', cancelText: 'No', onOk: () => { setCart([]); setDiscount(0); setAmountPaid(0); setSelectedCustomer(null); message.success('Bill has been reset.'); } }); };
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
     <style>
         {`
           /* Scrollbar ki churai (width) */
@@ -829,7 +839,7 @@ const POS = () => {
           }
         `}
       </style>
-      <Title level={2} style={{ marginBottom: '5px', marginLeft: '48px', fontSize: '23px' }}>
+      <Title level={2} style={{ marginBottom: '5px', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
             <ShoppingCartOutlined /> Point of Sale
           </Title>
       <Row gutter={24}>
@@ -1090,7 +1100,7 @@ const POS = () => {
             </Form.Item>
             <Radio.Group onChange={(e) => setPaymentMethod(e.target.value)} value={paymentMethod} style={{ marginBottom: '16px' }}>
               <Radio value={'Paid'}>Paid</Radio>
-              <Radio value={'Unpaid'} disabled={!selectedCustomer}>Pay Later (Credit)</Radio>
+              <Radio value={'Unpaid'} disabled={!selectedCustomer || isWalkIn}>Pay Later (Credit)</Radio>
             </Radio.Group>
             {paymentMethod === 'Paid' && (
               <div style={{ marginBottom: '16px' }}>

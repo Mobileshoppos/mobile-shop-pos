@@ -89,14 +89,14 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
       )}
 
       <Layout style={{ background: token.colorBgLayout }}>
-        <Content style={{ padding: '24px 16px 0' }}>
+        <Content style={{ padding: isMobile ? '8px 4px 0' : '24px 16px 0' }}>
           <div style={{
             background: token.colorBgContainer,
             borderRadius: token.borderRadiusLG,
             minHeight: 'calc(100vh - 24px)',
           }}>
             <AppHeader collapsed={collapsed} setCollapsed={setCollapsed} />
-            <div style={{ padding: '0 24px 24px' }}>
+            <div style={{ padding: isMobile ? '0 8px 8px' : '0 24px 24px' }}>
               <Outlet />
             </div>
           </div>

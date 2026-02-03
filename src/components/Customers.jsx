@@ -658,7 +658,7 @@ const handleCloseInvoiceSearchModal = () => {
         // Note: Yahan hum 'sales' ki bajaye 'salesWithDetails' use kar rahe hain
         const salesTx = salesWithDetails.map(s => ({ 
             type: 'sale', date: s.created_at || s.sale_date, 
-            description: `Sale (Invoice #${s.id})`, 
+            description: `Sale (Invoice #${s.invoice_id || s.id})`, 
             debit: (s.total_amount || 0) - (s.amount_paid_at_sale || 0), 
             credit: 0, details: s 
         }));
@@ -675,8 +675,12 @@ const handleCloseInvoiceSearchModal = () => {
                 );
                 
                 if (relatedReturn) {
+                    // Asal Sale dhoond kar uska chota ID (P-2020) nikalein
+                    const originalSale = sales.find(s => s.id === relatedReturn.sale_id);
+                    const displayId = originalSale ? (originalSale.invoice_id || originalSale.id) : relatedReturn.sale_id;
+
                     const feeText = relatedReturn.return_fee > 0 ? ` (Fee: ${formatCurrency(relatedReturn.return_fee, profile?.currency)} deducted)` : '';
-                    description = `Return Credit (Inv #${relatedReturn.sale_id})${feeText}`;
+                    description = `Return Credit (Inv #${displayId})${feeText}`;
                     const itemsFromHistory = history.filter(h => 
                         String(h.return_id) === String(relatedReturn.id)
                     );
@@ -848,7 +852,7 @@ const handleCloseInvoiceSearchModal = () => {
       ];
       return (
         <Card size="small" style={{ margin: '8px 0' }}>
-          <Descriptions title={`Invoice #${record.details.id} Summary`} bordered size="small" column={1}>
+          <Descriptions title={`Invoice #${record.details.invoice_id || record.details.id} Summary`} bordered size="small" column={1}>
             {/* --- IN 5 JAGAHON PAR TABDEELI HUI HAI --- */}
             <Descriptions.Item label="Subtotal">{formatCurrency(record.details.subtotal || 0, profile?.currency)}</Descriptions.Item>
             <Descriptions.Item label="Discount">- {formatCurrency(record.details.discount || 0, profile?.currency)}</Descriptions.Item>
@@ -901,14 +905,14 @@ const handleCloseInvoiceSearchModal = () => {
     return null;
   };
   
-  return (<div style={{ padding: '24px' }}> <div style={{
+  return (<div style={{ padding: isMobile ? '12px 4px' : '24px' }}> <div style={{
     display: 'flex',
     flexDirection: isMobile ? 'column' : 'row',
     justifyContent: 'space-between',
     alignItems: isMobile ? 'flex-start' : 'center',
     marginBottom: '24px'
 }}>
-    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0', marginLeft: '48px', fontSize: '23px' }}>
+    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
         <UserSwitchOutlined /> Customer Management
     </Title>
 

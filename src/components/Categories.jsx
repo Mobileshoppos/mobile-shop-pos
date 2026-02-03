@@ -197,8 +197,8 @@ const Categories = () => {
   ];
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: '48px', fontSize: '23px' }}>
+    <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
+      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
         <TagsOutlined /> Manage Categories & Attributes
       </Title>
       <Row gutter={[24, 24]}>

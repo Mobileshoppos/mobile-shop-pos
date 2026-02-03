@@ -331,14 +331,15 @@ export const SyncProvider = ({ children }) => {
                     p_local_id: purchase.id,
                     p_supplier_id: purchase.supplier_id, 
                     p_notes: purchase.notes,
-                    p_inventory_items: items
+                    p_inventory_items: items,
+                    p_invoice_id: purchase.invoice_id // <--- YEH NAYI LINE HAI
                 });
                 error = supError;
             }
 
             // --- Purchase Edit Sync (UUID Simplified) ---
             else if (item.action === 'update_full_purchase') {
-                const { id, supplier_id, notes, amount_paid, items } = item.data;
+                const { id, supplier_id, invoice_id, notes, amount_paid, items } = item.data; // <--- Added invoice_id here
                 
                 const { error: supError } = await supabase.rpc('update_purchase_inventory', {
                     p_purchase_id: id,
@@ -346,7 +347,8 @@ export const SyncProvider = ({ children }) => {
                     p_notes: notes,
                     p_amount_paid: amount_paid,
                     p_items: items,
-                    p_local_id: item.data.p_local_id
+                    p_local_id: item.data.p_local_id,
+                    p_invoice_id: invoice_id // <--- YEH NAYI LINE HAI
                 });
                 error = supError;
             }

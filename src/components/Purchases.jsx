@@ -119,7 +119,7 @@ const Purchases = () => {
     ];
 
     return (
-        <div style={{ padding: '24px' }}>
+        <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
             {/* --- NAYI TABDEELIYAN (Step 3) --- */}
             <Flex
     justify="space-between"
@@ -127,7 +127,7 @@ const Purchases = () => {
     style={{ marginBottom: '24px' }}
     vertical={isMobile} // Yeh 'flex-direction: column' set kar dega agar mobile hai
 >
-    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0', marginLeft: '48px', fontSize: '23px' }}>
+    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
         <FileTextOutlined /> Purchase History
     </Title>
     <Button 

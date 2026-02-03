@@ -4,10 +4,12 @@ import { supabase } from '../supabaseClient';
 import { ReloadOutlined, BugOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import Logger from '../utils/logger';
 import { db } from '../db';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const { Title, Text } = Typography;
 
 const SystemLogs = () => {
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const { token } = theme.useToken();
   const { modal, notification } = App.useApp();
   
@@ -143,13 +145,13 @@ const SystemLogs = () => {
   });
 
   return (
-    <div style={{ padding: '16px' }}>
+    <div style={{ padding: isMobile ? '12px 4px' : '16px' }}>
       <Card variant="borderless" style={{ background: token.colorBgContainer, borderRadius: token.borderRadiusLG }}>
         {/* Header Section */}
         <Row gutter={[16, 16]} align="middle" style={{ marginBottom: 24 }}>
           <Col xs={24} md={12}>
             <Space align="center" wrap>
-              <Title level={3} style={{ margin: 0 }}>System Health</Title>
+              <Title level={3} style={{ margin: 0, marginLeft: isMobile ? '8px' : '0' }}>System Health</Title>
               <Badge status="processing" text={isAdmin ? <Tag color="gold">Admin View</Tag> : <Tag color="blue">User View</Tag>} />
             </Space>
           </Col>
@@ -168,7 +170,7 @@ const SystemLogs = () => {
 
         {/* Stats & Filter Section */}
         <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-          <Col xs={24} sm={8}>
+          <Col xs={24} sm={12}>
             {/* Background ab token se aayega taake light/dark mode mein change ho sake */}
             <Card size="small" variant="borderless" style={{ 
               background: token.colorFillAlter, 
@@ -182,7 +184,7 @@ const SystemLogs = () => {
             </Card>
           </Col>
 
-          <Col xs={24} sm={8}>
+          <Col xs={24} sm={12}>
   <Card size="small" variant="borderless" style={{ 
     background: token.colorFillAlter, 
     borderLeft: `4px solid ${logs.filter(l => l.level === 'error').length > 5 ? token.colorError : token.colorSuccess}`,

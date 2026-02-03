@@ -4,6 +4,7 @@ import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, 
 import { ToolOutlined } from '@ant-design/icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { 
     themeConfig as initialThemeConfig, 
     lightThemeTokens as initialLightTheme, 
@@ -17,6 +18,7 @@ const { TextArea } = Input;
 const DEFAULT_POLICY = "No return or exchange after 7 days.\nWarranty claim directly from service center.\nNo warranty for burnt/damaged items.";
 
 const SettingsPage = () => {
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const { message } = App.useApp();
   const { profile, updateProfile } = useAuth();
   
@@ -132,8 +134,8 @@ const SettingsPage = () => {
   const currentBgContainerColor = isDarkMode ? darkTheme.colorBgContainer : lightTheme.colorBgContainer;
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: '48px', fontSize: '23px' }}>
+    <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
+      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
         <ToolOutlined /> App Settings
       </Title>
       <Text type="secondary">Change the look and feel of your application here.</Text>

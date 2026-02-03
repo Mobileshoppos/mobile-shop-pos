@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { Card, Row, Col, Typography, Button, List, Tag, Modal, Steps, Divider, Tooltip, Radio } from 'antd';
 import { CheckCircleOutlined, RocketOutlined, BankOutlined, WhatsAppOutlined, InfoCircleOutlined, CreditCardOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const { Title, Text, Paragraph } = Typography;
 
 const SubscriptionPage = () => {
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const { profile, isPro } = useAuth();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [billingCycle, setBillingCycle] = useState('monthly');
@@ -29,8 +31,8 @@ const SubscriptionPage = () => {
   };
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: '48px', fontSize: '23px' }}>
+    <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
+      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
         <CreditCardOutlined /> Manage Your Subscription
       </Title>
       

@@ -163,6 +163,13 @@ const Dashboard = () => {
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
+  
+  // --- NAYA IZAFA: Auto-Initialize Categories for New Users ---
+  useEffect(() => {
+    if (user?.id) {
+      DataService.initializeUserCategories(user.id);
+    }
+  }, [user?.id]);
 
   if (loading && !stats) return <div style={{ textAlign: 'center', marginTop: 100 }}><Spin size="large" /></div>;
 
@@ -265,7 +272,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: '12px 4px' }}>
       
       {/* HEADER WITH FILTERS */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>

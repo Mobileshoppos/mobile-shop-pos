@@ -57,8 +57,8 @@ export const generateInvoiceId = async () => {
     // 4 digits ka random number (1000 se 9999 tak)
     const randomNum = Math.floor(1000 + Math.random() * 9000);
     
-    // Format: "A-4521"
-    finalId = `${letter}-${randomNum}`;
+    // Format: "A4521"
+    finalId = `${letter}${randomNum}`;
 
     // Local DB mein check karein
     const existing = await db.sales.where('invoice_id').equals(finalId).first();

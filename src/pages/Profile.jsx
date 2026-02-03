@@ -5,6 +5,7 @@ import { Form, Input, Button, Card, Typography, Spin, App as AntApp, Divider } f
 import { SaveOutlined, LockOutlined, ProfileOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const { Title, Text } = Typography;
 
@@ -70,6 +71,7 @@ const ChangePasswordForm = () => {
 };
 
 const Profile = () => {
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const { user, profile, updateProfile } = useAuth();
   const [saving, setSaving] = useState(false);
   const { message } = AntApp.useApp();
@@ -92,8 +94,8 @@ const Profile = () => {
   };
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: '48px', fontSize: '23px' }}>
+    <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
+      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
         <ProfileOutlined /> Profile
       </Title>
       <Card>

@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { db } from './db';
+import { generateInvoiceId } from './utils/idGenerator';
 
 // --- DEFAULT CATEGORIES BLUEPRINT ---
 const DEFAULT_CATEGORIES = [
@@ -144,8 +145,8 @@ const DataService = {
         await db.sync_queue.add({ table_name: 'expense_categories', action: 'create', data: expCatData });
       }
 
-      // 5. Server par flag update kar dein
-      await supabase.from('profiles').update({ categories_initialized: true }).eq('user_id', userId);
+      // 5. Server par flag update kar dein (Islaah ke saath)
+      await supabase.from('profiles').update({ categories_initialized: true }).eq('user_id', userId).select();
       
       console.log("Smart Initialization complete.");
     } catch (error) {
@@ -626,12 +627,20 @@ async createNewPurchase(purchasePayload) {
     const { data: { user } } = await supabase.auth.getUser();
     const userId = user?.id;
 
+    // Agar user ne Invoice ID diya hai to wo, warna Auto Generate (PUR-A1234)
+    let finalInvoiceId = purchasePayload.p_invoice_id;
+    if (!finalInvoiceId) {
+        const autoId = await generateInvoiceId();
+        finalInvoiceId = `PUR-${autoId}`;
+    }
+
     const totalAmount = purchasePayload.p_inventory_items.reduce((sum, item) => 
         sum + (Number(item.quantity) * Number(item.purchase_price)), 0);
 
     const purchaseData = {
         id: purchaseId,
         local_id: purchaseId,
+        invoice_id: finalInvoiceId, // <--- SAVE HERE
         user_id: userId,
         supplier_id: purchasePayload.p_supplier_id,
         purchase_date: new Date().toISOString(),
@@ -900,7 +909,7 @@ async addCustomer(customerData) {
 
   // --- Offline-First Purchase Edit (UUID COMPATIBLE) ---
   async updatePurchaseFully(purchaseId, payload) {
-    const { supplier_id, notes, amount_paid, items } = payload;
+    const { supplier_id, invoice_id, notes, amount_paid, items } = payload; // <--- invoice_id added
 
     // 1. Database se mojooda items layein
     const dbItems = await db.inventory
@@ -930,6 +939,7 @@ async addCustomer(customerData) {
     // 4. Purchase Record Update (Local)
     await db.purchases.update(purchaseId, {
         supplier_id,
+        invoice_id, // <--- UPDATE HERE
         notes,
         total_amount: newTotal,
         amount_paid,
@@ -1019,6 +1029,7 @@ async addCustomer(customerData) {
         data: {
             id: purchaseId,
             p_local_id: crypto.randomUUID(),
+            p_invoice_id: invoice_id, // <--- SEND TO SERVER
             supplier_id,
             notes,
             amount_paid,
