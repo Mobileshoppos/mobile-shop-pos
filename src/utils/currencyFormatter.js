@@ -14,7 +14,7 @@ export const formatCurrency = (amount, currency = 'PKR') => {
   const formatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency,
-    minimumFractionDigits: 2,
+    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   });
 

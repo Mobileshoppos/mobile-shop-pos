@@ -64,49 +64,87 @@ const AppHeader = ({ collapsed, setCollapsed }) => {
   };
 return (
     <>
-      <Header style={{ padding: '0 16px', background: 'none' }}>
+      <Header style={{ padding: '0 24px', background: 'none', height: '40px', lineHeight: '40px', marginTop: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '100%' }}>
           
           {/* Left Side: Menu Button + Shop Name */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden' }}>
               <Button
                 type="text"
                 icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
                 onClick={() => setCollapsed(!collapsed)}
-                style={{ fontSize: '16px', width: 40, height: 40, color: token.colorText }}
+                style={{ fontSize: '16px', width: 32, height: 32, color: token.colorText }}
               />
 
-              <div style={titleContainerStyle} title={profile?.shop_name || 'My Shop'}>
-                <Tag icon={<ShopOutlined />} style={chipStyle}>
-                  {profile?.shop_name || 'My Shop'}
-                </Tag>
+              {/* Sync Status Signals (Smart & Connected Style) */}
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px', 
+                padding: '5px 12px', 
+                background: 'rgba(150, 150, 150, 0.15)', 
+                border: `1px solid ${token.colorBorder}`, 
+                borderRadius: '20px',
+                marginLeft: '12px',
+                backdropFilter: 'blur(4px)',
+                boxShadow: 'inset 0 0 4px rgba(0,0,0,0.1)'
+              }}>
+                <style>
+                  {`
+                    @keyframes pulse-yellow {
+                      0% { box-shadow: 0 0 0 0 rgba(250, 173, 20, 0.7); transform: scale(1); }
+                      70% { box-shadow: 0 0 0 4px rgba(250, 173, 20, 0); transform: scale(1.1); }
+                      100% { box-shadow: 0 0 0 0 rgba(250, 173, 20, 0); transform: scale(1); }
+                    }
+                    @keyframes blink-red {
+                      0% { opacity: 1; }
+                      50% { opacity: 0.5; }
+                      100% { opacity: 1; }
+                    }
+                  `}
+                </style>
+
+                {/* Red Light: Error/Stuck */}
+                <Tooltip title={stuckCount > 0 ? `Attention: ${stuckCount} items failed to sync. Click to retry.` : "Database Health: Excellent"}>
+                  <div 
+                    onClick={stuckCount > 0 ? showSyncCenter : null}
+                    style={{
+                      width: '10px', height: '10px', borderRadius: '50%',
+                      background: stuckCount > 0 ? '#ff4d4f' : 'rgba(100,100,100,0.2)', 
+                      boxShadow: stuckCount > 0 ? '0 0 8px #ff4d4f' : 'none',
+                      cursor: stuckCount > 0 ? 'pointer' : 'default',
+                      transition: 'all 0.3s',
+                      animation: stuckCount > 0 ? 'blink-red 1s infinite' : 'none'
+                    }}
+                  />
+                </Tooltip>
+
+                {/* Yellow Light: Syncing */}
+                <Tooltip title={pendingCount > 0 ? `Working: Syncing ${pendingCount} new items...` : "Sync Queue: All data uploaded"}>
+                  <div style={{
+                    width: '10px', height: '10px', borderRadius: '50%',
+                    background: pendingCount > 0 ? '#faad14' : 'rgba(100,100,100,0.2)',
+                    animation: pendingCount > 0 ? 'pulse-yellow 1.5s infinite' : 'none',
+                    transition: 'all 0.3s'
+                  }} />
+                </Tooltip>
+
+                {/* Green Light: Smart Status Indicator */}
+                <Tooltip title={
+                  stuckCount > 0 ? "System Online (Errors Detected)" : 
+                  pendingCount > 0 ? "System (Syncing in progress...)" : 
+                  "System Online & Fully Synced"
+                }>
+                  <div style={{
+                    width: '10px', height: '10px', borderRadius: '50%',
+                    // Green light hamesha jalegi (Online hone ki nishani), lekin glow tab karegi jab sab perfect ho
+                    background: '#52c41a',
+                    opacity: (pendingCount === 0 && stuckCount === 0) ? 1 : 0.6,
+                    boxShadow: (pendingCount === 0 && stuckCount === 0) ? '0 0 8px #52c41a' : 'none',
+                    transition: 'all 0.3s'
+                  }} />
+                </Tooltip>
               </div>
-
-              {/* Sync Status Tags */}
-              <Space size={4}>
-                {stuckCount > 0 && (
-                  <Tooltip title={`${stuckCount} items stuck. Click to retry.`}>
-                    <Tag 
-                      color="red" 
-                      onClick={showSyncCenter}
-                      style={{ borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' }}
-                    >
-                      {stuckCount} Stuck!
-                    </Tag>
-                  </Tooltip>
-                )}
-
-                {pendingCount > 0 && (
-                  <Tooltip title={`${pendingCount} items syncing...`}>
-                    <Tag 
-                      color="orange" 
-                      style={{ borderRadius: '10px', animation: 'pulse 2s infinite' }}
-                    >
-                      {pendingCount} Syncing...
-                    </Tag>
-                  </Tooltip>
-                )}
-              </Space>
           </div>
 
           {/* Right Side: Icons & Subscription Button */}
@@ -118,7 +156,7 @@ return (
                 icon={isPro ? <CrownOutlined /> : null}
                 onClick={() => navigate('/subscription')}
                 danger={!isPro && stockCount >= 50}
-                size="middle"
+                size="small"
               >
                 {isPro ? 'PRO' : `Stock: ${stockCount}/50`}
               </Button>

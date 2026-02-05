@@ -135,13 +135,17 @@ const DamagedStock = () => {
 
             <Row gutter={16} style={{ marginBottom: '24px' }}>
                 <Col xs={24} sm={8}>
-                    <Card size="small" style={{borderLeft: '4px solid #1890ff'}}>
+                    <Card size="small" style={{borderLeft: '4px solid #091119ff'}}>
                         <Statistic title="Total Damaged Units" value={totalQty} />
                     </Card>
                 </Col>
                 <Col span={8}>
                     <Card size="small" style={{borderLeft: '4px solid #ff4d4f'}}>
-                        <Statistic title="Total Loss (Cost Value)" value={totalLoss} precision={2} prefix={profile?.currency} />
+                        <Statistic 
+    title="Total Loss (Cost Value)" 
+    value={totalLoss} 
+    formatter={(val) => formatCurrency(val, profile?.currency)} 
+/>
                     </Card>
                 </Col>
                 <Col span={8}>

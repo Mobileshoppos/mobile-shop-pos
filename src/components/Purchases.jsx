@@ -119,7 +119,7 @@ const Purchases = () => {
     ];
 
     return (
-        <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
+        <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}>
             {/* --- NAYI TABDEELIYAN (Step 3) --- */}
             <Flex
     justify="space-between"

@@ -612,53 +612,16 @@ export const SyncProvider = ({ children }) => {
                 error = supError;
             }
 
-            // --- Sale Returns Sync (UUID Simplified & Inventory Fix) ---
+            // --- Sale Returns Sync (Atomic & Safe) ---
             else if (item.table_name === 'sale_returns' && item.action === 'create_full_return') {
                 const { return_record, items, payment_record } = item.data;
                 
-                // 1. Save Return Record
-                const { error: retError } = await supabase.from('sale_returns').upsert([return_record], { onConflict: 'id' });
-                
-                if (retError) { 
-                    error = retError; 
-                } else {
-                    // 2. Save Return Items
-                    await supabase.from('sale_return_items').upsert(items, { onConflict: 'id' });
-                    // 3. Save Payment (Credit)
-                    await supabase.from('customer_payments').upsert([payment_record], { onConflict: 'id' });
-
-                    // 4. SERVER INVENTORY UPDATE (YEH HAI ASAL FIX JO MISSING THA)
-                    for (const retItem of items) {
-                        // Server se current status check karein
-                        const { data: invItem } = await supabase
-                            .from('inventory')
-                            .select('id, imei, sold_qty, available_qty')
-                            .eq('id', retItem.inventory_id)
-                            .single();
-
-                        if (invItem) {
-                            if (invItem.imei) {
-                                // IMEI Item: Wapis Available karein
-                                await supabase.from('inventory')
-                                    .update({ status: 'Available', available_qty: 1, sold_qty: 0 })
-                                    .eq('id', retItem.inventory_id);
-                            } else {
-                                // Bulk Item: Quantity wapis jama karein
-                                const qtyToReturn = retItem.quantity || 1;
-                                const newAvail = (invItem.available_qty || 0) + qtyToReturn;
-                                const newSold = Math.max(0, (invItem.sold_qty || 0) - qtyToReturn);
-                                
-                                await supabase.from('inventory')
-                                    .update({ 
-                                        available_qty: newAvail,
-                                        sold_qty: newSold,
-                                        status: 'Available' 
-                                    })
-                                    .eq('id', retItem.inventory_id);
-                            }
-                        }
-                    }
-                }
+                const { error: rpcError } = await supabase.rpc('process_sale_return_atomic', {
+                    p_return_record: return_record,
+                    p_return_items: items,
+                    p_payment_record: payment_record
+                });
+                error = rpcError;
             }
 
             // --- Warranty Claims Sync (UUID Simplified) ---

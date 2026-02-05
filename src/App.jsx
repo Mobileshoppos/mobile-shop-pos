@@ -27,6 +27,7 @@ import { CustomThemeProvider, useTheme } from './context/ThemeContext';
 import { supabase } from './supabaseClient';
 import { darkThemeTokens, lightThemeTokens } from './theme/themeConfig';
 import SideMenu from './components/SideMenu';
+import BottomNav from './components/BottomNav';
 import Dashboard from './pages/Dashboard';
 import SystemLogs from './pages/SystemLogs';
 import WarrantyClaims from './pages/WarrantyClaims';
@@ -36,6 +37,7 @@ const { Content } = Layout;
 
 const MainLayout = ({ isDarkMode, toggleTheme }) => {
   const { syncAllData } = useSync();
+  const { profile } = useAuth();
   
   useEffect(() => {
     syncAllData();
@@ -96,9 +98,12 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
             minHeight: 'calc(100vh - 24px)',
           }}>
             <AppHeader collapsed={collapsed} setCollapsed={setCollapsed} />
-            <div style={{ padding: isMobile ? '0 8px 8px' : '0 24px 24px' }}>
+            <div style={{ padding: isMobile ? '0 8px 60px' : '0 24px 24px' }}>
               <Outlet />
             </div>
+            {isMobile && profile?.mobile_nav_enabled !== false && (
+              <BottomNav setCollapsed={setCollapsed} />
+          )}
           </div>
         </Content>
       </Layout>

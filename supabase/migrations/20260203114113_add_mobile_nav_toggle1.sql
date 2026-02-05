@@ -1,0 +1,2 @@
+ALTER TABLE profiles 
+ADD COLUMN IF NOT EXISTS mobile_nav_enabled BOOLEAN DEFAULT TRUE;

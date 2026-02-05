@@ -853,7 +853,7 @@ const Inventory = () => {
   const isSmartPhoneCategorySelected = categories.find(c => c.id === selectedCategoryId)?.name === 'Smart Phones & Tablets';
 
   return (
-    <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
+    <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}>
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '24px' }}>
         <Title level={2} style={{ margin: 0, marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
           <DatabaseOutlined /> {showLowStockOnly ? 'Low Stock Products' : 'Inventory'}

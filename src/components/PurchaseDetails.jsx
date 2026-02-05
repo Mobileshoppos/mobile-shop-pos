@@ -185,7 +185,7 @@ const showEditModal = () => {
     if (!purchase) return <Alert message="Not Found" description="No purchase found with this ID." type="warning" showIcon />;
 
     return (
-        <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
+        <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}>
             <Breadcrumb 
     items={[ 
         { title: <Link to="/purchases">Purchases</Link> }, 

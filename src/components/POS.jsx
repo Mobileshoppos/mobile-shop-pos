@@ -816,7 +816,7 @@ const POS = () => {
   const handleResetCart = () => { modal.confirm({ title: 'Reset Bill?', content: 'Are you sure you want to remove all items from the current bill?', okText: 'Yes, Reset', cancelText: 'No', onOk: () => { setCart([]); setDiscount(0); setAmountPaid(0); setSelectedCustomer(null); message.success('Bill has been reset.'); } }); };
 
   return (
-    <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
+    <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}>
     <style>
         {`
           /* Scrollbar ki churai (width) */
@@ -1202,12 +1202,16 @@ const POS = () => {
               />
             }
             <Divider />
+            {profile?.pos_discount_enabled !== false && (
             <Row gutter={16} style={{ marginBottom: '16px' }}>
               <Col span={14}><InputNumber style={{ width: '100%' }} placeholder="Total Bill Discount" value={discount} onChange={(val) => setDiscount(val || 0)} min={0} /></Col>
               <Col span={10}><Radio.Group value={discountType} onChange={(e) => setDiscountType(e.target.value)}><Radio.Button value="Amount">{profile?.currency || 'Rs.'}</Radio.Button><Radio.Button value="Percentage">%</Radio.Button></Radio.Group></Col>
             </Row>
+            )}
             <Row justify="space-between"><Text>Subtotal</Text><Text>{formatCurrency(subtotal, profile?.currency)}</Text></Row>
+            {profile?.pos_discount_enabled !== false && (
             <Row justify="space-between"><Text>Discount</Text><Text style={{ color: '#ff4d4f' }}>- {formatCurrency(discountAmount, profile?.currency)}</Text></Row>
+            )}
             <Divider style={{ margin: '8px 0' }}/>
             <Row justify="space-between" align="middle">
               <Col><Statistic title={<Title level={5} style={{ margin: 0 }}>Grand Total</Title>} value={grandTotal} precision={2} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Col>

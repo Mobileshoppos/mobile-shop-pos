@@ -329,7 +329,7 @@ const SalesHistory = () => {
   ];
 
   return (
-    <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
+    <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}>
       <Title level={2} style={{ marginBottom: '24px', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
         <HistoryOutlined /> Sales History
       </Title>

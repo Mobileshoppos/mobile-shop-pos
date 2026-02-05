@@ -905,7 +905,9 @@ const handleCloseInvoiceSearchModal = () => {
     return null;
   };
   
-  return (<div style={{ padding: isMobile ? '12px 4px' : '24px' }}> <div style={{
+  return (
+  <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}> 
+  <div style={{
     display: 'flex',
     flexDirection: isMobile ? 'column' : 'row',
     justifyContent: 'space-between',
