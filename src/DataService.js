@@ -70,6 +70,8 @@ const DEFAULT_EXPENSE_CATEGORIES = [
   { name: 'Miscellaneous' }
 ];
 
+// Hisaab kitaab ko durust rakhne ke liye helper function
+const precise = (num) => Math.round((num + Number.EPSILON) * 100) / 100;
 const DataService = {
   isInitializing: false,
   async initializeUserCategories(userId) {
@@ -262,6 +264,61 @@ const DataService = {
       exists: true,
       isActive: duplicate.is_active !== false
     };
+  },
+
+  async checkDuplicateCategory(name, excludeId = null) {
+    const allCategories = await db.categories.toArray();
+    const duplicate = allCategories.find(c => 
+      c.name?.toLowerCase().trim() === name?.toLowerCase().trim() &&
+      c.id !== excludeId
+    );
+    return duplicate ? true : false;
+  },
+
+  async checkDuplicateCustomer(phone, excludeId = null) {
+    if (!phone) return null;
+    
+    // 1. Sirf numbers nikalein (e.g. +92 300-1234567 -> 923001234567)
+    const cleanNewPhone = phone.replace(/\D/g, '');
+    // 2. Aakhri 10 digits lein (e.g. 3001234567)
+    const suffixNew = cleanNewPhone.slice(-10);
+
+    const allCustomers = await db.customers.toArray();
+    
+    const duplicate = allCustomers.find(c => {
+      if (!c.phone_number) return false;
+      const cleanExistingPhone = c.phone_number.replace(/\D/g, '');
+      const suffixExisting = cleanExistingPhone.slice(-10);
+      
+      // Agar aakhri 10 digits match kar jayen aur ID mukhtalif ho to duplicate hai
+      return suffixNew === suffixExisting && c.id !== excludeId;
+    });
+
+    return duplicate ? duplicate.name : null;
+  },
+
+  async checkDuplicateSupplier(phone, name, excludeId = null) {
+    const allSuppliers = await db.suppliers.toArray();
+    
+    // 1. Phone Check (Smart Suffix - Aakhri 10 digits)
+    let phoneDuplicate = null;
+    if (phone) {
+      const suffixNew = phone.replace(/\D/g, '').slice(-10);
+      phoneDuplicate = allSuppliers.find(s => {
+        if (!s.phone) return false;
+        return s.phone.replace(/\D/g, '').slice(-10) === suffixNew && s.id !== excludeId;
+      });
+    }
+
+    // 2. Name Check (Case-insensitive)
+    const nameDuplicate = allSuppliers.find(s => 
+      s.name?.toLowerCase().trim() === name?.toLowerCase().trim() && 
+      s.id !== excludeId
+    );
+
+    if (phoneDuplicate) return { type: 'phone', name: phoneDuplicate.name };
+    if (nameDuplicate) return { type: 'name', name: nameDuplicate.name };
+    return null;
   },
 
   async addProduct(productData) {
@@ -1298,7 +1355,7 @@ async addCustomer(customerData) {
       const d = new Date(s.sale_date || s.created_at).getTime();
       return d >= start && d <= end;
     });
-    const totalRevenueFromSales = filteredSales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
+    const totalRevenueFromSales = precise(filteredSales.reduce((sum, s) => sum + (s.total_amount || 0), 0));
 
     // B. Returns (Refunds)
     const allReturns = await db.sale_returns.toArray();
@@ -1306,10 +1363,10 @@ async addCustomer(customerData) {
       const d = new Date(r.created_at).getTime();
       return d >= start && d <= end;
     });
-    const totalRefunds = filteredReturns.reduce((sum, r) => sum + (r.total_refund_amount || 0), 0);
+    const totalRefunds = precise(filteredReturns.reduce((sum, r) => sum + (r.total_refund_amount || 0), 0));
     
     // Net Revenue
-    const totalRevenue = totalRevenueFromSales - totalRefunds;
+    const totalRevenue = precise(totalRevenueFromSales - totalRefunds);
 
     // C. Cost of Goods Sold (COGS) - Bechi gayi cheezon ki khareed qeemat
     // Hamein sale_items aur inventory ko check karna hoga
@@ -1689,25 +1746,45 @@ async addCustomer(customerData) {
         previousEnd = new Date(currentStart);
     }
 
-    // 2. Data Fetching
-    const sales = await db.sales.toArray();
-    const returns = await db.sale_returns.toArray(); 
-    const returnItems = await db.sale_return_items.toArray(); 
-    const expenses = await db.expenses.toArray();
-    const customerPayments = await db.customer_payments.toArray();
-    const supplierPayments = await db.supplier_payments.toArray();
-    const creditPayouts = await db.credit_payouts.toArray();
-    const supplierRefunds = await db.supplier_refunds.toArray();
-    const cashAdjustments = await db.cash_adjustments.toArray();
+    // 2. Data Fetching (Optimized with Indexed Queries)
+    const lastClosing = await db.daily_closings.orderBy('created_at').reverse().first();
+    const cashFilterDate = lastClosing ? new Date(lastClosing.created_at) : new Date(0);
+    const startingCash = lastClosing ? (lastClosing.actual_cash || 0) : 0;
+
+    // Hum sirf utna data uthayenge jitna dashboard ke filters ya cash calculation ke liye zaroori hai
+    const earliestNeededDate = new Date(Math.min(previousStart.getTime(), cashFilterDate.getTime())).toISOString();
+
+    // Parallel Fetch: Tamam tables se data aik saath mangwayein
+    const [
+      sales, 
+      returns, 
+      returnItems, 
+      expenses, 
+      customerPayments, 
+      supplierPayments, 
+      creditPayouts, 
+      supplierRefunds, 
+      cashAdjustments
+    ] = await Promise.all([
+      db.sales.where('created_at').aboveOrEqual(earliestNeededDate).toArray(),
+      db.sale_returns.where('created_at').aboveOrEqual(earliestNeededDate).toArray(),
+      db.sale_return_items.toArray(),
+      db.expenses.where('expense_date').aboveOrEqual(earliestNeededDate.split('T')[0]).toArray(),
+      db.customer_payments.where('updated_at').aboveOrEqual(earliestNeededDate).toArray(),
+      db.supplier_payments.where('updated_at').aboveOrEqual(earliestNeededDate).toArray(),
+      db.credit_payouts.where('updated_at').aboveOrEqual(earliestNeededDate).toArray(),
+      db.supplier_refunds.where('updated_at').aboveOrEqual(earliestNeededDate).toArray(),
+      db.cash_adjustments.where('created_at').aboveOrEqual(earliestNeededDate).toArray()
+    ]);
+    
     const expenseCategories = await db.expense_categories.toArray();
     const customers = await db.customers.toArray();
     const suppliers = await db.suppliers.toArray();
     const products = await db.products.toArray();
-    const saleItems = await db.sale_items.toArray();
-    const inventory = await db.inventory.toArray();
-    const lastClosing = await db.daily_closings.orderBy('created_at').reverse().first();
-    const cashFilterDate = lastClosing ? new Date(lastClosing.created_at) : new Date(0);
-    const startingCash = lastClosing ? (lastClosing.actual_cash || 0) : 0;
+    // Hum inventory se sirf wo items uthayenge jo 'Available' hain (Stock count ke liye)
+    // Aur sale_items se sirf wo jo is time range mein sale huay hain
+    const inventory = await db.inventory.where('status').equals('Available').toArray();
+    let saleItems = []; // Isay hum neechay sahi jagah par fetch karenge
 
     // 3. Filtering Logic
     const currentSalesData = sales.filter(s => new Date(s.sale_date || s.created_at) >= currentStart);
@@ -1761,9 +1838,10 @@ async addCustomer(customerData) {
         expenseBreakdown.push({ type: name, value: breakdownMap[name] });
     });
 
-    // 6. Profit Calculation
+    // 6. Profit Calculation (Optimized Fetch)
     const currentSaleIds = currentSalesData.map(s => s.id);
-    const currentSoldItems = saleItems.filter(i => currentSaleIds.includes(i.sale_id));
+    saleItems = await db.sale_items.where('sale_id').anyOf(currentSaleIds).toArray();
+    const currentSoldItems = saleItems;
 
     const inventoryMap = {};
     inventory.forEach(i => inventoryMap[i.id] = i);
@@ -1805,7 +1883,7 @@ async addCustomer(customerData) {
     const cashTransfersIn = cashAdjustments.filter(a => a.type === 'Transfer' && a.transfer_to === 'Cash' && new Date(a.created_at) > cashFilterDate).reduce((sum, a) => sum + (a.amount || 0), 0);
     const cashTransfersOut = cashAdjustments.filter(a => a.type === 'Transfer' && a.payment_method === 'Cash' && new Date(a.created_at) > cashFilterDate).reduce((sum, a) => sum + (a.amount || 0), 0);
 
-    const cashInHand = startingCash + (cashSales + cashReceived + cashRefunds + totalCashIn + cashTransfersIn) - (cashExpenses + cashPaidToSuppliers + cashPayouts + totalCashOut + cashTransfersOut);
+    const cashInHand = precise(startingCash + (cashSales + cashReceived + cashRefunds + totalCashIn + cashTransfersIn) - (cashExpenses + cashPaidToSuppliers + cashPayouts + totalCashOut + cashTransfersOut));
 
     // --- BANK LOGIC (Bank/EasyPaisa) ---
     const bankSales = sales.filter(s => s.payment_method === 'Bank').reduce((sum, s) => sum + (s.amount_paid_at_sale || 0), 0);
@@ -1825,7 +1903,7 @@ async addCustomer(customerData) {
     // NAYA: Bank se Cash mein gaya (Bank kam hoga)
     const bankTransfersOut = cashAdjustments.filter(a => a.type === 'Transfer' && a.payment_method === 'Bank').reduce((sum, a) => sum + (a.amount || 0), 0);
 
-    const bankBalance = (bankSales + bankReceived + bankRefunds + totalBankIn + bankTransfersIn) - (bankExpenses + bankPaidToSuppliers + bankPayouts + totalBankOut + bankTransfersOut);
+    const bankBalance = precise((bankSales + bankReceived + bankRefunds + totalBankIn + bankTransfersIn) - (bankExpenses + bankPaidToSuppliers + bankPayouts + totalBankOut + bankTransfersOut));
 
     // --- 7. BUSINESS LOGIC FIX: Receivables vs Payables (Credits) ---
     
@@ -1848,7 +1926,20 @@ async addCustomer(customerData) {
     // Total Payables (Suppliers + Customers jinko wapis karna hai)
     // Business mein yeh dono "Liabilities" hain.
     const totalLiabilities = totalSupplierPayables + totalCustomerCredits;
-    const totalInventoryValue = inventory.filter(i => (i.status || '').toLowerCase() === 'available').reduce((sum, i) => sum + ((i.purchase_price || 0) * (i.available_qty || 0)), 0);
+    // Point B Optimization: Direct sum from DB instead of JS loop
+    // Point B Optimization Fix: Added .toArray() before processing
+    // Inventory Valuation Optimization: Memory bachane ke liye .each() istemal kiya
+    let runningInventoryTotal = 0;
+    await db.inventory
+        .where('status').equals('Available')
+        .each(item => {
+            const price = Number(item.purchase_price) || 0;
+            const qty = Number(item.available_qty) || 0;
+            if (qty > 0) {
+                runningInventoryTotal += (price * qty);
+            }
+        });
+    const totalInventoryValue = precise(runningInventoryTotal);
 
     // 8. Low Stock
     const stockCounts = {};
@@ -1881,24 +1972,42 @@ async addCustomer(customerData) {
             customer: customers.find(c => c.id === s.customer_id)?.name || 'Walk-in Customer'
         }));
 
-    // 10. Top Selling
+    // 10. Top Selling & Most Profitable (Smart Inventory Lookup)
     const productSalesMap = {};
+    
+    // Sirf un items ki inventory uthayenge jo in sales mein biki hain
+    const soldInvIds = saleItems.map(si => si.inventory_id);
+    const soldInventoryItems = await db.inventory.where('id').anyOf(soldInvIds).toArray();
+    const soldInvMap = {};
+    soldInventoryItems.forEach(inv => { soldInvMap[inv.id] = inv; });
+
     saleItems.forEach(item => {
         const pid = item.product_id;
-        if (!productSalesMap[pid]) productSalesMap[pid] = 0;
-        productSalesMap[pid] += (item.quantity || 0);
+        const invItem = soldInvMap[item.inventory_id]; 
+        const profit = (item.price_at_sale - (invItem?.purchase_price || 0)) * (item.quantity || 1);
+
+        if (!productSalesMap[pid]) {
+            productSalesMap[pid] = { qty: 0, profit: 0 };
+        }
+        productSalesMap[pid].qty += (item.quantity || 1);
+        productSalesMap[pid].profit += profit;
     });
+
+    // Tezi ke liye pehle hi Products ki ek list (Map) bana lein
+    const productMap = {};
+    products.forEach(p => { productMap[String(p.id)] = p; });
 
     const topSellingProducts = Object.keys(productSalesMap)
         .map(pid => {
-            const prod = products.find(p => String(p.id) === String(pid));
+            // Poore table mein dhoondne ke bajaye seedha list (Map) se uthayen
+            const prod = productMap[String(pid)];
             return {
                 name: prod ? prod.name : 'Unknown Item',
-                totalSold: productSalesMap[pid]
+                totalSold: productSalesMap[pid].qty,
+                totalProfit: productSalesMap[pid].profit
             };
-        })
-        .sort((a, b) => b.totalSold - a.totalSold)
-        .slice(0, 5);
+        });
+        // Note: Sorting ab hum Dashboard.jsx mein filter ke mutabiq karenge
 
     return {
         totalSales: netSalesCurrent,
@@ -1926,9 +2035,13 @@ async addCustomer(customerData) {
   },
 
   async getLast7DaysSales() {
-    // 1. Sales aur Returns dono layein
-    const sales = await db.sales.toArray();
-    const returns = await db.sale_returns.toArray();
+    // 1. Sirf pichle 7 din ka data mangwayenge
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const dateLimit = sevenDaysAgo.toISOString();
+
+    const sales = await db.sales.where('created_at').aboveOrEqual(dateLimit).toArray();
+    const returns = await db.sale_returns.where('created_at').aboveOrEqual(dateLimit).toArray();
     
     const map = {};
     

@@ -77,6 +77,17 @@ const Categories = () => {
 
   const handleCategoryModalOk = async (values) => {
     try {
+      // --- DUPLICATE CHECK ---
+      const isDuplicate = await DataService.checkDuplicateCategory(values.name, editingCategory?.id);
+      if (isDuplicate) {
+        categoryForm.setFields([
+          {
+            name: 'name',
+            errors: [`Category "${values.name}" already exists!`],
+          },
+        ]);
+        return;
+      }
       if (editingCategory) {
         // Update (Offline)
         await DataService.updateProductCategory(editingCategory.id, values);

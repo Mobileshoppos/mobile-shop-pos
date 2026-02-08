@@ -181,27 +181,52 @@ const WarrantyClaims = () => {
                                         <List
                                             size="small"
                                             dataSource={lookupResult.items || []}
-                                            renderItem={entry => (
-                                                <List.Item extra={
-                                                    <Button size="small" type="link" onClick={() => {
-                                                        setLookupResult({
-                                                            type: 'IMEI', // Switch to detail view
-                                                            product: entry.product,
-                                                            item: entry.inventory,
-                                                            saleItem: entry.saleItem,
-                                                            saleDetails: lookupResult.sale,
-                                                            supplier: entry.supplier, // Supplier transfer karein
-                                                            customer: lookupResult.customer // Customer transfer karein
-                                                        });
-                                                        setIsClaimModalOpen(true);
-                                                    }}>Claim</Button>
-                                                }>
-                                                    <List.Item.Meta 
-                                                        title={entry.product?.name} 
-                                                        description={`Warranty Till: ${entry.saleItem?.warranty_expiry ? dayjs(entry.saleItem.warranty_expiry).format('DD-MM-YYYY') : 'None'}`} 
-                                                    />
-                                                </List.Item>
-                                            )}
+                                            renderItem={entry => {
+                                                // 1. Check karein warranty hai ya nahi, aur expired hai ya nahi
+                                                const expiryDate = entry.saleItem?.warranty_expiry;
+                                                const hasWarranty = !!expiryDate;
+                                                const isExpired = hasWarranty && dayjs().isAfter(dayjs(expiryDate), 'day');
+
+                                                // 2. Decision lein ke kya dikhana hai
+                                                let actionButton;
+
+                                                if (!hasWarranty) {
+                                                    actionButton = <Tag color="default">No Warranty</Tag>;
+                                                } else if (isExpired) {
+                                                    actionButton = <Tag color="error">Expired</Tag>;
+                                                } else {
+                                                    // Sirf Valid Warranty par Claim button dikhayein
+                                                    actionButton = (
+                                                        <Button size="small" type="primary" ghost onClick={() => {
+                                                            setLookupResult({
+                                                                type: 'IMEI', 
+                                                                product: entry.product,
+                                                                item: entry.inventory,
+                                                                saleItem: entry.saleItem,
+                                                                saleDetails: lookupResult.sale,
+                                                                supplier: entry.supplier,
+                                                                customer: lookupResult.customer
+                                                            });
+                                                            setIsClaimModalOpen(true);
+                                                        }}>
+                                                            Claim
+                                                        </Button>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <List.Item extra={actionButton}>
+                                                        <List.Item.Meta 
+                                                            title={entry.product?.name} 
+                                                            description={
+                                                                hasWarranty 
+                                                                ? <Text type={isExpired ? "danger" : "success"}>Warranty Till: {dayjs(expiryDate).format('DD-MMM-YYYY')}</Text>
+                                                                : <Text type="secondary">Warranty: None</Text>
+                                                            } 
+                                                        />
+                                                    </List.Item>
+                                                );
+                                            }}
                                         />
                                     </>
                                 )}

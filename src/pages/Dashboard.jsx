@@ -35,6 +35,7 @@ const Dashboard = () => {
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('today');
+  const [topSellingFilter, setTopSellingFilter] = useState('qty'); 
 
   const { message } = App.useApp();
   const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
@@ -106,7 +107,7 @@ const Dashboard = () => {
       setIsClosingSubmitting(true);
       const expected = stats?.cashInHand || 0;
       const actual = values.actual_cash;
-      const diff = actual - expected;
+      const diff = Math.round((actual - expected) * 100) / 100;
 
       const closingData = {
         id: crypto.randomUUID(),
@@ -158,7 +159,7 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [profile, timeRange, stats]);
+  }, [profile, timeRange]);
 
   useEffect(() => {
     loadDashboard();
@@ -436,42 +437,40 @@ const Dashboard = () => {
           </Card>
         </Col>
 
-        {/* Card 4: Receivables, Customer Credits & Supplier Payables */}
+        {/* Card 4: Receivables & Payables (Money In vs Money Out) */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
           <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #3a6073 0%, #3a7bd5 100%)' }}>
             <Statistic
-              title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Total Receivables</span>}
+              title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Accounts Receivable</span>}
               value={stats?.totalReceivables || 0}
-              prefix={<UserOutlined />}
+              prefix={<ArrowDownOutlined style={{ fontSize: '16px' }} />}
               valueStyle={{ color: 'white', fontWeight: 'bold', fontSize: '22px' }}
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
-             <div style={{ marginTop: 8, fontSize: '12px', opacity: 0.8 }}>
-                Pending from Customers
+             <div style={{ marginTop: -4, marginBottom: 10, fontSize: '11px', opacity: 0.8 }}>
+                Pending from customers
             </div>
 
-            {/* Section: Paise jo wapis karne hain (Liabilities) */}
-            <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+            {/* Section: Accounts Payable (Liabilities) */}
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+                <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Accounts Payable (To Pay)
+                </div>
                 
-                {/* 1. Customer Returns (Agar hain) */}
+                {/* 1. Supplier Payables */}
+                <div style={{ fontSize: '13px', display: 'flex', justifyContent: 'space-between', color: '#ffccc7' }}>
+                    <span>Suppliers:</span>
+                    <span style={{ fontWeight: 'bold' }}>{formatCurrency(stats?.totalPayables - (stats?.totalCustomerCredits || 0), profile?.currency)}</span>
+                </div>
+
+                {/* 2. Customer Credits (Due to returns) */}
                 {stats?.totalCustomerCredits > 0 && (
-                    <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffccc7', display: 'flex', justifyContent: 'space-between' }}>
-                        <span>To Customers:</span>
-                        <span>- {formatCurrency(stats.totalCustomerCredits, profile?.currency)}</span>
+                    <div style={{ fontSize: '13px', display: 'flex', justifyContent: 'space-between', color: '#ffccc7', marginTop: 2 }}>
+                        <span>Customer Credits:</span>
+                        <span style={{ fontWeight: 'bold' }}>{formatCurrency(stats.totalCustomerCredits, profile?.currency)}</span>
                     </div>
                 )}
-
-                {/* 2. Supplier Payables (Agar hain) */}
-                {/* Logic: Total Payables mein se Customer Credits nikaal dein to baqi Supplier ka bachega */}
-                {(stats?.totalPayables - (stats?.totalCustomerCredits || 0)) > 0 && (
-                    <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffccc7', display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-                        <span>To Suppliers:</span>
-                        <span>- {formatCurrency(stats.totalPayables - (stats.totalCustomerCredits || 0), profile?.currency)}</span>
-                    </div>
-                )}
-
             </div>
-
           </Card>
         </Col>
       </Row>
@@ -614,24 +613,38 @@ const Dashboard = () => {
             {/* Top Selling Products */}
             <Col span={24}>
               <Card 
-                title={<Space><TrophyOutlined style={{ color: '#faad14' }} /> Top Selling Products</Space>} 
-                style={{ borderRadius: 5, border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9' }}
-                styles={{ body: { padding: '0 12px' } }}
-              >
+  title={<Space><TrophyOutlined style={{ color: '#faad14' }} /> {topSellingFilter === 'qty' ? 'Top Selling' : 'Most Profitable'}</Space>} 
+  extra={
+    <Radio.Group size="small" value={topSellingFilter} onChange={e => setTopSellingFilter(e.target.value)}>
+      <Radio.Button value="qty">Qty</Radio.Button>
+      <Radio.Button value="profit">Profit</Radio.Button>
+    </Radio.Group>
+  }
+  style={{ borderRadius: 5, border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9' }}
+  styles={{ body: { padding: '0 12px' } }}
+>
                 <List
-                  itemLayout="horizontal"
-                  dataSource={stats?.topSellingProducts || []}
-                  renderItem={(item, index) => (
-                    <List.Item>
-                      <List.Item.Meta
-                        avatar={<Tag color="gold">#{index + 1}</Tag>}
-                        title={item.name}
-                      />
-                      <Text strong>{item.totalSold} Sold</Text>
-                    </List.Item>
-                  )}
-                  locale={{ emptyText: 'No sales yet!' }}
-                />
+  itemLayout="horizontal"
+  dataSource={(stats?.topSellingProducts || [])
+    .sort((a, b) => topSellingFilter === 'qty' ? b.totalSold - a.totalSold : b.totalProfit - a.totalProfit)
+    .slice(0, 5)
+  }
+  renderItem={(item, index) => (
+    <List.Item>
+      <List.Item.Meta
+        avatar={<Tag color="gold">#{index + 1}</Tag>}
+        title={item.name}
+      />
+      <Text strong>
+        {topSellingFilter === 'qty' 
+          ? `${item.totalSold} Sold` 
+          : formatCurrency(item.totalProfit, profile?.currency)
+        }
+      </Text>
+    </List.Item>
+  )}
+  locale={{ emptyText: 'No sales yet!' }}
+/>
               </Card>
               <Col span={24} style={{ marginTop: 16 }}>
   <Card 
@@ -818,7 +831,7 @@ const Dashboard = () => {
             {({ getFieldValue }) => {
               const actual = getFieldValue('actual_cash') || 0;
               const expected = stats?.cashInHand || 0;
-              const diff = actual - expected;
+              const diff = Math.round((actual - expected) * 100) / 100;
               
               if (actual === 0) return null;
 

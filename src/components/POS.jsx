@@ -18,6 +18,17 @@ import { generateInvoiceId } from '../utils/idGenerator';
 import { useTheme } from '../context/ThemeContext';
 
 const { Title, Text } = Typography;
+// Global Countries List
+const countries = [
+  { label: 'Pakistan', value: 'Pakistan' },
+  { label: 'India', value: 'India' },
+  { label: 'United Arab Emirates', value: 'UAE' },
+  { label: 'Saudi Arabia', value: 'Saudi Arabia' },
+  { label: 'United Kingdom', value: 'UK' },
+  { label: 'United States', value: 'USA' },
+  { label: 'Australia', value: 'Australia' },
+  { label: 'Canada', value: 'Canada' },
+];
 const { Search } = Input;
 
 // --- HELPER: SMART SEARCH (Naram Mizaaj) ---
@@ -655,7 +666,7 @@ const POS = () => {
               }
           });
           
-          message.success(`Sale #${saleId} completed successfully!`);
+          message.success(`Sale #${shortInvoiceId} completed successfully!`);
           saleDataForReceipt = saleRecord;
           
           processSyncQueue();
@@ -771,7 +782,23 @@ const POS = () => {
 
   // NAYA handleAddCustomer (Offline-First)
   const handleAddCustomer = async (values) => {
+    // 1. Phone number ki safai (Normalize)
+    if (values.phone_number) {
+      values.phone_number = values.phone_number.replace(/[^\d+]/g, '');
+    }
+
     try {
+      // 2. SMART DUPLICATE CHECK
+      const existingCustomerName = await DataService.checkDuplicateCustomer(values.phone_number);
+      if (existingCustomerName) {
+        addForm.setFields([
+          {
+            name: 'phone_number',
+            errors: [`Registered to: ${existingCustomerName}`],
+          },
+        ]);
+        return;
+      }
       // 1. Naya Customer Object banayein
       const newCustomer = { 
           ...values, 
@@ -1220,7 +1247,64 @@ const POS = () => {
           </Card>
         </Col>
       </Row>
-      <Modal title="Add a New Customer" open={isAddCustomerModalOpen} onCancel={() => setIsAddCustomerModalOpen(false)} onOk={() => addForm.submit()} okText="Save Customer"><Form form={addForm} layout="vertical" onFinish={handleAddCustomer}><Form.Item name="name" label="Full Name" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="phone_number" label="Phone Number" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="address" label="Address (Optional)"><Input.TextArea rows={3} /></Form.Item></Form></Modal>
+      <Modal 
+  title="Add a New Customer" 
+  open={isAddCustomerModalOpen} 
+  onCancel={() => setIsAddCustomerModalOpen(false)} 
+  onOk={() => addForm.submit()} 
+  okText="Save Customer"
+  width={600}
+>
+  <Form form={addForm} layout="vertical" onFinish={handleAddCustomer} style={{ marginTop: '20px' }}>
+    <Row gutter={16}>
+      <Col span={12}>
+        <Form.Item name="name" label="Full Name" rules={[{ required: true, message: 'Please enter name' }]}>
+          <Input placeholder="e.g. John Doe" />
+        </Form.Item>
+      </Col>
+      <Col span={12}>
+        <Form.Item name="phone_number" label="Phone / Mobile" rules={[{ required: true, message: 'Please enter phone' }]}>
+          <Input placeholder="e.g. +923001234567" />
+        </Form.Item>
+      </Col>
+    </Row>
+
+    <Row gutter={16}>
+      <Col span={12}>
+        <Form.Item name="email" label="Email Address" rules={[{ type: 'email', message: 'Invalid email format' }]}>
+          <Input placeholder="e.g. customer@example.com" />
+        </Form.Item>
+      </Col>
+      <Col span={12}>
+        <Form.Item name="tax_id" label="Tax ID / VAT #" tooltip="Required for Business (B2B) invoices">
+          <Input placeholder="e.g. TRN-123456" />
+        </Form.Item>
+      </Col>
+    </Row>
+
+    <Form.Item name="address" label="Street Address">
+      <Input placeholder="Building, Street, Area..." />
+    </Form.Item>
+
+    <Row gutter={16}>
+      <Col span={12}>
+        <Form.Item name="city" label="City">
+          <Input placeholder="e.g. Karachi / London" />
+        </Form.Item>
+      </Col>
+      <Col span={12}>
+        <Form.Item name="country" label="Country">
+          <Select 
+            showSearch 
+            placeholder="Select Country" 
+            options={countries}
+            filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+          />
+        </Form.Item>
+      </Col>
+    </Row>
+  </Form>
+</Modal>
       {isVariantModalOpen && <SelectVariantModal visible={isVariantModalOpen} onCancel={() => setIsVariantModalOpen(false)} onOk={handleVariantsSelected} product={productForVariantSelection} cart={cart} />}
     </div>
   );

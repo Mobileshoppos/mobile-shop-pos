@@ -1,0 +1,5 @@
+ALTER TABLE public.customers 
+ADD COLUMN email TEXT,
+ADD COLUMN tax_id TEXT,
+ADD COLUMN city TEXT,
+ADD COLUMN country TEXT;

@@ -360,6 +360,24 @@ const SupplierDashboard = () => {
     const handleModalOk = async () => {
         try {
             const values = await form.validateFields();
+            
+            // 1. Phone number ki safai (Normalization)
+            if (values.phone) {
+                values.phone = values.phone.replace(/[^\d+]/g, '');
+            }
+
+            // 2. SMART DUPLICATE CHECK (Name aur Phone dono ke liye)
+            const duplicate = await DataService.checkDuplicateSupplier(values.phone, values.name, editingSupplier?.id);
+            
+            if (duplicate) {
+                if (duplicate.type === 'phone') {
+                    form.setFields([{ name: 'phone', errors: [`Registered to: ${duplicate.name}`] }]);
+                } else {
+                    form.setFields([{ name: 'name', errors: ['Company name already exists!'] }]);
+                }
+                return;
+            }
+
             if (editingSupplier) {
                 await DataService.updateSupplier(editingSupplier.id, values);
                 notification.success({ message: 'Success', description: 'Supplier updated.' });

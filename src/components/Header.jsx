@@ -120,7 +120,7 @@ return (
                 </Tooltip>
 
                 {/* Yellow Light: Syncing */}
-                <Tooltip title={pendingCount > 0 ? `Working: Syncing ${pendingCount} new items...` : "Sync Queue: All data uploaded"}>
+                <Tooltip title={pendingCount > 0 ? `Working: Syncing ${pendingCount} new items...` : "Sync Center: All data uploaded"}>
                   <div style={{
                     width: '10px', height: '10px', borderRadius: '50%',
                     background: pendingCount > 0 ? '#faad14' : 'rgba(100,100,100,0.2)',

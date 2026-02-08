@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag, Dropdown, Menu, Tooltip
+  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag, Dropdown, Menu, Tooltip, Select
 } from 'antd';
 import { UserSwitchOutlined, UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined, MoreOutlined, EditOutlined, ReloadOutlined, InboxOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
@@ -13,6 +13,18 @@ import { useSync } from '../context/SyncContext';
 import DataService from '../DataService';
 
 const { Title, Text } = Typography;
+// Global Countries List
+const countries = [
+  { label: 'Pakistan', value: 'Pakistan' },
+  { label: 'India', value: 'India' },
+  { label: 'United Arab Emirates', value: 'UAE' },
+  { label: 'Saudi Arabia', value: 'Saudi Arabia' },
+  { label: 'United Kingdom', value: 'UK' },
+  { label: 'United States', value: 'USA' },
+  { label: 'Australia', value: 'Australia' },
+  { label: 'Canada', value: 'Canada' },
+  // Aap baad mein mazeed countries yahan add kar sakte hain
+];
 
 const Customers = () => {
   const { message, modal } = AntApp.useApp();
@@ -127,7 +139,23 @@ const Customers = () => {
   };
 
   const handleAddCustomer = async (values) => {
+    // 1. Phone number ki safai (Normalize) taake database saaf rahe
+    if (values.phone_number) {
+      values.phone_number = values.phone_number.replace(/[^\d+]/g, '');
+    }
+
     try {
+      // 2. SMART DUPLICATE CHECK (Aakhri 10 digits wala)
+      const existingCustomerName = await DataService.checkDuplicateCustomer(values.phone_number, editingCustomer?.id);
+      if (existingCustomerName) {
+        addForm.setFields([
+          {
+            name: 'phone_number',
+            errors: [`Registered to: ${existingCustomerName}`],
+          },
+        ]);
+        return;
+      }
       if (editingCustomer) {
         // EDIT MODE
         await DataService.updateCustomer(editingCustomer.id, values);
@@ -1053,9 +1081,56 @@ const handleCloseInvoiceSearchModal = () => {
     <Table columns={customerColumns} dataSource={customers} loading={loading} rowKey="id" />
 )} <Modal title={editingCustomer ? "Edit Customer" : "Add New Customer"} open={isAddModalOpen} onCancel={() => setIsAddModalOpen(false)} onOk={() => addForm.submit()} okText="Save"> 
   <Form form={addForm} layout="vertical" onFinish={handleAddCustomer}>
-    <Form.Item name="name" label="Full Name" rules={[{ required: true }]}>
-      <Input ref={customerNameInputRef} />
-    </Form.Item><Form.Item name="phone_number" label="Phone" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="address" label="Address"><Input.TextArea /></Form.Item></Form> </Modal> <Modal
+  <Row gutter={16}>
+    <Col span={12}>
+      <Form.Item name="name" label="Full Name" rules={[{ required: true, message: 'Please enter name' }]}>
+        <Input ref={customerNameInputRef} placeholder="e.g. John Doe" />
+      </Form.Item>
+    </Col>
+    <Col span={12}>
+      <Form.Item name="phone_number" label="Phone / Mobile" rules={[{ required: true, message: 'Please enter phone' }]}>
+        <Input placeholder="e.g. +923001234567" />
+      </Form.Item>
+    </Col>
+  </Row>
+
+  <Row gutter={16}>
+    <Col span={12}>
+      <Form.Item name="email" label="Email Address" rules={[{ type: 'email', message: 'Invalid email format' }]}>
+        <Input placeholder="e.g. customer@example.com" />
+      </Form.Item>
+    </Col>
+    <Col span={12}>
+      <Form.Item name="tax_id" label="Tax ID / VAT #" tooltip="Required for Business (B2B) invoices">
+        <Input placeholder="e.g. TRN-123456" />
+      </Form.Item>
+    </Col>
+  </Row>
+
+  <Form.Item name="address" label="Street Address">
+    <Input placeholder="Building, Street, Area..." />
+  </Form.Item>
+
+  <Row gutter={16}>
+    <Col span={12}>
+      <Form.Item name="city" label="City">
+        <Input placeholder="e.g. Karachi / London" />
+      </Form.Item>
+    </Col>
+    <Col span={12}>
+      <Form.Item name="country" label="Country">
+        <Select 
+          showSearch 
+          placeholder="Select Country" 
+          options={countries}
+          filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+        />
+      </Form.Item>
+    </Col>
+  </Row>
+</Form> 
+</Modal> 
+<Modal
     title={`Ledger: ${selectedCustomer?.name}`}
     open={isLedgerModalOpen}
     onCancel={() => setIsLedgerModalOpen(false)}
