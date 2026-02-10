@@ -431,7 +431,8 @@ const POS = () => {
                         ...inventoryItem,
                         product_name: parentProduct.name,
                         variant_id: inventoryItem.variant_id,
-                        sale_price: inventoryItem.sale_price || parentProduct.sale_price
+                        sale_price: inventoryItem.sale_price || parentProduct.sale_price,
+                        purchase_price: inventoryItem.purchase_price,
                     };
                     handleVariantsSelected([itemToAdd]);
                     setSearchTerm('');
@@ -455,6 +456,7 @@ const POS = () => {
                      product_name: parentProduct.name,
                      variant_id: inventoryItem.variant_id || inventoryItem.id,
                      sale_price: inventoryItem.sale_price || parentProduct.sale_price,
+                     purchase_price: inventoryItem.purchase_price,
                      imei: trimmedValue 
                  };
                  handleVariantsSelected([itemToAdd]);
@@ -577,6 +579,7 @@ const POS = () => {
                     product_name_snapshot: cartItem.product_name, 
                     quantity: 1,
                     price_at_sale: cartItem.sale_price,
+                    purchase_price: batchItem.purchase_price || 0,
                     user_id: user.id,
                     warranty_expiry: expiryDate 
                 });
@@ -615,6 +618,7 @@ const POS = () => {
                     product_name_snapshot: cartItem.product_name,
                     quantity: cartItem.quantity,
                     price_at_sale: cartItem.sale_price,
+                    purchase_price: cartItem.purchase_price || 0,
                     user_id: user.id,
                     warranty_expiry: expiryDateBulk // Naya Column
                 });

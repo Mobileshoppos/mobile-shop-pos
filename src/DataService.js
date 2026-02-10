@@ -858,6 +858,7 @@ async addCustomer(customerData) {
       product_name_snapshot: item.product_name,
       quantity: item.quantity || 1,
       price_at_sale: item.price_at_sale,
+      purchase_price: item.purchase_price || 0,
       user_id: salePayload.user_id,
       warranty_expiry: item.warranty_expiry || null
     }));
@@ -1384,9 +1385,16 @@ async addCustomer(customerData) {
     inventoryItems.forEach(inv => { inventoryMap[inv.id] = inv; });
 
     saleItems.forEach(item => {
-      const inv = inventoryMap[item.inventory_id];
-      if (inv) {
-        totalCostOfGoodsSold += (inv.purchase_price || 0);
+      // Naya Professional Tareeqa: Pehle sale_item mein freeze hui price check karein
+      if (item.purchase_price !== undefined && item.purchase_price !== null && Number(item.purchase_price) !== 0) {
+        totalCostOfGoodsSold += (Number(item.purchase_price) * (item.quantity || 1));
+      } 
+      // Fallback: Purana tareeqa (Sirf purani sales ke liye jab ye column nahi tha)
+      else {
+        const inv = inventoryMap[item.inventory_id];
+        if (inv) {
+          totalCostOfGoodsSold += (inv.purchase_price || 0);
+        }
       }
     });
 
@@ -1395,12 +1403,22 @@ async addCustomer(customerData) {
     const returnIds = filteredReturns.map(r => r.id);
     if (returnIds.length > 0) {
         const returnItems = await db.sale_return_items.where('return_id').anyOf(returnIds).toArray();
-        const returnInvIds = returnItems.map(i => i.inventory_id);
-        const returnInventory = await db.inventory.where('id').anyOf(returnInvIds).toArray();
         
-        returnInventory.forEach(inv => {
-            totalCostOfReturns += (inv.purchase_price || 0);
-        });
+        for (const rItem of returnItems) {
+            // Smart Lookup: Pehle dekho ke is sale item mein purchase_price freeze hui thi?
+            const sItem = await db.sale_items
+                .where('[sale_id+inventory_id]')
+                .equals([rItem.sale_id || '', rItem.inventory_id]) // Note: Agar sale_id return record mein hai
+                .first();
+
+            if (sItem && sItem.purchase_price) {
+                totalCostOfReturns += Number(sItem.purchase_price) * (rItem.quantity || 1);
+            } else {
+                // Fallback: Agar purana data hai to inventory se lo
+                const inv = await db.inventory.get(rItem.inventory_id);
+                if (inv) totalCostOfReturns += (inv.purchase_price || 0);
+            }
+        }
     }
 
     const totalCost = totalCostOfGoodsSold - totalCostOfReturns;
@@ -1754,11 +1772,8 @@ async addCustomer(customerData) {
     // Hum sirf utna data uthayenge jitna dashboard ke filters ya cash calculation ke liye zaroori hai
     const earliestNeededDate = new Date(Math.min(previousStart.getTime(), cashFilterDate.getTime())).toISOString();
 
-    // Parallel Fetch: Tamam tables se data aik saath mangwayein
+    // Parallel Fetch: Optimized (Sales aur Returns ko memory-safe process karne ke liye nikaal diya gaya hai)
     const [
-      sales, 
-      returns, 
-      returnItems, 
       expenses, 
       customerPayments, 
       supplierPayments, 
@@ -1766,9 +1781,6 @@ async addCustomer(customerData) {
       supplierRefunds, 
       cashAdjustments
     ] = await Promise.all([
-      db.sales.where('created_at').aboveOrEqual(earliestNeededDate).toArray(),
-      db.sale_returns.where('created_at').aboveOrEqual(earliestNeededDate).toArray(),
-      db.sale_return_items.toArray(),
       db.expenses.where('expense_date').aboveOrEqual(earliestNeededDate.split('T')[0]).toArray(),
       db.customer_payments.where('updated_at').aboveOrEqual(earliestNeededDate).toArray(),
       db.supplier_payments.where('updated_at').aboveOrEqual(earliestNeededDate).toArray(),
@@ -1778,25 +1790,88 @@ async addCustomer(customerData) {
     ]);
     
     const expenseCategories = await db.expense_categories.toArray();
-    const customers = await db.customers.toArray();
-    const suppliers = await db.suppliers.toArray();
-    const products = await db.products.toArray();
-    // Hum inventory se sirf wo items uthayenge jo 'Available' hain (Stock count ke liye)
-    // Aur sale_items se sirf wo jo is time range mein sale huay hain
-    const inventory = await db.inventory.where('status').equals('Available').toArray();
-    let saleItems = []; // Isay hum neechay sahi jagah par fetch karenge
+    let totalReceivables = 0;
+    let totalCustomerCredits = 0;
+    const customerNameMap = {}; 
 
-    // 3. Filtering Logic
-    const currentSalesData = sales.filter(s => new Date(s.sale_date || s.created_at) >= currentStart);
-    const previousSalesData = sales.filter(s => {
-        const d = new Date(s.sale_date || s.created_at);
-        return d >= previousStart && d < (timeRange === 'today' ? previousEnd : currentStart);
+    await db.customers.each(c => {
+        const bal = c.balance || 0;
+        if (bal > 0) totalReceivables += bal;
+        else if (bal < 0) totalCustomerCredits += Math.abs(bal);
+        customerNameMap[c.id] = c.name;
     });
 
-    const currentReturnsData = returns.filter(r => new Date(r.created_at) >= currentStart);
-    const previousReturnsData = returns.filter(r => {
-        const d = new Date(r.created_at);
-        return d >= previousStart && d < (timeRange === 'today' ? previousEnd : currentStart);
+    const suppliers = await db.suppliers.toArray();
+    const products = await db.products.toArray();
+
+    const inventoryMap = {}; 
+    const stockCounts = {};
+    let runningInventoryTotal = 0;
+
+    await db.inventory
+        .where('status').equals('Available')
+        .each(item => {
+            const qty = Number(item.available_qty) || 0;
+            const price = Number(item.purchase_price) || 0;
+            if (qty > 0) {
+                runningInventoryTotal += (price * qty);
+                const pid = item.product_id;
+                stockCounts[pid] = (stockCounts[pid] || 0) + qty;
+                inventoryMap[item.id] = item;
+            }
+        });
+    const totalInventoryValue = precise(runningInventoryTotal);
+
+    // --- SALES & RETURNS OPTIMIZATION (Big Data Safe) ---
+    let sales = []; 
+    let returns = [];
+    let rawSalesCurrent = 0;
+    let rawSalesPrevious = 0;
+    let rawReturnsCurrent = 0;
+    let rawReturnsPrevious = 0;
+    let totalReturnFeesCurrent = 0;
+    
+    // Cash Calculation ke liye naye variables
+    let cashSalesTotal = 0;
+    let bankSalesTotal = 0;
+
+    const currentSalesData = [];
+    const previousSalesData = [];
+    const currentReturnsData = [];
+    let saleItems = [];
+
+    // 1. Sales Loop: Ek hi dafa database se guzrein
+    await db.sales.where('created_at').aboveOrEqual(earliestNeededDate).each(s => {
+        sales.push(s); // Crash bachane ke liye data yahan save karein
+        const sDate = new Date(s.sale_date || s.created_at);
+        
+        // Stats aur Growth ke liye
+        if (sDate >= currentStart) {
+            rawSalesCurrent += (s.total_amount || 0);
+            currentSalesData.push(s);
+        } else if (sDate >= previousStart && sDate < (timeRange === 'today' ? previousEnd : currentStart)) {
+            rawSalesPrevious += (s.total_amount || 0);
+            previousSalesData.push(s);
+        }
+
+        // Cash/Bank calculation (Jo pehle filter se hoti thi)
+        if (sDate > cashFilterDate) {
+            if (s.payment_method === 'Cash') cashSalesTotal += (s.amount_paid_at_sale || 0);
+        }
+        if (s.payment_method === 'Bank') bankSalesTotal += (s.amount_paid_at_sale || 0);
+    });
+
+    // 2. Returns Loop
+    await db.sale_returns.where('created_at').aboveOrEqual(earliestNeededDate).each(r => {
+        returns.push(r); // Crash bachane ke liye data yahan save karein
+        const rDate = new Date(r.created_at);
+        if (rDate >= currentStart) {
+            rawReturnsCurrent += (r.total_refund_amount || 0);
+            totalReturnFeesCurrent += (Number(r.return_fee) || 0);
+            currentReturnsData.push(r);
+        } else if (rDate >= previousStart && rDate < (timeRange === 'today' ? previousEnd : currentStart)) {
+            rawReturnsPrevious += (r.total_refund_amount || 0);
+        }
     });
 
     const currentExpensesData = expenses.filter(e => new Date(e.expense_date) >= currentStart);
@@ -1805,14 +1880,8 @@ async addCustomer(customerData) {
         return d >= previousStart && d < (timeRange === 'today' ? previousEnd : currentStart);
     });
 
-    // 4. Net Sales Calculation
-    const rawSalesCurrent = currentSalesData.reduce((sum, s) => sum + (s.total_amount || 0), 0);
-    const rawReturnsCurrent = currentReturnsData.reduce((sum, r) => sum + (r.total_refund_amount || 0), 0);
-    const totalReturnFeesCurrent = currentReturnsData.reduce((sum, r) => sum + (Number(r.return_fee) || 0), 0);
+    // Net Sales calculation (Variables upar loop mein pehle hi calculate ho chuke hain)
     const netSalesCurrent = rawSalesCurrent - rawReturnsCurrent;
-
-    const rawSalesPrevious = previousSalesData.reduce((sum, s) => sum + (s.total_amount || 0), 0);
-    const rawReturnsPrevious = previousReturnsData.reduce((sum, r) => sum + (r.total_refund_amount || 0), 0);
     const netSalesPrevious = rawSalesPrevious - rawReturnsPrevious;
     
     const totalExpensesCurrent = currentExpensesData.reduce((sum, e) => sum + (e.amount || 0), 0);
@@ -1843,23 +1912,33 @@ async addCustomer(customerData) {
     saleItems = await db.sale_items.where('sale_id').anyOf(currentSaleIds).toArray();
     const currentSoldItems = saleItems;
 
-    const inventoryMap = {};
-    inventory.forEach(i => inventoryMap[i.id] = i);
-
     let totalCostOfSold = 0;
     currentSoldItems.forEach(item => {
-        const invItem = inventoryMap[item.inventory_id];
-        if (invItem) totalCostOfSold += (invItem.purchase_price || 0);
+        // Naya Professional Tareeqa: Direct sale_item se cost uthayein
+        if (item.purchase_price !== undefined && item.purchase_price !== null && Number(item.purchase_price) !== 0) {
+            totalCostOfSold += (Number(item.purchase_price) * (item.quantity || 1));
+        }
+        // Fallback: Purana tareeqa
+        else {
+            const invItem = inventoryMap[item.inventory_id];
+            if (invItem) totalCostOfSold += (invItem.purchase_price || 0);
+        }
     });
 
     const currentReturnIds = currentReturnsData.map(r => r.id);
-    const currentReturnedItems = returnItems.filter(i => currentReturnIds.includes(i.return_id));
+    // Professional Way: Sirf wahi items load karein jo in returns se talluq rakhte hain
+    const currentReturnedItems = currentReturnIds.length > 0 
+        ? await db.sale_return_items.where('return_id').anyOf(currentReturnIds).toArray()
+        : [];
 
     let totalCostOfReturns = 0;
-    currentReturnedItems.forEach(item => {
-        const invItem = inventoryMap[item.inventory_id];
-        if (invItem) totalCostOfReturns += (invItem.purchase_price || 0);
-    });
+    for (const rItem of currentReturnedItems) {
+        // Hum inventoryMap se hi cost le rahe hain kyunke dashboard par inventory pehle se load hoti hai
+        const invItem = inventoryMap[rItem.inventory_id];
+        if (invItem) {
+            totalCostOfReturns += (invItem.purchase_price || 0);
+        }
+    }
 
     const netCost = totalCostOfSold - totalCostOfReturns;
     const grossProfitCurrent = netSalesCurrent - netCost;
@@ -1867,8 +1946,8 @@ async addCustomer(customerData) {
 
     // --- CASH IN HAND & BANK BALANCE CALCULATION ---
     
-    // A. Cash Calculation
-    const cashSales = sales.filter(s => s.payment_method === 'Cash' && new Date(s.sale_date || s.created_at) > cashFilterDate).reduce((sum, s) => sum + (s.amount_paid_at_sale || 0), 0);
+    // A. Cash Calculation (Loop se hasil karda value use karein)
+    const cashSales = cashSalesTotal;
     const cashReceived = customerPayments.filter(p => p.payment_method === 'Cash' && new Date(p.created_at) > cashFilterDate).reduce((sum, p) => sum + (p.amount_paid || 0), 0);
     const cashExpenses = expenses.filter(e => e.payment_method === 'Cash' && new Date(e.expense_date) > cashFilterDate).reduce((sum, e) => sum + (e.amount || 0), 0);
     const cashPaidToSuppliers = supplierPayments.filter(p => p.payment_method === 'Cash' && new Date(p.payment_date || p.created_at) > cashFilterDate).reduce((sum, p) => sum + (p.amount || 0), 0);
@@ -1886,7 +1965,7 @@ async addCustomer(customerData) {
     const cashInHand = precise(startingCash + (cashSales + cashReceived + cashRefunds + totalCashIn + cashTransfersIn) - (cashExpenses + cashPaidToSuppliers + cashPayouts + totalCashOut + cashTransfersOut));
 
     // --- BANK LOGIC (Bank/EasyPaisa) ---
-    const bankSales = sales.filter(s => s.payment_method === 'Bank').reduce((sum, s) => sum + (s.amount_paid_at_sale || 0), 0);
+    const bankSales = bankSalesTotal;
     const bankReceived = customerPayments.filter(p => p.payment_method === 'Bank').reduce((sum, p) => sum + (p.amount_paid || 0), 0);
     const bankExpenses = expenses.filter(e => e.payment_method === 'Bank').reduce((sum, e) => sum + (e.amount || 0), 0);
     const bankPaidToSuppliers = supplierPayments.filter(p => p.payment_method === 'Bank').reduce((sum, p) => sum + (p.amount || 0), 0);
@@ -1905,20 +1984,6 @@ async addCustomer(customerData) {
 
     const bankBalance = precise((bankSales + bankReceived + bankRefunds + totalBankIn + bankTransfersIn) - (bankExpenses + bankPaidToSuppliers + bankPayouts + totalBankOut + bankTransfersOut));
 
-    // --- 7. BUSINESS LOGIC FIX: Receivables vs Payables (Credits) ---
-    
-    let totalReceivables = 0;       // Jo paise LENE hain (Positive Balance)
-    let totalCustomerCredits = 0;   // Jo paise WAPIS KARNE hain (Negative Balance)
-
-    customers.forEach(c => {
-        const bal = c.balance || 0;
-        if (bal > 0) {
-            totalReceivables += bal;
-        } else if (bal < 0) {
-            // Math.abs(-20) = 20. Hamein positive number chahiye display ke liye
-            totalCustomerCredits += Math.abs(bal); 
-        }
-    });
 
     // Suppliers ka udhaar (Payables)
     const totalSupplierPayables = suppliers.reduce((sum, s) => sum + (s.balance_due || 0), 0);
@@ -1926,30 +1991,8 @@ async addCustomer(customerData) {
     // Total Payables (Suppliers + Customers jinko wapis karna hai)
     // Business mein yeh dono "Liabilities" hain.
     const totalLiabilities = totalSupplierPayables + totalCustomerCredits;
-    // Point B Optimization: Direct sum from DB instead of JS loop
-    // Point B Optimization Fix: Added .toArray() before processing
-    // Inventory Valuation Optimization: Memory bachane ke liye .each() istemal kiya
-    let runningInventoryTotal = 0;
-    await db.inventory
-        .where('status').equals('Available')
-        .each(item => {
-            const price = Number(item.purchase_price) || 0;
-            const qty = Number(item.available_qty) || 0;
-            if (qty > 0) {
-                runningInventoryTotal += (price * qty);
-            }
-        });
-    const totalInventoryValue = precise(runningInventoryTotal);
 
-    // 8. Low Stock
-    const stockCounts = {};
-    inventory.forEach(item => {
-        const status = (item.status || '').toLowerCase();
-        if (status === 'available') {
-            const qty = item.available_qty !== undefined ? Number(item.available_qty) : 1;
-            stockCounts[item.product_id] = (stockCounts[item.product_id] || 0) + qty;
-        }
-    });
+    // stockCounts upar Step 1 mein pehle hi calculate ho chuka hai.
 
     const lowStockItems = products
         .map(product => ({
@@ -1959,7 +2002,7 @@ async addCustomer(customerData) {
         .filter(p => p.quantity <= threshold)
         .slice(0, 5);
 
-    // 9. Recent Sales
+    // 9. Recent Sales (Optimized Lookup)
     const recentSales = sales
         .sort((a, b) => new Date(b.sale_date || b.created_at) - new Date(a.sale_date || a.created_at))
         .slice(0, 5)
@@ -1969,22 +2012,19 @@ async addCustomer(customerData) {
             date: s.sale_date || s.created_at,
             amount: s.total_amount,
             payment_status: s.payment_status || 'paid',
-            customer: customers.find(c => c.id === s.customer_id)?.name || 'Walk-in Customer'
+            customer: customerNameMap[s.customer_id] || 'Walk-in Customer'
         }));
 
-    // 10. Top Selling & Most Profitable (Smart Inventory Lookup)
+    // 10. Top Selling & Most Profitable (Optimized: Using Frozen Purchase Price)
     const productSalesMap = {};
-    
-    // Sirf un items ki inventory uthayenge jo in sales mein biki hain
-    const soldInvIds = saleItems.map(si => si.inventory_id);
-    const soldInventoryItems = await db.inventory.where('id').anyOf(soldInvIds).toArray();
-    const soldInvMap = {};
-    soldInventoryItems.forEach(inv => { soldInvMap[inv.id] = inv; });
 
     saleItems.forEach(item => {
         const pid = item.product_id;
-        const invItem = soldInvMap[item.inventory_id]; 
-        const profit = (item.price_at_sale - (invItem?.purchase_price || 0)) * (item.quantity || 1);
+        
+        // Professional Tareeqa: Seedha sale_item mein mojud purchase_price use karein
+        // Is se database par bojh khatam ho jata hai aur profit hamesha sahi rehta hai
+        const costOfThisItem = Number(item.purchase_price) || 0;
+        const profit = (Number(item.price_at_sale) - costOfThisItem) * (item.quantity || 1);
 
         if (!productSalesMap[pid]) {
             productSalesMap[pid] = { qty: 0, profit: 0 };

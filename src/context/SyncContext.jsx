@@ -384,27 +384,16 @@ export const SyncProvider = ({ children }) => {
                 error = supError;
             }
 
-            // Suppliers Update (Safety Filter Added)
+            // --- Suppliers Update & Delete (UUID Safe Fix) ---
             else if (item.table_name === 'suppliers' && item.action === 'update') {
-                // Hum 'balance_due', 'total_purchases', aur 'total_payments' ko nikaal rahe hain
-                // taake server par sirf asli columns (name, phone, etc.) jayein.
                 const { id, balance_due, total_purchases, total_payments, ...updates } = item.data;
-                
-                const realId = idMap[id] || id;
-                if (!isNaN(realId)) {
-                    const { error: supError } = await supabase
-                        .from('suppliers')
-                        .update(updates) // Ab is mein koi faltu column nahi hai
-                        .eq('id', realId);
-                    error = supError;
-                }
+                // Ab hum seedha 'id' use karenge aur 'isNaN' ka check hata denge
+                const { error: supError } = await supabase.from('suppliers').update(updates).eq('id', id);
+                error = supError;
             }
             else if (item.table_name === 'suppliers' && item.action === 'delete') {
-                const realId = idMap[item.data.id] || item.data.id;
-                if (!isNaN(realId)) {
-                    const { error: supError } = await supabase.from('suppliers').delete().eq('id', realId);
-                    error = supError;
-                }
+                const { error: supError } = await supabase.from('suppliers').delete().eq('id', item.data.id);
+                error = supError;
             }
 
             // --- Supplier Bulk Payment Sync (UUID Simplified) ---
@@ -526,12 +515,12 @@ export const SyncProvider = ({ children }) => {
                     .upsert([item.data], { onConflict: 'id' });
                 error = supError;
             }
+            // --- Expense Categories Update (UUID Safe Fix) ---
             else if (item.table_name === 'expense_categories' && item.action === 'update') {
                 const { id, name } = item.data;
-                if (!isNaN(id)) {
-                    const { error: supError } = await supabase.from('expense_categories').update({ name }).eq('id', id);
-                    error = supError;
-                }
+                // Ab hum seedha 'id' use karenge aur 'isNaN' ka check hata denge
+                const { error: supError } = await supabase.from('expense_categories').update({ name }).eq('id', id);
+                error = supError;
             }
             // --- Expense Categories Delete Sync (UUID Fix) ---
             else if (item.table_name === 'expense_categories' && item.action === 'delete') {
@@ -550,10 +539,9 @@ export const SyncProvider = ({ children }) => {
             }
             else if (item.table_name === 'expenses' && item.action === 'update') {
                 const { id, ...updates } = item.data;
-                if (!isNaN(id)) {
-                    const { error: supError } = await supabase.from('expenses').update(updates).eq('id', id);
-                    error = supError;
-                }
+                // UUID Fix: Expenses ke liye isNaN check hataya
+                const { error: supError } = await supabase.from('expenses').update(updates).eq('id', id);
+                error = supError;
             }
             // --- Expenses Delete Sync (UUID Fix) ---
             else if (item.table_name === 'expenses' && item.action === 'delete') {
@@ -574,10 +562,9 @@ export const SyncProvider = ({ children }) => {
             
             else if (item.table_name === 'categories' && item.action === 'update') {
                 const { id, ...updates } = item.data;
-                if (!isNaN(id)) { 
-                    const { error: supError } = await supabase.from('categories').update(updates).eq('id', id);
-                    error = supError;
-                }
+                // UUID fix: Hum ne 'isNaN' check hata diya hai taake string IDs update ho sakein
+                const { error: supError } = await supabase.from('categories').update(updates).eq('id', id);
+                error = supError;
             }
             // --- Categories Delete Sync (UUID Fix) ---
             else if (item.table_name === 'categories' && item.action === 'delete') {
@@ -598,10 +585,9 @@ export const SyncProvider = ({ children }) => {
 
             else if (item.table_name === 'category_attributes' && item.action === 'update') {
                 const { id, ...updates } = item.data;
-                if (!isNaN(id)) {
-                    const { error: supError } = await supabase.from('category_attributes').update(updates).eq('id', id);
-                    error = supError;
-                }
+                // UUID Fix: Attributes ke liye isNaN check hataya
+                const { error: supError } = await supabase.from('category_attributes').update(updates).eq('id', id);
+                error = supError;
             }
             // --- Category Attributes Delete Sync (UUID Fix) ---
             else if (item.table_name === 'category_attributes' && item.action === 'delete') {

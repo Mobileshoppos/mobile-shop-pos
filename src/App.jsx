@@ -29,6 +29,7 @@ import { darkThemeTokens, lightThemeTokens } from './theme/themeConfig';
 import SideMenu from './components/SideMenu';
 import BottomNav from './components/BottomNav';
 import Dashboard from './pages/Dashboard';
+import WelcomeWizard from './components/WelcomeWizard';
 import SystemLogs from './pages/SystemLogs';
 import WarrantyClaims from './pages/WarrantyClaims';
 import DamagedStock from './pages/DamagedStock';
@@ -97,6 +98,7 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
             borderRadius: token.borderRadiusLG,
             minHeight: 'calc(100vh - 24px)',
           }}>
+            {profile && !profile.is_setup_completed && <WelcomeWizard />}
             <AppHeader collapsed={collapsed} setCollapsed={setCollapsed} />
             <div style={{ padding: isMobile ? '0 8px 60px' : '0 24px 24px' }}>
               <Outlet />
