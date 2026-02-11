@@ -835,26 +835,77 @@ const handleCloseInvoiceSearchModal = () => {
     };
 
     if (record.type === 'sale') {
+      // --- NAYA GROUPING LOGIC START ---
+      const groupedItemsMap = new Map();
+
+      record.details.sale_items.forEach(item => {
+          // Grouping Key: Product ID + Price + Attributes (IMEI nikaal kar)
+          const attrs = { ...(item.inventory?.item_attributes || {}) };
+          delete attrs['Serial / IMEI']; 
+          delete attrs['IMEI'];
+          delete attrs['Serial Number'];
+          
+          const key = `${item.product_id}-${item.price_at_sale}-${JSON.stringify(attrs)}`;
+
+          if (groupedItemsMap.has(key)) {
+              const existing = groupedItemsMap.get(key);
+              existing.quantity += (item.quantity || 1);
+              if (item.inventory?.imei) existing.all_imeis.push(item.inventory.imei);
+              // Tamam inventory IDs jama karein taake Return ka hisaab sahi ho
+              existing.all_inventory_ids.push(item.inventory_id);
+          } else {
+              groupedItemsMap.set(key, {
+                  ...item,
+                  quantity: (item.quantity || 1),
+                  all_imeis: item.inventory?.imei ? [item.inventory.imei] : [],
+                  all_inventory_ids: [item.inventory_id],
+                  clean_attributes: attrs
+              });
+          }
+      });
+      const groupedDataSource = Array.from(groupedItemsMap.values());
+      // --- NAYA GROUPING LOGIC END ---
+
       const saleItemCols = [
         { title: 'Product', dataIndex: ['products', 'name'] },
-        { title: 'Details', render: renderItemDetails },
+        { 
+          title: 'Details', 
+          render: (_, item) => {
+              const attrValues = Object.values(item.clean_attributes || {}).filter(Boolean).join(' / ');
+              return (
+                  <Space direction="vertical" size={0}>
+                      {/* Font size 13px kiya gaya hai */}
+                      {attrValues && <Text type="secondary" style={{ fontSize: '13px' }}>{attrValues}</Text>}
+                      
+                      {item.all_imeis.length > 0 && (
+                          <div style={{ marginTop: '6px' }}>
+                              <Text strong style={{ fontSize: '12px', color: '#1890ff' }}>IMEIs: </Text>
+                              {item.all_imeis.map(imei => (
+                                  <Text code key={imei} style={{ fontSize: '12px', marginRight: '6px', display: 'inline-block', marginBottom: '4px' }}>
+                                      {imei}
+                                  </Text>
+                              ))}
+                          </div>
+                      )}
+                  </Space>
+              );
+          }
+        },
         { 
           title: 'Sold', 
           dataIndex: 'quantity', 
           align: 'center', 
-          render: q => <Text strong>{q || 1}</Text> 
+          render: q => <Text strong>{q}</Text> 
         },
         { 
           title: 'Returned', 
           key: 'returned_qty', 
           align: 'center', 
           render: (_, item) => {
-            // Is sale item ke liye kitne return hue hain wo dhoondein
-            const returned = ledgerData.find(ld => ld.type === 'return' && ld.details.sale_id === record.details.id);
-            // Hum return items table se is inventory_id ke returns ginte hain
+            // Is group ke tamam inventory IDs ke returns ginte hain
             const retQty = returnHistory
                 .filter(rh => 
-                    String(rh.inventory_id) === String(item.inventory_id) && 
+                    item.all_inventory_ids.includes(rh.inventory_id) && 
                     String(rh.sale_id) === String(record.details.id)
                 )
                 .reduce((sum, r) => sum + (r.quantity || 0), 0);
@@ -869,7 +920,7 @@ const handleCloseInvoiceSearchModal = () => {
           render: (_, item) => {
             const retQty = returnHistory
                 .filter(rh => 
-                    String(rh.inventory_id) === String(item.inventory_id) && 
+                    item.all_inventory_ids.includes(rh.inventory_id) && 
                     String(rh.sale_id) === String(record.details.id)
                 )
                 .reduce((sum, r) => sum + (r.quantity || 0), 0);
@@ -893,7 +944,7 @@ const handleCloseInvoiceSearchModal = () => {
             <Button icon={<SwapOutlined />} type="primary" ghost onClick={() => openReturnModal(record.details)}>Return Items</Button>
           </div>
           <>
-            <Table columns={saleItemCols} dataSource={record.details.sale_items} pagination={false} rowKey="id" style={{marginTop: '8px'}} />
+            <Table columns={saleItemCols} dataSource={groupedDataSource} pagination={false} rowKey={(item) => `${item.product_id}-${item.price_at_sale}`} style={{marginTop: '8px'}} />
             {record.details.discount > 0 && (
               <div style={{ textAlign: 'right', marginTop: '12px', paddingRight: '24px' }}>
                 <Text type="secondary" style={{ fontSize: '14px' }}>Invoice Discount: </Text>
@@ -1199,30 +1250,62 @@ const handleCloseInvoiceSearchModal = () => {
     pagination={false} 
     size="small"
     columns={[
-        { title: 'Product', dataIndex: 'product_name' },
+        { 
+            title: 'Product', 
+            key: 'product_name',
+            render: (_, record) => (
+                <Space direction="vertical" size={0}>
+                    <Text strong>{record.product_name}</Text>
+                    {/* NAYA: IMEI dikhane ke liye */}
+                    {record.imei && <Text type="secondary" style={{ fontSize: '11px' }}>IMEI: {record.imei}</Text>}
+                </Space>
+            )
+        },
         { 
             title: 'Sold Qty', 
             dataIndex: 'quantity', 
-            render: (q) => <Tag color="orange">{q || 1} Sold</Tag> 
+            render: (q, record) => <Tag color="orange">{record.imei ? '1 Unit' : `${q} Sold`}</Tag> 
         },
         {
             title: 'Return Qty',
             key: 'return_qty',
-            render: (_, record) => (
-                <InputNumber 
-                    min={0} 
-                    max={record.quantity || 1} 
-                    defaultValue={0}
-                    onChange={(val) => {
-                        const current = selectedReturnItems.filter(i => i.sale_item_id !== record.sale_item_id);
-                        if (val > 0) {
-                            setSelectedReturnItems([...current, { ...record, return_qty: val }]);
-                        } else {
-                            setSelectedReturnItems(current);
-                        }
-                    }}
-                />
-            )
+            render: (_, record) => {
+                // NAYA LOGIC: Agar IMEI hai to Checkbox dikhao, warna InputNumber
+                if (record.imei) {
+                    return (
+                        <Checkbox 
+                            checked={selectedReturnItems.some(i => i.sale_item_id === record.sale_item_id)}
+                            onChange={(e) => {
+                                const checked = e.target.checked;
+                                const current = selectedReturnItems.filter(i => i.sale_item_id !== record.sale_item_id);
+                                if (checked) {
+                                    setSelectedReturnItems([...current, { ...record, return_qty: 1 }]);
+                                } else {
+                                    setSelectedReturnItems(current);
+                                }
+                            }}
+                        >
+                            Return this unit
+                        </Checkbox>
+                    );
+                }
+                // Bulk items ke liye purana InputNumber
+                return (
+                    <InputNumber 
+                        min={0} 
+                        max={record.quantity || 1} 
+                        defaultValue={0}
+                        onChange={(val) => {
+                            const current = selectedReturnItems.filter(i => i.sale_item_id !== record.sale_item_id);
+                            if (val > 0) {
+                                setSelectedReturnItems([...current, { ...record, return_qty: val }]);
+                            } else {
+                                setSelectedReturnItems(current);
+                            }
+                        }}
+                    />
+                );
+            }
         },
         { 
             title: 'Refund', 

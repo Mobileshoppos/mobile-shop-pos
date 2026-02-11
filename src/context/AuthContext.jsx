@@ -68,9 +68,10 @@ export const AuthProvider = ({ children }) => {
 
     // Agar Offline hain ya RPC fail ho gaya, to Local DB se khud ginein
     try {
-        const products = await db.products.toArray();
-        // Saare products ki quantity jama karein
-        const totalStock = products.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        // --- OFFLINE-FIRST CONSISTENCY FIX ---
+        // Inventory se Available items ginein (Wahi logic jo DataService use karta hai)
+        const allInventory = await db.inventory.where('status').anyOf('Available', 'available').toArray();
+        const totalStock = allInventory.reduce((sum, item) => sum + (Number(item.available_qty) || 0), 0);
         setStockCount(totalStock);
     } catch (err) {
         console.error("Local stock calc error:", err);
@@ -233,8 +234,14 @@ export const AuthProvider = ({ children }) => {
     
     checkSession();
 
+    // --- NAYA CODE: Live Update Listener ---
+    // Jab bhi database mein stock badle, yeh ginti refresh karega
+    const handleLocalUpdate = () => fetchStockCount();
+    window.addEventListener('local-db-updated', handleLocalUpdate);
+
     return () => {
       subscription?.unsubscribe();
+      window.removeEventListener('local-db-updated', handleLocalUpdate);
     };
   }, [getProfile, fetchStockCount]);
 

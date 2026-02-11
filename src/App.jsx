@@ -33,6 +33,8 @@ import WelcomeWizard from './components/WelcomeWizard';
 import SystemLogs from './pages/SystemLogs';
 import WarrantyClaims from './pages/WarrantyClaims';
 import DamagedStock from './pages/DamagedStock';
+import FloatingNav from './components/FloatingNav';
+import KeyboardShortcuts from './components/KeyboardShortcuts';
 
 const { Content } = Layout;
 
@@ -105,7 +107,13 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
             </div>
             {isMobile && profile?.mobile_nav_enabled !== false && (
               <BottomNav setCollapsed={setCollapsed} />
-          )}
+            )}
+
+            {/* Global Floating Nav for Desktop */}
+            {!isMobile && <FloatingNav />}
+
+            {/* Headless Keyboard Shortcuts Listener */}
+            <KeyboardShortcuts />
           </div>
         </Content>
       </Layout>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSearchParams } from 'react-router-dom'; 
 import { useState, useEffect } from 'react';
 import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio, Switch, Input } from 'antd';
 import { ToolOutlined } from '@ant-design/icons';
@@ -18,9 +19,19 @@ const { TextArea } = Input;
 const DEFAULT_POLICY = "No return or exchange after 7 days.\nWarranty claim directly from service center.\nNo warranty for burnt/damaged items.";
 
 const SettingsPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams(); // Naya: URL se tab parhne ke liye
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { message } = App.useApp();
   const { profile, updateProfile } = useAuth();
+
+  // Naya: Active Tab ki state
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || '1');
+
+  // Naya: Jab URL badle to tab bhi badal jaye
+  useEffect(() => {
+    const tabFromUrl = searchParams.get('tab');
+    if (tabFromUrl) setActiveTab(tabFromUrl);
+  }, [searchParams]);
   
   const [selectedCurrency, setSelectedCurrency] = useState('PKR');
   const [isSaving, setIsSaving] = useState(false);
@@ -35,6 +46,8 @@ const SettingsPage = () => {
   const [posDiscountEnabled, setPosDiscountEnabled] = useState(true);
   const [mobileNavEnabled, setMobileNavEnabled] = useState(true);
   const [mobileNavItems, setMobileNavItems] = useState(["/", "/pos", "/inventory", "/sales-history"]);
+  const [desktopNavItems, setDesktopNavItems] = useState(['/pos', '/inventory', '/warranty', '/customers', '/expenses']);
+  const [desktopNavPosition, setDesktopNavPosition] = useState('bottom');
 
   const navOptions = [
     { label: 'Home', value: '/' },
@@ -71,6 +84,8 @@ const SettingsPage = () => {
       if (profile.pos_discount_enabled !== undefined) setPosDiscountEnabled(profile.pos_discount_enabled);
       if (profile.mobile_nav_enabled !== undefined) setMobileNavEnabled(profile.mobile_nav_enabled);
       if (profile.mobile_nav_items) setMobileNavItems(profile.mobile_nav_items);
+      if (profile.desktop_nav_items) setDesktopNavItems(profile.desktop_nav_items);
+      if (profile.desktop_nav_position) setDesktopNavPosition(profile.desktop_nav_position);
       }
       if (profile.low_stock_threshold) setLowStockThreshold(profile.low_stock_threshold);
       
@@ -101,6 +116,8 @@ const SettingsPage = () => {
       pos_discount_enabled: posDiscountEnabled,
       mobile_nav_enabled: mobileNavEnabled,
       mobile_nav_items: mobileNavItems,
+      desktop_nav_items: desktopNavItems,
+      desktop_nav_position: desktopNavPosition, 
     };
 
     const result = await updateProfile(updates);
@@ -162,7 +179,8 @@ const SettingsPage = () => {
 
       <Card title="Application Configuration" style={{ marginTop: 24 }}>
         <Tabs 
-          defaultActiveKey="1" 
+          activeKey={activeTab} 
+          onChange={(key) => { setActiveTab(key); setSearchParams({ tab: key }); }}
           type="card"
           items={[
             {
@@ -310,31 +328,61 @@ const SettingsPage = () => {
             },
             {
               key: '4',
-              label: 'Mobile App',
+              label: 'Navigation',
               children: (
                 <div style={{ padding: '16px 0' }}>
-                  <Title level={4} style={{ fontSize: '16px' }}>Mobile Navigation Settings</Title>
+                  <Title level={4} style={{ fontSize: '16px' }}>Mobile Navigation (Bottom Bar)</Title>
                   <Row align="middle" gutter={[16, 16]}>
-                    <Col xs={24} sm={6}>
-                      <Text strong>Enable Bottom Navigation</Text>
-                      <Text type="secondary" style={{ display: 'block' }}>Show/Hide bottom bar on mobile devices.</Text>
-                    </Col>
+                    <Col xs={24} sm={6}><Text strong>Enable Bottom Bar</Text></Col>
                     <Col xs={24} sm={18}><Switch checked={mobileNavEnabled} onChange={setMobileNavEnabled} /></Col>
                   </Row>
                   {mobileNavEnabled && (
                     <Row align="middle" gutter={[16, 16]} style={{ marginTop: '16px' }}>
-                      <Col xs={24} sm={6}>
-                        <Text strong>Shortcuts (Max 4)</Text>
-                        <Text type="secondary" style={{ display: 'block' }}>Choose 4 items for your bottom bar.</Text>
-                      </Col>
+                      <Col xs={24} sm={6}><Text strong>Mobile Shortcuts (Max 4)</Text></Col>
                       <Col xs={24} sm={18}>
-                        <Select mode="multiple" style={{ width: '100%' }} placeholder="Select 4 shortcuts" value={mobileNavItems} 
-                          onChange={(values) => values.length <= 4 ? setMobileNavItems(values) : message.warning('You can only select up to 4 shortcuts')}
+                        <Select mode="multiple" style={{ width: '100%' }} value={mobileNavItems} 
+                          onChange={(vals) => vals.length <= 4 ? setMobileNavItems(vals) : message.warning('Max 4 for Mobile')}
                           options={navOptions} 
                         />
                       </Col>
                     </Row>
                   )}
+
+                  <Divider />
+
+                  <Title level={4} style={{ fontSize: '16px' }}>Desktop Navigation (Floating Bar)</Title>
+                  <Row align="middle" gutter={[16, 16]}>
+                    <Col xs={24} sm={6}>
+                      <Text strong>Desktop Shortcuts (Max 10)</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>Choose icons for your floating bar.</Text>
+                    </Col>
+                    <Col xs={24} sm={18}>
+                      <Select 
+                        mode="multiple" 
+                        style={{ width: '100%' }} 
+                        placeholder="Select up to 10 shortcuts" 
+                        value={desktopNavItems} 
+                        onChange={(values) => values.length <= 10 ? setDesktopNavItems(values) : message.warning('You can only select up to 10 shortcuts for desktop')}
+                        options={navOptions} 
+                      />
+                    </Col>
+                  </Row>
+                  <Row align="middle" gutter={[16, 16]} style={{ marginTop: '16px' }}>
+                    <Col xs={24} sm={6}>
+                      <Text strong>Bar Position</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>Where should the floating bar appear?</Text>
+                    </Col>
+                    <Col xs={24} sm={18}>
+                      <Radio.Group 
+                        value={desktopNavPosition} 
+                        onChange={(e) => setDesktopNavPosition(e.target.value)}
+                        buttonStyle="solid"
+                      >
+                        <Radio.Button value="bottom">Bottom Center</Radio.Button>
+                        <Radio.Button value="right">Right Side</Radio.Button>
+                      </Radio.Group>
+                    </Col>
+                  </Row>
                 </div>
               ),
             },
@@ -361,7 +409,9 @@ const SettingsPage = () => {
                 warrantySystemEnabled === profile.warranty_system_enabled &&
                 posDiscountEnabled === profile.pos_discount_enabled &&
                 mobileNavEnabled === profile.mobile_nav_enabled &&
-                JSON.stringify(mobileNavItems) === JSON.stringify(profile.mobile_nav_items)
+                JSON.stringify(mobileNavItems) === JSON.stringify(profile.mobile_nav_items) &&
+                JSON.stringify(desktopNavItems) === JSON.stringify(profile.desktop_nav_items) &&
+                desktopNavPosition === (profile.desktop_nav_position || 'bottom')
               )}
             >
               Save All Settings

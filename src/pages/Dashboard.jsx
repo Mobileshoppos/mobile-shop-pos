@@ -26,6 +26,8 @@ import { db } from '../db';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { useTheme } from '../context/ThemeContext';
+import PageTour from '../components/PageTour';
+import { useRef } from 'react';
 
 const { Title, Text } = Typography;
 
@@ -38,10 +40,36 @@ const Dashboard = () => {
   const [topSellingFilter, setTopSellingFilter] = useState('qty'); 
 
   const { message } = App.useApp();
+  const refSales = useRef(null);
+  const refCash = useRef(null);
+  const refProfit = useRef(null);
+  const refQuickActions = useRef(null);
   const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
   const [isAdjustmentSubmitting, setIsAdjustmentSubmitting] = useState(false);
   const [isClosingSubmitting, setIsClosingSubmitting] = useState(false);
   const [adjustmentForm] = Form.useForm();
+  const tourSteps = [
+    {
+      title: 'Sales Overview',
+      description: 'Yahan aap apni aaj ki, is hafte ki ya is mahine ki kul sales dekh sakte hain.',
+      target: () => refSales.current,
+    },
+    {
+      title: 'Galla (Cash in Hand)',
+      description: 'Yeh aapke gally mein majood naqad raqam hai. Aap yahan se cash in/out bhi kar sakte hain.',
+      target: () => refCash.current,
+    },
+    {
+      title: 'Net Profit',
+      description: 'Tamam akhrajat nikalne ke baad aapka asli munafa yahan nazar aayega.',
+      target: () => refProfit.current,
+    },
+    {
+      title: 'Quick Actions',
+      description: 'Nayi sale karne ya stock add karne ke liye in shortcuts ka istemal karein.',
+      target: () => refQuickActions.current,
+    },
+  ];
 
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [historyData, setHistoryData] = useState([]);
@@ -274,6 +302,7 @@ const Dashboard = () => {
 
   return (
     <div style={{ padding: '12px 4px' }}>
+      <PageTour pageKey="dashboard" steps={tourSteps} />
       
       {/* HEADER WITH FILTERS */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
@@ -293,7 +322,7 @@ const Dashboard = () => {
       <Row gutter={[16, 16]}>
         {/* Card 1: Sales */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
-          <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+          <Card ref={refSales} style={{ ...cardStyle, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>
                 {timeRange === 'today' ? "Today's Sales" : timeRange === 'week' ? "Weekly Sales" : "Monthly Sales"}
@@ -315,7 +344,7 @@ const Dashboard = () => {
         {/* Card: Cash in Hand (Galla) - Fixed Alignment */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
           <Card 
-            style={{ ...cardStyle, background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}
+            ref={refCash} style={{ ...cardStyle, background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}
           >
             {/* Floating Buttons - Ab yeh alignment kharab nahi karenge */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -354,7 +383,7 @@ const Dashboard = () => {
 
         {/* Card 2: Profit (Updated Layout for Clarity) */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
-          <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' }}>
+          <Card ref={refProfit} style={{ ...cardStyle, background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Net Profit</span>}
               value={stats?.netProfit || 0}
@@ -475,43 +504,8 @@ const Dashboard = () => {
         </Col>
       </Row>
 
-      {/* --- SECTION 1.5: QUICK ACTIONS --- */}
-      <Row gutter={[16, 16]} style={{ marginTop: 5 }}>
-        <Col span={24}>
-          <Card variant="borderless" style={{ borderRadius: 5 }}>
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
-              <Title level={5} style={{ margin: 0 }}>Quick Actions</Title>
-              <Space wrap size="middle">
-                <Tooltip title="New Sale">
-                  <Button type="primary" icon={<ShoppingOutlined />} onClick={() => navigate('/pos')} />
-                </Tooltip>
-                <Tooltip title="Add Stock (Inventory)">
-                  <Button icon={<PlusOutlined />} onClick={() => navigate('/inventory')} />
-                </Tooltip>
-                <Tooltip title="Warranty & Claims">
-                  <Button icon={<SafetyCertificateOutlined />} onClick={() => navigate('/warranty')} />
-                </Tooltip>
-                <Tooltip title="Suppliers">
-                  <Button icon={<TeamOutlined />} onClick={() => navigate('/suppliers')} />
-                </Tooltip>
-                <Tooltip title="Expenses">
-                  <Button icon={<DollarCircleOutlined />} onClick={() => navigate('/expenses')} />
-                </Tooltip>
-                <Tooltip title="Close Register">
-                  <Button 
-                    icon={<CheckCircleOutlined />} 
-                    style={{ backgroundColor: '#52c41a', color: 'white', border: 'none' }}
-                    onClick={() => setIsClosingModalOpen(true)} 
-                  />
-                </Tooltip>
-              </Space>
-            </div>
-          </Card>
-        </Col>
-      </Row>
-
       {/* --- SECTION 2: GRAPH & ALERTS --- */}
-      <Row gutter={[16, 16]} style={{ marginTop: 5 }}>
+      <Row gutter={[16, 16]} style={{ marginTop: 10 }}>
         
         {/* Left Side: Sales Graph AND Recent Transactions */}
         <Col xs={24} lg={16}>
@@ -857,7 +851,6 @@ const Dashboard = () => {
     const actual = getFieldValue('actual_cash') || 0;
     const expected = stats?.cashInHand || 0;
     const isDifferent = actual !== expected && actual !== 0;
-
     return (
       <Form.Item 
         name="notes" 
@@ -872,6 +865,7 @@ const Dashboard = () => {
         />
       </Form.Item>
     );
+
   }}
 </Form.Item>
         </Form>

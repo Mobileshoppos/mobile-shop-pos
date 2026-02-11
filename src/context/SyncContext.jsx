@@ -114,6 +114,14 @@ export const SyncProvider = ({ children }) => {
 
       console.log('Syncing started (Downloading)...');
 
+      // 0. Profile & Subscription Status (Sab se pehle)
+      const { data: serverProfile } = await supabase.from('profiles').select('*').eq('user_id', user.id).single();
+      if (serverProfile) {
+        await db.user_settings.put({ ...serverProfile, id: user.id });
+        // Dispatch event taake AuthContext ko pata chale profile badal gaya hai
+        window.dispatchEvent(new CustomEvent('local-db-updated'));
+      }
+
       // 1. Categories
       const { data: categories } = await supabase.from('categories').select('*').or(`user_id.eq.${user.id},user_id.is.null`).gt('updated_at', lastSyncTime);
       await smartPut('categories', categories, pendingIds);

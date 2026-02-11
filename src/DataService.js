@@ -72,6 +72,32 @@ const DEFAULT_EXPENSE_CATEGORIES = [
 
 // Hisaab kitaab ko durust rakhne ke liye helper function
 const precise = (num) => Math.round((num + Number.EPSILON) * 100) / 100;
+
+// --- SUBSCRIPTION HELPER (Limit Checker) ---
+const checkSubscriptionLimit = async (newItemsCount = 0) => {
+  // --- OFFLINE-FIRST FIX ---
+  // Supabase ke bajaye seedha local settings se profile uthayein
+  const profile = await db.user_settings.toCollection().first();
+  
+  // Agar profile nahi mila (maslan pehli baar login), to check skip karein
+  if (!profile) return;
+
+  // 1. Agar Pro hai to koi pabandi nahi
+  if (profile.subscription_tier === 'pro') return;
+
+  // 2. Mojooda stock ginein (Available items)
+  const allInventory = await db.inventory.where('status').anyOf('Available', 'available').toArray();
+  const currentStock = allInventory.reduce((sum, item) => sum + (Number(item.available_qty) || 0), 0);
+
+  // 3. Agar limit (50) cross ho rahi ho to Error throw karein
+  if (currentStock + newItemsCount > 50) {
+    const errorMsg = `Subscription Limit: You currently have ${currentStock} items in stock. Adding ${newItemsCount} more would exceed the 50-item limit of the Free Plan. Please upgrade to Pro to add more stock.`;
+    
+    // Yeh error message user ko screen par nazar aayega
+    throw new Error(errorMsg);
+  }
+};
+
 const DataService = {
   isInitializing: false,
   async initializeUserCategories(userId) {
@@ -376,44 +402,48 @@ const DataService = {
     return true;
   },
 
-  // --- INVENTORY ADJUSTMENT (DAMAGED STOCK) ---
-  async markItemAsDamaged(inventoryId, qtyToMark, notes = "") {
-    // 1. Local DB se item nikalain
-    const item = await db.inventory.get(inventoryId);
-    if (!item) throw new Error("Item not found in inventory.");
+  // --- INVENTORY ADJUSTMENT (DAMAGED STOCK) - SMART VERSION ---
+  async markItemAsDamaged(inventoryIds, totalQtyToMark, notes = "") {
+    let remainingToMark = totalQtyToMark;
 
-    // 2. Check karein ke kya itni quantity bachi bhi hai?
-    if (qtyToMark > item.available_qty) {
-      throw new Error(`Only ${item.available_qty} units available to mark as damaged.`);
+    // Hum un tamam IDs par loop chalayenge jo is product ki hain
+    for (const invId of inventoryIds) {
+      if (remainingToMark <= 0) break;
+
+      const item = await db.inventory.get(invId);
+      if (!item || item.available_qty <= 0) continue;
+
+      // Is line mein se kitna stock nikaal sakte hain?
+      const takeFromThisRow = Math.min(remainingToMark, item.available_qty);
+      
+      const newAvailable = item.available_qty - takeFromThisRow;
+      const newDamaged = (item.damaged_qty || 0) + takeFromThisRow;
+      
+      let newStatus = item.status;
+      if (newAvailable === 0 && (item.sold_qty || 0) === 0 && (item.returned_qty || 0) === 0) {
+        newStatus = 'Damaged';
+      }
+
+      const updates = {
+        available_qty: newAvailable,
+        damaged_qty: newDamaged,
+        adjustment_notes: notes,
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      };
+
+      // Local Update
+      await db.inventory.update(invId, updates);
+
+      // Sync Queue
+      await db.sync_queue.add({
+        table_name: 'inventory',
+        action: 'update',
+        data: { id: invId, ...updates }
+      });
+
+      remainingToMark -= takeFromThisRow;
     }
-
-    // 3. Nayi quantities calculate karein
-    const newAvailable = item.available_qty - qtyToMark;
-    const newDamaged = (item.damaged_qty || 0) + qtyToMark;
-
-    // 4. Status tay karein (Agar sab kharab ho gaya aur bika kuch nahi, to status 'Damaged' kar dein)
-    let newStatus = item.status;
-    if (newAvailable === 0 && (item.sold_qty || 0) === 0 && (item.returned_qty || 0) === 0) {
-      newStatus = 'Damaged';
-    }
-
-    const updates = {
-      available_qty: newAvailable,
-      damaged_qty: newDamaged,
-      adjustment_notes: notes,
-      status: newStatus,
-      updated_at: new Date().toISOString()
-    };
-
-    // 5. Local Update
-    await db.inventory.update(inventoryId, updates);
-
-    // 6. Sync Queue mein daalain (Server update ke liye)
-    await db.sync_queue.add({
-      table_name: 'inventory',
-      action: 'update',
-      data: { id: inventoryId, ...updates }
-    });
 
     return true;
   },
@@ -680,6 +710,10 @@ const DataService = {
   },
 
 async createNewPurchase(purchasePayload) {
+    // Subscription Limit Check
+    const incomingQty = purchasePayload.p_inventory_items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    await checkSubscriptionLimit(incomingQty);
+
     const purchaseId = purchasePayload.p_local_id || crypto.randomUUID();
     const { data: { user } } = await supabase.auth.getUser();
     const userId = user?.id;
@@ -729,6 +763,8 @@ async createNewPurchase(purchasePayload) {
     // Local DB mein save karein
     await db.purchases.put(purchaseData);
     await db.inventory.bulkPut(itemsData);
+    // Signal bhejein taake Header update ho jaye
+    window.dispatchEvent(new CustomEvent('local-db-updated'));
 
     // Supplier ka balance local update karein
     const supplier = await db.suppliers.get(purchasePayload.p_supplier_id);
@@ -871,6 +907,8 @@ async addCustomer(customerData) {
     // A. Local DB mein Save karein
     await db.sales.add(saleData);
     if (db.sale_items) await db.sale_items.bulkAdd(saleItemsData);
+    // Signal bhejein taake Header update ho jaye
+    window.dispatchEvent(new CustomEvent('local-db-updated'));
 
     // B. Local Inventory update karein
     for (const item of salePayload.items) {
@@ -967,7 +1005,16 @@ async addCustomer(customerData) {
 
   // --- Offline-First Purchase Edit (UUID COMPATIBLE) ---
   async updatePurchaseFully(purchaseId, payload) {
-    const { supplier_id, invoice_id, notes, amount_paid, items } = payload; // <--- invoice_id added
+    const { supplier_id, invoice_id, notes, amount_paid, items } = payload;
+
+    // Subscription Limit Check (Sirf naye izafay par)
+    const newTotalQty = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    const oldItems = await db.inventory.where('purchase_id').equals(purchaseId).toArray();
+    const oldTotalQty = oldItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    
+    if (newTotalQty > oldTotalQty) {
+        await checkSubscriptionLimit(newTotalQty - oldTotalQty);
+    }
 
     // 1. Database se mojooda items layein
     const dbItems = await db.inventory
@@ -997,13 +1044,33 @@ async addCustomer(customerData) {
     // 4. Purchase Record Update (Local)
     await db.purchases.update(purchaseId, {
         supplier_id,
-        invoice_id, // <--- UPDATE HERE
+        invoice_id,
         notes,
         total_amount: newTotal,
         amount_paid,
         balance_due: newBalance,
         status: newStatus
     });
+
+    // --- NAYA ACCOUNTING FIX: Payment Record Update ---
+    // Agar ye Cash Purchase hai ya is bill ki koi payment pehle ho chuki hai, 
+    // to us payment record ko bhi naye "amount_paid" ke mutabiq theek karein.
+    const linkedPayment = await db.supplier_payments.where('purchase_id').equals(purchaseId).first();
+    if (linkedPayment && linkedPayment.amount !== amount_paid) {
+        // A. Local DB mein payment ki raqam theek karein (Dashboard isi se chalta hai)
+        await db.supplier_payments.update(linkedPayment.id, { amount: amount_paid });
+
+        // B. Sync Queue mein dalein taake server par bhi hisaab theek ho jaye
+        await db.sync_queue.add({
+            table_name: 'supplier_payments',
+            action: 'edit_supplier_payment',
+            data: {
+                p_payment_id: linkedPayment.id,
+                p_new_amount: amount_paid,
+                p_new_notes: (notes || '') + ' (Auto-adjusted on purchase edit)'
+            }
+        });
+    }
 
     // 5. Inventory Handle Karein (Local)
     const existingItems = await db.inventory.where('purchase_id').equals(purchaseId).toArray();
@@ -1071,6 +1138,8 @@ async addCustomer(customerData) {
             }
         }
         if (safeToDelete.length > 0) await db.inventory.bulkDelete(safeToDelete);
+    // Signal bhejein taake Header update ho jaye
+    window.dispatchEvent(new CustomEvent('local-db-updated'));
     }
 
     // 5. Supplier Balance Update
@@ -1936,7 +2005,9 @@ async addCustomer(customerData) {
         // Hum inventoryMap se hi cost le rahe hain kyunke dashboard par inventory pehle se load hoti hai
         const invItem = inventoryMap[rItem.inventory_id];
         if (invItem) {
-            totalCostOfReturns += (invItem.purchase_price || 0);
+            // FIX: Quantity se multiply karna zaroori hai taake bulk items (cables waghera) ka hisaab sahi ho
+            const qty = Number(rItem.quantity) || 1;
+            totalCostOfReturns += (Number(invItem.purchase_price) || 0) * qty;
         }
     }
 

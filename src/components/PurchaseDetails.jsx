@@ -246,7 +246,17 @@ const showEditModal = () => {
                 expandable={{
                     expandedRowRender: (record) => {
                         if (!record.imeis || record.imeis.length === 0) return null;
-                        return (<ul style={{ margin: 0, paddingLeft: '20px' }}>{record.imeis.map(imei => <li key={imei}><Text code>{imei}</Text></li>)}</ul>);
+                        return (
+                            <div style={{ padding: '8px 24px' }}>
+                                <Text strong style={{ fontSize: '12px', marginRight: '8px', color: '#1890ff' }}>IMEIs:</Text>
+                                {record.imeis.map((imei, index) => (
+                                    <span key={imei}>
+                                        <Text code>{imei}</Text>
+                                        {index < record.imeis.length - 1 && <Text style={{ marginRight: '6px' }}>,</Text>}
+                                    </span>
+                                ))}
+                            </div>
+                        );
                     },
                     rowExpandable: (record) => record.imeis && record.imeis.length > 0,
                 }}
@@ -266,7 +276,17 @@ const showEditModal = () => {
                         expandable={{
                             expandedRowRender: (record) => {
                                 if (!record.imeis || record.imeis.length === 0) return null;
-                                return (<ul style={{ margin: 0, paddingLeft: '20px' }}>{record.imeis.map(imei => <li key={imei}><Text code type="danger">{imei}</Text></li>)}</ul>);
+                                return (
+                                    <div style={{ padding: '8px 24px' }}>
+                                        <Text strong style={{ fontSize: '12px', marginRight: '8px', color: '#ff4d4f' }}>Returned IMEIs:</Text>
+                                        {record.imeis.map((imei, index) => (
+                                            <span key={imei}>
+                                                <Text code type="danger">{imei}</Text>
+                                                {index < record.imeis.length - 1 && <Text style={{ marginRight: '6px' }}>,</Text>}
+                                            </span>
+                                        ))}
+                                    </div>
+                                );
                             },
                             rowExpandable: (record) => record.imeis && record.imeis.length > 0,
                         }}

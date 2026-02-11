@@ -149,12 +149,14 @@ return (
 
           {/* Right Side: Icons & Subscription Button */}
           <Space align="center" size="small">
-            <Tooltip title="Manage Subscription" placement="bottom">
+            <Tooltip title={isPro ? "Pro Plan Active" : "Free Plan Limit: 50 Items"} placement="bottom">
               <Button 
                 type={isPro ? 'primary' : 'default'} 
                 ghost={isPro}
                 icon={isPro ? <CrownOutlined /> : null}
                 onClick={() => navigate('/subscription')}
+                // Naya Logic: 45 par warning (orange), 50 par danger (red)
+                style={!isPro && stockCount >= 45 && stockCount < 50 ? { borderColor: '#faad14', color: '#faad14' } : {}}
                 danger={!isPro && stockCount >= 50}
                 size="small"
               >

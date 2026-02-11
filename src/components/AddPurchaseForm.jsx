@@ -364,13 +364,16 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
   
   const totalAmount = purchaseItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.purchase_price || 0)), 0);
 
-  // Amount Paid Smart Logic
+  // Amount Paid Smart Logic (Updated for Edit Mode)
   useEffect(() => {
-    if (visible && !editingPurchase) {
+    if (visible) {
         if (isCashPurchase) {
-            form.setFieldsValue({ amount_paid: totalAmount, payment_method: 'Cash' });
-        } else {
-            form.setFieldsValue({ amount_paid: 0 });
+            // Cash Purchase mein hamesha Total aur Paid barabar honge
+            // Default payment method ab 'Bank' (Bank / Online) par set hai
+            form.setFieldsValue({ amount_paid: totalAmount, payment_method: 'Bank' });
+        } else if (!editingPurchase) {
+            // Naye bill ke liye default amount 0 aur method 'Bank'
+            form.setFieldsValue({ amount_paid: 0, payment_method: 'Bank' });
         }
     }
   }, [totalAmount, visible, form, editingPurchase, isCashPurchase]);
@@ -609,6 +612,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
       // Sync process background mein chalta rahega
       processSyncQueue();
       refetchStockCount();
+      // Signal bhejein taake Dashboard aur Header foran update hon
+      window.dispatchEvent(new CustomEvent('local-db-updated'));
       onPurchaseCreated();
 
     } catch (error) {
@@ -713,7 +718,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
   return (
     <>
       <Modal
-        title={editingPurchase ? `Edit Purchase #${editingPurchase.id}` : "Create New Purchase Invoice"} 
+        title={editingPurchase ? `Edit Purchase #${editingPurchase.invoice_id || editingPurchase.id.slice(0, 8)}` : "Create New Purchase Invoice"} 
         open={visible} onCancel={onCancel} width={1000}
         footer={[ <Button key="back" onClick={onCancel}>Cancel</Button>, <Button key="submit" type="primary" loading={isSubmitting} onClick={handleSavePurchase}>{editingPurchase ? "Update Purchase" : "Save Purchase"}</Button> ]}
       >
@@ -779,6 +784,9 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
                         // === SECURITY FIX: Yeh rule ghalat raqam save nahi hone dega ===
                         {
                           validator: (_, value) => {
+                            // Agar Cash Purchase hai to check skip karein (kyunke hum auto-sync kar rahe hain)
+                            if (isCashPurchase) return Promise.resolve();
+                            
                             if (value > totalAmount) {
                               return Promise.reject(`Amount cannot be more than ${formatCurrency(totalAmount, profile?.currency)}`);
                             }

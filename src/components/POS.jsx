@@ -579,7 +579,8 @@ const POS = () => {
                     product_name_snapshot: cartItem.product_name, 
                     quantity: 1,
                     price_at_sale: cartItem.sale_price,
-                    purchase_price: batchItem.purchase_price || 0,
+                    // FIX: batchItem ki jagah cartItem use karein kyunke IMEI item ki details cart mein pehle se hain
+                    purchase_price: cartItem.purchase_price || 0,
                     user_id: user.id,
                     warranty_expiry: expiryDate 
                 });

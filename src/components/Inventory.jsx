@@ -11,6 +11,7 @@ import { useSync } from '../context/SyncContext';
 import { db } from '../db';
 import { useTheme } from '../context/ThemeContext';
 import AddPurchaseForm from './AddPurchaseForm';
+import PageTour from '../components/PageTour';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -46,7 +47,7 @@ const formatPriceRange = (min, max, currency) => {
   return `${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`;
 };
 
-const ProductList = ({ showArchived, products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged }) => {
+const ProductList = ({ showArchived, products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged, refFirstStock }) => {
   const { profile } = useAuth();
   const { isDarkMode } = useTheme();
   
@@ -308,6 +309,7 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                   }}>
                       <Text type="secondary" style={{ display: 'block', marginBottom: '8px' }}>No stock added yet</Text>
                       <Button 
+                        ref={refFirstStock}
                         type="dashed" 
                         icon={<PlusOutlined />} 
                         onClick={() => onAddStock(product)} // Yahan hum poora product pass kar rahe hain
@@ -326,6 +328,11 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
 };
 
 const Inventory = () => {
+  const refAddModel = useRef(null);
+  const refSearch = useRef(null);
+  const refFilters = useRef(null);
+  const refArchive = useRef(null);
+  const refFirstStock = useRef(null); 
   const [showArchived, setShowArchived] = useState(false);
   const searchInputRef = useRef(null);
   const productNameInputRef = useRef(null);
@@ -836,10 +843,8 @@ const Inventory = () => {
     try {
       if (!damagedItem || !damagedItem.ids) return;
       
-      // Pehla available inventory record uthain
-      const invId = damagedItem.ids[0]; 
-
-      await DataService.markItemAsDamaged(invId, values.quantity, values.notes);
+      // Tamam IDs ki list bhejein (DataService ab loops handle kar lega)
+      await DataService.markItemAsDamaged(damagedItem.ids, values.quantity, values.notes);
       
       message.success('Stock adjusted! Damaged quantity recorded.');
       setIsDamagedModalOpen(false);
@@ -851,20 +856,62 @@ const Inventory = () => {
   };
   
   const isSmartPhoneCategorySelected = categories.find(c => c.id === selectedCategoryId)?.name === 'Smart Phones & Tablets';
+  const hasSeenInitialTour = !!profile?.tours_completed?.inventory_empty;
+
+  const tourSteps = [
+    // Step 1: Product Model (Sirf pehli baar)
+    ...(!hasSeenInitialTour ? [{
+      title: 'Product Model Banayein',
+      description: 'Sab se pehle yahan click karke product ka model banayein (maslan: Samsung A54). Model sirf ek baar banta hai.',
+      target: () => refAddModel.current,
+    }] : []),
+
+    // Step 2: Stock Add (Sirf tab jab product ban jaye)
+    ...(products.length > 0 ? [{
+      title: 'Stock Add Karein',
+      description: 'Mubarak ho! Aap ne model bana liya. Ab yahan click karke is ka asli stock (IMEI ya Quantity) add karein.',
+      target: () => refFirstStock.current,
+    }] : []),
+
+    // Baqi Steps: Search, Filters, Archive (Sirf pehli baar)
+    ...(!hasSeenInitialTour ? [
+      {
+        title: 'Smart Search',
+        description: 'Apne stock mein se kuch bhi dhoondne ke liye naam, brand ya IMEI yahan scan/type karein.',
+        target: () => refSearch.current,
+      },
+      {
+        title: 'Advanced Filters',
+        description: 'Price range ya attributes (RAM, ROM) ke hisab se stock dekhne ke liye yahan click karein.',
+        target: () => refFilters.current,
+      },
+      {
+        title: 'Archive (Hidden Items)',
+        description: 'Jo items aap ne hide (archive) kiye hain, unhain yahan click karke dekh sakte hain.',
+        target: () => refArchive.current,
+      }
+    ] : []),
+  ].filter(step => step.target()); // Yeh line ghalat steps ko nikaal degi
 
   return (
     <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}>
+      <PageTour 
+  key={products.length === 0 ? "empty" : "ready"} 
+  pageKey={products.length === 0 ? "inventory_empty" : "inventory_ready"} 
+  steps={tourSteps} 
+/>
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '24px' }}>
         <Title level={2} style={{ margin: 0, marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
           <DatabaseOutlined /> {showLowStockOnly ? 'Low Stock Products' : 'Inventory'}
         </Title>
-        <Button type="primary" size="Normal" onClick={() => setIsProductModalOpen(true)} style={{ width: isMobile ? '100%' : 'auto' }}>Add New Product Model</Button>
+        <Button ref={refAddModel} type="primary" size="Normal" onClick={() => setIsProductModalOpen(true)} style={{ width: isMobile ? '100%' : 'auto' }}>Add New Product Model</Button>
       </div>
 
       <Card style={{ marginBottom: '16px' }} styles={{ body: { padding: '12px' } }}>
         <Row gutter={[8, 8]} align="middle">
           {/* 1. Search Box (Sab se bada) */}
           <Col xs={24} sm={8} md={9}>
+          <div ref={refSearch}>
             <Input 
               ref={searchInputRef}
               placeholder="Search or Scan..." 
@@ -873,6 +920,7 @@ const Inventory = () => {
               onChange={(e) => setSearchText(e.target.value)} 
               allowClear 
             />
+            </div>
           </Col>
 
           {/* 2. Category Select */}
@@ -906,6 +954,7 @@ const Inventory = () => {
              
              {/* Filter Toggle Button */}
              <Button 
+               ref={refFilters}
                icon={<FilterOutlined />} 
                onClick={() => setShowFilters(!showFilters)} 
                type={showFilters ? 'primary' : 'default'}
@@ -914,7 +963,7 @@ const Inventory = () => {
 
              {/* Archive Toggle Button (Icon Only) */}
              <Button 
-               // Agar Archived list khuli hai to 'Wapis' ka icon, warna 'Box' ka icon
+               ref={refArchive}
                icon={showArchived ? <RollbackOutlined /> : <InboxOutlined />} 
                onClick={() => setShowArchived(!showArchived)} 
                type={showArchived ? 'primary' : 'default'}
@@ -993,6 +1042,7 @@ const Inventory = () => {
             damagedForm.setFieldsValue({ quantity: 1 });
             setIsDamagedModalOpen(true);
         }}
+        refFirstStock={refFirstStock}
         ProductList showArchived={showArchived}
       />
 
