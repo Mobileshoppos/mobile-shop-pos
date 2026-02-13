@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
+import { useAuth } from './AuthContext';
 import { 
     themeConfig as initialThemeConfig,
     lightThemeTokens as initialLightTheme,
@@ -18,31 +19,34 @@ const getFromStorage = (key, fallback) => {
 const ThemeContext = createContext();
 
 export const CustomThemeProvider = ({ children }) => {
-  const [themeConfig, setThemeConfig] = useState(() => getFromStorage('theme_config', initialThemeConfig));
-  const [lightTheme, setLightTheme] = useState(() => getFromStorage('theme_light', initialLightTheme));
-  const [darkTheme, setDarkTheme] = useState(() => getFromStorage('theme_dark', initialDarkTheme));
+  const [themeConfig, setThemeConfig] = useState(initialThemeConfig);
+  const { profile } = useAuth();
+  const [lightTheme, setLightTheme] = useState(initialLightTheme);
+  const [darkTheme, setDarkTheme] = useState(initialDarkTheme);
   
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    const savedTheme = localStorage.getItem('theme_mode');
-    if (savedTheme) return savedTheme === 'dark';
-    return window.matchMedia && window.matchMedia('(pre-color-scheme: dark)').matches;
-  });
+  const [isDarkMode, setIsDarkMode] = useState(true); // Default Dark
 
   useEffect(() => {
-    localStorage.setItem('theme_config', JSON.stringify(themeConfig));
-  }, [themeConfig]);
+    const syncTheme = () => {
+      const mode = profile?.theme_mode || 'dark'; // Default to dark if not set
+      
+      if (mode === 'system') {
+        setIsDarkMode(window.matchMedia('(pre-color-scheme: dark)').matches);
+      } else {
+        setIsDarkMode(mode === 'dark');
+      }
+    };
 
-  useEffect(() => {
-    localStorage.setItem('theme_light', JSON.stringify(lightTheme));
-  }, [lightTheme]);
+    syncTheme();
 
-  useEffect(() => {
-    localStorage.setItem('theme_dark', JSON.stringify(darkTheme));
-  }, [darkTheme]);
-
-  useEffect(() => {
-    localStorage.setItem('theme_mode', isDarkMode ? 'dark' : 'light');
-  }, [isDarkMode]);
+    // Agar system setting change ho to auto-update kare
+    if (profile?.theme_mode === 'system') {
+      const mediaQuery = window.matchMedia('(pre-color-scheme: dark)');
+      const handler = (e) => setIsDarkMode(e.matches);
+      mediaQuery.addEventListener('change', handler);
+      return () => mediaQuery.removeEventListener('change', handler);
+    }
+  }, [profile?.theme_mode]);
 
   const toggleTheme = () => setIsDarkMode(prevMode => !prevMode);
 

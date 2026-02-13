@@ -2035,23 +2035,22 @@ async addCustomer(customerData) {
 
     const cashInHand = precise(startingCash + (cashSales + cashReceived + cashRefunds + totalCashIn + cashTransfersIn) - (cashExpenses + cashPaidToSuppliers + cashPayouts + totalCashOut + cashTransfersOut));
 
-    // --- BANK LOGIC (Bank/EasyPaisa) ---
-    const bankSales = bankSalesTotal;
-    const bankReceived = customerPayments.filter(p => p.payment_method === 'Bank').reduce((sum, p) => sum + (p.amount_paid || 0), 0);
-    const bankExpenses = expenses.filter(e => e.payment_method === 'Bank').reduce((sum, e) => sum + (e.amount || 0), 0);
-    const bankPaidToSuppliers = supplierPayments.filter(p => p.payment_method === 'Bank').reduce((sum, p) => sum + (p.amount || 0), 0);
-    const bankPayouts = creditPayouts.filter(p => p.payment_method === 'Bank').reduce((sum, p) => sum + (p.amount_paid || 0), 0);
-    const bankRefunds = supplierRefunds.filter(r => 
-      (r.payment_method === 'Bank' || r.refund_method === 'Bank' || r.payment_method === 'Bank Transfer' || r.refund_method === 'Bank Transfer')
-    ).reduce((sum, r) => sum + (r.amount || 0), 0);
+    // --- BANK LOGIC (Smart Fix for 'Bank' vs 'Bank Transfer') ---
+    // Helper function taake dono spellings check ho sakein
+    const isBank = (method) => method === 'Bank' || method === 'Bank Transfer';
 
-    const totalBankIn = cashAdjustments.filter(a => a.type === 'In' && a.payment_method === 'Bank').reduce((sum, a) => sum + (a.amount || 0), 0);
-    const totalBankOut = cashAdjustments.filter(a => a.type === 'Out' && a.payment_method === 'Bank').reduce((sum, a) => sum + (a.amount || 0), 0);
+    const bankSales = bankSalesTotal;
+    const bankReceived = customerPayments.filter(p => isBank(p.payment_method)).reduce((sum, p) => sum + (p.amount_paid || 0), 0);
+    const bankExpenses = expenses.filter(e => isBank(e.payment_method)).reduce((sum, e) => sum + (e.amount || 0), 0);
+    const bankPaidToSuppliers = supplierPayments.filter(p => isBank(p.payment_method)).reduce((sum, p) => sum + (p.amount || 0), 0);
+    const bankPayouts = creditPayouts.filter(p => isBank(p.payment_method)).reduce((sum, p) => sum + (p.amount_paid || 0), 0);
+    const bankRefunds = supplierRefunds.filter(r => isBank(r.payment_method) || isBank(r.refund_method)).reduce((sum, r) => sum + (r.amount || 0), 0);
+
+    const totalBankIn = cashAdjustments.filter(a => a.type === 'In' && isBank(a.payment_method)).reduce((sum, a) => sum + (a.amount || 0), 0);
+    const totalBankOut = cashAdjustments.filter(a => a.type === 'Out' && isBank(a.payment_method)).reduce((sum, a) => sum + (a.amount || 0), 0);
     
-    // NAYA: Cash se Bank mein aaya (Bank barhega)
-    const bankTransfersIn = cashAdjustments.filter(a => a.type === 'Transfer' && a.transfer_to === 'Bank').reduce((sum, a) => sum + (a.amount || 0), 0);
-    // NAYA: Bank se Cash mein gaya (Bank kam hoga)
-    const bankTransfersOut = cashAdjustments.filter(a => a.type === 'Transfer' && a.payment_method === 'Bank').reduce((sum, a) => sum + (a.amount || 0), 0);
+    const bankTransfersIn = cashAdjustments.filter(a => a.type === 'Transfer' && isBank(a.transfer_to)).reduce((sum, a) => sum + (a.amount || 0), 0);
+    const bankTransfersOut = cashAdjustments.filter(a => a.type === 'Transfer' && isBank(a.payment_method)).reduce((sum, a) => sum + (a.amount || 0), 0);
 
     const bankBalance = precise((bankSales + bankReceived + bankRefunds + totalBankIn + bankTransfersIn) - (bankExpenses + bankPaidToSuppliers + bankPayouts + totalBankOut + bankTransfersOut));
 

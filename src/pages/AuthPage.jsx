@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout, Modal } from 'antd';
+import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout, Modal, Space, Divider, Checkbox } from 'antd';
 import { LockOutlined, MailOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
@@ -90,6 +90,20 @@ const AuthPage = () => {
       <Form.Item name="password" label="Password" rules={[{ required: true, min: 6, message: 'Password must be at least 6 characters long!' }]}>
         <Input.Password prefix={<LockOutlined />} placeholder="Create a strong password" />
       </Form.Item>
+      <Form.Item
+        name="agreement"
+        valuePropName="checked"
+        rules={[
+          {
+            validator: (_, value) =>
+              value ? Promise.resolve() : Promise.reject(new Error('Should accept agreement')),
+          },
+        ]}
+      >
+        <Checkbox style={{ fontSize: '12px' }}>
+          I agree to SadaPOS <a href="https://www.sadapos.com/p/terms-of-service.html" target="_blank" rel="noopener noreferrer">Terms of Service</a> and <a href="https://www.sadapos.com/p/privacy-policy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+        </Checkbox>
+      </Form.Item>
       <Form.Item>
         <Button type="primary" htmlType="submit" loading={loading} block size="large">
           Sign Up
@@ -111,6 +125,20 @@ const AuthPage = () => {
             <Tabs.TabPane tab="Login" key="1">{loginForm}</Tabs.TabPane>
             <Tabs.TabPane tab="Sign Up" key="2">{signupForm}</Tabs.TabPane>
           </Tabs>
+          <Divider style={{ margin: '12px 0' }} />
+          <div style={{ textAlign: 'center' }}>
+            <Space size="small" split={<Divider type="vertical" />}>
+              <Typography.Link href="https://www.sadapos.com/p/privacy-policy.html" target="_blank" style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                Privacy
+              </Typography.Link>
+              <Typography.Link href="https://www.sadapos.com/p/terms-of-service.html" target="_blank" style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                Terms
+              </Typography.Link>
+              <Typography.Link href="https://www.sadapos.com/p/refund-policy.html" target="_blank" style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                Refund
+              </Typography.Link>
+            </Space>
+          </div>
         </Card>
         <Modal
           title="Reset Your Password"

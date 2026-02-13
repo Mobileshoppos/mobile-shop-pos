@@ -20,13 +20,13 @@ export const themeConfig = {
       darkItemBg: '#1F1F1F',
       // YAHAN SIRF MENU KA FONT SIZE CONTROL HOGA
       fontSize: 15,
-    }
+    },
   },
 };
 
 export const darkThemeTokens = {
-  colorPrimary: '#3A3A3A',
-  colorBgLayout: '#1F1F1F',
+  colorPrimary: '#1677ff', // AntD standard blue (behtar contrast ke liye)
+  colorBgLayout: '#141414',
   colorBgContainer: '#1F1F1F',
 };
 

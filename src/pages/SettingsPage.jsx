@@ -34,6 +34,7 @@ const SettingsPage = () => {
   }, [searchParams]);
   
   const [selectedCurrency, setSelectedCurrency] = useState('PKR');
+  const [themeMode, setThemeMode] = useState('dark');
   const [isSaving, setIsSaving] = useState(false);
   const [receiptFormat, setReceiptFormat] = useState('pdf');
   const [lowStockAlerts, setLowStockAlerts] = useState(true);
@@ -72,6 +73,7 @@ const SettingsPage = () => {
   useEffect(() => {
     if (profile) {
       if (profile.currency) setSelectedCurrency(profile.currency);
+      if (profile.theme_mode) setThemeMode(profile.theme_mode);
       if (profile.receipt_format) setReceiptFormat(profile.receipt_format);
       if (profile.low_stock_alerts_enabled !== null && profile.low_stock_alerts_enabled !== undefined) {
         setLowStockAlerts(profile.low_stock_alerts_enabled);
@@ -117,7 +119,8 @@ const SettingsPage = () => {
       mobile_nav_enabled: mobileNavEnabled,
       mobile_nav_items: mobileNavItems,
       desktop_nav_items: desktopNavItems,
-      desktop_nav_position: desktopNavPosition, 
+      desktop_nav_position: desktopNavPosition,
+      theme_mode: themeMode, 
     };
 
     const result = await updateProfile(updates);
@@ -280,6 +283,24 @@ const SettingsPage = () => {
               children: (
                 <div style={{ padding: '16px 0' }}>
                   <Row align="middle" gutter={[16, 16]}>
+                    <Col xs={24} sm={6}>
+                      <Text strong>App Theme</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>Choose your preferred look.</Text>
+                    </Col>
+                    <Col xs={24} sm={18}>
+                      <Radio.Group 
+                        value={themeMode} 
+                        onChange={(e) => setThemeMode(e.target.value)} 
+                        buttonStyle="solid"
+                      >
+                        <Radio.Button value="light">Light</Radio.Button>
+                        <Radio.Button value="dark">Dark</Radio.Button>
+                        <Radio.Button value="system">System Default</Radio.Button>
+                      </Radio.Group>
+                    </Col>
+                  </Row>
+                  <Divider />
+                  <Row align="middle" gutter={[16, 16]}>
                     <Col xs={24} sm={6}><Text strong>Global Font Size</Text></Col>
                     <Col xs={16} sm={12}><Slider min={12} max={20} step={1} onChange={handleFontSizeChange} value={themeConfig.token.fontSize} /></Col>
                     <Col xs={8} sm={6}><InputNumber min={12} max={20} style={{ width: '100%' }} value={themeConfig.token.fontSize} onChange={handleFontSizeChange} /></Col>
@@ -411,7 +432,8 @@ const SettingsPage = () => {
                 mobileNavEnabled === profile.mobile_nav_enabled &&
                 JSON.stringify(mobileNavItems) === JSON.stringify(profile.mobile_nav_items) &&
                 JSON.stringify(desktopNavItems) === JSON.stringify(profile.desktop_nav_items) &&
-                desktopNavPosition === (profile.desktop_nav_position || 'bottom')
+                desktopNavPosition === (profile.desktop_nav_position || 'bottom') &&
+                themeMode === (profile.theme_mode || 'dark')
               )}
             >
               Save All Settings

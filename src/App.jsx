@@ -35,6 +35,7 @@ import WarrantyClaims from './pages/WarrantyClaims';
 import DamagedStock from './pages/DamagedStock';
 import FloatingNav from './components/FloatingNav';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
+import About from './pages/About';
 
 const { Content } = Layout;
 
@@ -74,8 +75,6 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
         collapsed={collapsed} 
         setCollapsed={setCollapsed} 
         isMobile={isMobile} 
-        isDarkMode={isDarkMode} 
-        toggleTheme={toggleTheme} 
       />
 
       {isMobile && !collapsed && (
@@ -161,6 +160,7 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route path="subscription" element={<SubscriptionPage />} />
         <Route path="*" element={<Navigate to="/" />} />
         <Route path="/logs" element={<SystemLogs />} />
+        <Route path="about" element={<About />} />
       </Route>
     </Routes>
   );

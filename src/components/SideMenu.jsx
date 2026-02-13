@@ -9,8 +9,6 @@ import {
   AppstoreOutlined,
   DollarCircleOutlined,
   SettingOutlined,
-  SunOutlined,
-  MoonOutlined,
   TeamOutlined,
   HistoryOutlined,
   CreditCardOutlined,
@@ -23,7 +21,8 @@ import {
   ProfileOutlined,    
   ToolOutlined,
   DatabaseOutlined,
-  AlertOutlined
+  AlertOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -92,6 +91,7 @@ const menuItems = [
         { key: '/profile', icon: <ProfileOutlined />, label: <Link to="/profile">Profile</Link> },
         { key: '/subscription', icon: <CreditCardOutlined />, label: <Link to="/subscription">Subscription</Link> },
         { key: '/settings', icon: <ToolOutlined />, label: <Link to="/settings">App Settings</Link> },
+        { key: '/about', icon: <InfoCircleOutlined />, label: <Link to="/about">About & Legal</Link> },
       ]
     },
 ];
@@ -99,7 +99,7 @@ const menuItems = [
 // Yeh wo keys hain jo Groups hain (Jinhein humein control karna hai)
 const rootSubmenuKeys = ['products', 'people', 'finance', 'settings_group'];
 
-const SideMenu = ({ collapsed, setCollapsed, isMobile, isDarkMode, toggleTheme }) => {
+const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
   const location = useLocation();
   const { profile } = useAuth();
   
@@ -210,15 +210,6 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile, isDarkMode, toggleTheme }
                 background: 'transparent',
                 borderRight: 0
               }} 
-            />
-        </div>
-        
-        <div style={{ padding: '16px', textAlign: 'center' }}>
-            <Switch
-                checkedChildren={<MoonOutlined />}
-                unCheckedChildren={<SunOutlined />}
-                checked={isDarkMode}
-                onChange={toggleTheme}
             />
         </div>
       </Sider>

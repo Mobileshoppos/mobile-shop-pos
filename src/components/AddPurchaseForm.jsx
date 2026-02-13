@@ -368,11 +368,10 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
   useEffect(() => {
     if (visible) {
         if (isCashPurchase) {
-            // Cash Purchase mein hamesha Total aur Paid barabar honge
-            // Default payment method ab 'Bank' (Bank / Online) par set hai
+            // Wapis 'Bank' kar diya gaya taake poori app consistent rahe
             form.setFieldsValue({ amount_paid: totalAmount, payment_method: 'Bank' });
         } else if (!editingPurchase) {
-            // Naye bill ke liye default amount 0 aur method 'Bank'
+            // Naye bill ke liye default
             form.setFieldsValue({ amount_paid: 0, payment_method: 'Bank' });
         }
     }
@@ -807,7 +806,6 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
                   </Col>
                   <Col span={12}>
                     <Form.Item name="payment_method" label="Paid From" rules={[{ required: true }]}>
-                      {/* === RULE CHANGE: disabled hata diya gaya taake user select kar sake === */}
                       <Radio.Group buttonStyle="solid">
                         <Radio.Button value="Cash">Cash</Radio.Button>
                         <Radio.Button value="Bank">Bank / Online</Radio.Button>
