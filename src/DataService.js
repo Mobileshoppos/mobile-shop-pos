@@ -1042,9 +1042,12 @@ async addCustomer(customerData) {
     const oldTotal = purchaseToUpdate.total_amount || 0;
 
     // 4. Purchase Record Update (Local)
+    // Agar Edit karte waqt ID khali ho jaye, to purani ID hi istemal karein
+    const finalInvoiceId = invoice_id || purchaseToUpdate.invoice_id;
+
     await db.purchases.update(purchaseId, {
         supplier_id,
-        invoice_id,
+        invoice_id: finalInvoiceId,
         notes,
         total_amount: newTotal,
         amount_paid,
@@ -1156,7 +1159,7 @@ async addCustomer(customerData) {
         data: {
             id: purchaseId,
             p_local_id: crypto.randomUUID(),
-            p_invoice_id: invoice_id, // <--- SEND TO SERVER
+            invoice_id: finalInvoiceId, 
             supplier_id,
             notes,
             amount_paid,
@@ -1877,18 +1880,20 @@ async addCustomer(customerData) {
     const stockCounts = {};
     let runningInventoryTotal = 0;
 
-    await db.inventory
-        .where('status').equals('Available')
-        .each(item => {
-            const qty = Number(item.available_qty) || 0;
-            const price = Number(item.purchase_price) || 0;
-            if (qty > 0) {
-                runningInventoryTotal += (price * qty);
-                const pid = item.product_id;
-                stockCounts[pid] = (stockCounts[pid] || 0) + qty;
-                inventoryMap[item.id] = item;
-            }
-        });
+    await db.inventory.each(item => {
+        const qty = Number(item.available_qty) || 0;
+        const price = Number(item.purchase_price) || 0;
+        
+        // Profit calculation ke liye har item ka data map mein hona chahiye, chahe wo Sold ho ya Available
+        inventoryMap[item.id] = item;
+
+        // Lekin "Total Inventory Value" aur "Stock Count" mein sirf Available items ginein
+        if (item.status === 'Available' && qty > 0) {
+            runningInventoryTotal += (price * qty);
+            const pid = item.product_id;
+            stockCounts[pid] = (stockCounts[pid] || 0) + qty;
+        }
+    });
     const totalInventoryValue = precise(runningInventoryTotal);
 
     // --- SALES & RETURNS OPTIMIZATION (Big Data Safe) ---

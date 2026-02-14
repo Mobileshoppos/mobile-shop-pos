@@ -1024,7 +1024,7 @@ const POS = () => {
                           {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
                         </Text>
                         {/* Main Stock Badge */}
-                        <Tag color={product.quantity > 0 ? "blue" : "red"} style={{ margin: '4px 0 0 0', fontSize: '10px' }}>
+                        <Tag color={product.quantity > 0 ? "blue" : "red"} style={{ margin: '4px 0 0 0', fontSize: '15px' }}>
                            Total: {product.quantity}
                         </Tag>
                       </div>
@@ -1049,7 +1049,7 @@ const POS = () => {
                             <div style={{ marginRight: '8px', flexShrink: 0 }}>
                               <Space size={4}>
                                 <Tag 
-                                  style={{ margin: 0, fontSize: '11px', padding: '0 6px' }}
+                                  style={{ margin: 0, fontSize: '15px', padding: '0 6px' }}
                                   color={variant.display_quantity > 0 ? "cyan" : "red"}
                                 >
                                   {variant.display_quantity}

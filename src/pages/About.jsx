@@ -47,7 +47,7 @@ const About = () => {
       >
         <GlobalOutlined style={{ fontSize: '48px', color: '#1890ff', marginBottom: 16 }} />
         <Title level={2} style={{ margin: 0 }}>SadaPOS</Title>
-        <Text type="secondary">Version 1.0.0</Text>
+        <Text type="secondary">Version 1.1.2</Text>
         <br />
         <br />
         <Text>The smartest offline-first POS for mobile shops.</Text>

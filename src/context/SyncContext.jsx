@@ -131,7 +131,7 @@ export const SyncProvider = ({ children }) => {
       await smartPut('products', products, pendingIds);
       
 
-      const { data: variants } = await supabase.from('product_variants').select('*');
+      const { data: variants } = await supabase.from('product_variants').select('*').eq('user_id', user.id);
       if (variants) await db.product_variants.bulkPut(variants);
 
       // 3. Inventory

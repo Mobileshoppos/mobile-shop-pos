@@ -91,7 +91,7 @@ const menuItems = [
         { key: '/profile', icon: <ProfileOutlined />, label: <Link to="/profile">Profile</Link> },
         { key: '/subscription', icon: <CreditCardOutlined />, label: <Link to="/subscription">Subscription</Link> },
         { key: '/settings', icon: <ToolOutlined />, label: <Link to="/settings">App Settings</Link> },
-        { key: '/about', icon: <InfoCircleOutlined />, label: <Link to="/about">About & Legal</Link> },
+        { key: '/about', icon: <InfoCircleOutlined />, label: <Link to="/about">About</Link> },
       ]
     },
 ];
