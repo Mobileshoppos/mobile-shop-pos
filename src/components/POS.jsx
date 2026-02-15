@@ -674,7 +674,7 @@ const POS = () => {
           message.success(`Sale #${shortInvoiceId} completed successfully!`);
           saleDataForReceipt = saleRecord;
           
-          processSyncQueue();
+          // processSyncQueue(); <--- Yeh line hum ne hata di taake Receipt foran show ho. Auto-Sync isay khud sambhal lega.
 
         } catch (error) {
           console.error("Sale Error:", error);
@@ -834,7 +834,7 @@ const POS = () => {
       setSelectedCustomer(newCustomer.id);
       
       // 5. Upload Trigger karein (Agar internet hua to foran chala jayega)
-      processSyncQueue();
+      // processSyncQueue(); <--- Hata diya, Auto-Sync zindabad!
 
     } catch (error) {
       message.error('Error adding customer: ' + error.message);

@@ -1,9 +1,8 @@
-// src/context/SyncContext.jsx - FINAL COMPLETE VERSION
-
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { db } from '../db';
 import { supabase } from '../supabaseClient';
 import Logger from '../utils/logger';
+import { checkSupabaseConnection } from '../utils/connectionCheck';
 
 const SyncContext = createContext();
 
@@ -95,7 +94,9 @@ export const SyncProvider = ({ children }) => {
 
   // --- DOWNLOAD FUNCTION ---
   const syncAllData = async () => {
-    if (!navigator.onLine) return;
+    // Pehle check karein ke kya waqayi internet server tak pohanch raha hai?
+    const hasInternet = await checkSupabaseConnection();
+    if (!hasInternet) return;
     
     setIsSyncing(true);
     try {
@@ -220,7 +221,14 @@ export const SyncProvider = ({ children }) => {
 
   // --- UPLOAD FUNCTION (Fixed: Lock + Suppliers Swap) ---
   const processSyncQueue = async () => {
-  if (!navigator.onLine || isSyncingRef.current) return;
+  
+  // 1. Pehle check karein ke kya waqayi internet server tak pohanch raha hai?
+  // (Yeh Li-Fi scenario mein 'false' dega aur code yahin ruk jayega)
+  const hasInternet = await checkSupabaseConnection();
+
+  // Agar internet nahi hai ya pehle se sync chal raha hai, to wapis mur jayein
+  if (!hasInternet || isSyncingRef.current) return;
+  
   const startTime = Date.now();
   let allQueueItems = [];
 

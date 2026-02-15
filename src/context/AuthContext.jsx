@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { db } from '../db'; // <--- Local DB Import kiya
+import { db } from '../db'; 
+import { checkSupabaseConnection } from '../utils/connectionCheck';
 
 const AuthContext = createContext();
 
@@ -201,7 +202,10 @@ export const AuthProvider = ({ children }) => {
       // --- TABDEELI YAHAN HAI ---
       
       // Step 1: Sab se pehle check karein ke kya hum Offline hain?
-      if (!navigator.onLine) {
+      // Hum 'Ping' kar ke tasdeeq karenge ke waqayi internet chal raha hai
+      const isConnected = await checkSupabaseConnection();
+      
+      if (!isConnected) {
         const offlineUser = getOfflineBackup();
         if (offlineUser) {
           console.log("Startup Offline: Immediate Restore...");

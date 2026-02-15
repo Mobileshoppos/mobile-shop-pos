@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { db } from './db';
 import { generateInvoiceId } from './utils/idGenerator';
+import { checkSupabaseConnection } from './utils/connectionCheck';
 
 // --- DEFAULT CATEGORIES BLUEPRINT ---
 const DEFAULT_CATEGORIES = [
@@ -102,6 +103,11 @@ const DataService = {
   isInitializing: false,
   async initializeUserCategories(userId) {
     if (!userId || this.isInitializing) return;
+
+    // Li-Fi Fix: Agar asli internet nahi hai, to initialization skip karein
+    const hasInternet = await checkSupabaseConnection();
+    if (!hasInternet) return;
+
     this.isInitializing = true;
 
     try {
@@ -1597,10 +1603,14 @@ async addCustomer(customerData) {
   },
 
   async getExpenseCategories() {
-    // Check karein aur initialize karein agar zaroorat ho
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await this.initializeUserCategories(user.id);
+    // Li-Fi Fix: Pehle connection check karein
+    const hasInternet = await checkSupabaseConnection();
+
+    if (hasInternet) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await this.initializeUserCategories(user.id);
+      }
     }
     return await db.expense_categories.toArray();
   },
@@ -1700,18 +1710,18 @@ async addCustomer(customerData) {
   // --- PRODUCT CATEGORIES & ATTRIBUTES SECTION ---
 
   async getProductCategories() {
-    // --- NAYA INITIALIZATION CHECK ---
-    // Pehle check karein ke kya user logged in hai?
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      // Agar user hai, to initialization function ko call karein
-      // Ye function khud hi check kar lega ke agar categories pehle se hain to kuch nahi karega
-      await this.initializeUserCategories(user.id);
+    // Li-Fi Fix: Pehle connection check karein
+    const hasInternet = await checkSupabaseConnection();
+    
+    if (hasInternet) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await this.initializeUserCategories(user.id);
+      }
     }
 
-    // 1. Local Categories layein (Ab is mein initialization ke baad naye records honge)
+    // Local DB se data hamesha return hoga, chahe net ho ya na ho
     const categories = await db.categories.orderBy('name').toArray();
-    
     return categories;
   },
 
