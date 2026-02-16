@@ -94,10 +94,12 @@ const Profile = () => {
   };
 
   return (
-    <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
-      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
-        <ProfileOutlined /> Profile
-      </Title>
+    <div style={{ padding: isMobile ? '12px 4px' : '4px' }}>
+      {isMobile && (
+        <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
+          <ProfileOutlined /> Profile
+        </Title>
+      )}
       <Card>
         <Title level={4} style={{ marginTop: 0 }}>Profile and Shop Information</Title>
         <p>Keep your shop and personal details up to date.</p>

@@ -329,10 +329,12 @@ const SalesHistory = () => {
   ];
 
   return (
-    <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}>
-      <Title level={2} style={{ marginBottom: '24px', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
-        <HistoryOutlined /> Sales History
-      </Title>
+    <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
+      {isMobile && (
+        <Title level={2} style={{ marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
+          <HistoryOutlined /> Sales History
+        </Title>
+      )}
       <Card>
         {/* TABLE COMPONENT KO IS SE BADAL DEIN */}
         <Table

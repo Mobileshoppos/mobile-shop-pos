@@ -32,9 +32,11 @@ const SubscriptionPage = () => {
 
   return (
     <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
-      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
+      {isMobile && (
+      <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
         <CreditCardOutlined /> Manage Your Subscription
       </Title>
+    )}
       
       <Row gutter={[24, 24]}>
         

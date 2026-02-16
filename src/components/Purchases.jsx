@@ -119,17 +119,19 @@ const Purchases = () => {
     ];
 
     return (
-        <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}>
+        <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
             {/* --- NAYI TABDEELIYAN (Step 3) --- */}
             <Flex
-    justify="space-between"
+    justify={isMobile ? 'space-between' : 'flex-end'}
     align={isMobile ? 'flex-start' : 'center'}
-    style={{ marginBottom: '24px' }}
-    vertical={isMobile} // Yeh 'flex-direction: column' set kar dega agar mobile hai
+    style={{ marginBottom: '16px' }}
+    vertical={isMobile} 
 >
-    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
-        <FileTextOutlined /> Purchase History
-    </Title>
+    {isMobile && (
+        <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
+            <FileTextOutlined /> Purchase History
+        </Title>
+    )}
     <Button 
         type="primary" 
         icon={<PlusOutlined />} 

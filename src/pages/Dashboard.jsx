@@ -21,6 +21,7 @@ import {
 } from '@ant-design/icons';
 import { Area, Pie } from '@ant-design/charts'; 
 import { useNavigate } from 'react-router-dom';
+import { useMediaQuery } from '../hooks/useMediaQuery'; 
 import DataService from '../DataService';
 import { db } from '../db';
 import { useAuth } from '../context/AuthContext';
@@ -32,7 +33,8 @@ import { useRef } from 'react';
 const { Title, Text } = Typography;
 
 const Dashboard = () => {
-  const { isDarkMode } = useTheme(); 
+  const { isDarkMode } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 768px)');  
   const [stats, setStats] = useState(null);
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -301,14 +303,16 @@ const Dashboard = () => {
   };
 
   return (
-    <div style={{ padding: '12px 4px' }}>
+    <div style={{ padding: isMobile ? '12px 4px' : '4px' }}>
       <PageTour pageKey="dashboard" steps={tourSteps} />
       
       {/* HEADER WITH FILTERS */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
-        <Title level={2} style={{ margin: 0, marginLeft: '48px',fontSize: '23px' }}>
-          <HomeOutlined /> Dashboard
-        </Title>
+      <div style={{ display: 'flex', justifyContent: isMobile ? 'space-between' : 'flex-end', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+        {isMobile && (
+          <Title level={2} style={{ margin: 0, marginLeft: '8px', fontSize: '23px' }}>
+            <HomeOutlined /> Dashboard
+          </Title>
+        )}
         
         {/* Time Filter Buttons */}
         <Radio.Group value={timeRange} onChange={(e) => setTimeRange(e.target.value)} buttonStyle="solid">

@@ -185,13 +185,18 @@ const showEditModal = () => {
     if (!purchase) return <Alert message="Not Found" description="No purchase found with this ID." type="warning" showIcon />;
 
     return (
-        <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}>
+        <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
+            {isMobile && (
+                <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
+                    <FileTextOutlined /> Purchase Details
+                </Title>
+            )}
             <Breadcrumb 
     items={[ 
         { title: <Link to="/purchases">Purchases</Link> }, 
         { title: `Purchase #${purchase?.invoice_id || id.slice(0, 8)}` } 
     ]} 
-    style={{ marginBottom: '16px' }}
+    style={{ marginBottom: '16px', marginLeft: isMobile ? '8px' : '0' }}
 />
             <Card>
                 <Row justify="space-between" align="middle" style={{ flexDirection: isMobile ? 'column' : 'row', textAlign: isMobile ? 'center' : 'left' }}>

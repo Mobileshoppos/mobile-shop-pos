@@ -97,8 +97,12 @@ const WarrantyClaims = () => {
     };
 
     return (
-        <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
-            <Title level={2} style={{marginLeft: isMobile ? '8px' : '48px', fontSize: '23px'}}><SafetyCertificateOutlined /> Warranty & Claims Management</Title>
+        <div style={{ padding: isMobile ? '12px 4px' : '4px' }}>
+            {isMobile && (
+              <Title level={2} style={{marginLeft: '8px', fontSize: '23px', marginBottom: '16px'}}>
+                <SafetyCertificateOutlined /> Warranty & Claims Management
+              </Title>
+            )}
             
             <Row gutter={[24, 24]}>
                 <Col xs={24} lg={10}>

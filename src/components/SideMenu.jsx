@@ -22,7 +22,9 @@ import {
   ToolOutlined,
   DatabaseOutlined,
   AlertOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  MenuUnfoldOutlined,
+  MenuFoldOutlined
 } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -78,7 +80,7 @@ const menuItems = [
     },
 
     // 5. Reports
-    { key: '/reports', icon: <PieChartOutlined />, label: <Link to="/reports">Reports</Link> },
+    // { key: '/reports', icon: <PieChartOutlined />, label: <Link to="/reports">Reports</Link> },
 
     { type: 'divider' },
 
@@ -153,6 +155,12 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
       handleLogout();
       handleMenuItemClick();
     }},
+    { 
+      key: 'toggle', 
+      icon: collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />, 
+      label: collapsed ? 'Expand Menu' : 'Collapse', 
+      onClick: () => setCollapsed(!collapsed) 
+    },
   ];
 
   const siderStyle = {
@@ -180,7 +188,7 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
             {/* Logo Area */}
             <div style={{ 
                 height: '32px', 
-                margin: '16px', 
+                margin: '20px', 
                 background: 'rgba(255, 255, 255, 0.2)', 
                 borderRadius: '6px',
                 display: 'flex',

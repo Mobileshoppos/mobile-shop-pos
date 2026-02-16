@@ -521,19 +521,16 @@ const SupplierDashboard = () => {
                     font-weight: bold;
                 }
             `}</style>
-            <Layout style={{ background: 'transparent', padding: isMobile ? '12px 4px' : '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <Title level={2} style={{ margin: 0, marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
-                    <ShopOutlined /> Suppliers Dashboard
-                </Title>
-                <Button 
-                    icon={showArchived ? <ReloadOutlined /> : <InboxOutlined />} 
-                    onClick={() => setShowArchived(!showArchived)} 
-                    type={showArchived ? 'primary' : 'default'}
-                    danger={showArchived}
-                    title={showArchived ? 'Back to Active' : 'View Archived'}
-                />
-            </div>
+            <Layout style={{ background: 'transparent', padding: isMobile ? '12px 4px' : '4px' }}>
+            
+            {/* Sirf Mobile par Title dikhayein, Desktop par Header mein hai */}
+            {isMobile && (
+                <div style={{ marginBottom: '16px' }}>
+                    <Title level={2} style={{ margin: 0, marginLeft: '8px', fontSize: '23px' }}>
+                        <ShopOutlined /> Suppliers Dashboard
+                    </Title>
+                </div>
+            )}
             
             <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
                 <Col xs={24} sm={12}>
@@ -554,11 +551,16 @@ const SupplierDashboard = () => {
                             <Flex gap="small">
                                 <Input
                                     ref={searchInputRef}
-                                    placeholder="Search supplier..."
+                                    placeholder="Search..."
                                     prefix={<SearchOutlined />}
                                     value={searchTerm}
                                     onChange={e => setSearchTerm(e.target.value)}
                                     style={{ flexGrow: 1 }}
+                                />
+                                <Button 
+                                    icon={showArchived ? <ReloadOutlined /> : <InboxOutlined />} 
+                                    onClick={() => setShowArchived(!showArchived)} 
+                                    danger={showArchived}
                                 />
                                 <Button type="primary" icon={<PlusOutlined />} onClick={handleAddNew} />
                             </Flex>
@@ -581,17 +583,26 @@ const SupplierDashboard = () => {
                 )
             ) : (
                 // --- DESKTOP LAYOUT ---
-                <Layout style={{ background: token.colorBgContainer, borderRadius: token.borderRadiusLG, overflow: 'hidden' }}>
-                    <Sider width={300} style={{ background: token.colorBgLayout }}>
-                        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+                // Background ko 'transparent' kar diya taake colors kharab na hon
+                <Layout style={{ background: 'transparent', borderRadius: token.borderRadiusLG, overflow: 'hidden', height: 'calc(100vh - 140px)' }}>
+                    <Sider width={320} style={{ background: token.colorBgContainer, borderRight: `1px solid ${token.colorBorderSecondary}` }}>
+                        <div style={{ padding: '12px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
                             <Flex gap="small">
                                 <Input
                                     ref={searchInputRef}
-                                    placeholder="Search supplier..."
+                                    placeholder="Search..."
                                     prefix={<SearchOutlined />}
                                     value={searchTerm}
                                     onChange={e => setSearchTerm(e.target.value)}
                                     style={{ flexGrow: 1 }}
+                                />
+                                {/* Archive Button Yahan Aa Gaya */}
+                                <Button 
+                                    icon={showArchived ? <ReloadOutlined /> : <InboxOutlined />} 
+                                    onClick={() => setShowArchived(!showArchived)} 
+                                    type={showArchived ? 'primary' : 'default'}
+                                    danger={showArchived}
+                                    title={showArchived ? 'Back to Active' : 'View Archived'}
                                 />
                                 <Button type="primary" icon={<PlusOutlined />} onClick={handleAddNew} />
                             </Flex>
@@ -616,7 +627,7 @@ const SupplierDashboard = () => {
                             />
                         }
                     </Sider>
-                    <Layout>{renderSupplierDetails()}</Layout>
+                    <Layout style={{ background: 'transparent' }}>{renderSupplierDetails()}</Layout>
                 </Layout>
             )}
 

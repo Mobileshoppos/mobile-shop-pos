@@ -208,10 +208,12 @@ const Categories = () => {
   ];
 
   return (
-    <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}>
-      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
-        <TagsOutlined /> Manage Categories & Attributes
-      </Title>
+    <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
+      {isMobile && (
+        <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
+          <TagsOutlined /> Manage Categories & Attributes
+        </Title>
+      )}
       <Row gutter={[24, 24]}>
         <Col span={isMobile ? 24 : 10}>
           <Card>

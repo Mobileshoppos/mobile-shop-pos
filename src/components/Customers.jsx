@@ -505,7 +505,8 @@ const handleCloseInvoiceSearchModal = () => {
         amount_paid: -totalRefundAmount, // Negative amount for credit
         user_id: user.id,
         remarks: `Refund for Invoice #${selectedSale.id}`,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
       // 4. Local DB mein Save karein
@@ -548,8 +549,9 @@ const handleCloseInvoiceSearchModal = () => {
               payment_method: 'Cash',
               remarks: `Auto-Refund for Return #${returnId}`,
               user_id: user.id,
-              created_at: new Date().toISOString() // Thora sa time gap taake ledger mein baad mein aaye
-          };
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
 
           // Payout Save Karein
           await db.credit_payouts.add(payoutRecord);
@@ -985,7 +987,7 @@ const handleCloseInvoiceSearchModal = () => {
   };
   
   return (
-  <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}> 
+  <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}> 
   <div style={{
     display: 'flex',
     flexDirection: isMobile ? 'column' : 'row',
@@ -993,9 +995,11 @@ const handleCloseInvoiceSearchModal = () => {
     alignItems: isMobile ? 'flex-start' : 'center',
     marginBottom: '24px'
 }}>
-    <Title level={2} style={{ margin: 0, marginBottom: isMobile ? '16px' : '0', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
-        <UserSwitchOutlined /> Customer Management
-    </Title>
+    {isMobile && (
+        <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
+            <UserSwitchOutlined /> Customer Management
+        </Title>
+    )}
 
     {/* Computer (Desktop) ke liye Search Bar */}
     {!isMobile && (

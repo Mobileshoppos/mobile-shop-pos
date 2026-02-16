@@ -141,15 +141,17 @@ const ExpenseCategories = () => {
   ];
 
   return (
-    <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}>
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', gap: '16px' }}>
-        <Title level={2} style={{ margin: 0, marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
+    <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: isMobile ? 'space-between' : 'flex-end', marginBottom: '16px', gap: '16px' }}>
+        <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()} style={{ width: isMobile ? '100%' : 'auto' }}>
+    Add New Category
+  </Button>
+</div>
+      {isMobile && (
+        <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
           <FileProtectOutlined /> Manage Expense Categories
         </Title>
-        <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()} block={isMobile}>
-          Add New Category
-        </Button>
-      </div>
+      )}
       <Table columns={columns} dataSource={categories} loading={loading} rowKey="id" scroll={{ x: true }} />
       <Modal title={editingCategory ? 'Edit Category' : 'Add a New Category'} open={isModalOpen} onCancel={handleCancel} onOk={() => form.submit()} okText="Save">
         <Form form={form} layout="vertical" onFinish={handleOk}>

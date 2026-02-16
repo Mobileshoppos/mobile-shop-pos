@@ -750,7 +750,9 @@ const POS = () => {
                  showQrCode: profile?.qr_code_enabled ?? true
              };
 
-             if (profile?.receipt_format === 'thermal') {
+             if (profile?.receipt_format === 'none') {
+                message.info('Sale completed. Receipt printing is disabled.');
+             } else if (profile?.receipt_format === 'thermal') {
                 printThermalReceipt(receiptData, profile?.currency);
              } else {
                 generateSaleReceipt(receiptData, profile?.currency);
@@ -848,7 +850,7 @@ const POS = () => {
   const handleResetCart = () => { modal.confirm({ title: 'Reset Bill?', content: 'Are you sure you want to remove all items from the current bill?', okText: 'Yes, Reset', cancelText: 'No', onOk: () => { setCart([]); setDiscount(0); setAmountPaid(0); setSelectedCustomer(null); message.success('Bill has been reset.'); } }); };
 
   return (
-    <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}>
+    <div style={{ padding: isMobile ? '4px 0' : '8px 0' }}>
     <style>
         {`
           /* Scrollbar ki churai (width) */
@@ -871,11 +873,13 @@ const POS = () => {
           }
         `}
       </style>
-      <Title level={2} style={{ marginBottom: '5px', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
+      {isMobile && (
+        <Title level={2} style={{ marginBottom: '5px', marginLeft: '8px', fontSize: '23px' }}>
             <ShoppingCartOutlined /> Point of Sale
-          </Title>
-      <Row gutter={24}>
-        <Col xs={24} md={14}>
+        </Title>
+      )}
+      <Row gutter={16}>
+        <Col xs={24} md={11}>
           <Card styles={{ body: { padding: '12px' } }}>
             {/* === ROW 1: SEARCH, CATEGORY, BUTTONS === */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
@@ -1118,9 +1122,9 @@ const POS = () => {
             />
           </Card>
         </Col>
-        <Col xs={24} md={10}>
-          <Card>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <Col xs={24} md={13}>
+          <Card styles={{ body: { padding: '12px' } }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <Title level={4} style={{ margin: 0 }}>Current Bill</Title>
               {cart.length > 0 && (<Button danger type="text" icon={<DeleteOutlined />} onClick={handleResetCart}>Reset Cart</Button>)}
             </div>

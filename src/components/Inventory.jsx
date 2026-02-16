@@ -894,17 +894,19 @@ const Inventory = () => {
   ].filter(step => step.target()); // Yeh line ghalat steps ko nikaal degi
 
   return (
-    <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}>
+    <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
       <PageTour 
   key={products.length === 0 ? "empty" : "ready"} 
   pageKey={products.length === 0 ? "inventory_empty" : "inventory_ready"} 
   steps={tourSteps} 
 />
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '24px' }}>
-        <Title level={2} style={{ margin: 0, marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
-          <DatabaseOutlined /> {showLowStockOnly ? 'Low Stock Products' : 'Inventory'}
-        </Title>
-        <Button ref={refAddModel} type="primary" size="Normal" onClick={() => setIsProductModalOpen(true)} style={{ width: isMobile ? '100%' : 'auto' }}>Add New Product Model</Button>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: isMobile ? 'space-between' : 'flex-end', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '16px' }}>
+        {isMobile && (
+          <Title level={2} style={{ margin: 0, marginLeft: '8px', fontSize: '23px' }}>
+            <DatabaseOutlined /> {showLowStockOnly ? 'Low Stock Products' : 'Inventory'}
+          </Title>
+        )}
+        <Button ref={refAddModel} type="primary" size="middle" onClick={() => setIsProductModalOpen(true)} style={{ width: isMobile ? '100%' : 'auto', marginTop: isMobile ? '10px' : '0' }}>Add New Product Model</Button>
       </div>
 
       <Card style={{ marginBottom: '16px' }} styles={{ body: { padding: '12px' } }}>

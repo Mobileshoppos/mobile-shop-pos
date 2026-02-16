@@ -93,14 +93,14 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
       )}
 
       <Layout style={{ background: token.colorBgLayout }}>
-        <Content style={{ padding: isMobile ? '8px 4px 0' : '24px 16px 0' }}>
+        <Content style={{ padding: 0 }}>
           <div style={{
             background: token.colorBgContainer,
-            borderRadius: token.borderRadiusLG,
-            minHeight: 'calc(100vh - 24px)',
-          }}>
+            minHeight: '100vh',
+            paddingTop: '12px',
+           }}>
             {profile && !profile.is_setup_completed && <WelcomeWizard />}
-            <AppHeader collapsed={collapsed} setCollapsed={setCollapsed} />
+            <AppHeader collapsed={collapsed} setCollapsed={setCollapsed} isMobile={isMobile} />
             <div style={{ padding: isMobile ? '0 8px 60px' : '0 24px 24px' }}>
               <Outlet />
             </div>
@@ -108,8 +108,8 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
               <BottomNav setCollapsed={setCollapsed} />
             )}
 
-            {/* Global Floating Nav for Desktop */}
-            {!isMobile && <FloatingNav />}
+            {/* Global Floating Nav for Desktop - Setting ke mutabiq dikhayein */}
+            {!isMobile && profile?.desktop_nav_enabled !== false && <FloatingNav />}
 
             {/* Headless Keyboard Shortcuts Listener */}
             <KeyboardShortcuts />

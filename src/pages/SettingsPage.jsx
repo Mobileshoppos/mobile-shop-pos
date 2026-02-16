@@ -19,7 +19,7 @@ const { TextArea } = Input;
 const DEFAULT_POLICY = "No return or exchange after 7 days.\nWarranty claim directly from service center.\nNo warranty for burnt/damaged items.";
 
 const SettingsPage = () => {
-  const [searchParams, setSearchParams] = useSearchParams(); // Naya: URL se tab parhne ke liye
+  const [searchParams, setSearchParams] = useSearchParams(); 
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { message } = App.useApp();
   const { profile, updateProfile } = useAuth();
@@ -46,6 +46,7 @@ const SettingsPage = () => {
   const [warrantySystemEnabled, setWarrantySystemEnabled] = useState(true);
   const [posDiscountEnabled, setPosDiscountEnabled] = useState(true);
   const [mobileNavEnabled, setMobileNavEnabled] = useState(true);
+  const [desktopNavEnabled, setDesktopNavEnabled] = useState(true);
   const [mobileNavItems, setMobileNavItems] = useState(["/", "/pos", "/inventory", "/sales-history"]);
   const [desktopNavItems, setDesktopNavItems] = useState(['/pos', '/inventory', '/warranty', '/customers', '/expenses']);
   const [desktopNavPosition, setDesktopNavPosition] = useState('bottom');
@@ -85,6 +86,7 @@ const SettingsPage = () => {
           setWarrantySystemEnabled(profile.warranty_system_enabled);
       if (profile.pos_discount_enabled !== undefined) setPosDiscountEnabled(profile.pos_discount_enabled);
       if (profile.mobile_nav_enabled !== undefined) setMobileNavEnabled(profile.mobile_nav_enabled);
+      if (profile.desktop_nav_enabled !== undefined) setDesktopNavEnabled(profile.desktop_nav_enabled);
       if (profile.mobile_nav_items) setMobileNavItems(profile.mobile_nav_items);
       if (profile.desktop_nav_items) setDesktopNavItems(profile.desktop_nav_items);
       if (profile.desktop_nav_position) setDesktopNavPosition(profile.desktop_nav_position);
@@ -117,6 +119,7 @@ const SettingsPage = () => {
       warranty_system_enabled: warrantySystemEnabled,
       pos_discount_enabled: posDiscountEnabled,
       mobile_nav_enabled: mobileNavEnabled,
+      desktop_nav_enabled: desktopNavEnabled,
       mobile_nav_items: mobileNavItems,
       desktop_nav_items: desktopNavItems,
       desktop_nav_position: desktopNavPosition,
@@ -174,10 +177,12 @@ const SettingsPage = () => {
   const currentBgContainerColor = isDarkMode ? darkTheme.colorBgContainer : lightTheme.colorBgContainer;
 
   return (
-    <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
-      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: isMobile ? '8px' : '48px', fontSize: '23px' }}>
-        <ToolOutlined /> App Settings
-      </Title>
+    <div style={{ padding: isMobile ? '12px 4px' : '4px' }}>
+      {isMobile && (
+        <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
+          <ToolOutlined /> App Settings
+        </Title>
+      )}
       <Text type="secondary">Change the look and feel of your application here.</Text>
 
       <Card title="Application Configuration" style={{ marginTop: 24 }}>
@@ -210,6 +215,7 @@ const SettingsPage = () => {
                       <Radio.Group onChange={(e) => setReceiptFormat(e.target.value)} value={receiptFormat}>
                         <Radio value={'pdf'}>PDF Document</Radio>
                         <Radio value={'thermal'}>Thermal Receipt</Radio>
+                        <Radio value={'none'}>None (Disable Receipt)</Radio>
                       </Radio.Group>
                     </Col>
                   </Row>
@@ -354,7 +360,7 @@ const SettingsPage = () => {
                 <div style={{ padding: '16px 0' }}>
                   <Title level={4} style={{ fontSize: '16px' }}>Mobile Navigation (Bottom Bar)</Title>
                   <Row align="middle" gutter={[16, 16]}>
-                    <Col xs={24} sm={6}><Text strong>Enable Bottom Bar</Text></Col>
+                    <Col xs={24} sm={6}><Text strong>Enable or Disable Bottom Bar</Text></Col>
                     <Col xs={24} sm={18}><Switch checked={mobileNavEnabled} onChange={setMobileNavEnabled} /></Col>
                   </Row>
                   {mobileNavEnabled && (
@@ -372,38 +378,46 @@ const SettingsPage = () => {
                   <Divider />
 
                   <Title level={4} style={{ fontSize: '16px' }}>Desktop Navigation (Floating Bar)</Title>
-                  <Row align="middle" gutter={[16, 16]}>
-                    <Col xs={24} sm={6}>
-                      <Text strong>Desktop Shortcuts (Max 10)</Text>
-                      <Text type="secondary" style={{ display: 'block' }}>Choose icons for your floating bar.</Text>
-                    </Col>
-                    <Col xs={24} sm={18}>
-                      <Select 
-                        mode="multiple" 
-                        style={{ width: '100%' }} 
-                        placeholder="Select up to 10 shortcuts" 
-                        value={desktopNavItems} 
-                        onChange={(values) => values.length <= 10 ? setDesktopNavItems(values) : message.warning('You can only select up to 10 shortcuts for desktop')}
-                        options={navOptions} 
-                      />
-                    </Col>
-                  </Row>
                   <Row align="middle" gutter={[16, 16]} style={{ marginTop: '16px' }}>
-                    <Col xs={24} sm={6}>
-                      <Text strong>Bar Position</Text>
-                      <Text type="secondary" style={{ display: 'block' }}>Where should the floating bar appear?</Text>
-                    </Col>
-                    <Col xs={24} sm={18}>
-                      <Radio.Group 
-                        value={desktopNavPosition} 
-                        onChange={(e) => setDesktopNavPosition(e.target.value)}
-                        buttonStyle="solid"
-                      >
-                        <Radio.Button value="bottom">Bottom Center</Radio.Button>
-                        <Radio.Button value="right">Right Side</Radio.Button>
-                      </Radio.Group>
-                    </Col>
+                    <Col xs={24} sm={6}><Text strong>Enable or Disable Floating Bar</Text></Col>
+                    <Col xs={24} sm={18}><Switch checked={desktopNavEnabled} onChange={setDesktopNavEnabled} /></Col>
                   </Row>
+                  {desktopNavEnabled && (
+                    <>
+                      <Row align="middle" gutter={[16, 16]} style={{ marginTop: '16px' }}>
+                        <Col xs={24} sm={6}>
+                          <Text strong>Desktop Shortcuts (Max 10)</Text>
+                          <Text type="secondary" style={{ display: 'block' }}>Choose icons for your floating bar.</Text>
+                        </Col>
+                        <Col xs={24} sm={18}>
+                          <Select 
+                            mode="multiple" 
+                            style={{ width: '100%' }} 
+                            placeholder="Select up to 10 shortcuts" 
+                            value={desktopNavItems} 
+                            onChange={(values) => values.length <= 10 ? setDesktopNavItems(values) : message.warning('You can only select up to 10 shortcuts for desktop')}
+                            options={navOptions} 
+                          />
+                        </Col>
+                      </Row>
+                      <Row align="middle" gutter={[16, 16]} style={{ marginTop: '16px' }}>
+                        <Col xs={24} sm={6}>
+                          <Text strong>Bar Position</Text>
+                          <Text type="secondary" style={{ display: 'block' }}>Where should the floating bar appear?</Text>
+                        </Col>
+                        <Col xs={24} sm={18}>
+                          <Radio.Group 
+                            value={desktopNavPosition} 
+                            onChange={(e) => setDesktopNavPosition(e.target.value)}
+                            buttonStyle="solid"
+                          >
+                            <Radio.Button value="bottom">Bottom Center</Radio.Button>
+                            <Radio.Button value="right">Right Side</Radio.Button>
+                          </Radio.Group>
+                        </Col>
+                      </Row>
+                    </>
+                  )}
                 </div>
               ),
             },
@@ -430,6 +444,7 @@ const SettingsPage = () => {
                 warrantySystemEnabled === profile.warranty_system_enabled &&
                 posDiscountEnabled === profile.pos_discount_enabled &&
                 mobileNavEnabled === profile.mobile_nav_enabled &&
+                desktopNavEnabled === profile.desktop_nav_enabled && 
                 JSON.stringify(mobileNavItems) === JSON.stringify(profile.mobile_nav_items) &&
                 JSON.stringify(desktopNavItems) === JSON.stringify(profile.desktop_nav_items) &&
                 desktopNavPosition === (profile.desktop_nav_position || 'bottom') &&

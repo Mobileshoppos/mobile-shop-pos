@@ -150,16 +150,23 @@ const Reports = () => {
   const totalStockValue = products.reduce((sum, product) => sum + ((product.quantity || 0) * (product.avg_purchase_price || 0)), 0);
 
   return (
-    <div style={{ padding: isMobile ? '12px 0' : '24px 0' }}>
-      <Title level={2} style={{ margin: 0, marginBottom: '24px', marginLeft: isMobile ? '8px' : '48px' }}>
-        <PieChartOutlined /> Reports
+    <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
+      <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: isMobile ? '8px' : '0', fontSize: '23px' }}>
+        {isMobile && (
+          <PieChartOutlined style={{ marginRight: '8px' }} />
+        )}
+        {isMobile ? '' : (
+          <span style={{ fontSize: '23px' }}>
+            <PieChartOutlined style={{ marginRight: '8px' }} /> Reports
+          </span>
+        )}
       </Title>
-      <Space style={{ marginBottom: '16px' }}>
-          <DatePicker.RangePicker
+      <div style={{ display: 'flex', justifyContent: isMobile ? 'space-between' : 'flex-end', alignItems: 'center', marginBottom: '16px', gap: '16px' }}>
+        <DatePicker.RangePicker
             value={dateRange}
             onChange={setDateRange}
-          />
-        </Space>
+        />
+      </div>
       
       <Card style={{ marginBottom: '24px' }}>
         <Title level={4}>Profit & Loss Summary</Title>
