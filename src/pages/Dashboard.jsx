@@ -382,6 +382,15 @@ const Dashboard = () => {
                 <span>Bank Balance:</span>
                 <span>{formatCurrency(stats?.bankBalance || 0, profile?.currency)}</span>
             </div>
+            {/* Standard Ant Design Button */}
+            <Button 
+              block 
+              icon={<CheckCircleOutlined />}
+              style={{ marginTop: 12 }}
+              onClick={() => setIsClosingModalOpen(true)}
+            >
+              Day-End Closing
+            </Button>
           </Card>
         </Col>
 

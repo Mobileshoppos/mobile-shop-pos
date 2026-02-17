@@ -479,7 +479,7 @@ const handleCloseInvoiceSearchModal = () => {
           local_id: returnId,
           sale_id: selectedSale.id,
           customer_id: selectedSale.customer_id,
-          total_refund_amount: totalRefundAmount,
+          total_refund_amount: refundCashNow ? maxCashRefundable : totalRefundAmount,
           return_fee: returnFee,
           reason: values.reason,
           user_id: user.id,
@@ -545,7 +545,7 @@ const handleCloseInvoiceSearchModal = () => {
               id: payoutId,
               local_id: payoutId,
               customer_id: selectedSale.customer_id,
-              amount_paid: totalRefundAmount, // Positive Amount (Cash Out)
+              amount_paid: maxCashRefundable, // <--- AB YEH SIRF JAYEZ CASH WAPAS KAREGA
               payment_method: 'Cash',
               remarks: `Auto-Refund for Return #${returnId}`,
               user_id: user.id,
@@ -556,8 +556,8 @@ const handleCloseInvoiceSearchModal = () => {
           // Payout Save Karein
           await db.credit_payouts.add(payoutRecord);
           
-          // Balance wapis barha dein (Credit diya phir Cash de diya = 0 change)
-          newBalance = newBalance + totalRefundAmount; 
+          /// Balance wapis barha dein (Jitna cash asliyat mein diya sirf utna balance mein wapis jurega)
+          newBalance = newBalance + maxCashRefundable; 
       }
 
       // Final Balance Save Karein
@@ -605,15 +605,27 @@ const handleCloseInvoiceSearchModal = () => {
     }
   };
   
-  const totalRefundAmount = useMemo(() => {
+  const { totalRefundAmount, debtOnInvoice, maxCashRefundable } = useMemo(() => {
     const grossRefund = selectedReturnItems.reduce((sum, i) => sum + (i.return_qty * i.price_at_sale), 0);
     const subtotal = selectedSale?.subtotal || grossRefund || 1;
     const discountRatio = (selectedSale?.discount || 0) / subtotal;
     const refundDiscount = grossRefund * discountRatio;
     const netRefundable = grossRefund - refundDiscount;
-    
-    // Safety Lock: Agar fee zyada ho jaye to refund 0 ho jayega, negative nahi.
-    return Math.max(0, netRefundable - returnFee);
+    const finalRefund = Math.max(0, netRefundable - returnFee);
+
+    // Naya Hisaab: Is invoice par kitna udhaar baki tha?
+    const invoiceTotal = selectedSale?.total_amount || 0;
+    const invoicePaid = selectedSale?.amount_paid_at_sale || 0;
+    const unpaidOnInvoice = Math.max(0, invoiceTotal - invoicePaid);
+
+    // Dukandar sirf utna cash wapas kar sakta hai jitna udhaar se zyada ho
+    const maxCash = Math.max(0, finalRefund - unpaidOnInvoice);
+
+    return { 
+      totalRefundAmount: finalRefund, 
+      debtOnInvoice: unpaidOnInvoice, 
+      maxCashRefundable: maxCash 
+    };
   }, [selectedReturnItems, selectedSale, returnFee]);
   
 
@@ -961,6 +973,11 @@ const handleCloseInvoiceSearchModal = () => {
       const returnDetails = record.details.return_details;
       if (!returnDetails) return <Text type="secondary">Details not available.</Text>;
 
+      // Wazahat ke liye calculation
+      const totalReturnValue = record.credit; // Item ki net qeemat
+      const cashRefunded = returnDetails.total_refund_amount; // Jo cash wapas diya (hamari aakhri tabdeeli ke mutabiq)
+      const adjustedDebt = Math.max(0, totalReturnValue - cashRefunded);
+
       const returnItemCols = [
         { title: 'Product', dataIndex: ['products', 'name'] },
         { title: 'Details', render: renderItemDetails },
@@ -969,14 +986,30 @@ const handleCloseInvoiceSearchModal = () => {
       ];
       return (
         <Card size="small" style={{ margin: '8px 0' }}>
-          <Descriptions title={`Return Details`} bordered size="small" column={1}>
+          <Descriptions title={`Return Details & Explanation`} bordered size="small" column={1}>
             <Descriptions.Item label="Reason for Return">{returnDetails.reason || <Text type="secondary">No reason provided.</Text>}</Descriptions.Item>
+            
+            <Descriptions.Item label="Total Return Value">
+              {formatCurrency(totalReturnValue, profile?.currency)}
+            </Descriptions.Item>
+
+            {adjustedDebt > 0 && (
+              <Descriptions.Item label="Adjusted against Debt">
+                <Text type="danger">-{formatCurrency(adjustedDebt, profile?.currency)}</Text>
+              </Descriptions.Item>
+            )}
+
+            <Descriptions.Item label="Cash Refunded to Customer">
+              <Text strong style={{ color: '#52c41a' }}>
+                {formatCurrency(cashRefunded, profile?.currency)}
+              </Text>
+            </Descriptions.Item>
+
             {returnDetails.return_fee > 0 && (
               <Descriptions.Item label="Restocking Fee Charged">
                 <Text type="danger">{formatCurrency(returnDetails.return_fee, profile?.currency)}</Text>
               </Descriptions.Item>
             )}
-            <Descriptions.Item label="Final Refund Amount"><strong>{formatCurrency(record.credit, profile?.currency)}</strong></Descriptions.Item>
           </Descriptions>
           <Title level={5} style={{ marginTop: '16px' }}>Items Returned in this Transaction</Title>
           <Table columns={returnItemCols} dataSource={returnDetails.sale_return_items} pagination={false} rowKey="id" style={{marginTop: '8px'}}/>
@@ -1349,7 +1382,19 @@ const handleCloseInvoiceSearchModal = () => {
          </Form.Item>
        </Col>
      </Row>
-   </Form> <Descriptions bordered><Descriptions.Item label="Total Credit"><Title level={4} style={{margin:0, color: '#52c41a'}}>{formatCurrency(totalRefundAmount, profile?.currency)}</Title></Descriptions.Item></Descriptions> 
+   </Form> <Descriptions bordered column={1} size="small">
+     <Descriptions.Item label="Item Return Value">
+       {formatCurrency(totalRefundAmount, profile?.currency)}
+     </Descriptions.Item>
+     <Descriptions.Item label="Adjusted against Invoice Debt">
+       <Text type="danger">-{formatCurrency(Math.min(totalRefundAmount, debtOnInvoice), profile?.currency)}</Text>
+     </Descriptions.Item>
+     <Descriptions.Item label="Available for Cash Refund">
+       <Title level={4} style={{margin:0, color: '#52c41a'}}>
+         {formatCurrency(maxCashRefundable, profile?.currency)}
+       </Title>
+     </Descriptions.Item>
+   </Descriptions> 
     <div style={{ marginTop: '16px', padding: '12px', border: '1px solid #d9d9d9', borderRadius: '6px' }}>
       <Checkbox 
         checked={refundCashNow} 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip, Badge, Tag, Checkbox
 } from 'antd';
-import { ShoppingCartOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons';
+import { ShoppingCartOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined, WalletOutlined, BankOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -1128,33 +1128,56 @@ const POS = () => {
               <Title level={4} style={{ margin: 0 }}>Current Bill</Title>
               {cart.length > 0 && (<Button danger type="text" icon={<DeleteOutlined />} onClick={handleResetCart}>Reset Cart</Button>)}
             </div>
-            <Form.Item label="Customer">
+            <Form.Item label="Customer" style={{ marginBottom: '8px' }}>
               <Space.Compact style={{ width: '100%' }}>
                 <Select showSearch placeholder="Select a customer (optional)" style={{ width: '100%' }} value={selectedCustomer} onChange={(value) => setSelectedCustomer(value)} filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())} options={customers.map(customer => ({ value: customer.id, label: `${customer.name} - ${customer.phone_number}` }))} allowClear />
                 <Button icon={<UserAddOutlined />} onClick={() => setIsAddCustomerModalOpen(true)} />
               </Space.Compact>
             </Form.Item>
-            <Radio.Group onChange={(e) => setPaymentMethod(e.target.value)} value={paymentMethod} style={{ marginBottom: '16px' }}>
-              <Radio value={'Paid'}>Paid</Radio>
-              <Radio value={'Unpaid'} disabled={!selectedCustomer || isWalkIn}>Pay Later (Credit)</Radio>
-            </Radio.Group>
-            {paymentMethod === 'Paid' && (
-              <div style={{ marginBottom: '16px' }}>
-                <Text type="secondary" style={{ display: 'block', marginBottom: '8px' }}>Receive Money In:</Text>
-                <Radio.Group onChange={(e) => setCashOrBank(e.target.value)} value={cashOrBank} buttonStyle="solid">
-                  <Radio.Button value="Cash">Cash</Radio.Button>
-                  <Radio.Button value="Bank">Bank / Online</Radio.Button>
-                  </Radio.Group>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px', flexWrap: 'wrap' }}>
+              {/* 1. Payment Method (Paid / Pay Later) */}
+              <Radio.Group onChange={(e) => setPaymentMethod(e.target.value)} value={paymentMethod}>
+                <Radio value={'Paid'}>Paid</Radio>
+                <Radio value={'Unpaid'} disabled={!selectedCustomer || isWalkIn}>Pay Later (Credit)</Radio>
+              </Radio.Group>
+
+              {/* 2. Amount Paid Input (Sirf Pay Later par nazar aayega) */}
+              {paymentMethod === 'Unpaid' && selectedCustomer && (
+                <Space>
+                  <Text strong>Paid Now:</Text>
+                  <InputNumber 
+                    size="small"
+                    style={{ width: '110px' }} 
+                    prefix={profile?.currency ? `${profile.currency} ` : ''} 
+                    min={0} 
+                    max={grandTotal} 
+                    value={amountPaid} 
+                    onChange={(value) => setAmountPaid(value || 0)} 
+                  />
+                </Space>
               )}
-            {paymentMethod === 'Unpaid' && selectedCustomer && (<Form.Item label="Amount Paid Now (optional)"><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} max={grandTotal} value={amountPaid} onChange={(value) => setAmountPaid(value || 0)} /></Form.Item>)}
+
+              {/* 3. Cash/Bank Icons (Ab usi row mein end par hain) */}
+              <Radio.Group onChange={(e) => setCashOrBank(e.target.value)} value={cashOrBank} buttonStyle="solid">
+                <Tooltip title="Cash">
+                  <Radio.Button value="Cash">
+                    <WalletOutlined />
+                  </Radio.Button>
+                </Tooltip>
+                <Tooltip title="Bank / Online Transfer">
+                  <Radio.Button value="Bank">
+                    <BankOutlined />
+                  </Radio.Button>
+                </Tooltip>
+              </Radio.Group>
+            </div>
             {cart.length === 0 ? <Empty description="Cart is empty" /> : 
               <List 
                 dataSource={cart} 
                 renderItem={(item) => { 
                   const productInStock = allProducts.find(p => p.id === item.product_id); 
                   return (
-                    <List.Item style={{ paddingInline: 0 }}> 
+                    <List.Item style={{ paddingInline: 0, paddingBlock: '4px' }}> 
                       <div style={{ width: '100%' }}>
                         <Row justify="space-between" align="top">
                           <Col flex="auto">
@@ -1207,7 +1230,7 @@ const POS = () => {
                         </Row>
                         
                         {(item.category_is_imei_based || item.imei) ? (
-  <Row justify="space-between" align="middle" style={{ marginTop: '8px' }}>
+  <Row justify="space-between" align="middle" style={{ marginTop: '4px' }}>
     <Col><Text type="secondary">Price:</Text></Col>
     <Col><Text strong>{formatCurrency(item.sale_price, profile?.currency)}</Text></Col>
   </Row>
@@ -1234,12 +1257,12 @@ const POS = () => {
                     </List.Item>
                   ); 
                 }} 
-                style={{ maxHeight: '30vh', overflowY: 'auto', marginBottom: '16px' }} 
+                style={{ maxHeight: '30vh', overflowY: 'auto', marginBottom: '8px' }} 
               />
             }
             <Divider />
             {profile?.pos_discount_enabled !== false && (
-            <Row gutter={16} style={{ marginBottom: '16px' }}>
+            <Row gutter={16} style={{ marginBottom: '8px' }}>
               <Col span={14}><InputNumber style={{ width: '100%' }} placeholder="Total Bill Discount" value={discount} onChange={(val) => setDiscount(val || 0)} min={0} /></Col>
               <Col span={10}><Radio.Group value={discountType} onChange={(e) => setDiscountType(e.target.value)}><Radio.Button value="Amount">{profile?.currency || 'Rs.'}</Radio.Button><Radio.Button value="Percentage">%</Radio.Button></Radio.Group></Col>
             </Row>
