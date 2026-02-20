@@ -1,21 +1,29 @@
 import { supabase } from '../supabaseClient';
 
-// Yeh function Supabase ko ek halki si 'Hello' bhejta hai
 export const checkSupabaseConnection = async () => {
   try {
     // Agar browser hi keh raha hai ke net nahi hai, to foran false bhej do
     if (!navigator.onLine) return false;
 
-    // Agar browser keh raha hai net hai, to confirm karne ke liye server se waqt poocho
-    // (Yeh boht fast request hoti hai)
-    const { error } = await supabase.rpc('get_server_time');
+    // 3 second ka timeout
+    const timeoutPromise = new Promise((resolve) => {
+      setTimeout(() => resolve({ error: new Error('Timeout') }), 3000);
+    });
+
+    // Asal server check
+    const serverCheck = supabase.rpc('get_server_time');
+
+    // YAHAN ASAL FIX HAI: Dono cheezon ko array ke andar daal diya hai
+    const response = await Promise.race('get_server_time');
     
-    // Agar koi error nahi aaya, iska matlab Internet Zinda hai
-    if (!error) return true;
+    // Agar response mein koi error nahi hai, iska matlab Internet bilkul theek chal raha hai
+    if (response && !response.error) {
+      return true;
+    }
     
     return false;
   } catch (err) {
-    // Agar koi bhi masla hua, iska matlab Internet kharab hai
+    // Agar koi bhi masla hua to offline tasawwur karein
     return false;
   }
 };

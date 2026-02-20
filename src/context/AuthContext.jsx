@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { db } from '../db'; 
 import { checkSupabaseConnection } from '../utils/connectionCheck';
@@ -15,6 +15,7 @@ export const AuthProvider = ({ children }) => {
   const [isStockLoading, setIsStockLoading] = useState(true);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [isLowStockLoading, setIsLowStockLoading] = useState(true);
+  const isOfflineModeRef = useRef(false);
 
   // 1. Profile Fetching (Offline-First)
   const getProfile = useCallback(async (currentUser) => {
@@ -170,17 +171,24 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
+      // NAYA LOGIC: Agar hum pehle se offline mode mein ja chuke hain, to Supabase ke expire hone wale event ko ignore karein
+      if (!session && isOfflineModeRef.current) {
+        console.log("Ignoring Supabase session clear because we are in Offline Mode.");
+        return; // Yahin se wapis mur jayein, user ko bahar na nikalen
+      }
+
       if (!session && !navigator.onLine) {
         console.log("Offline mode: Restoring user from backup...");
         const offlineUser = getOfflineBackup();
         if (offlineUser) {
           // Hum ek "Naqli" (Fake) session bana rahe hain taake App khul jaye
           session = { user: offlineUser, access_token: 'offline_mode' };
+          isOfflineModeRef.current = true; // Mark kar dein ke hum offline hain
         }
       }
 
-      // Agar Session Valid hai (Online), to future ke liye Backup save karein
-      if (session?.user) {
+      // Agar Session Valid hai (Online) aur yeh offline mode ka fake session nahi hai, to backup save karein
+      if (session?.user && session.access_token !== 'offline_mode') {
         localStorage.setItem('app_offline_user_backup', JSON.stringify(session.user));
       }
 
@@ -211,6 +219,7 @@ export const AuthProvider = ({ children }) => {
           console.log("Startup Offline: Immediate Restore...");
           // Agar offline hain aur backup hai, to foran set karein aur YAHIN RUK JAYEIN
           // Supabase ko call karne ki zaroorat nahi hai.
+          isOfflineModeRef.current = true; // NAYA: Mark kar dein ke hum offline hain
           setSession({ user: offlineUser, access_token: 'offline_mode' });
           setUser(offlineUser);
           

@@ -60,7 +60,7 @@ const FloatingNav = () => {
       position: 'fixed',
       ...currentStyle,
       zIndex: 1000,
-      padding: '6px 14px',
+      padding: '4px 10px',
       borderRadius: '30px',
       backgroundColor: isDarkMode ? 'rgba(31, 31, 31, 0.85)' : 'rgba(255, 255, 255, 0.85)',
       backdropFilter: 'blur(12px)',
@@ -70,7 +70,7 @@ const FloatingNav = () => {
       alignItems: 'center',
       transition: 'all 0.3s ease'
     }}>
-      <Space direction={currentStyle.flexDirection === 'column' ? 'vertical' : 'horizontal'} size="small">
+      <Space direction={currentStyle.flexDirection === 'column' ? 'vertical' : 'horizontal'} size={4}>
         {userShortcuts.map((path) => {
           const config = iconConfig[path];
           if (!config) return null;
@@ -83,15 +83,15 @@ const FloatingNav = () => {
                 type={isActive ? 'primary' : 'text'}
                 shape="circle"
                 icon={React.cloneElement(config.icon, { 
-                  style: { fontSize: '19px', color: isActive ? '#fff' : config.color } 
+                  style: { fontSize: '16px', color: isActive ? '#fff' : config.color } 
                 })}
                 onClick={() => navigate(path)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: '42px',
-                  height: '42px',
+                  width: '36px',
+                  height: '36px',
                   transition: 'all 0.2s',
                   backgroundColor: isActive ? config.color : 'transparent'
                 }}
@@ -102,8 +102,8 @@ const FloatingNav = () => {
         
         {/* Divider Line */}
         <div style={{ 
-          width: currentStyle.flexDirection === 'column' ? '24px' : '1px', 
-          height: currentStyle.flexDirection === 'column' ? '1px' : '24px', 
+          width: currentStyle.flexDirection === 'column' ? '20px' : '1px', 
+          height: currentStyle.flexDirection === 'column' ? '1px' : '20px', 
           background: isDarkMode ? '#444' : '#eee', 
           margin: '4px auto' 
         }} />
@@ -112,7 +112,7 @@ const FloatingNav = () => {
           <Button 
             type="text" 
             shape="circle" 
-            icon={<SettingOutlined style={{ fontSize: '18px', color: '#8c8c8c' }} />} 
+            icon={<SettingOutlined style={{ fontSize: '15px', color: '#8c8c8c' }} />} 
             // Seedha Settings ke Navigation tab (4) par le jayega
             onClick={() => navigate('/settings?tab=4')} 
           />

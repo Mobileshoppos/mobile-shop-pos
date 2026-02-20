@@ -37,3 +37,7 @@ dist-ssr
 npm-debug.log
 
 backup/
+
+# Marketing Website Template
+marketing-blogger-template.xml
+marketing-blogger-template.bak

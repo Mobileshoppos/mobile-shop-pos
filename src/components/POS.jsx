@@ -944,20 +944,12 @@ const POS = () => {
 
             {/* === ROW 2: HIDDEN FILTERS (Fixed for Dark Mode) === */}
             {showFilters && (
-               <div style={{ 
-                  marginBottom: '12px', 
-                  padding: '12px', 
-                  // Agar Dark Mode hai to halka transparent background, warna light gray
-                  background: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#f9f9f9', 
-                  borderRadius: '6px', 
-                  // Border bhi theme ke hisaab se
-                  border: isDarkMode ? '1px solid #424242' : '1px solid #f0f0f0' 
-               }}>
-                  <Row gutter={[8, 8]} align="middle">
+               <div style={{ marginBottom: '16px', marginTop: '4px' }}>
+                  <Row gutter={[8, 8]} align="top">
                     {/* A. Price Range */}
-                    <Col xs={24} md={10}>
+                    <Col xs={24} sm={12} md={9}>
+                       <Text type="secondary" style={{ display: 'block', marginBottom: '2px', fontSize: '11px', fontWeight: 500 }}>Price Range</Text>
                        <Space>
-                          <Text type="secondary" style={{fontSize: '12px'}}>Price:</Text>
                           <InputNumber placeholder="Min" value={priceRange[0]} onChange={(v) => setPriceRange([v, priceRange[1]])} style={{ width: '90px' }} />
                           <span>-</span>
                           <InputNumber placeholder="Max" value={priceRange[1]} onChange={(v) => setPriceRange([priceRange[0], v])} style={{ width: '90px' }} />
@@ -966,12 +958,13 @@ const POS = () => {
 
                     {/* B. Dynamic Attributes (RAM, ROM etc) */}
                     {advancedFilters.map((filter) => (
-                      <Col xs={12} md={6} key={filter.attribute_name}>
+                      <Col xs={12} sm={6} md={5} key={filter.attribute_name}>
+                        <Text type="secondary" style={{ display: 'block', marginBottom: '2px', fontSize: '11px', fontWeight: 500 }}>{filter.attribute_name}</Text>
                         <Select
                           allowClear
                           showSearch
                           style={{ width: '100%' }}
-                          placeholder={filter.attribute_name}
+                          placeholder="Any"
                           value={filterAttributes[filter.attribute_name]}
                           onChange={(val) => setFilterAttributes(prev => ({ ...prev, [filter.attribute_name]: val }))}
                         >
@@ -979,15 +972,6 @@ const POS = () => {
                         </Select>
                       </Col>
                     ))}
-
-                    {/* C. Message agar Category select na ho */}
-                    {!activeCategoryId && (
-                       <Col xs={24} md={14}>
-                         <Text type="secondary" style={{ fontSize: '12px', fontStyle: 'italic' }}>
-                           * Select a Category (e.g. Mobile) to see RAM/ROM filters.
-                         </Text>
-                       </Col>
-                    )}
                   </Row>
                </div>
             )}

@@ -900,16 +900,16 @@ const Inventory = () => {
   pageKey={products.length === 0 ? "inventory_empty" : "inventory_ready"} 
   steps={tourSteps} 
 />
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: isMobile ? 'space-between' : 'flex-end', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: isMobile ? 'space-between' : 'flex-end', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: isMobile ? '16px' : '0' }}>
         {isMobile && (
           <Title level={2} style={{ margin: 0, marginLeft: '8px', fontSize: '23px' }}>
             <DatabaseOutlined /> {showLowStockOnly ? 'Low Stock Products' : 'Inventory'}
           </Title>
         )}
-        <Button ref={refAddModel} type="primary" size="middle" onClick={() => setIsProductModalOpen(true)} style={{ width: isMobile ? '100%' : 'auto', marginTop: isMobile ? '10px' : '0' }}>Add New Product Model</Button>
+        {isMobile && (<Button ref={refAddModel} type="primary" size="middle" onClick={() => setIsProductModalOpen(true)} style={{ width: '100%', marginTop: '10px' }}>Add New Product Model</Button>)}
       </div>
 
-      <Card style={{ marginBottom: '16px' }} styles={{ body: { padding: '12px' } }}>
+      <div style={{ marginBottom: '18px', padding: isMobile ? '0 8px' : '0' }}>
         <Row gutter={[8, 8]} align="middle">
           {/* 1. Search Box (Sab se bada) */}
           <Col xs={24} sm={8} md={9}>
@@ -926,7 +926,7 @@ const Inventory = () => {
           </Col>
 
           {/* 2. Category Select */}
-          <Col xs={12} sm={6} md={5}>
+          <Col xs={12} sm={6} md={4}>
             <Select 
               placeholder="Category" 
               style={{ width: '100%' }} 
@@ -941,7 +941,7 @@ const Inventory = () => {
           </Col>
 
           {/* 3. Sort Select */}
-          <Col xs={12} sm={6} md={5}>
+          <Col xs={12} sm={6} md={4}>
             <Select value={sortBy} onChange={(v) => setSortBy(v)} style={{ width: '100%' }}>
                 <Option value="name_asc">Name (A-Z)</Option>
                 <Option value="price_asc">Price: Low to High</Option>
@@ -952,7 +952,8 @@ const Inventory = () => {
           </Col>
 
           {/* 4. Action Buttons (Filter Toggle & Reset) */}
-          <Col xs={24} sm={4} md={5} style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <Col xs={24} sm={4} md={7} style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          
              
              {/* Filter Toggle Button */}
              <Button 
@@ -980,16 +981,26 @@ const Inventory = () => {
                 onClick={handleResetFilters} 
                 title="Reset All Filters" 
              />
+             {!isMobile && (
+               <Button 
+                 ref={refAddModel} 
+                 type="primary" 
+                 icon={<PlusOutlined />}
+                 onClick={() => setIsProductModalOpen(true)}
+               >
+                 New Product Model
+               </Button>
+             )}
           </Col>
         </Row>
 
         {/* === HIDDEN FILTERS (Price Range & Attributes) === */}
         {showFilters && (
-           <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: isDarkMode ? '1px solid #444' : '1px solid #f0f0f0' }}>
-              <Row gutter={[16, 16]} align="top">
+           <div style={{ marginTop: '8px' }}>
+              <Row gutter={[8, 8]} align="top">
                 {/* Price Range */}
-                <Col xs={24} md={8} lg={6}>
-                   <Text type="secondary" style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Price Range</Text>
+                <Col xs={24} sm={12} md={6} lg={5}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: '2px', fontSize: '11px', fontWeight: 500 }}>Price Range</Text>
                    <Space>
                       <InputNumber placeholder="Min" value={priceRange[0]} onChange={(v) => setPriceRange([v, priceRange[1]])} min={0} style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
                       <span style={{ color: '#999' }}>-</span>
@@ -999,13 +1010,13 @@ const Inventory = () => {
 
                 {/* Dynamic Attributes (RAM, ROM, Color etc.) - Sirf tab dikhenge jab Category select hogi */}
                 {advancedFilters.map((filter) => (
-                  <Col xs={12} sm={8} md={6} lg={4} key={filter.attribute_name}>
-                    <Text type="secondary" style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>{filter.attribute_name}</Text>
+                  <Col xs={12} sm={6} md={4} lg={3} key={filter.attribute_name}>
+                    <Text type="secondary" style={{ display: 'block', marginBottom: '2px', fontSize: '11px', fontWeight: 500 }}>{filter.attribute_name}</Text>
                     <Select
                       allowClear
                       showSearch // <-- Yeh search box on karega
                       style={{ width: '100%' }}
-                      placeholder={`Select ${filter.attribute_name}`}
+                      placeholder="Any"
                       value={filterAttributes[filter.attribute_name]}
                       onChange={(val) => setFilterAttributes(prev => ({ ...prev, [filter.attribute_name]: val }))}
                       // Yeh line batati hai ke search kaise karna hai (Small/Capital letters ignore karke)
@@ -1021,7 +1032,7 @@ const Inventory = () => {
                 {/* Agar Category select nahi hai to user ko batayein */}
                 {!filterCategory && (
                    <Col xs={24} md={12}>
-                     <Text type="secondary" style={{ fontStyle: 'italic', fontSize: '12px', marginTop: '24px', display: 'block' }}>
+                     <Text type="secondary" style={{ fontStyle: 'italic', fontSize: '11px', marginTop: '26px', display: 'block' }}>
                        * Select a Category to see more filters like RAM, ROM, Color.
                      </Text>
                    </Col>
@@ -1029,7 +1040,7 @@ const Inventory = () => {
               </Row>
            </div>
         )}
-      </Card>
+      </div>
 
       <ProductList 
         products={products} 
