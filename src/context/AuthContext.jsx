@@ -207,42 +207,49 @@ export const AuthProvider = ({ children }) => {
     });
 
     const checkSession = async () => {
-      // --- TABDEELI YAHAN HAI ---
-      
-      // Step 1: Sab se pehle check karein ke kya hum Offline hain?
-      // Hum 'Ping' kar ke tasdeeq karenge ke waqayi internet chal raha hai
-      const isConnected = await checkSupabaseConnection();
-      
-      if (!isConnected) {
-        const offlineUser = getOfflineBackup();
-        if (offlineUser) {
-          console.log("Startup Offline: Immediate Restore...");
-          // Agar offline hain aur backup hai, to foran set karein aur YAHIN RUK JAYEIN
-          // Supabase ko call karne ki zaroorat nahi hai.
-          isOfflineModeRef.current = true; // NAYA: Mark kar dein ke hum offline hain
-          setSession({ user: offlineUser, access_token: 'offline_mode' });
-          setUser(offlineUser);
-          
-          // Profile bhi local DB se utha lein
-          await getProfile(offlineUser);
-          fetchStockCount();
-          
+      const safetyTimer = setTimeout(() => {
+        if (loading) {
+          console.log("Safety Valve Triggered: Forcing offline mode.");
+          const offlineUser = getOfflineBackup();
+          if (offlineUser) {
+            isOfflineModeRef.current = true;
+            setSession({ user: offlineUser, access_token: 'offline_mode' });
+            setUser(offlineUser);
+          }
           setLoading(false);
-          return; // <--- Yeh return zaroori hai taake code neeche na jaye
         }
-      }
+      }, 6000);
 
-      // Step 2: Agar hum yahan pohnche, iska matlab ya to Online hain ya Backup nahi mila
-      // Ab hum Supabase ko call karenge (jo 1 minute le sakta hai agar internet slow ho)
-      let { data: { session } } = await supabase.auth.getSession();
-      
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await getProfile(session.user);
-        fetchStockCount();
+      try {
+        const isConnected = await checkSupabaseConnection();
+        
+        if (!isConnected) {
+          const offlineUser = getOfflineBackup();
+          if (offlineUser) {
+            isOfflineModeRef.current = true;
+            setSession({ user: offlineUser, access_token: 'offline_mode' });
+            setUser(offlineUser);
+            await getProfile(offlineUser);
+            fetchStockCount();
+            clearTimeout(safetyTimer);
+            setLoading(false);
+            return;
+          }
+        }
+
+        let { data: { session: currentSession } } = await supabase.auth.getSession();
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        if (currentSession?.user) {
+          await getProfile(currentSession.user);
+          fetchStockCount();
+        }
+      } catch (e) {
+        console.error("Auth check failed", e);
+      } finally {
+        clearTimeout(safetyTimer);
+        setLoading(false);
       }
-      setLoading(false);
     };
     
     checkSession();

@@ -24,11 +24,11 @@ export const CustomThemeProvider = ({ children }) => {
   const [lightTheme, setLightTheme] = useState(initialLightTheme);
   const [darkTheme, setDarkTheme] = useState(initialDarkTheme);
   
-  const [isDarkMode, setIsDarkMode] = useState(true); // Default Dark
+  const [isDarkMode, setIsDarkMode] = useState(false); // Default Light
 
   useEffect(() => {
     const syncTheme = () => {
-      const mode = profile?.theme_mode || 'dark'; // Default to dark if not set
+      const mode = profile?.theme_mode || 'light'; // Default to light if not set
       
       if (mode === 'system') {
         setIsDarkMode(window.matchMedia('(pre-color-scheme: dark)').matches);

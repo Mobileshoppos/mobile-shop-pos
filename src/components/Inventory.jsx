@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
-import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete } from 'antd';
+import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme } from 'antd';
 import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -48,6 +48,7 @@ const formatPriceRange = (min, max, currency) => {
 };
 
 const ProductList = ({ showArchived, products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged, refFirstStock }) => {
+  const { token } = theme.useToken(); // Control Center Connection
   const { profile } = useAuth();
   const { isDarkMode } = useTheme();
   
@@ -121,7 +122,7 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
           <List.Item>
             <Card
               hoverable
-              style={{ border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9', height: '100%' }}
+              style={{ border: `1px solid ${token.colorBorder}`, backgroundColor: token.colorBgContainer, height: '100%' }}
               styles={{ body: { padding: '16px' } }}
             >
               {/* === HEADER AREA === */}
@@ -137,9 +138,9 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                           margin: 0, 
                           fontSize: '12px', 
                           padding: '4px 8px',
-                          background: 'transparent', // Aar-paar
-                          border: '1px solid #2f54eb', // Blue Border
-                          color: '#2f54eb' // Blue Text
+                          background: 'transparent',
+                          border: `1px solid ${token.colorPrimary}`,
+                          color: token.colorPrimary
                         }}
                      >
                         {product.category_name}
@@ -153,7 +154,7 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
                   
                   {/* Price Range */}
-                  <Text strong style={{ fontSize: '18px', color: '#52c41a', whiteSpace: 'nowrap' }}>
+                  <Text strong style={{ fontSize: '18px', color: token.colorSuccess, whiteSpace: 'nowrap' }}>
                     {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
                   </Text>
                   
@@ -198,16 +199,16 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                 </div>
               </div>
 
-              <Divider style={{ margin: '12px 0', borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)' }} />
+              <Divider style={{ margin: '12px 0', borderColor: token.colorBorderSecondary }} />
 
               {/* === VARIANTS LIST === */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {product.groupedVariants.map((variant, index) => (
                   <div key={index} 
                     style={{ 
-                      overflowX: 'auto', whiteSpace: 'nowrap', padding: '10px', // Padding increased slightly
-                      background: isDarkMode ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
-                      borderRadius: '6px', border: isDarkMode ? 'none' : '1px solid rgba(0,0,0,0.03)',
+                      overflowX: 'auto', whiteSpace: 'nowrap', padding: '10px',
+                      background: token.colorFillQuaternary, // Control Center se halka background
+                      borderRadius: '6px', border: 'none',
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                     }} className="hide-scrollbar">
                     
@@ -222,10 +223,10 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                             fontSize: '15px', 
                             padding: '4px 10px',
                             background: 'transparent',
-                            // Agar stock hai to Blue Border, warna Red Border
-                            border: variant.display_quantity > 0 ? '1px solid #1890ff' : '1px solid #ff4d4f',
+                            // Agar stock hai to Primary Border, warna Error Border
+                            border: variant.display_quantity > 0 ? `1px solid ${token.colorPrimary}` : `1px solid ${token.colorError}`,
                             // Text ka color bhi same
-                            color: variant.display_quantity > 0 ? '#1890ff' : '#ff4d4f'
+                            color: variant.display_quantity > 0 ? token.colorPrimary : token.colorError
                           }}
                         >
                           {variant.display_quantity} Stock
@@ -235,8 +236,8 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
 
                       <div style={{ marginRight: '16px', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
                         {/* SALE PRICE - FONT INCREASED TO 15px */}
-                        <Text strong style={{ color: '#52c41a', fontSize: '16px', lineHeight: '1.2' }}>
-                           <span style={{ fontSize: '12px', opacity: 0.8, marginRight: '4px', color: isDarkMode ? '#aaa' : '#666' }}>Sale:</span>
+                        <Text strong style={{ color: token.colorSuccess, fontSize: '16px', lineHeight: '1.2' }}>
+                           <span style={{ fontSize: '12px', opacity: 0.8, marginRight: '4px', color: token.colorTextSecondary }}>Sale:</span>
                            {formatCurrency(variant.sale_price, profile?.currency)}
                         </Text>
                         {/* BUY PRICE - FONT INCREASED TO 12px */}
@@ -271,7 +272,7 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
   type="text" 
   icon={<PlusOutlined />} 
   size="small" 
-  style={{ marginLeft: '8px', color: '#52c41a', fontSize: '16px' }} 
+  style={{ marginLeft: '8px', color: token.colorSuccess, fontSize: '16px' }} 
   onClick={() => onAddStock(variant)} 
   title="Add Stock / Add New Variants"
 />
@@ -279,7 +280,7 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
   type="text" 
   icon={<EditOutlined />} 
   size="small" 
-  style={{ marginLeft: '8px', color: '#1890ff', fontSize: '16px' }} 
+  style={{ marginLeft: '8px', color: 'token.colorPrimary', fontSize: '16px' }} 
   onClick={() => {
       const cat = categories?.find(c => c.id === product.category_id);
       const isImei = cat ? cat.is_imei_based : false;
@@ -328,6 +329,7 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
 };
 
 const Inventory = () => {
+  const { token } = theme.useToken(); // Control Center Connection
   const refAddModel = useRef(null);
   const refSearch = useRef(null);
   const refFilters = useRef(null);
@@ -917,7 +919,7 @@ const Inventory = () => {
             <Input 
               ref={searchInputRef}
               placeholder="Search or Scan..." 
-              prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+              prefix={<SearchOutlined style={{ color: token.colorTextSecondary }} />}
               value={searchText} 
               onChange={(e) => setSearchText(e.target.value)} 
               allowClear 
@@ -1003,7 +1005,7 @@ const Inventory = () => {
                   <Text type="secondary" style={{ display: 'block', marginBottom: '2px', fontSize: '11px', fontWeight: 500 }}>Price Range</Text>
                    <Space>
                       <InputNumber placeholder="Min" value={priceRange[0]} onChange={(v) => setPriceRange([v, priceRange[1]])} min={0} style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
-                      <span style={{ color: '#999' }}>-</span>
+                      <span style={{ color: token.colorTextSecondary }}>-</span>
                       <InputNumber placeholder="Max" value={priceRange[1]} onChange={(v) => setPriceRange([priceRange[0], v])} min={0} style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
                    </Space>
                 </Col>
@@ -1160,7 +1162,7 @@ const Inventory = () => {
 
 {/* DAMAGED STOCK MODAL */}
       <Modal
-        title={<span><AlertOutlined style={{color: 'red'}} /> Mark Stock as Damaged</span>}
+        title={<span><AlertOutlined style={{color: token.colorError}} /> Mark Stock as Damaged</span>}
         open={isDamagedModalOpen}
         onOk={damagedForm.submit}
         onCancel={() => setIsDamagedModalOpen(false)}

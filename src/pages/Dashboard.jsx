@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table, Radio, Modal, Form, InputNumber, Input, App, Tooltip, Tabs } from 'antd';
+import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table, Radio, Modal, Form, InputNumber, Input, App, Tooltip, Tabs, theme } from 'antd';
 import {
   HomeOutlined,
   ShoppingOutlined,
@@ -42,6 +42,7 @@ const Dashboard = () => {
   const [topSellingFilter, setTopSellingFilter] = useState('qty'); 
 
   const { message } = App.useApp();
+  const { token } = theme.useToken();
   const refSales = useRef(null);
   const refCash = useRef(null);
   const refProfit = useRef(null);
@@ -230,9 +231,9 @@ const Dashboard = () => {
   };
 
   // --- Custom Styles for Cards ---
-  const cardStyle = { borderRadius: 8, border: 'none', color: 'white', height: '100%', };
+  const cardStyle = { borderRadius: 8, border: 'none', color: '#ffffff', height: '100%' };
 
-  // --- Graph Configuration (UPDATED FOR DARK MODE) ---
+  // --- Graph Configuration (CONTROL CENTER LINKED) ---
   const config = {
     data: chartData,
     xField: 'date',
@@ -241,57 +242,56 @@ const Dashboard = () => {
     // 1. Theme set karein
     theme: isDarkMode ? 'dark' : 'light',
     
-    // 2. Gradient Color (Dark mode mein thora dark, Light mein bright)
+    // 2. Gradient Color (Area Style)
     areaStyle: () => {
       return {
         fill: isDarkMode 
-            ? 'l(270) 0:#1f1f1f 0.5:#1890ff 1:#1890ff' 
-            : 'l(270) 0:#ffffff 0.5:#7ec2f3 1:#1890ff',
+            ? `l(270) 0:#1f1f1f 0.5:${token.colorPrimary} 1:${token.colorPrimary}` 
+            : `l(270) 0:#ffffff 0.5:${token.colorBorder} 1:${token.colorPrimary}`,
       };
     },
-    color: '#1890ff',
     
-    // 3. X-Axis (Neeche wali dates)
+    // 3. Main Line Color (Yeh sab se zaroori hai)
+    color: token.colorPrimary,
+    
+    // 4. X-Axis (Neeche wali dates)
     xAxis: {
         label: {
             style: {
-                // Agar Dark mode hai to White text, warna Black
-                fill: isDarkMode ? 'rgba(255,255,255,0.85)' : '#000000',
+                fill: isDarkMode ? 'rgba(255,255,255,0.85)' : token.colorText,
             }
         },
         grid: {
             line: {
                 style: {
-                    stroke: isDarkMode ? '#444' : '#eee',
+                    stroke: isDarkMode ? '#444' : token.colorBorder,
                 }
             }
         }
     },
 
-    // 4. Y-Axis (Side wali prices)
+    // 5. Y-Axis (Side wali prices)
     yAxis: {
         label: {
             formatter: (v) => `${v}`,
             style: {
-                // Agar Dark mode hai to White text, warna Black
-                fill: isDarkMode ? 'rgba(255,255,255,0.85)' : '#000000',
+                fill: isDarkMode ? 'rgba(255,255,255,0.85)' : token.colorText,
             }
         },
         grid: {
             line: {
                 style: {
-                    stroke: isDarkMode ? '#444' : '#eee',
+                    stroke: isDarkMode ? '#444' : token.colorBorder,
                 }
             }
         }
     },
 
-    // 5. Tooltip (Jab mouse upar layein)
+    // 6. Tooltip
     tooltip: {
         formatter: (datum) => {
             return { name: 'Sales', value: formatCurrency(datum.amount, profile?.currency) };
         },
-        // Tooltip ka background aur text color set karein
         domStyles: isDarkMode ? {
             'g2-tooltip': { backgroundColor: '#333', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' },
             'g2-tooltip-title': { color: '#fff' },
@@ -326,7 +326,7 @@ const Dashboard = () => {
       <Row gutter={[16, 16]}>
         {/* Card 1: Sales */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
-          <Card ref={refSales} style={{ ...cardStyle, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+          <Card ref={refSales} style={{ ...cardStyle, backgroundColor: token.colorPrimary }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>
                 {timeRange === 'today' ? "Today's Sales" : timeRange === 'week' ? "Weekly Sales" : "Monthly Sales"}
@@ -347,9 +347,7 @@ const Dashboard = () => {
 
         {/* Card: Cash in Hand (Galla) - Fixed Alignment */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
-          <Card 
-            ref={refCash} style={{ ...cardStyle, background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}
-          >
+          <Card ref={refCash} style={{ ...cardStyle, backgroundColor: token.colorInfo }}>
             {/* Floating Buttons - Ab yeh alignment kharab nahi karenge */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Statistic
@@ -396,7 +394,7 @@ const Dashboard = () => {
 
         {/* Card 2: Profit (Updated Layout for Clarity) */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
-          <Card ref={refProfit} style={{ ...cardStyle, background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' }}>
+          <Card ref={refProfit} style={{ ...cardStyle, backgroundColor: '#008080' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Net Profit</span>}
               value={stats?.netProfit || 0}
@@ -438,7 +436,7 @@ const Dashboard = () => {
 
         {/* Card 3: Expenses */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
-          <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #ff9966 0%, #ff5e62 100%)' }}>
+          <Card style={{ ...cardStyle, backgroundColor: '#006666' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Total Expenses</span>}
               value={stats?.totalExpenses || 0}
@@ -481,7 +479,7 @@ const Dashboard = () => {
 
         {/* Card 4: Receivables & Payables (Money In vs Money Out) */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
-          <Card style={{ ...cardStyle, background: 'linear-gradient(135deg, #3a6073 0%, #3a7bd5 100%)' }}>
+          <Card style={{ ...cardStyle, backgroundColor: '#004c4c' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Accounts Receivable</span>}
               value={stats?.totalReceivables || 0}
@@ -530,7 +528,7 @@ const Dashboard = () => {
 >
              <div style={{ height: 265 }}>
    {/* Key lagane se chart force-refresh hoga jab theme badlegi */}
-   <Area {...config} key={isDarkMode ? 'dark-chart' : 'light-chart'} />
+   <Area {...config} key={(isDarkMode ? 'dark-chart' : 'light-chart') + token.colorPrimary} />
 </div>
           </Card>
 
@@ -538,7 +536,7 @@ const Dashboard = () => {
           <Card 
   title="Recent Transactions" 
   // variant="borderless" hata diya
-  style={{ borderRadius: 5, marginTop: 15, border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9' }} // <--- Border add kiya
+  style={{ borderRadius: 5, marginTop: 15, border: isDarkMode ? '1px solid #424242' : `1px solid ${token.colorBorder}` }}
 >
             <Table
               dataSource={stats?.recentSales || []}
@@ -562,11 +560,11 @@ const Dashboard = () => {
                   title: 'Status', 
                   dataIndex: 'payment_status', 
                   key: 'payment_status',
-                  // NAYA: Status Color Logic
+                  // NAYA: Status Color Logic (Control Center se juda hua)
                   render: (status) => {
-                      let color = 'green';
-                      if (status === 'unpaid') color = 'volcano';
-                      if (status === 'partial') color = 'orange';
+                      let color = token.colorSuccess; // Default PAID color
+                      if (status === 'unpaid') color = token.colorError;
+                      if (status === 'partial') color = token.colorWarning;
                       return <Tag color={color}>{status ? status.toUpperCase() : 'PAID'}</Tag>
                   }
                 },
@@ -575,7 +573,7 @@ const Dashboard = () => {
                   dataIndex: 'amount', 
                   key: 'amount',
                   align: 'right',
-                  render: (amount) => <Tag color="blue">{formatCurrency(amount, profile?.currency)}</Tag>
+                  render: (amount) => <Tag color={token.colorPrimary}>{formatCurrency(amount, profile?.currency)}</Tag>
                 },
               ]}
             />
@@ -589,7 +587,7 @@ const Dashboard = () => {
             {/* Low Stock Alert */}
             <Col span={24}>
               <Card 
-                title={<Space><AlertOutlined style={{ color: '#ff4d4f' }} /> Low Stock Alert</Space>} 
+                title={<Space><AlertOutlined style={{ color: token.colorError }} /> Low Stock Alert</Space>} 
                 style={{ borderRadius: 5, border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9' }}
                 styles={{ body: { padding: '0 12px' } }}
                 extra={<Button type="link" onClick={() => navigate('/inventory?low_stock=true')}>View All</Button>}
@@ -604,13 +602,13 @@ const Dashboard = () => {
                           title={item.name}
                           description={<Text type="secondary">Only {item.quantity} left</Text>}
                         />
-                        <Tag color="red">Low</Tag>
+                        <Tag color={token.colorError}>Low</Tag>
                       </List.Item>
                     )}
                     locale={{ emptyText: 'All items are well stocked!' }}
                   />
                 ) : (
-                  <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
+                  <div style={{ textAlign: 'center', padding: '20px', color: token.colorTextSecondary }}>
                     <Text type="secondary">Low Stock Alerts are disabled in Settings.</Text>
                   </div>
                 )}
@@ -620,7 +618,7 @@ const Dashboard = () => {
             {/* Top Selling Products */}
             <Col span={24}>
               <Card 
-  title={<Space><TrophyOutlined style={{ color: '#faad14' }} /> {topSellingFilter === 'qty' ? 'Top Selling' : 'Most Profitable'}</Space>} 
+  title={<Space><TrophyOutlined style={{ color: token.colorWarning }} /> {topSellingFilter === 'qty' ? 'Top Selling' : 'Most Profitable'}</Space>} 
   extra={
     <Radio.Group size="small" value={topSellingFilter} onChange={e => setTopSellingFilter(e.target.value)}>
       <Radio.Button value="qty">Qty</Radio.Button>
@@ -639,7 +637,7 @@ const Dashboard = () => {
   renderItem={(item, index) => (
     <List.Item>
       <List.Item.Meta
-        avatar={<Tag color="gold">#{index + 1}</Tag>}
+        avatar={<Tag color={token.colorWarning}>#{index + 1}</Tag>}
         title={item.name}
       />
       <Text strong>
@@ -655,8 +653,8 @@ const Dashboard = () => {
               </Card>
               <Col span={24} style={{ marginTop: 16 }}>
   <Card 
-    title={<Space><ShoppingOutlined style={{ color: '#1890ff' }} /> Inventory Assets</Space>} 
-    style={{ borderRadius: 5, border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9' }}
+    title={<Space><ShoppingOutlined style={{ color: token.colorPrimary }} /> Inventory Assets</Space>} 
+    style={{ borderRadius: 5, border: isDarkMode ? '1px solid #424242' : `1px solid ${token.colorBorder}` }}
     styles={{ body: { padding: '12px' } }}
   >
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -665,7 +663,7 @@ const Dashboard = () => {
         {formatCurrency(stats?.totalInventoryValue || 0, profile?.currency)}
       </Text>
     </div>
-    <div style={{ marginTop: 8, fontSize: '11px', color: '#8c8c8c', fontStyle: 'italic' }}>
+    <div style={{ marginTop: 8, fontSize: '11px', color: token.colorTextSecondary, fontStyle: 'italic' }}>
       * Based on purchase price of available items.
     </div>
   </Card>

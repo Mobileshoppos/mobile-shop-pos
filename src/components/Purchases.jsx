@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Table, Tag, Typography, Button, App as AntApp, Flex, List, Card, Row, Col } from 'antd';
+import { Table, Tag, Typography, Button, App as AntApp, Flex, List, Card, Row, Col, theme } from 'antd';
 import { FileTextOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import DataService from '../DataService';
@@ -10,16 +10,16 @@ import { formatCurrency } from '../utils/currencyFormatter';
 
 const { Title, Text } = Typography;
 
-const getStatusColor = (status) => {
-    switch (status) {
-        case 'paid': return 'success';
-        case 'partially_paid': return 'warning';
-        case 'unpaid': return 'error';
-        default: return 'default';
-    }
-};
-
 const Purchases = () => {
+    const { token } = theme.useToken(); // Control Center Connection
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'paid': return token.colorSuccess;
+            case 'partially_paid': return token.colorWarning;
+            case 'unpaid': return token.colorError;
+            default: return token.colorTextSecondary;
+        }
+    };
     const { profile } = useAuth();
     const [purchases, setPurchases] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -86,7 +86,7 @@ const Purchases = () => {
         {
             title: 'Balance Due', dataIndex: 'balance_due', key: 'balance_due', align: 'right',
             render: (amount) => (
-    <Text type={amount > 0 ? 'danger' : 'secondary'} strong>
+    <Text style={{ color: amount > 0 ? token.colorError : token.colorTextSecondary }} strong>
         {formatCurrency(amount, profile?.currency)}
     </Text>
 ),
@@ -168,8 +168,8 @@ const Purchases = () => {
                             <Text>{formatCurrency(purchase.total_amount, profile?.currency)}</Text>
                         </Col>
                         <Col style={{ textAlign: 'right' }}>
-                            <Text type="secondary">Balance Due</Text><br />
-                            <Text type={purchase.balance_due > 0 ? 'danger' : 'secondary'} strong>
+                            <Text style={{ color: token.colorTextSecondary }}>Balance Due</Text><br />
+                            <Text style={{ color: purchase.balance_due > 0 ? token.colorError : token.colorTextSecondary }} strong>
     {formatCurrency(purchase.balance_due, profile?.currency)}
 </Text>
                         </Col>

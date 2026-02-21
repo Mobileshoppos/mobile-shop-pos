@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip, Badge, Tag, Checkbox
+  Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip, Badge, Tag, Checkbox, theme
 } from 'antd';
 import { ShoppingCartOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined, WalletOutlined, BankOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
@@ -57,6 +57,7 @@ const formatPriceRange = (min, max, currency) => {
 };
 
 const POS = () => {
+  const { token } = theme.useToken(); // Control Center Connection
   const { isDarkMode } = useTheme();
   const [showFilters, setShowFilters] = useState(false);
   const [priceRange, setPriceRange] = useState([null, null]);
@@ -860,16 +861,16 @@ const POS = () => {
           }
           /* Scrollbar ka peeche ka hissa (Track) */
           ::-webkit-scrollbar-track {
-            background: ${isDarkMode ? '#1f1f1f' : '#f0f0f0'}; 
+            background: ${token.colorBgLayout}; 
           }
           /* Scrollbar ka pakarne wala hissa (Thumb) */
           ::-webkit-scrollbar-thumb {
-            background-color: ${isDarkMode ? '#424242' : '#c1c1c1'};
+            background-color: ${token.colorTextQuaternary};
             border-radius: 4px;
           }
           /* Jab mouse upar layein */
           ::-webkit-scrollbar-thumb:hover {
-            background-color: ${isDarkMode ? '#666' : '#a8a8a8'};
+            background-color: ${token.colorTextTertiary};
           }
         `}
       </style>
@@ -887,7 +888,7 @@ const POS = () => {
               {/* 1. Search & Scan Input */}
               <Input
                 placeholder="Scan Barcode or Search..."
-                prefix={<BarcodeOutlined style={{ color: '#1890ff', fontSize: '18px' }} />}
+                prefix={<BarcodeOutlined style={{ color: token.colorPrimary, fontSize: '18px' }} />}
                 value={searchTerm}
                 onChange={(e) => handleSearch(e.target.value, 'input')}
                 onPressEnter={(e) => handleSearch(e.target.value, 'search')}
@@ -990,9 +991,9 @@ const POS = () => {
                   <Card
                     hoverable
                     style={{ 
-                      border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9', 
+                      border: `1px solid ${token.colorBorder}`, 
                       height: '100%',
-                      background: isDarkMode ? '#1f1f1f' : '#fff'
+                      background: token.colorBgContainer
                     }}
                     styles={{ body: { padding: '12px' } }}
                   >
@@ -1008,17 +1009,17 @@ const POS = () => {
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <Text strong style={{ fontSize: '14px', color: '#52c41a', display: 'block' }}>
+                        <Text strong style={{ fontSize: '14px', color: token.colorSuccess, display: 'block' }}>
                           {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
                         </Text>
                         {/* Main Stock Badge */}
-                        <Tag color={product.quantity > 0 ? "blue" : "red"} style={{ margin: '4px 0 0 0', fontSize: '15px' }}>
+                        <Tag color={product.quantity > 0 ? token.colorPrimary : token.colorError} style={{ margin: '4px 0 0 0', fontSize: '15px' }}>
                            Total: {product.quantity}
                         </Tag>
                       </div>
                     </div>
 
-                    <Divider style={{ margin: '8px 0', borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)' }} />
+                    <Divider style={{ margin: '8px 0', borderColor: token.colorBorderSecondary }} />
 
                     {/* === VARIANTS LIST (Scrollable) === */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '150px', overflowY: 'auto' }} className="hide-scrollbar">
@@ -1026,9 +1027,9 @@ const POS = () => {
                         <div key={index} 
                           style={{ 
                             padding: '6px',
-                            background: isDarkMode ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+                            background: token.colorFillQuaternary,
                             borderRadius: '4px', 
-                            border: isDarkMode ? 'none' : '1px solid rgba(0,0,0,0.05)',
+                            border: 'none',
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                           }}>
                           
@@ -1064,7 +1065,7 @@ const POS = () => {
 
                             <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                               {/* Price */}
-                              <Text strong style={{ color: '#52c41a', fontSize: '13px' }}>
+                              <Text strong style={{ color: token.colorSuccess, fontSize: '13px' }}>
                                  {formatCurrency(variant.sale_price, profile?.currency)}
                               </Text>
                               
@@ -1253,7 +1254,7 @@ const POS = () => {
             )}
             <Row justify="space-between"><Text>Subtotal</Text><Text>{formatCurrency(subtotal, profile?.currency)}</Text></Row>
             {profile?.pos_discount_enabled !== false && (
-            <Row justify="space-between"><Text>Discount</Text><Text style={{ color: '#ff4d4f' }}>- {formatCurrency(discountAmount, profile?.currency)}</Text></Row>
+            <Row justify="space-between"><Text>Discount</Text><Text style={{ color: token.colorError }}>- {formatCurrency(discountAmount, profile?.currency)}</Text></Row>
             )}
             <Divider style={{ margin: '8px 0' }}/>
             <Row justify="space-between" align="middle">

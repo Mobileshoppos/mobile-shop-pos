@@ -9,33 +9,35 @@ import {
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import { theme } from 'antd';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
 
-// 1. Tamam mumkinah shortcuts ka rasta, unke icons aur colors ka map
-const iconConfig = {
-  '/': { title: 'Dashboard', icon: <HomeOutlined />, color: '#1890ff' },
-  '/inventory': { title: 'Inventory', icon: <DatabaseOutlined />, color: '#52c41a' },
-  '/pos': { title: 'Point of Sale', icon: <ShoppingCartOutlined />, color: '#13c2c2' },
-  '/warranty': { title: 'Warranty', icon: <SafetyCertificateOutlined />, color: '#faad14' },
-  '/categories': { title: 'Categories', icon: <TagsOutlined />, color: '#eb2f96' },
-  '/purchases': { title: 'Purchases', icon: <FileTextOutlined />, color: '#722ed1' },
-  '/customers': { title: 'Customers', icon: <UserSwitchOutlined />, color: '#2f54eb' },
-  '/suppliers': { title: 'Suppliers', icon: <ShopOutlined />, color: '#fa8c16' },
-  '/sales-history': { title: 'Sales History', icon: <HistoryOutlined />, color: '#1890ff' },
-  '/expenses': { title: 'Expenses', icon: <DollarCircleOutlined />, color: '#f5222d' },
-  '/damaged-stock': { title: 'Damaged Stock', icon: <AlertOutlined />, color: '#ff4d4f' },
-  '/reports': { title: 'Reports', icon: <PieChartOutlined />, color: '#faad14' },
-  '/settings': { title: 'Settings', icon: <ToolOutlined />, color: '#8c8c8c' },
-};
-
 const FloatingNav = () => {
+  const { token } = theme.useToken(); // Control Center Connection
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [isHovered, setIsHovered] = React.useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { isDarkMode } = useTheme();
   const { profile } = useAuth();
+
+  // 1. Tamam mumkinah shortcuts ka rasta, unke icons aur colors ka map
+  // Ab yeh bahar se andar aa gaya hai taake 'token' ko use kar sake
+  const iconConfig = {
+    '/': { title: 'Dashboard', icon: <HomeOutlined />, color: token.colorPrimary },
+    '/inventory': { title: 'Inventory', icon: <DatabaseOutlined />, color: token.colorSuccess },
+    '/pos': { title: 'Point of Sale', icon: <ShoppingCartOutlined />, color: token.colorInfo },
+    '/warranty': { title: 'Warranty', icon: <SafetyCertificateOutlined />, color: token.colorWarning },
+    '/categories': { title: 'Categories', icon: <TagsOutlined />, color: token.colorPrimary },
+    '/purchases': { title: 'Purchases', icon: <FileTextOutlined />, color: token.colorInfo },
+    '/customers': { title: 'Customers', icon: <UserSwitchOutlined />, color: token.colorPrimary },
+    '/suppliers': { title: 'Suppliers', icon: <ShopOutlined />, color: token.colorWarning },
+    '/sales-history': { title: 'Sales History', icon: <HistoryOutlined />, color: token.colorPrimary },
+    '/expenses': { title: 'Expenses', icon: <DollarCircleOutlined />, color: token.colorError },
+    '/damaged-stock': { title: 'Damaged Stock', icon: <AlertOutlined />, color: token.colorError },
+    '/reports': { title: 'Reports', icon: <PieChartOutlined />, color: token.colorWarning },
+    '/settings': { title: 'Settings', icon: <ToolOutlined />, color: token.colorTextSecondary },
+  };
 
   // Agar mobile screen hai to kuch na dikhao
   if (isMobile) return null;
@@ -62,10 +64,10 @@ const FloatingNav = () => {
       zIndex: 1000,
       padding: '4px 10px',
       borderRadius: '30px',
-      backgroundColor: isDarkMode ? 'rgba(31, 31, 31, 0.85)' : 'rgba(255, 255, 255, 0.85)',
+      backgroundColor: token.colorBgElevated, // Control Center Background
       backdropFilter: 'blur(12px)',
-      boxShadow: isDarkMode ? '0 8px 32px rgba(0,0,0,0.6)' : '0 8px 32px rgba(0,0,0,0.12)',
-      border: isDarkMode ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.06)',
+      boxShadow: token.boxShadowSecondary, // Control Center Shadow
+      border: `1px solid ${token.colorBorderSecondary}`, // Control Center Border
       display: 'flex',
       alignItems: 'center',
       transition: 'all 0.3s ease'
@@ -104,7 +106,7 @@ const FloatingNav = () => {
         <div style={{ 
           width: currentStyle.flexDirection === 'column' ? '20px' : '1px', 
           height: currentStyle.flexDirection === 'column' ? '1px' : '20px', 
-          background: isDarkMode ? '#444' : '#eee', 
+          background: token.colorBorder, 
           margin: '4px auto' 
         }} />
         
@@ -112,7 +114,7 @@ const FloatingNav = () => {
           <Button 
             type="text" 
             shape="circle" 
-            icon={<SettingOutlined style={{ fontSize: '15px', color: '#8c8c8c' }} />} 
+            icon={<SettingOutlined style={{ fontSize: '15px', color: token.colorTextSecondary }} />} 
             // Seedha Settings ke Navigation tab (4) par le jayega
             onClick={() => navigate('/settings?tab=4')} 
           />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Typography, Tag, App, Button, Tooltip, Space } from 'antd';
+import { Card, Table, Typography, Tag, App, Button, Tooltip, Space, theme } from 'antd';
 import { PrinterOutlined, ReloadOutlined, HistoryOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
@@ -13,6 +13,7 @@ import { useSync } from '../context/SyncContext';
 const { Title, Text } = Typography;
 
 const SalesHistory = () => {
+  const { token } = theme.useToken(); // Control Center Connection
   const { profile } = useAuth();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { message } = App.useApp();
@@ -219,11 +220,11 @@ const SalesHistory = () => {
       width: 100,
       align: 'center',
       render: (status, record) => {
-        if (status === 'synced') return <Tag color="green">Synced</Tag>;
-        if (status === 'pending') return <Tag color="orange">Pending</Tag>;
+        if (status === 'synced') return <Tag color={token.colorSuccess}>Synced</Tag>;
+        if (status === 'pending') return <Tag color={token.colorWarning}>Pending</Tag>;
         return (
           <Tooltip title={record.sync_error || "Sync failed"}>
-            <Tag color="red" style={{ cursor: 'help' }}>Error</Tag>
+            <Tag color={token.colorError} style={{ cursor: 'help' }}>Error</Tag>
           </Tooltip>
         );
       }
@@ -267,7 +268,7 @@ const SalesHistory = () => {
   title: 'Method',
   dataIndex: 'payment_method',
   key: 'payment_method',
-  render: (method) => <Tag color={method === 'Bank' ? 'blue' : 'default'}>{method || 'Cash'}</Tag>,
+  render: (method) => <Tag color={method === 'Bank' ? token.colorInfo : 'default'}>{method || 'Cash'}</Tag>,
   width: 100,
 },
     {
@@ -283,7 +284,7 @@ const SalesHistory = () => {
       dataIndex: 'payment_status',
       key: 'payment_status',
       render: (status) => (
-        <Tag color={status === 'Paid' ? 'green' : 'volcano'}>
+        <Tag color={status === 'Paid' ? token.colorSuccess : token.colorError}>
           {status.toUpperCase()}
         </Tag>
       ),

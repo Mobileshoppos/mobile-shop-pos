@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag, Dropdown, Menu, Tooltip, Select
+  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag, Dropdown, Menu, Tooltip, Select, theme
 } from 'antd';
 import { UserSwitchOutlined, UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined, MoreOutlined, EditOutlined, ReloadOutlined, InboxOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
@@ -27,6 +27,7 @@ const countries = [
 ];
 
 const Customers = () => {
+  const { token } = theme.useToken(); // Control Center Connection
   const { message, modal } = AntApp.useApp();
   const [searchParams] = useSearchParams();
   const searchInputRef = useRef(null);
@@ -775,7 +776,7 @@ const handleCloseInvoiceSearchModal = () => {
     { title: 'Customer Name', dataIndex: 'name' },
     { title: 'Phone', dataIndex: 'phone_number' },
     { title: 'Address', dataIndex: 'address', render: (address) => address || <Text type="secondary">N/A</Text> },
-    { title: 'Balance', dataIndex: 'balance', align: 'right', render: (b) => <Text type={b > 0 ? 'danger' : 'success'}>{formatCurrency(b, profile?.currency)}</Text> },
+    { title: 'Balance', dataIndex: 'balance', align: 'right', render: (b) => <Text style={{ color: b > 0 ? token.colorError : token.colorSuccess }}>{formatCurrency(b, profile?.currency)}</Text> },
     // Is hisse ko dhoond kar replace karein
     { 
       title: 'Actions', 
@@ -893,7 +894,7 @@ const handleCloseInvoiceSearchModal = () => {
                       
                       {item.all_imeis.length > 0 && (
                           <div style={{ marginTop: '6px' }}>
-                              <Text strong style={{ fontSize: '12px', color: '#1890ff' }}>IMEIs: </Text>
+                              <Text strong style={{ fontSize: '12px', color: token.colorPrimary }}>IMEIs: </Text>
                               {item.all_imeis.map(imei => (
                                   <Text code key={imei} style={{ fontSize: '12px', marginRight: '6px', display: 'inline-block', marginBottom: '4px' }}>
                                       {imei}
@@ -923,7 +924,7 @@ const handleCloseInvoiceSearchModal = () => {
                     String(rh.sale_id) === String(record.details.id)
                 )
                 .reduce((sum, r) => sum + (r.quantity || 0), 0);
-            return retQty > 0 ? <Text type="danger">{retQty}</Text> : '0';
+            return retQty > 0 ? <Text style={{ color: token.colorError }}>{retQty}</Text> : '0';
           }
         },
         { title: 'Price', dataIndex: 'price_at_sale', align: 'right', render: p => formatCurrency(p, profile?.currency) },
@@ -1000,7 +1001,7 @@ const handleCloseInvoiceSearchModal = () => {
             )}
 
             <Descriptions.Item label="Cash Refunded to Customer">
-              <Text strong style={{ color: '#52c41a' }}>
+              <Text strong style={{ color: token.colorSuccess }}>
                 {formatCurrency(cashRefunded, profile?.currency)}
               </Text>
             </Descriptions.Item>
@@ -1301,7 +1302,7 @@ const handleCloseInvoiceSearchModal = () => {
         { 
             title: 'Sold Qty', 
             dataIndex: 'quantity', 
-            render: (q, record) => <Tag color="orange">{record.imei ? '1 Unit' : `${q} Sold`}</Tag> 
+            render: (q, record) => <Tag color={token.colorWarning}>{record.imei ? '1 Unit' : `${q} Sold`}</Tag> 
         },
         {
             title: 'Return Qty',
@@ -1390,7 +1391,7 @@ const handleCloseInvoiceSearchModal = () => {
        <Text type="danger">-{formatCurrency(Math.min(totalRefundAmount, debtOnInvoice), profile?.currency)}</Text>
      </Descriptions.Item>
      <Descriptions.Item label="Available for Cash Refund">
-       <Title level={4} style={{margin:0, color: '#52c41a'}}>
+       <Title level={4} style={{margin:0, color: token.colorSuccess}}>
          {formatCurrency(maxCashRefundable, profile?.currency)}
        </Title>
      </Descriptions.Item>

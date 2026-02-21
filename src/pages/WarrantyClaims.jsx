@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Input, Card, Row, Col, Button, Table, Tag, Space, App, Empty, Descriptions, Divider, Modal, Form, Select, Alert, List } from 'antd';
+import { Typography, Input, Card, Row, Col, Button, Table, Tag, Space, App, Empty, Descriptions, Divider, Modal, Form, Select, Alert, List, theme } from 'antd';
 import { SearchOutlined, SafetyCertificateOutlined, ToolOutlined, HistoryOutlined, DeleteOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,7 @@ import dayjs from 'dayjs';
 const { Title, Text } = Typography;
 
 const WarrantyClaims = () => {
+    const { token } = theme.useToken(); // Control Center Connection
     const isMobile = useMediaQuery('(max-width: 768px)');
     const { message, modal } = App.useApp();
     const { user, profile } = useAuth();
@@ -131,9 +132,9 @@ const WarrantyClaims = () => {
                                                 <Text strong>{lookupResult.supplier?.name || 'N/A'}</Text>
                                             </Descriptions.Item>
                                             <Descriptions.Item label="Pur. Invoice #">
-                                                <Tag color="cyan">{lookupResult.item?.purchase_id || lookupResult.inventory?.purchase_id || 'N/A'}</Tag>
+                                                <Tag color={token.colorInfo}>{lookupResult.item?.purchase_id || lookupResult.inventory?.purchase_id || 'N/A'}</Tag>
                                             </Descriptions.Item>
-                                            <Descriptions.Item label="Sold On">{lookupResult.saleDetails ? dayjs(lookupResult.saleDetails.created_at).format('DD-MMM-YYYY') : <Tag color="blue">In Stock</Tag>}</Descriptions.Item>
+                                            <Descriptions.Item label="Sold On">{lookupResult.saleDetails ? dayjs(lookupResult.saleDetails.created_at).format('DD-MMM-YYYY') : <Tag color={token.colorPrimary}>In Stock</Tag>}</Descriptions.Item>
                                         </Descriptions>
                                         
                                         <Divider style={{margin: '12px 0'}} />
@@ -153,7 +154,7 @@ const WarrantyClaims = () => {
                                                 <Card size="small" title="Customer Warranty">
                                                     {lookupResult.saleItem?.warranty_expiry ? (
                                                         <>
-                                                            <Text strong style={{color: '#52c41a'}}>{calculateRemainingDays(lookupResult.saleItem.warranty_expiry)} Days Left</Text><br/>
+                                                            <Text strong style={{color: token.colorSuccess}}>{calculateRemainingDays(lookupResult.saleItem.warranty_expiry)} Days Left</Text><br/>
                                                             <Text type="secondary" style={{fontSize: '10px'}}>Till: {dayjs(lookupResult.saleItem.warranty_expiry).format('DD-MMM-YYYY')}</Text>
                                                         </>
                                                     ) : <Text type="secondary">No Warranty</Text>}
@@ -197,7 +198,7 @@ const WarrantyClaims = () => {
                                                 if (!hasWarranty) {
                                                     actionButton = <Tag color="default">No Warranty</Tag>;
                                                 } else if (isExpired) {
-                                                    actionButton = <Tag color="error">Expired</Tag>;
+                                                    actionButton = <Tag color={token.colorError}>Expired</Tag>;
                                                 } else {
                                                     // Sirf Valid Warranty par Claim button dikhayein
                                                     actionButton = (
@@ -274,7 +275,7 @@ const WarrantyClaims = () => {
                                     dataIndex: 'status',
                                     render: (status, record) => (
                                         <Space direction="vertical" size={4}>
-                                            <Tag color={status.includes('Supplier') ? 'orange' : 'blue'} style={{ margin: 0, fontSize: '10px' }}>
+                                            <Tag color={status.includes('Supplier') ? token.colorWarning : token.colorPrimary} style={{ margin: 0, fontSize: '10px' }}>
                                                 {status}
                                             </Tag>
                                             <Select 

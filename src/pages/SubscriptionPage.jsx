@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Row, Col, Typography, Button, List, Tag, Modal, Steps, Divider, Tooltip, Radio } from 'antd';
+import { Card, Row, Col, Typography, Button, List, Tag, Modal, Steps, Divider, Tooltip, Radio, theme } from 'antd';
 import { CheckCircleOutlined, RocketOutlined, BankOutlined, WhatsAppOutlined, InfoCircleOutlined, CreditCardOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -7,6 +7,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery';
 const { Title, Text, Paragraph } = Typography;
 
 const SubscriptionPage = () => {
+  const { token } = theme.useToken(); // Control Center Connection
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { profile, isPro } = useAuth();
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -47,11 +48,11 @@ const SubscriptionPage = () => {
             variant="borderless" 
             style={{ 
               boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
-              border: `2px solid ${isPro ? '#fadb14' : '#1890ff'}` 
+              border: `2px solid ${isPro ? token.colorWarning : token.colorPrimary}` 
             }}
           >
             <Tag 
-              color={isPro ? 'gold' : 'blue'} 
+              color={isPro ? token.colorWarning : token.colorPrimary} 
               style={{ fontSize: '1.2rem', padding: '8px 16px', marginBottom: '20px' }}
             >
               {isPro ? 'PRO PLAN' : 'FREE PLAN'}
@@ -82,7 +83,7 @@ const SubscriptionPage = () => {
               dataSource={isPro ? proFeatures : freeFeatures}
               renderItem={(item) => (
                 <List.Item style={{ border: 'none', padding: '4px 0' }}>
-                  <CheckCircleOutlined style={{ color: '#52c41a', marginRight: '10px' }} /> {item}
+                  <CheckCircleOutlined style={{ color: token.colorSuccess, marginRight: '10px' }} /> {item}
                 </List.Item>
               )}
             />

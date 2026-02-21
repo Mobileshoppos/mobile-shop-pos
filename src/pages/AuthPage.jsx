@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout, Modal, Space, Divider, Checkbox } from 'antd';
+import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout, Modal, Space, Divider, Checkbox, theme } from 'antd';
 import { LockOutlined, MailOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
@@ -8,6 +8,7 @@ const { Title } = Typography;
 const { Content } = Layout;
 
 const AuthPage = () => {
+  const { token } = theme.useToken(); // Control Center Connection
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { message } = AntApp.useApp();
   const [loading, setLoading] = useState(false);
@@ -119,7 +120,7 @@ const AuthPage = () => {
         <Card style={{ width: 400, maxWidth: '100%' }}>
           {/* --- TABDEELI: Title se hardcoded color hata diya hai --- */}
           <Title level={3} style={{ textAlign: 'center' }}>
-            <AppstoreOutlined style={{ marginRight: '8px', color: '#1890ff' }} /> SadaPos
+            <AppstoreOutlined style={{ marginRight: '8px', color: token.colorPrimary }} /> SadaPos
           </Title>
           <Tabs defaultActiveKey="1" centered>
             <Tabs.TabPane tab="Login" key="1">{loginForm}</Tabs.TabPane>
@@ -128,13 +129,13 @@ const AuthPage = () => {
           <Divider style={{ margin: '12px 0' }} />
           <div style={{ textAlign: 'center' }}>
             <Space size="small" split={<Divider type="vertical" />}>
-              <Typography.Link href="https://www.sadapos.com/p/privacy-policy.html" target="_blank" style={{ fontSize: '12px', color: '#8c8c8c' }}>
+              <Typography.Link href="https://www.sadapos.com/p/privacy-policy.html" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
                 Privacy
               </Typography.Link>
-              <Typography.Link href="https://www.sadapos.com/p/terms-of-service.html" target="_blank" style={{ fontSize: '12px', color: '#8c8c8c' }}>
+              <Typography.Link href="https://www.sadapos.com/p/terms-of-service.html" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
                 Terms
               </Typography.Link>
-              <Typography.Link href="https://www.sadapos.com/p/refund-policy.html" target="_blank" style={{ fontSize: '12px', color: '#8c8c8c' }}>
+              <Typography.Link href="https://www.sadapos.com/p/refund-policy.html" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
                 Refund
               </Typography.Link>
             </Space>

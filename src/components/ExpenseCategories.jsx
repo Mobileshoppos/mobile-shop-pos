@@ -9,7 +9,8 @@ import {
   App as AntApp,
   Space,
   Popconfirm,
-  Tooltip
+  Tooltip,
+  theme
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, FileProtectOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
@@ -20,6 +21,7 @@ import { db } from '../db'; // Database ko import kiya
 const { Title } = Typography;
 
 const ExpenseCategories = () => {
+  const { token } = theme.useToken(); // Control Center Connection
   const { message } = AntApp.useApp();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { user } = useAuth();

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Typography, Table, Button, Modal, Form, Input, App as AntApp,
-  Space, Popconfirm, Tooltip, Row, Col, Card, Empty, Select, Switch, Tag
+  Space, Popconfirm, Tooltip, Row, Col, Card, Empty, Select, Switch, Tag, theme
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, MobileOutlined, TagsOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
@@ -14,6 +14,7 @@ const { Title, Text } = Typography;
 const { Option } = Select;
 
 const Categories = () => {
+  const { token } = theme.useToken(); // Control Center Connection
   const { message } = AntApp.useApp();
   const isMobile = useMediaQuery('(max-width: 992px)');
   const { user } = useAuth();
@@ -172,8 +173,8 @@ const Categories = () => {
     { 
       title: 'Stock Type', dataIndex: 'is_imei_based', key: 'is_imei_based', align: 'center',
       render: (is_imei_based) => is_imei_based 
-        ? <Tag icon={<MobileOutlined />} color="cyan">Per-Item</Tag> 
-        : <Tag icon={<TagsOutlined />} color="geekblue">Quantity</Tag>
+        ? <Tag icon={<MobileOutlined />} color={token.colorInfo}>Per-Item</Tag> 
+        : <Tag icon={<TagsOutlined />} color={token.colorPrimary}>Quantity</Tag>
     },
     {
       title: 'Actions', key: 'actions', width: 120, align: 'center',
@@ -193,7 +194,7 @@ const Categories = () => {
   const attributeColumns = [
     { title: 'Attribute Name', dataIndex: 'attribute_name', key: 'attribute_name' },
     { title: 'Type', dataIndex: 'attribute_type', key: 'attribute_type', render: type => <Tag>{type.toUpperCase()}</Tag> },
-    { title: 'Required', dataIndex: 'is_required', key: 'is_required', render: req => req ? <Tag color="green">Yes</Tag> : <Tag>No</Tag> },
+    { title: 'Required', dataIndex: 'is_required', key: 'is_required', render: req => req ? <Tag color={token.colorSuccess}>Yes</Tag> : <Tag>No</Tag> },
     {
         title: 'Actions', key: 'actions', width: 120, align: 'center',
         render: (_, record) => (
@@ -233,7 +234,7 @@ const Categories = () => {
             {selectedCategory ? (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <Title level={4} style={{ margin: 0 }}>Attributes for: <Text type="success">{selectedCategory.name}</Text></Title>
+                    <Title level={4} style={{ margin: 0 }}>Attributes for: <Text style={{ color: token.colorSuccess }}>{selectedCategory.name}</Text></Title>
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => showAttributeModal()}>Add New</Button>
                 </div>
                 <Table columns={attributeColumns} dataSource={attributes} loading={loadingAttributes} rowKey="id" size="small" pagination={false} scroll={{ x: true }} />

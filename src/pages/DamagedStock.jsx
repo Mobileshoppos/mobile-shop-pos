@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Typography, Table, Card, Tag, App, Button, Space, Row, Col, Statistic, Input, DatePicker, Popconfirm } from 'antd';
+import { Typography, Table, Card, Tag, App, Button, Space, Row, Col, Statistic, Input, DatePicker, Popconfirm, theme } from 'antd';
 import { AlertOutlined, ReloadOutlined, SearchOutlined, RollbackOutlined, PrinterOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +12,7 @@ const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
 const DamagedStock = () => {
+    const { token } = theme.useToken(); // Control Center Connection
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchText, setSearchText] = useState('');
@@ -86,9 +87,9 @@ const DamagedStock = () => {
         { 
             title: 'Supplier', 
             dataIndex: 'supplier_name', 
-            render: name => <Tag color="blue">{name}</Tag>
+            render: name => <Tag color={token.colorInfo}>{name}</Tag>
         },
-        { title: 'Qty', dataIndex: 'damaged_qty', align: 'center', render: q => <Text strong type="danger">{q}</Text> },
+        { title: 'Qty', dataIndex: 'damaged_qty', align: 'center', render: q => <Text strong style={{ color: token.colorError }}>{q}</Text> },
         { 
             title: 'Loss (Cost)', 
             dataIndex: 'total_loss', 
@@ -118,7 +119,7 @@ const DamagedStock = () => {
                 <Col>
                     {isMobile && (
                         <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
-                            <AlertOutlined style={{color: 'red'}} /> Damaged Stock Report
+                            <AlertOutlined style={{color: token.colorError}} /> Damaged Stock Report
                         </Title>
                     )}
                 </Col>
@@ -137,12 +138,12 @@ const DamagedStock = () => {
 
             <Row gutter={16} style={{ marginBottom: '24px' }}>
                 <Col xs={24} sm={8}>
-                    <Card size="small" style={{borderLeft: '4px solid #091119ff'}}>
+                    <Card size="small" style={{borderLeft: `4px solid ${token.colorPrimary}`}}>
                         <Statistic title="Total Damaged Units" value={totalQty} />
                     </Card>
                 </Col>
                 <Col span={8}>
-                    <Card size="small" style={{borderLeft: '4px solid #ff4d4f'}}>
+                    <Card size="small" style={{borderLeft: `4px solid ${token.colorError}`}}>
                         <Statistic 
     title="Total Loss (Cost Value)" 
     value={totalLoss} 
@@ -151,7 +152,7 @@ const DamagedStock = () => {
                     </Card>
                 </Col>
                 <Col span={8}>
-                    <Card size="small" style={{borderLeft: '4px solid #52c41a'}}>
+                    <Card size="small" style={{borderLeft: `4px solid ${token.colorSuccess}`}}>
                         <Statistic title="Records Found" value={filteredData.length} />
                     </Card>
                 </Col>

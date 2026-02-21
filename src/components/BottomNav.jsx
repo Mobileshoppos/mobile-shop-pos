@@ -52,15 +52,15 @@ const BottomNav = ({ setCollapsed }) => {
     left: 0,
     right: 0,
     height: '50px', // Height mazeed kam kar di (Labels hatne ki wajah se)
-    backgroundColor: `${token.colorBgContainer}b3`,
-    backdropFilter: 'blur(1px)',
-    WebkitBackdropFilter: 'blur(1px)',
+    backgroundColor: token.colorBgContainer, // Control Center ka background
+    backdropFilter: 'blur(4px)',
+    WebkitBackdropFilter: 'blur(4px)',
     display: 'flex',
     justifyContent: 'space-around',
     alignItems: 'center',
-    borderTop: `1px solid ${token.colorBorderSecondary}`,
+    borderTop: `1px solid ${token.colorBorder}`, // Control Center ka border
     zIndex: 1000,
-    boxShadow: '0 -4px 15px rgba(0,0,0,0.1)',
+    boxShadow: token.boxShadowSecondary, // Control Center ki shadow
     transition: 'bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
     paddingBottom: 'env(safe-area-inset-bottom)',
   };

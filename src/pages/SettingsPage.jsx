@@ -1,7 +1,7 @@
 import React from 'react';
 import { useSearchParams } from 'react-router-dom'; 
 import { useState, useEffect } from 'react';
-import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio, Switch, Input } from 'antd';
+import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio, Switch, Input, theme } from 'antd';
 import { ToolOutlined } from '@ant-design/icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -19,6 +19,7 @@ const { TextArea } = Input;
 const DEFAULT_POLICY = "No return or exchange after 7 days.\nWarranty claim directly from service center.\nNo warranty for burnt/damaged items.";
 
 const SettingsPage = () => {
+  const { token } = theme.useToken(); // Control Center Connection
   const [searchParams, setSearchParams] = useSearchParams(); 
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { message } = App.useApp();
@@ -34,7 +35,7 @@ const SettingsPage = () => {
   }, [searchParams]);
   
   const [selectedCurrency, setSelectedCurrency] = useState('PKR');
-  const [themeMode, setThemeMode] = useState('dark');
+  const [themeMode, setThemeMode] = useState('light');
   const [isSaving, setIsSaving] = useState(false);
   const [receiptFormat, setReceiptFormat] = useState('pdf');
   const [lowStockAlerts, setLowStockAlerts] = useState(true);
@@ -180,7 +181,7 @@ const SettingsPage = () => {
     <div style={{ padding: isMobile ? '12px 4px' : '4px' }}>
       {isMobile && (
         <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
-          <ToolOutlined /> App Settings
+          <ToolOutlined style={{ color: token.colorPrimary }} /> App Settings
         </Title>
       )}
       <Text type="secondary">Change the look and feel of your application here.</Text>
@@ -314,7 +315,7 @@ const SettingsPage = () => {
                   <Divider />
                   <Row align="middle" gutter={[16, 16]}>
                     <Col xs={24} sm={6}>
-                      <Text strong>Primary Color</Text>
+                      <Text strong style={{ color: token.colorPrimary }}>Primary Color</Text>
                       <Text type="secondary" style={{ display: 'block' }}>Mode: {isDarkMode ? 'Dark' : 'Light'}</Text>
                     </Col>
                     <Col xs={24} sm={18}><ColorPicker showText value={currentPrimaryColor} onChangeComplete={handleColorChange} /></Col>
@@ -322,7 +323,7 @@ const SettingsPage = () => {
                   <Divider />
                   <Row align="middle" gutter={[16, 16]}>
                     <Col xs={24} sm={6}>
-                      <Text strong>Container Background</Text>
+                      <Text strong style={{ color: token.colorText }}>Container Background</Text>
                       <Text type="secondary" style={{ display: 'block' }}>Affects cards, tables, etc.</Text>
                     </Col>
                     <Col xs={24} sm={18}><ColorPicker showText value={currentBgContainerColor} onChangeComplete={handleBgContainerColorChange} /></Col>
@@ -330,7 +331,7 @@ const SettingsPage = () => {
                   <Divider />
                   <Row align="middle" gutter={[16, 16]}>
                     <Col xs={24} sm={6}>
-                      <Text strong>Container Border Radius</Text>
+                      <Text strong style={{ color: token.colorText }}>Container Border Radius</Text>
                       <Text type="secondary" style={{ display: 'block' }}>Affects cards, inputs, etc.</Text>
                     </Col>
                     <Col xs={16} sm={12}><Slider min={0} max={24} step={1} onChange={handleBorderRadiusChange} value={themeConfig.token.borderRadiusLG} /></Col>
@@ -448,7 +449,7 @@ const SettingsPage = () => {
                 JSON.stringify(mobileNavItems) === JSON.stringify(profile.mobile_nav_items) &&
                 JSON.stringify(desktopNavItems) === JSON.stringify(profile.desktop_nav_items) &&
                 desktopNavPosition === (profile.desktop_nav_position || 'bottom') &&
-                themeMode === (profile.theme_mode || 'dark')
+                themeMode === (profile.theme_mode || 'light')
               )}
             >
               Save All Settings

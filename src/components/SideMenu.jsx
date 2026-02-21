@@ -1,5 +1,5 @@
 import React, { useState } from 'react'; // useState add kiya hai
-import { Layout, Menu, Switch } from 'antd';
+import { Layout, Menu, Switch, ConfigProvider } from 'antd'; // ConfigProvider add kiya
 import { Link, useLocation } from 'react-router-dom';
 import { 
   HomeOutlined, 
@@ -26,6 +26,7 @@ import {
   MenuUnfoldOutlined,
   MenuFoldOutlined
 } from '@ant-design/icons';
+import { theme } from 'antd'; // Control Center connection
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
@@ -102,6 +103,7 @@ const menuItems = [
 const rootSubmenuKeys = ['products', 'people', 'finance', 'settings_group'];
 
 const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
+  const { token } = theme.useToken(); // Control Center se colors mangwaye
   const location = useLocation();
   const { profile } = useAuth();
   
@@ -167,6 +169,7 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
+    background: token.colorSiderBg,
     ...(isMobile && {
         position: 'fixed',
         height: '100vh',
@@ -177,7 +180,7 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
   return (
     <Sider 
         collapsedWidth={isMobile ? "0" : "80"}
-        theme="dark"
+        theme="light"
         collapsible
         collapsed={collapsed}
         onCollapse={(value) => setCollapsed(value)}
@@ -188,8 +191,8 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
             {/* Logo Area */}
             <div style={{ 
                 height: '32px', 
-                margin: '20px', 
-                background: 'rgba(255, 255, 255, 0.2)', 
+                margin: '16px', 
+                background: token.colorPrimary, // Logo ka background ab Deep Teal (Brand Color) hoga
                 borderRadius: '6px',
                 display: 'flex',
                 alignItems: 'center',
@@ -204,21 +207,35 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
                 {collapsed ? 'SP' : 'SadaPos'}
             </div>
             
-            <Menu 
-              theme="dark" 
-              mode="inline" 
-              selectedKeys={[location.pathname]} 
-              
-              // YEH DO LINES NAYI HAIN (Jo magic karengi)
-              openKeys={openKeys} 
-              onOpenChange={onOpenChange}
+            <ConfigProvider
+              theme={{
+                components: {
+                  Menu: {
+                    itemBg: 'transparent',              // Background transparent taake Sider ka rang nazar aaye
+                    itemColor: token.colorMenuText,     // Text color
+                    itemSelectedBg: token.colorMenuSelectedBg,   // Selected Background
+                    itemSelectedColor: token.colorMenuSelectedText, // Selected Text
+                    itemHoverBg: token.colorMenuHoverBg,         // Hover Background
+                    itemHoverColor: token.colorMenuSelectedText, // Hover Text
+                  }
+                }
+              }}
+            >
+              <Menu 
+                mode="inline" 
+                selectedKeys={[location.pathname]} 
+                
+                // YEH DO LINES NAYI HAIN (Jo magic karengi)
+                openKeys={openKeys} 
+                onOpenChange={onOpenChange}
 
-              items={menuItemsWithLogout} 
-              style={{ 
-                background: 'transparent',
-                borderRight: 0
-              }} 
-            />
+                items={menuItemsWithLogout} 
+                style={{ 
+                  background: 'transparent',
+                  borderRight: 0
+                }} 
+              />
+            </ConfigProvider>
         </div>
       </Sider>
   );

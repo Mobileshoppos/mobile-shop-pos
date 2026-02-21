@@ -76,17 +76,17 @@ const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
     border: 'none',
     transition: 'all 0.2s ease-in-out',
     backgroundColor: token.colorPrimary,
-    color: token.colorTextLightSolid,
+    color: token.colorHeaderTextLightSolid,
   };
 return (
     <>
       <Header style={{ 
   padding: '0 28px', 
-  background: 'none', 
-  height: '50px', 
-  lineHeight: '50px', 
+  background: token.colorHeaderBg, 
+  height: '64px', // Height barha di
+  lineHeight: '64px', // Line height barha di
   marginTop: 0, 
-  borderBottom: `1px solid ${token.colorBorderSecondary}`,
+  borderBottom: `1px solid ${token.colorBorder}`,
   marginBottom: '10px'
 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '100%' }}>
@@ -98,7 +98,7 @@ return (
     type="text"
     icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
     onClick={() => setCollapsed(!collapsed)}
-    style={{ fontSize: '18px', width: 32, height: 32, color: token.colorText, marginRight: '8px' }}
+    style={{ fontSize: '18px', width: 32, height: 32, color: token.colorHeaderText, marginRight: '8px' }}
   />
 )}
 
@@ -130,8 +130,8 @@ return (
                     onClick={stuckCount > 0 ? showSyncCenter : null}
                     style={{
                       width: '14px', height: '14px', borderRadius: '50%',
-                      background: stuckCount > 0 ? '#ff4d4f' : 'rgba(100,100,100,0.2)', 
-                      boxShadow: stuckCount > 0 ? '0 0 8px #ff4d4f' : 'none',
+                      background: stuckCount > 0 ? token.colorError : token.colorFillSecondary, 
+                      boxShadow: stuckCount > 0 ? `0 0 8px ${token.colorError}` : 'none',
                       cursor: stuckCount > 0 ? 'pointer' : 'default',
                       transition: 'all 0.3s',
                       animation: stuckCount > 0 ? 'blink-red 1s infinite' : 'none'
@@ -147,7 +147,7 @@ return (
                 }>
                   <div style={{
                     width: '14px', height: '14px', borderRadius: '50%',
-                    background: pendingCount > 0 ? '#faad14' : (stuckCount > 0 ? 'rgba(250, 173, 20, 0.5)' : 'rgba(100,100,100,0.2)'),
+                    background: pendingCount > 0 ? token.colorWarning : (stuckCount > 0 ? token.colorWarning : token.colorFillSecondary),
                     animation: pendingCount > 0 ? 'pulse-yellow 1.5s infinite' : 'none',
                     transition: 'all 0.3s'
                   }} />
@@ -162,9 +162,9 @@ return (
                   <div style={{
                     width: '14px', height: '14px', borderRadius: '50%',
                     // Green light hamesha jalegi (Online hone ki nishani), lekin glow tab karegi jab sab perfect ho
-                    background: '#52c41a',
+                    background: token.colorSuccess,
                     opacity: (pendingCount === 0 && stuckCount === 0) ? 1 : 0.6,
-                    boxShadow: (pendingCount === 0 && stuckCount === 0) ? '0 0 8px #52c41a' : 'none',
+                    boxShadow: (pendingCount === 0 && stuckCount === 0) ? `0 0 8px ${token.colorSuccess}` : 'none',
                     transition: 'all 0.3s'
                   }} />
                 </Tooltip>
@@ -173,87 +173,87 @@ return (
               {!isMobile && (
                 <>
                   {location.pathname === '/pos' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <ShoppingCartOutlined style={{ marginRight: '8px' }} /> Point of Sale
                      </span>
                   )}
                   {location.pathname === '/' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <HomeOutlined style={{ marginRight: '8px' }} /> Dashboard
                      </span>
                   )}
                   {location.pathname === '/inventory' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <DatabaseOutlined style={{ marginRight: '8px' }} /> Inventory
                      </span>
                   )}
                   {location.pathname === '/warranty' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <SafetyCertificateOutlined style={{ marginRight: '8px' }} /> Warranty & Claims
                      </span>
                   )}
                   {location.pathname === '/categories' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <TagsOutlined style={{ marginRight: '8px' }} /> Categories & Attributes
                      </span>
                   )}
                   {location.pathname === '/purchases' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <FileTextOutlined style={{ marginRight: '8px' }} /> Purchase History
                      </span>
                   )}
                   {location.pathname === '/customers' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <UserSwitchOutlined style={{ marginRight: '8px' }} /> Customer Management
                      </span>
                   )}
                   {location.pathname === '/suppliers' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <ShopOutlined style={{ marginRight: '8px' }} /> Suppliers Dashboard
                      </span>
                   )}
                   {location.pathname === '/sales-history' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <HistoryOutlined style={{ marginRight: '8px' }} /> Sales History
                      </span>
                   )}
                   {location.pathname === '/expenses' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <DollarCircleOutlined style={{ marginRight: '8px' }} /> Manage Expenses
                      </span>
                   )}
                   {location.pathname === '/expense-categories' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <FileProtectOutlined style={{ marginRight: '8px' }} /> Expense Categories
                      </span>
                   )}
                   {location.pathname === '/damaged-stock' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <AlertOutlined style={{ marginRight: '8px' }} /> Damaged Stock
                      </span>
                   )}
                   {location.pathname === '/profile' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <ProfileOutlined style={{ marginRight: '8px' }} /> Profile
                      </span>
                   )}
                   {location.pathname === '/subscription' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <CreditCardOutlined style={{ marginRight: '8px' }} /> Manage Your Subscription
                      </span>
                   )}
                   {location.pathname === '/settings' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <ToolOutlined style={{ marginRight: '8px' }} /> App Settings
                      </span>
                   )}
                   {location.pathname.startsWith('/purchases/') && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <FileTextOutlined style={{ marginRight: '8px' }} /> Purchase Details
                      </span>
                   )}
                   {location.pathname === '/reports' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <PieChartOutlined style={{ marginRight: '8px' }} /> Reports
                      </span>
                   )}
@@ -269,7 +269,7 @@ return (
                 ghost={isPro}
                 icon={isPro ? <CrownOutlined /> : null}
                 onClick={() => navigate('/subscription')}
-                style={!isPro && stockCount >= 45 && stockCount < 50 ? { borderColor: '#faad14', color: '#faad14' } : {}}
+                style={!isPro && stockCount >= 45 && stockCount < 50 ? { borderColor: token.colorWarning, color: token.colorWarning } : {}}
                 danger={!isPro && stockCount >= 50}
                 size="small"
               >
@@ -312,7 +312,7 @@ return (
     </Space>
   }
   description={
-    <div style={{ color: 'red', fontSize: '11px', marginTop: '4px' }}>
+    <div style={{ color: token.colorError, fontSize: '11px', marginTop: '4px' }}>
       Error: {item.last_error || 'Connection failed or server busy'}
     </div>
   }

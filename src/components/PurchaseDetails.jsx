@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input, Space, Popconfirm, Radio, Checkbox } from 'antd';
+import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input, Space, Popconfirm, Radio, Checkbox, theme } from 'antd';
 import { FileTextOutlined, ArrowLeftOutlined, DollarCircleOutlined, EditOutlined, RollbackOutlined, DeleteOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
@@ -14,16 +14,16 @@ import AddPurchaseForm from '../components/AddPurchaseForm';
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-const getStatusColor = (status) => {
-    switch (status) {
-        case 'paid': return 'success';
-        case 'partially_paid': return 'warning';
-        case 'unpaid': return 'error';
-        default: return 'default';
-    }
-};
-
 const PurchaseDetails = () => {
+    const { token } = theme.useToken(); // Control Center Connection
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'paid': return token.colorSuccess;
+            case 'partially_paid': return token.colorWarning;
+            case 'unpaid': return token.colorError;
+            default: return token.colorTextSecondary;
+        }
+    };
     const { profile } = useAuth();
     const { processSyncQueue, isSyncing } = useSync();
     const { id } = useParams();
@@ -114,13 +114,13 @@ const PurchaseDetails = () => {
                     <Text>{text}</Text>
                     {/* Agar item Sold hai */}
                     {record.status && record.status.toLowerCase() === 'sold' && (
-                        <Tag color="red" style={{ fontSize: '10px', marginTop: '4px' }}>
+                        <Tag color={token.colorError} style={{ fontSize: '10px', marginTop: '4px' }}>
                             Sold - Cannot Return
                         </Tag>
                     )}
                     {/* Agar item Returned hai */}
                     {record.status && record.status.toLowerCase() === 'returned' && (
-                        <Tag color="orange" style={{ fontSize: '10px', marginTop: '4px' }}>
+                        <Tag color={token.colorWarning} style={{ fontSize: '10px', marginTop: '4px' }}>
                             Returned
                         </Tag>
                     )}
@@ -220,13 +220,13 @@ const showEditModal = () => {
         <Statistic title="Total Amount" value={purchase.total_amount} formatter={() => formatCurrency(purchase.total_amount, profile?.currency)} />
     </Col>
     <Col span={isMobile ? 24 : 5} style={{ marginBottom: isMobile ? '16px' : '0' }}>
-        <Statistic title="Amount Paid" value={purchase.amount_paid} valueStyle={{ color: '#52c41a' }} formatter={() => formatCurrency(purchase.amount_paid, profile?.currency)} />
+        <Statistic title="Amount Paid" value={purchase.amount_paid} valueStyle={{ color: token.colorSuccess }} formatter={() => formatCurrency(purchase.amount_paid, profile?.currency)} />
     </Col>
     <Col span={isMobile ? 24 : 6}>
-        <Statistic title="Balance Due" value={purchase.balance_due} valueStyle={{ color: '#cf1322' }} formatter={() => formatCurrency(purchase.balance_due, profile?.currency)} />
+        <Statistic title="Balance Due" value={purchase.balance_due} valueStyle={{ color: token.colorError }} formatter={() => formatCurrency(purchase.balance_due, profile?.currency)} />
     </Col>
 </Row>
-                {purchase.notes && ( <div style={{ marginTop: '24px', padding: '12px', background: '#2c2c2c', borderRadius: '6px' }}><Text strong>Notes:</Text><br /><Text type="secondary">{purchase.notes}</Text></div> )}
+                {purchase.notes && ( <div style={{ marginTop: '24px', padding: '12px', background: token.colorFillTertiary, borderRadius: '6px' }}><Text strong>Notes:</Text><br /><Text type="secondary">{purchase.notes}</Text></div> )}
                 <div style={{ marginTop: '24px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '8px' }}>
     <Button type="primary" block={isMobile} icon={<DollarCircleOutlined />} onClick={showPaymentModal} disabled={purchase.balance_due <= 0}>
         Record a Payment
@@ -253,7 +253,7 @@ const showEditModal = () => {
                         if (!record.imeis || record.imeis.length === 0) return null;
                         return (
                             <div style={{ padding: '8px 24px' }}>
-                                <Text strong style={{ fontSize: '12px', marginRight: '8px', color: '#1890ff' }}>IMEIs:</Text>
+                                <Text strong style={{ fontSize: '12px', marginRight: '8px', color: token.colorPrimary }}>IMEIs:</Text>
                                 {record.imeis.map((imei, index) => (
                                     <span key={imei}>
                                         <Text code>{imei}</Text>
@@ -283,7 +283,7 @@ const showEditModal = () => {
                                 if (!record.imeis || record.imeis.length === 0) return null;
                                 return (
                                     <div style={{ padding: '8px 24px' }}>
-                                        <Text strong style={{ fontSize: '12px', marginRight: '8px', color: '#ff4d4f' }}>Returned IMEIs:</Text>
+                                        <Text strong style={{ fontSize: '12px', marginRight: '8px', color: token.colorError }}>Returned IMEIs:</Text>
                                         {record.imeis.map((imei, index) => (
                                             <span key={imei}>
                                                 <Text code type="danger">{imei}</Text>
@@ -339,7 +339,7 @@ const showEditModal = () => {
         { 
             title: 'Available', 
             dataIndex: 'available_qty', 
-            render: (qty) => <Tag color="blue">{qty} in stock</Tag> 
+            render: (qty) => <Tag color={token.colorInfo}>{qty} in stock</Tag> 
         },
         {
             title: 'Select / Qty',
@@ -391,7 +391,7 @@ const showEditModal = () => {
                 // selectedReturnItems state se is item ki qty dhoondein
                 const selected = selectedReturnItems.find(i => i.inventory_id === record.id);
                 const qty = selected ? selected.qty : 0;
-                return <Text strong style={{ color: qty > 0 ? '#52c41a' : 'inherit' }}>
+                return <Text strong style={{ color: qty > 0 ? token.colorSuccess : 'inherit' }}>
                     {formatCurrency(qty * record.purchase_price, profile?.currency)}
                 </Text>;
             }

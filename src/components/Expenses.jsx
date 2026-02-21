@@ -13,7 +13,8 @@ import {
   Space,
   Popconfirm,
   Radio,
-  Tag
+  Tag,
+  theme
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
@@ -26,6 +27,7 @@ const { Title, Text } = Typography;
 const { Option } = Select;
 
 const Expenses = () => {
+  const { token } = theme.useToken(); // Control Center Connection
   const { message } = AntApp.useApp();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { user, profile } = useAuth();
@@ -133,7 +135,7 @@ const Expenses = () => {
       title: 'Method', 
       dataIndex: 'payment_method', 
       key: 'payment_method', 
-      render: (method) => <Tag color={method === 'Bank' ? 'blue' : 'default'}>{method || 'Cash'}</Tag> 
+      render: (method) => <Tag color={method === 'Bank' ? token.colorInfo : 'default'}>{method || 'Cash'}</Tag> 
     },
     { title: 'Amount', dataIndex: 'amount', key: 'amount', align: 'right', render: (amount) => <Text strong>{formatCurrency(amount, profile?.currency)}</Text> },
     {

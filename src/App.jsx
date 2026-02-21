@@ -97,7 +97,7 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
           <div style={{
             background: token.colorBgContainer,
             minHeight: '100vh',
-            paddingTop: '12px',
+            paddingTop: 0,
            }}>
             {profile && !profile.is_setup_completed && <WelcomeWizard />}
             <AppHeader collapsed={collapsed} setCollapsed={setCollapsed} isMobile={isMobile} />

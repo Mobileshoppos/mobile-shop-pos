@@ -16,6 +16,7 @@ const { Title, Text } = Typography;
 
 
 const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
+    const { token } = theme.useToken(); // Control Center Connection
     const { profile } = useAuth();
     const [ledgerData, setLedgerData] = useState([]);
     // NAYA: Stats save karne ke liye state
@@ -173,7 +174,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
 
     const ledgerColumns = [
         { title: 'Date', dataIndex: 'date', key: 'date', render: (d) => new Date(d).toLocaleDateString() },
-        { title: 'Type', dataIndex: 'type', key: 'type', render: (t) => <Tag color={t === 'Purchase' ? 'volcano' : 'green'}>{t}</Tag> },
+        { title: 'Type', dataIndex: 'type', key: 'type', render: (t) => <Tag color={t === 'Purchase' ? token.colorError : token.colorSuccess}>{t}</Tag> },
         { title: 'Details', dataIndex: 'details', key: 'details', render: (text, record) => record.link ? <Link to={record.link}>{text}</Link> : text },
         { title: 'Debit (Bill)', dataIndex: 'debit', key: 'debit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
         { title: 'Credit (Paid)', dataIndex: 'credit', key: 'credit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
@@ -183,7 +184,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
             key: 'running_balance', 
             align: 'right', 
             render: (val) => (
-                <div className="nowrap-column" style={{ color: val > 0 ? '#cf1322' : '#52c41a' }}>
+                <div className="nowrap-column" style={{ color: val > 0 ? token.colorError : token.colorSuccess }}>
                     {formatCurrency(val, profile?.currency)}
                 </div>
             )
@@ -201,10 +202,10 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
 
             <Row gutter={[16, 16]} style={{ marginBottom: '24px', textAlign: 'center' }}>
                 <Col xs={12} sm={4}><Statistic title="Total Business" value={calculatedStats?.total_purchases || 0} formatter={() => formatCurrency(calculatedStats?.total_purchases || 0, profile?.currency)} /></Col>
-                <Col xs={12} sm={5}><Statistic title="Total Paid" value={calculatedStats?.total_payments || 0} valueStyle={{ color: '#1890ff' }} formatter={() => formatCurrency(calculatedStats?.total_payments || 0, profile?.currency)} /></Col>
-                <Col xs={12} sm={5}><Statistic title="Total Refunds" value={calculatedStats?.total_refunds || 0} valueStyle={{ color: '#faad14' }} formatter={() => formatCurrency(calculatedStats?.total_refunds || 0, profile?.currency)} /></Col>
-                <Col xs={12} sm={5}><Statistic title="Balance Due" value={calculatedStats?.balance_due || 0} valueStyle={{ color: '#cf1322' }} formatter={() => formatCurrency(calculatedStats?.balance_due || 0, profile?.currency)} /></Col>
-                <Col xs={12} sm={5}><Statistic title="Your Credit" value={calculatedStats?.credit_balance || 0} valueStyle={{ color: '#52c41a' }} formatter={() => formatCurrency(calculatedStats?.credit_balance || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={5}><Statistic title="Total Paid" value={calculatedStats?.total_payments || 0} valueStyle={{ color: token.colorPrimary }} formatter={() => formatCurrency(calculatedStats?.total_payments || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={5}><Statistic title="Total Refunds" value={calculatedStats?.total_refunds || 0} valueStyle={{ color: token.colorWarning }} formatter={() => formatCurrency(calculatedStats?.total_refunds || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={5}><Statistic title="Balance Due" value={calculatedStats?.balance_due || 0} valueStyle={{ color: token.colorError }} formatter={() => formatCurrency(calculatedStats?.balance_due || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={5}><Statistic title="Your Credit" value={calculatedStats?.credit_balance || 0} valueStyle={{ color: token.colorSuccess }} formatter={() => formatCurrency(calculatedStats?.credit_balance || 0, profile?.currency)} /></Col>
             </Row>
 
             <Title level={4}>Transaction Ledger</Title>
@@ -218,7 +219,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                             <Card style={{ width: '100%' }} size="small">
                                 <Row justify="space-between" align="middle" gutter={8}>
                                     <Col flex="auto">
-                                        <Tag color={item.type === 'Purchase' ? 'volcano' : 'green'}>{item.type}</Tag>
+                                        <Tag color={item.type === 'Purchase' ? token.colorError : token.colorSuccess}>{item.type}</Tag>
                                         <div style={{ marginTop: '4px' }}>
                                             <Text>{item.link ? <Link to={item.link}>{item.details}</Link> : item.details}</Text>
                                         </div>
@@ -226,12 +227,12 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                                     </Col>
                                     <Col style={{ textAlign: 'right' }}>
     {item.debit > 0 && (
-        <Text type="danger" strong>
+        <Text style={{ color: token.colorError }} strong>
             <ArrowDownOutlined /> {formatCurrency(item.debit, profile?.currency)}
         </Text>
     )}
     {item.credit > 0 && (
-        <Text type="success" strong>
+        <Text style={{ color: token.colorSuccess }} strong>
             <ArrowUpOutlined /> {formatCurrency(item.credit, profile?.currency)}
         </Text>
     )}

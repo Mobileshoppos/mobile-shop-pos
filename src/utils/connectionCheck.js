@@ -1,29 +1,19 @@
-import { supabase } from '../supabaseClient';
-
 export const checkSupabaseConnection = async () => {
-  try {
-    // Agar browser hi keh raha hai ke net nahi hai, to foran false bhej do
-    if (!navigator.onLine) return false;
+  if (!navigator.onLine) return false;
 
-    // 3 second ka timeout
-    const timeoutPromise = new Promise((resolve) => {
-      setTimeout(() => resolve({ error: new Error('Timeout') }), 3000);
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); 
+
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/`, {
+      method: 'GET',
+      headers: { 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+      signal: controller.signal
     });
 
-    // Asal server check
-    const serverCheck = supabase.rpc('get_server_time');
-
-    // YAHAN ASAL FIX HAI: Dono cheezon ko array ke andar daal diya hai
-    const response = await Promise.race('get_server_time');
-    
-    // Agar response mein koi error nahi hai, iska matlab Internet bilkul theek chal raha hai
-    if (response && !response.error) {
-      return true;
-    }
-    
-    return false;
+    clearTimeout(timeoutId);
+    return response.ok || response.status === 401; 
   } catch (err) {
-    // Agar koi bhi masla hua to offline tasawwur karein
     return false;
   }
 };
