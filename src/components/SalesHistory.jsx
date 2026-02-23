@@ -82,7 +82,7 @@ const SalesHistory = () => {
                 total_items: totalItems,
                 total_amount: sale.total_amount,
                 payment_status: sale.payment_status,
-                salesperson_name: 'Admin',
+                salesperson_name: 'Owner',
                 payment_method: sale.payment_method || 'Cash',
                 sync_status: status,
                 sync_error: errorMsg
@@ -220,11 +220,11 @@ const SalesHistory = () => {
       width: 100,
       align: 'center',
       render: (status, record) => {
-        if (status === 'synced') return <Tag color={token.colorSuccess}>Synced</Tag>;
-        if (status === 'pending') return <Tag color={token.colorWarning}>Pending</Tag>;
+        if (status === 'synced') return <Tag color="success">Synced</Tag>;
+        if (status === 'pending') return <Tag color="warning">Pending</Tag>;
         return (
           <Tooltip title={record.sync_error || "Sync failed"}>
-            <Tag color={token.colorError} style={{ cursor: 'help' }}>Error</Tag>
+            <Tag color="error" style={{ cursor: 'help' }}>Error</Tag>
           </Tooltip>
         );
       }
@@ -258,44 +258,59 @@ const SalesHistory = () => {
       width: 220,
     },
     {
-      title: 'Total Items',
+      title: (
+        <div style={{ lineHeight: '1.2' }}>
+          <div>Total</div>
+          <div>Items</div>
+        </div>
+      ),
       dataIndex: 'total_items',
       key: 'total_items',
       align: 'center',
-      width: 120,
+      width: 80,
     },
     {
   title: 'Method',
   dataIndex: 'payment_method',
   key: 'payment_method',
-  render: (method) => <Tag color={method === 'Bank' ? token.colorInfo : 'default'}>{method || 'Cash'}</Tag>,
+  render: (method) => <Tag color={method === 'Bank' ? 'cyan' : 'default'}>{method || 'Cash'}</Tag>,
   width: 100,
 },
     {
-  title: 'Total Amount',
-  dataIndex: 'total_amount',
-  key: 'total_amount',
-  render: (amount) => formatCurrency(amount, profile?.currency),
-  align: 'right',
-  width: 150,
-},
+      title: (
+        <div style={{ lineHeight: '1.2' }}>
+          <div>Total</div>
+          <div>Amount</div>
+        </div>
+      ),
+      dataIndex: 'total_amount',
+      key: 'total_amount',
+      render: (amount) => formatCurrency(amount, profile?.currency),
+      align: 'right',
+      width: 110,
+    },
     {
-      title: 'Payment Status',
+      title: (
+        <div style={{ lineHeight: '1.2' }}>
+          <div>Payment</div>
+          <div>Status</div>
+        </div>
+      ),
       dataIndex: 'payment_status',
       key: 'payment_status',
       render: (status) => (
-        <Tag color={status === 'Paid' ? token.colorSuccess : token.colorError}>
+        <Tag color={status === 'Paid' ? 'success' : 'error'}>
           {status.toUpperCase()}
         </Tag>
       ),
       align: 'center',
-      width: 150,
+      width: 100,
     },
     {
       title: 'Salesperson',
       dataIndex: 'salesperson_name',
       key: 'salesperson_name',
-      width: 220,
+      width: 110,
     },
     {
       title: 'Actions',

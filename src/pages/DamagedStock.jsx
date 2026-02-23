@@ -87,7 +87,7 @@ const DamagedStock = () => {
         { 
             title: 'Supplier', 
             dataIndex: 'supplier_name', 
-            render: name => <Tag color={token.colorInfo}>{name}</Tag>
+            render: name => <Tag color="cyan">{name}</Tag>
         },
         { title: 'Qty', dataIndex: 'damaged_qty', align: 'center', render: q => <Text strong style={{ color: token.colorError }}>{q}</Text> },
         { 

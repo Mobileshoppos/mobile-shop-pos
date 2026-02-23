@@ -114,13 +114,13 @@ const PurchaseDetails = () => {
                     <Text>{text}</Text>
                     {/* Agar item Sold hai */}
                     {record.status && record.status.toLowerCase() === 'sold' && (
-                        <Tag color={token.colorError} style={{ fontSize: '10px', marginTop: '4px' }}>
+                        <Tag color="error" style={{ fontSize: '10px', marginTop: '4px' }}>
                             Sold - Cannot Return
                         </Tag>
                     )}
                     {/* Agar item Returned hai */}
                     {record.status && record.status.toLowerCase() === 'returned' && (
-                        <Tag color={token.colorWarning} style={{ fontSize: '10px', marginTop: '4px' }}>
+                        <Tag color="warning" style={{ fontSize: '10px', marginTop: '4px' }}>
                             Returned
                         </Tag>
                     )}
@@ -339,7 +339,7 @@ const showEditModal = () => {
         { 
             title: 'Available', 
             dataIndex: 'available_qty', 
-            render: (qty) => <Tag color={token.colorInfo}>{qty} in stock</Tag> 
+            render: (qty) => <Tag color="cyan">{qty} in stock</Tag> 
         },
         {
             title: 'Select / Qty',

@@ -174,7 +174,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
 
     const ledgerColumns = [
         { title: 'Date', dataIndex: 'date', key: 'date', render: (d) => new Date(d).toLocaleDateString() },
-        { title: 'Type', dataIndex: 'type', key: 'type', render: (t) => <Tag color={t === 'Purchase' ? token.colorError : token.colorSuccess}>{t}</Tag> },
+        { title: 'Type', dataIndex: 'type', key: 'type', render: (t) => <Tag color={t === 'Purchase' ? 'error' : 'success'}>{t}</Tag> },
         { title: 'Details', dataIndex: 'details', key: 'details', render: (text, record) => record.link ? <Link to={record.link}>{text}</Link> : text },
         { title: 'Debit (Bill)', dataIndex: 'debit', key: 'debit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
         { title: 'Credit (Paid)', dataIndex: 'credit', key: 'credit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
@@ -405,6 +405,10 @@ const SupplierDashboard = () => {
         suppliers.reduce((sum, s) => sum + (s.balance_due || 0), 0)
     , [suppliers]);
 
+    const totalGlobalRefunds = useMemo(() => 
+        suppliers.reduce((sum, s) => sum + (s.total_refunds || 0), 0)
+    , [suppliers]);
+
     const renderSupplierDetails = () => {
         if (!selectedSupplierId || !selectedSupplier) return (
             <Content style={{ padding: isMobile ? 0 : '0 24px', minHeight: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -509,10 +513,11 @@ const SupplierDashboard = () => {
                 
                 /* Sidebar Selected Item Fix */
                 .ant-menu-item-selected {
-                    background-color: ${isDarkMode ? '#111' : '#e6f7ff'} !important;
+                    background-color: ${isDarkMode ? 'rgba(26, 182, 201, 0.15)' : token.colorMenuSelectedBg} !important;
+                    border-right: 3px solid ${token.colorPrimary} !important;
                 }
                 .ant-menu-item-selected .ant-typography {
-                    color: ${isDarkMode ? '#fff' : '#1890ff'} !important;
+                    color: ${token.colorPrimary} !important;
                     font-weight: bold;
                 }
 
@@ -533,12 +538,15 @@ const SupplierDashboard = () => {
                 </div>
             )}
             
-            <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-                <Col xs={24} sm={12}>
-                    <Card><Statistic title="Total Suppliers" value={suppliers.length} /></Card>
+            <Row gutter={[12, 12]} style={{ marginBottom: '16px' }}>
+                <Col xs={12} sm={8}>
+                    <Card size="small"><Statistic title="Suppliers" value={suppliers.length} valueStyle={{ fontSize: '20px' }} /></Card>
                 </Col>
-                <Col xs={24} sm={12}>
-                     <Card><Statistic title="Total Outstanding Balance" value={totalBalanceDue} valueStyle={{ color: totalBalanceDue > 0 ? '#cf1322' : '#52c41a' }} formatter={() => formatCurrency(totalBalanceDue, profile?.currency)} /></Card>
+                <Col xs={12} sm={8}>
+                     <Card size="small"><Statistic title="Outstanding" value={totalBalanceDue} valueStyle={{ color: totalBalanceDue > 0 ? token.colorError : token.colorSuccess, fontSize: '20px' }} formatter={() => formatCurrency(totalBalanceDue, profile?.currency)} /></Card>
+                </Col>
+                <Col xs={24} sm={8}>
+                     <Card size="small"><Statistic title="Total Refunds" value={totalGlobalRefunds} valueStyle={{ color: token.colorWarning, fontSize: '20px' }} formatter={() => formatCurrency(totalGlobalRefunds, profile?.currency)} /></Card>
                 </Col>
             </Row>
 

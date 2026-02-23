@@ -101,7 +101,7 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
            }}>
             {profile && !profile.is_setup_completed && <WelcomeWizard />}
             <AppHeader collapsed={collapsed} setCollapsed={setCollapsed} isMobile={isMobile} />
-            <div style={{ padding: isMobile ? '0 8px 60px' : '0 24px 24px' }}>
+            <div style={{ padding: isMobile ? '0 8px 60px' : '0 12px 24px' }}>
               <Outlet />
             </div>
             {isMobile && profile?.mobile_nav_enabled !== false && (

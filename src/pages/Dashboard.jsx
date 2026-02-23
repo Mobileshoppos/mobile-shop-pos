@@ -326,7 +326,7 @@ const Dashboard = () => {
       <Row gutter={[16, 16]}>
         {/* Card 1: Sales */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
-          <Card ref={refSales} style={{ ...cardStyle, backgroundColor: token.colorPrimary }}>
+          <Card ref={refSales} style={{ ...cardStyle, backgroundColor: isDarkMode ? '#2C3E50' : token.colorPrimary }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>
                 {timeRange === 'today' ? "Today's Sales" : timeRange === 'week' ? "Weekly Sales" : "Monthly Sales"}
@@ -347,7 +347,7 @@ const Dashboard = () => {
 
         {/* Card: Cash in Hand (Galla) - Fixed Alignment */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
-          <Card ref={refCash} style={{ ...cardStyle, backgroundColor: token.colorInfo }}>
+          <Card ref={refCash} style={{ ...cardStyle, backgroundColor: isDarkMode ? '#0F7A82' : '#088395' }}>
             {/* Floating Buttons - Ab yeh alignment kharab nahi karenge */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Statistic
@@ -394,7 +394,7 @@ const Dashboard = () => {
 
         {/* Card 2: Profit (Updated Layout for Clarity) */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
-          <Card ref={refProfit} style={{ ...cardStyle, backgroundColor: '#008080' }}>
+          <Card ref={refProfit} style={{ ...cardStyle, backgroundColor: isDarkMode ? '#1E8449' : '#237804' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Net Profit</span>}
               value={stats?.netProfit || 0}
@@ -436,7 +436,7 @@ const Dashboard = () => {
 
         {/* Card 3: Expenses */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
-          <Card style={{ ...cardStyle, backgroundColor: '#006666' }}>
+          <Card style={{ ...cardStyle, backgroundColor: isDarkMode ? '#BA4A00' : '#d4380d' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Total Expenses</span>}
               value={stats?.totalExpenses || 0}
@@ -479,7 +479,7 @@ const Dashboard = () => {
 
         {/* Card 4: Receivables & Payables (Money In vs Money Out) */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
-          <Card style={{ ...cardStyle, backgroundColor: '#004c4c' }}>
+          <Card style={{ ...cardStyle, backgroundColor: isDarkMode ? '#5B2C6F' : '#531dab' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Accounts Receivable</span>}
               value={stats?.totalReceivables || 0}
@@ -498,14 +498,14 @@ const Dashboard = () => {
                 </div>
                 
                 {/* 1. Supplier Payables */}
-                <div style={{ fontSize: '13px', display: 'flex', justifyContent: 'space-between', color: '#ffccc7' }}>
+                <div style={{ fontSize: '13px', display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.85)' }}>
                     <span>Suppliers:</span>
                     <span style={{ fontWeight: 'bold' }}>{formatCurrency(stats?.totalPayables - (stats?.totalCustomerCredits || 0), profile?.currency)}</span>
                 </div>
 
                 {/* 2. Customer Credits (Due to returns) */}
                 {stats?.totalCustomerCredits > 0 && (
-                    <div style={{ fontSize: '13px', display: 'flex', justifyContent: 'space-between', color: '#ffccc7', marginTop: 2 }}>
+                    <div style={{ fontSize: '13px', display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.85)', marginTop: 2 }}>
                         <span>Customer Credits:</span>
                         <span style={{ fontWeight: 'bold' }}>{formatCurrency(stats.totalCustomerCredits, profile?.currency)}</span>
                     </div>
@@ -560,11 +560,11 @@ const Dashboard = () => {
                   title: 'Status', 
                   dataIndex: 'payment_status', 
                   key: 'payment_status',
-                  // NAYA: Status Color Logic (Control Center se juda hua)
+                  // STANDARD: Semantic Colors for Auto Dark/Light Adaptation
                   render: (status) => {
-                      let color = token.colorSuccess; // Default PAID color
-                      if (status === 'unpaid') color = token.colorError;
-                      if (status === 'partial') color = token.colorWarning;
+                      let color = 'success'; // Auto-adapts to Dark/Light
+                      if (status === 'unpaid') color = 'error';
+                      if (status === 'partial') color = 'warning';
                       return <Tag color={color}>{status ? status.toUpperCase() : 'PAID'}</Tag>
                   }
                 },
@@ -573,7 +573,7 @@ const Dashboard = () => {
                   dataIndex: 'amount', 
                   key: 'amount',
                   align: 'right',
-                  render: (amount) => <Tag color={token.colorPrimary}>{formatCurrency(amount, profile?.currency)}</Tag>
+                  render: (amount) => <Tag color="processing">{formatCurrency(amount, profile?.currency)}</Tag>
                 },
               ]}
             />
@@ -602,7 +602,7 @@ const Dashboard = () => {
                           title={item.name}
                           description={<Text type="secondary">Only {item.quantity} left</Text>}
                         />
-                        <Tag color={token.colorError}>Low</Tag>
+                        <Tag color="error">Low</Tag>
                       </List.Item>
                     )}
                     locale={{ emptyText: 'All items are well stocked!' }}
@@ -841,8 +841,14 @@ const Dashboard = () => {
               if (actual === 0) return null;
 
               return (
-                <div style={{ marginBottom: '20px', padding: '10px', borderRadius: '5px', backgroundColor: diff === 0 ? '#f6ffed' : '#fff1f0', border: diff === 0 ? '1px solid #b7eb8f' : '1px solid #ffa39e' }}>
-                  <Text strong style={{ color: diff >= 0 ? '#52c41a' : '#f5222d' }}>
+                <div style={{ 
+                  marginBottom: '20px', 
+                  padding: '10px', 
+                  borderRadius: '5px', 
+                  backgroundColor: diff === 0 ? token.colorSuccessBg : token.colorErrorBg, 
+                  border: `1px solid ${diff === 0 ? token.colorSuccessBorder : token.colorErrorBorder}` 
+                }}>
+                  <Text strong style={{ color: diff >= 0 ? token.colorSuccess : token.colorError }}>
                     Difference: {formatCurrency(diff, profile?.currency)}
                   </Text>
                   <br />

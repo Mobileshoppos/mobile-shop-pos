@@ -132,17 +132,8 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                   <Text strong style={{ fontSize: '20px', display: 'block', marginBottom: '6px' }}>{product.name}</Text>
                   
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                     {/* CATEGORY TAG - TRANSPARENT STYLE */}
-                     <Tag 
-                        style={{ 
-                          margin: 0, 
-                          fontSize: '12px', 
-                          padding: '4px 8px',
-                          background: 'transparent',
-                          border: `1px solid ${token.colorPrimary}`,
-                          color: token.colorPrimary
-                        }}
-                     >
+                     {/* CATEGORY TAG - STANDARD STYLE */}
+                     <Tag color="cyan" style={{ margin: 0, fontSize: '12px', padding: '4px 8px' }}>
                         {product.category_name}
                      </Tag>
                      {/* BRAND NAME - FONT INCREASED */}
@@ -218,16 +209,8 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                         {/* STOCK BADGE - TRANSPARENT STYLE */}
                       <div style={{ marginRight: '12px', flexShrink: 0 }}>
                         <Tag 
-                          style={{ 
-                            margin: 0, 
-                            fontSize: '15px', 
-                            padding: '4px 10px',
-                            background: 'transparent',
-                            // Agar stock hai to Primary Border, warna Error Border
-                            border: variant.display_quantity > 0 ? `1px solid ${token.colorPrimary}` : `1px solid ${token.colorError}`,
-                            // Text ka color bhi same
-                            color: variant.display_quantity > 0 ? token.colorPrimary : token.colorError
-                          }}
+                          color={variant.display_quantity > 0 ? "processing" : "error"}
+                          style={{ margin: 0, fontSize: '15px', padding: '4px 10px' }}
                         >
                           {variant.display_quantity} Stock
                         </Tag>

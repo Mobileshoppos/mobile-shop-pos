@@ -15,9 +15,9 @@ export default defineConfig({
         navigateFallback: '/index.html'
       },
       manifest: {
-        name: 'SadaPOS - Mobile Shop App',
+        name: 'SadaPOS - Simple Inventory & POS System',
         short_name: 'SadaPOS',
-        description: 'A simple Point of Sale and Inventory Management app for mobile shops.',
+        description: 'A simple Point of Sale and Inventory Management System for Retailer Shops.',
         theme_color: '#ffffff',
         background_color: "#ffffff",
         display: "standalone",

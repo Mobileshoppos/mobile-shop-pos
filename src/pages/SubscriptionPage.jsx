@@ -52,7 +52,7 @@ const SubscriptionPage = () => {
             }}
           >
             <Tag 
-              color={isPro ? token.colorWarning : token.colorPrimary} 
+              color={isPro ? 'warning' : 'processing'} 
               style={{ fontSize: '1.2rem', padding: '8px 16px', marginBottom: '20px' }}
             >
               {isPro ? 'PRO PLAN' : 'FREE PLAN'}

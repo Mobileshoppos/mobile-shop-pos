@@ -16,30 +16,53 @@ export const themeConfig = {
       colorPrimaryHover: '#088395', // Medium Teal for hover effects
       colorPrimaryActive: '#09637E',
     },
-    Tag: {
-      defaultBg: '#EBF4F6', // Ice Blue for normal tags
-      defaultColor: '#09637E', // Deep Teal text inside normal tags
-    },
-    Card: {
-      headerBg: '#EBF4F6', // Ice Blue header for cards
-    },
-    Table: {
-      headerBg: '#EBF4F6', // Table ke header ka background (Ice Blue)
-      headerColor: '#09637E', // Table ke header ki likhai (Deep Teal)
-    }
+    // Card aur Table ki hard-coded settings yahan se hata di gayi hain
+    // Taake Dark Mode mein yeh khud ko adjust kar sakein
   },
 };
 
 export const darkThemeTokens = {
-  colorPrimary: '#1677ff', // AntD standard blue (behtar contrast ke liye)
-  colorBgLayout: '#141414',
-  colorBgContainer: '#1F1F1F',
+  // --- Brand & Main Colors ---
+  colorPrimary: '#1AB6C9', // Bright Cyan-Teal (Dark mode mein behtareen chamakta hai aur wazeh nazar aata hai)
+  colorBgLayout: '#121212', // Google Material Background (Very Dark Grey)
+  colorBgContainer: '#1E1E1E', // Google Material Surface (Cards ke liye thora halka)
+  colorBgElevated: '#282828', // Dropdowns aur Modals ke liye mazeed halka
+  colorFillAlter: '#282828', // Table Headers aur Card Headers ke liye thora ubhra hua Dark Grey
+  
+  // --- Text & Borders (Google Standard) ---
+  colorText: 'rgba(255, 255, 255, 0.87)', // High-Emphasis Text (Aam likhai)
+  colorTextSecondary: 'rgba(255, 255, 255, 0.60)', // Medium-Emphasis Text (Halki likhai)
+  colorTextHeading: 'rgba(255, 255, 255, 0.87)', // Headings
+  colorBorder: '#333333', // Dark mode ke hisaab se borders
+  colorBorderSecondary: '#2A2A2A',
+  
+  // --- Semantic Colors (Dark Mode Optimized) ---
+  colorSuccess: '#66bb6a', // Google Material Dark Green (PAID)
+  colorError: '#ef5350',   // Google Material Dark Red (UNPAID)
+  colorWarning: '#ffa726', // Google Material Dark Orange (PARTIAL)
+  colorInfo: '#29b6f6',    // Google Material Dark Blue
+  
+  // --- Links ---
+  colorLink: '#7AB2B2',          // Muted Teal (Dark background par acha lagta hai)
+  colorLinkHover: '#EBF4F6',     // Hover par Ice Blue
+  
+  // --- Header Controls ---
+  colorHeaderBg: '#1E1E1E',      // Header ka background (Cards jaisa)
+  colorHeaderText: 'rgba(255, 255, 255, 0.87)',
+  
+  // --- Side Menu Controls ---
+  colorSiderBg: '#1E1E1E',           // Side Menu ka background (App Container jaisa)
+  colorMenuText: 'rgba(255, 255, 255, 0.60)',
+  colorMenuSelectedBg: 'rgba(8, 131, 149, 0.15)', // Medium Teal ka halka sa saya (transparent)
+  colorMenuSelectedText: '#7AB2B2',  // Selected text ka color
+  colorMenuHoverBg: 'rgba(255, 255, 255, 0.08)', // Hover par halka grey
 };
 
 export const lightThemeTokens = {
   colorPrimary: '#09637E', // SadaPOS Deep Teal (Main brand color)
   colorBgLayout: '#EBF4F6', // SadaPOS Ice Blue (Puri website ka main background)
   colorBgContainer: '#ffffff', // Cards aur boxes ka background safaid hi acha lagta hai
+  colorFillAlter: '#EBF4F6', // Table Headers aur Card Headers ke liye Ice Blue
   colorTextHeading: '#09637E', // Headings ka color Deep Teal
   colorBorder: '#7AB2B2', // Borders ka color Muted Teal
   

@@ -55,35 +55,32 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // 2. Stock Count (Offline Calculation)
+  // 2. Stock Count (Offline-First: Pehle Local, Phir Server)
   const fetchStockCount = useCallback(async () => {
     setIsStockLoading(true);
-    
-    // Agar Internet hai to RPC use karein
-    if (navigator.onLine) {
-        const { data, error } = await supabase.rpc('get_current_user_stock_count');
-        if (!error) {
-            setStockCount(data);
-            setIsStockLoading(false);
-            return;
-        }
-    }
-
-    // Agar Offline hain ya RPC fail ho gaya, to Local DB se khud ginein
     try {
-        // --- OFFLINE-FIRST CONSISTENCY FIX ---
-        // Inventory se Available items ginein (Wahi logic jo DataService use karta hai)
+        // Step A: Pehle Local DB se foran ginein (No Waiting)
         const allInventory = await db.inventory.where('status').anyOf('Available', 'available').toArray();
         const totalStock = allInventory.reduce((sum, item) => sum + (Number(item.available_qty) || 0), 0);
         setStockCount(totalStock);
+        setIsStockLoading(false); // Foran loading khatam karein
+
+        // Step B: Agar Internet hai, to background mein server se taza count lein
+        if (navigator.onLine) {
+            supabase.rpc('get_current_user_stock_count').then(({ data, error }) => {
+                if (!error && data !== null) {
+                    setStockCount(data);
+                }
+            });
+        }
     } catch (err) {
-        console.error("Local stock calc error:", err);
-        setStockCount(0);
+        console.error("Stock calculation error:", err);
     } finally {
         setIsStockLoading(false);
     }
   }, []);
 
-  // 3. Low Stock Count (Offline Calculation)
+  // 3. Low Stock Count (Offline-First: Pehle Local, Phir Server)
   const fetchLowStockCount = useCallback(async () => {
     if (!profile || !profile.low_stock_alerts_enabled) {
         setLowStockCount(0);
@@ -92,27 +89,24 @@ export const AuthProvider = ({ children }) => {
     }
 
     setIsLowStockLoading(true);
-
-    // Agar Internet hai to RPC use karein
-    if (navigator.onLine) {
-        const { data, error } = await supabase.rpc('get_low_stock_product_count');
-        if (!error) {
-            setLowStockCount(data);
-            setIsLowStockLoading(false);
-            return;
-        }
-    }
-
-    // Agar Offline hain, to Local DB se filter karein
     try {
+        // Step A: Pehle Local DB se foran filter karein
         const products = await db.products.toArray();
         const threshold = profile.low_stock_threshold || 0;
-        // Wo products ginein jinki quantity threshold se kam hai
         const lowStock = products.filter(p => (p.quantity || 0) <= threshold).length;
         setLowStockCount(lowStock);
+        setIsLowStockLoading(false);
+
+        // Step B: Agar Internet hai, to background mein server se taza count lein
+        if (navigator.onLine) {
+            supabase.rpc('get_low_stock_product_count').then(({ data, error }) => {
+                if (!error && data !== null) {
+                    setLowStockCount(data);
+                }
+            });
+        }
     } catch (err) {
-        console.error("Local low stock calc error:", err);
-        setLowStockCount(0);
+        console.error("Low stock calculation error:", err);
     } finally {
         setIsLowStockLoading(false);
     }
@@ -162,7 +156,7 @@ export const AuthProvider = ({ children }) => {
         return null;
       }
     };
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         setSession(session);
         setUser(session?.user ?? null);
@@ -171,25 +165,26 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
-      // NAYA LOGIC: Agar hum pehle se offline mode mein ja chuke hain, to Supabase ke expire hone wale event ko ignore karein
-      if (!session && isOfflineModeRef.current) {
-        console.log("Ignoring Supabase session clear because we are in Offline Mode.");
-        return; // Yahin se wapis mur jayein, user ko bahar na nikalen
-      }
-
-      if (!session && !navigator.onLine) {
-        console.log("Offline mode: Restoring user from backup...");
-        const offlineUser = getOfflineBackup();
-        if (offlineUser) {
-          // Hum ek "Naqli" (Fake) session bana rahe hain taake App khul jaye
-          session = { user: offlineUser, access_token: 'offline_mode' };
-          isOfflineModeRef.current = true; // Mark kar dein ke hum offline hain
+      // --- IMPROVED OFFLINE SESSION LOCK ---
+      // Agar Supabase kahe ke session khatam ho gaya (null), lekin internet nahi hai ya hum pehle se offline hain
+      if (!session) {
+        const isActuallyConnected = await checkSupabaseConnection();
+        if (!isActuallyConnected) {
+          const offlineUser = getOfflineBackup();
+          if (offlineUser) {
+            console.log("Internet issue or token expired. Locking session in Offline Mode.");
+            isOfflineModeRef.current = true;
+            // Purana session barkaraar rakhein
+            setLoading(false);
+            return; 
+          }
         }
       }
 
-      // Agar Session Valid hai (Online) aur yeh offline mode ka fake session nahi hai, to backup save karein
-      if (session?.user && session.access_token !== 'offline_mode') {
+      // Agar session mil jaye to backup update karein
+      if (session?.user) {
         localStorage.setItem('app_offline_user_backup', JSON.stringify(session.user));
+        isOfflineModeRef.current = false;
       }
 
       setIsPasswordRecovery(false);
@@ -202,52 +197,32 @@ export const AuthProvider = ({ children }) => {
       } else {
         setProfile(null);
       }
-      
       setLoading(false);
     });
 
     const checkSession = async () => {
-      const safetyTimer = setTimeout(() => {
-        if (loading) {
-          console.log("Safety Valve Triggered: Forcing offline mode.");
-          const offlineUser = getOfflineBackup();
-          if (offlineUser) {
-            isOfflineModeRef.current = true;
-            setSession({ user: offlineUser, access_token: 'offline_mode' });
-            setUser(offlineUser);
-          }
-          setLoading(false);
-        }
-      }, 6000);
+      // Step A: Pehle foran backup se user load karein (Zero Waiting)
+      const offlineUser = getOfflineBackup();
+      if (offlineUser) {
+        setUser(offlineUser);
+        setSession({ user: offlineUser, access_token: 'offline_mode' });
+        await getProfile(offlineUser);
+        fetchStockCount();
+        setLoading(false); // App khul gayi!
+      }
 
+      // Step B: Background mein Supabase se asli session check karein
       try {
-        const isConnected = await checkSupabaseConnection();
-        
-        if (!isConnected) {
-          const offlineUser = getOfflineBackup();
-          if (offlineUser) {
-            isOfflineModeRef.current = true;
-            setSession({ user: offlineUser, access_token: 'offline_mode' });
-            setUser(offlineUser);
-            await getProfile(offlineUser);
-            fetchStockCount();
-            clearTimeout(safetyTimer);
-            setLoading(false);
-            return;
-          }
-        }
-
-        let { data: { session: currentSession } } = await supabase.auth.getSession();
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        if (currentSession?.user) {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (currentSession) {
+          setSession(currentSession);
+          setUser(currentSession.user);
+          isOfflineModeRef.current = false;
           await getProfile(currentSession.user);
-          fetchStockCount();
         }
       } catch (e) {
-        console.error("Auth check failed", e);
+        console.log("Background auth check failed, staying in offline mode.");
       } finally {
-        clearTimeout(safetyTimer);
         setLoading(false);
       }
     };

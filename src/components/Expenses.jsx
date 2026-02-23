@@ -135,7 +135,7 @@ const Expenses = () => {
       title: 'Method', 
       dataIndex: 'payment_method', 
       key: 'payment_method', 
-      render: (method) => <Tag color={method === 'Bank' ? token.colorInfo : 'default'}>{method || 'Cash'}</Tag> 
+      render: (method) => <Tag color={method === 'Bank' ? 'cyan' : 'default'}>{method || 'Cash'}</Tag> 
     },
     { title: 'Amount', dataIndex: 'amount', key: 'amount', align: 'right', render: (amount) => <Text strong>{formatCurrency(amount, profile?.currency)}</Text> },
     {

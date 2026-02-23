@@ -981,11 +981,17 @@ const POS = () => {
             <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
             
             <List
-              grid={{ gutter: 16, xs: 1, sm: 1, md: 1, lg: 2, xl: 2 }} // 2 Columns on large screens
+              grid={{ gutter: 16, xs: 1, sm: 1, md: 1, lg: 1, xl: 1 }} // Ab har screen par sirf 1 column dikhega
               dataSource={productsWithVariants}
               loading={loading}
               rowKey="id"
-              style={{ height: '60vh', overflowY: 'auto', overflowX: 'hidden', paddingRight: '5px' }}
+              style={{ 
+                height: '60vh', 
+                overflowY: 'auto', 
+                overflowX: 'hidden', 
+                paddingLeft: '0px',  // Left side se padding
+                paddingRight: '0px'  // Right side se padding
+              }}
               renderItem={(product) => (
                 <List.Item style={{ marginBottom: '16px' }}>
                   <Card
@@ -1000,20 +1006,20 @@ const POS = () => {
                     {/* === HEADER: Name, Category, Price === */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1, paddingRight: '4px' }}>
-                        <Text strong style={{ fontSize: '16px', display: 'block', marginBottom: '4px', lineHeight: 1.2 }}>
+                        <Text strong style={{ fontSize: '18px', display: 'block', marginBottom: '4px', lineHeight: 1.2 }}>
                           {product.name}
                         </Text>
                         <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                           <Tag style={{ margin: 0, fontSize: '10px', padding: '0 4px' }}>{product.category_name}</Tag>
-                           {product.brand && <Text type="secondary" style={{ fontSize: '11px' }}>{product.brand}</Text>}
+                           <Tag style={{ margin: 0, fontSize: '12px', padding: '0 4px' }}>{product.category_name}</Tag>
+                           {product.brand && <Text type="secondary" style={{ fontSize: '13px' }}>{product.brand}</Text>}
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <Text strong style={{ fontSize: '14px', color: token.colorSuccess, display: 'block' }}>
+                        <Text strong style={{ fontSize: '16px', color: token.colorSuccess, display: 'block' }}>
                           {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
                         </Text>
                         {/* Main Stock Badge */}
-                        <Tag color={product.quantity > 0 ? token.colorPrimary : token.colorError} style={{ margin: '4px 0 0 0', fontSize: '15px' }}>
+                        <Tag color={product.quantity > 0 ? "processing" : "error"} style={{ margin: '4px 0 0 0', fontSize: '17px', fontWeight: 'bold' }}>
                            Total: {product.quantity}
                         </Tag>
                       </div>
@@ -1038,7 +1044,7 @@ const POS = () => {
                             <div style={{ marginRight: '8px', flexShrink: 0 }}>
                               <Space size={4}>
                                 <Tag 
-                                  style={{ margin: 0, fontSize: '15px', padding: '0 6px' }}
+                                  style={{ margin: 0, fontSize: '17px', padding: '0 6px', fontWeight: 'bold' }}
                                   color={variant.display_quantity > 0 ? "cyan" : "red"}
                                 >
                                   {variant.display_quantity}
@@ -1065,7 +1071,7 @@ const POS = () => {
 
                             <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                               {/* Price */}
-                              <Text strong style={{ color: token.colorSuccess, fontSize: '13px' }}>
+                              <Text strong style={{ color: token.colorSuccess, fontSize: '15px' }}>
                                  {formatCurrency(variant.sale_price, profile?.currency)}
                               </Text>
                               
@@ -1073,10 +1079,16 @@ const POS = () => {
                               <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                 {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
                                   if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) return null;
-                                  return <Text key={key} type="secondary" style={{ fontSize: '11px' }}>{value}</Text>;
+                                  return (
+                                    <Text key={key} type="secondary" style={{ fontSize: isMobile ? '13px' : '15px' }}>
+                                      {value}
+                                    </Text>
+                                  );
                                 })}
                                 {(!variant.item_attributes || Object.keys(variant.item_attributes).length === 0) && (
-                                  <Text type="secondary" style={{ fontSize: '11px' }}>Standard</Text>
+                                  <Text type="secondary" style={{ fontSize: isMobile ? '13px' : '15px' }}>
+                                    Standard
+                                  </Text>
                                 )}
                               </div>
                             </div>

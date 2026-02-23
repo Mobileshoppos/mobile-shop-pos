@@ -132,9 +132,9 @@ const WarrantyClaims = () => {
                                                 <Text strong>{lookupResult.supplier?.name || 'N/A'}</Text>
                                             </Descriptions.Item>
                                             <Descriptions.Item label="Pur. Invoice #">
-                                                <Tag color={token.colorInfo}>{lookupResult.item?.purchase_id || lookupResult.inventory?.purchase_id || 'N/A'}</Tag>
+                                                <Tag color="cyan">{lookupResult.item?.purchase_id || lookupResult.inventory?.purchase_id || 'N/A'}</Tag>
                                             </Descriptions.Item>
-                                            <Descriptions.Item label="Sold On">{lookupResult.saleDetails ? dayjs(lookupResult.saleDetails.created_at).format('DD-MMM-YYYY') : <Tag color={token.colorPrimary}>In Stock</Tag>}</Descriptions.Item>
+                                            <Descriptions.Item label="Sold On">{lookupResult.saleDetails ? dayjs(lookupResult.saleDetails.created_at).format('DD-MMM-YYYY') : <Tag color="processing">In Stock</Tag>}</Descriptions.Item>
                                         </Descriptions>
                                         
                                         <Divider style={{margin: '12px 0'}} />
@@ -198,7 +198,7 @@ const WarrantyClaims = () => {
                                                 if (!hasWarranty) {
                                                     actionButton = <Tag color="default">No Warranty</Tag>;
                                                 } else if (isExpired) {
-                                                    actionButton = <Tag color={token.colorError}>Expired</Tag>;
+                                                    actionButton = <Tag color="error">Expired</Tag>;
                                                 } else {
                                                     // Sirf Valid Warranty par Claim button dikhayein
                                                     actionButton = (
@@ -275,7 +275,7 @@ const WarrantyClaims = () => {
                                     dataIndex: 'status',
                                     render: (status, record) => (
                                         <Space direction="vertical" size={4}>
-                                            <Tag color={status.includes('Supplier') ? token.colorWarning : token.colorPrimary} style={{ margin: 0, fontSize: '10px' }}>
+                                            <Tag color={status.includes('Supplier') ? 'warning' : 'processing'} style={{ margin: 0, fontSize: '10px' }}>
                                                 {status}
                                             </Tag>
                                             <Select 

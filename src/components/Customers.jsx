@@ -1302,7 +1302,7 @@ const handleCloseInvoiceSearchModal = () => {
         { 
             title: 'Sold Qty', 
             dataIndex: 'quantity', 
-            render: (q, record) => <Tag color={token.colorWarning}>{record.imei ? '1 Unit' : `${q} Sold`}</Tag> 
+            render: (q, record) => <Tag color="warning">{record.imei ? '1 Unit' : `${q} Sold`}</Tag> 
         },
         {
             title: 'Return Qty',

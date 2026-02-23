@@ -219,15 +219,20 @@ export const SyncProvider = ({ children }) => {
     });
   };
 
-  // --- UPLOAD FUNCTION (Fixed: Lock + Suppliers Swap) ---
+  // --- UPLOAD FUNCTION (Smart & Light) ---
   const processSyncQueue = async () => {
-  
-  // 1. Pehle check karein ke kya waqayi internet server tak pohanch raha hai?
-  // (Yeh Li-Fi scenario mein 'false' dega aur code yahin ruk jayega)
-  const hasInternet = await checkSupabaseConnection();
+    // A. Pehle check karein ke kya pehle se sync chal raha hai?
+    if (isSyncingRef.current) return;
 
-  // Agar internet nahi hai ya pehle se sync chal raha hai, to wapis mur jayein
-  if (!hasInternet || isSyncingRef.current) return;
+    // B. Check karein ke kya Queue mein kuch hai bhi sahi? 
+    // Agar queue khali hai, to internet check karne ki zaroorat hi nahi.
+    const count = await db.sync_queue.count();
+    if (count === 0) return;
+
+    // C. Agar queue mein data hai, sirf tab internet check karein
+    if (!navigator.onLine) return;
+    const hasInternet = await checkSupabaseConnection();
+    if (!hasInternet) return;
   
   const startTime = Date.now();
   let allQueueItems = [];
@@ -721,19 +726,15 @@ const retryAll = async () => {
     };
   }, []);
 
-  // --- NAYA CODE: Auto-Sync (Har 3 second baad check karega) ---
+  // --- SMART AUTO-SYNC (Queue-Driven) ---
   useEffect(() => {
     const interval = setInterval(async () => {
-      // Agar internet chal raha hai
-      if (navigator.onLine) {
-        // Check karein ke kya Queue mein koi kaam ruka hua hai?
-        const count = await db.sync_queue.count();
-        if (count > 0) {
-          console.log('Auto-Sync: Found items in queue, processing...');
-          processSyncQueue();
-        }
+      // Sirf tab koshish karein jab Queue mein kuch ho aur browser kahe ke main online hoon
+      const count = await db.sync_queue.count();
+      if (count > 0 && navigator.onLine) {
+        processSyncQueue();
       }
-    }, 3000); // Har 3000ms (3 second) baad chalega
+    }, 10000); // Isay 10 second kar dein taake system par bojh na paray
 
     return () => clearInterval(interval);
   }, []);

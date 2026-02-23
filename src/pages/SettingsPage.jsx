@@ -274,10 +274,7 @@ const SettingsPage = () => {
                       <Text strong>Alert Threshold</Text>
                       <Text type="secondary" style={{ display: 'block' }}>Quantity at which to trigger alert.</Text>
                     </Col>
-                    <Col xs={16} sm={12}>
-                      <Slider min={1} max={50} step={1} onChange={setLowStockThreshold} value={lowStockThreshold} disabled={!lowStockAlerts} />
-                    </Col>
-                    <Col xs={8} sm={6}>
+                    <Col xs={24} sm={18}>
                       <InputNumber min={1} max={50} style={{ width: '100%' }} value={lowStockThreshold} onChange={setLowStockThreshold} disabled={!lowStockAlerts} />
                     </Col>
                   </Row>
@@ -309,24 +306,7 @@ const SettingsPage = () => {
                   <Divider />
                   <Row align="middle" gutter={[16, 16]}>
                     <Col xs={24} sm={6}><Text strong>Global Font Size</Text></Col>
-                    <Col xs={16} sm={12}><Slider min={12} max={20} step={1} onChange={handleFontSizeChange} value={themeConfig.token.fontSize} /></Col>
-                    <Col xs={8} sm={6}><InputNumber min={12} max={20} style={{ width: '100%' }} value={themeConfig.token.fontSize} onChange={handleFontSizeChange} /></Col>
-                  </Row>
-                  <Divider />
-                  <Row align="middle" gutter={[16, 16]}>
-                    <Col xs={24} sm={6}>
-                      <Text strong style={{ color: token.colorPrimary }}>Primary Color</Text>
-                      <Text type="secondary" style={{ display: 'block' }}>Mode: {isDarkMode ? 'Dark' : 'Light'}</Text>
-                    </Col>
-                    <Col xs={24} sm={18}><ColorPicker showText value={currentPrimaryColor} onChangeComplete={handleColorChange} /></Col>
-                  </Row>
-                  <Divider />
-                  <Row align="middle" gutter={[16, 16]}>
-                    <Col xs={24} sm={6}>
-                      <Text strong style={{ color: token.colorText }}>Container Background</Text>
-                      <Text type="secondary" style={{ display: 'block' }}>Affects cards, tables, etc.</Text>
-                    </Col>
-                    <Col xs={24} sm={18}><ColorPicker showText value={currentBgContainerColor} onChangeComplete={handleBgContainerColorChange} /></Col>
+                    <Col xs={24} sm={18}><InputNumber min={12} max={20} style={{ width: '100%' }} value={themeConfig.token.fontSize} onChange={handleFontSizeChange} /></Col>
                   </Row>
                   <Divider />
                   <Row align="middle" gutter={[16, 16]}>
@@ -334,8 +314,7 @@ const SettingsPage = () => {
                       <Text strong style={{ color: token.colorText }}>Container Border Radius</Text>
                       <Text type="secondary" style={{ display: 'block' }}>Affects cards, inputs, etc.</Text>
                     </Col>
-                    <Col xs={16} sm={12}><Slider min={0} max={24} step={1} onChange={handleBorderRadiusChange} value={themeConfig.token.borderRadiusLG} /></Col>
-                    <Col xs={8} sm={6}><InputNumber min={0} max={24} style={{ width: '100%' }} value={themeConfig.token.borderRadiusLG} onChange={handleBorderRadiusChange} /></Col>
+                    <Col xs={24} sm={18}><InputNumber min={0} max={24} style={{ width: '100%' }} value={themeConfig.token.borderRadiusLG} onChange={handleBorderRadiusChange} /></Col>
                   </Row>
                   <Divider />
                   <Row justify="end">

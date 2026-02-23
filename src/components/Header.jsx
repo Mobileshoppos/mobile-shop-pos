@@ -112,9 +112,9 @@ return (
                 <style>
                   {`
                     @keyframes pulse-yellow {
-                      0% { box-shadow: 0 0 0 0 rgba(250, 173, 20, 0.7); transform: scale(1); }
-                      70% { box-shadow: 0 0 0 4px rgba(250, 173, 20, 0); transform: scale(1.1); }
-                      100% { box-shadow: 0 0 0 0 rgba(250, 173, 20, 0); transform: scale(1); }
+                      0% { box-shadow: 0 0 0 0 ${token.colorWarning}b3; transform: scale(1); }
+                      70% { box-shadow: 0 0 0 4px ${token.colorWarning}00; transform: scale(1.1); }
+                      100% { box-shadow: 0 0 0 0 ${token.colorWarning}00; transform: scale(1); }
                     }
                     @keyframes blink-red {
                       0% { opacity: 1; }

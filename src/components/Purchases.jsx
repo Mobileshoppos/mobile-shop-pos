@@ -14,10 +14,10 @@ const Purchases = () => {
     const { token } = theme.useToken(); // Control Center Connection
     const getStatusColor = (status) => {
         switch (status) {
-            case 'paid': return token.colorSuccess;
-            case 'partially_paid': return token.colorWarning;
-            case 'unpaid': return token.colorError;
-            default: return token.colorTextSecondary;
+            case 'paid': return 'success';
+            case 'partially_paid': return 'warning';
+            case 'unpaid': return 'error';
+            default: return 'default';
         }
     };
     const { profile } = useAuth();

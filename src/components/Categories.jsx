@@ -173,8 +173,8 @@ const Categories = () => {
     { 
       title: 'Stock Type', dataIndex: 'is_imei_based', key: 'is_imei_based', align: 'center',
       render: (is_imei_based) => is_imei_based 
-        ? <Tag icon={<MobileOutlined />} color={token.colorInfo}>Per-Item</Tag> 
-        : <Tag icon={<TagsOutlined />} color={token.colorPrimary}>Quantity</Tag>
+        ? <Tag icon={<MobileOutlined />} color="cyan">Per-Item</Tag> 
+        : <Tag icon={<TagsOutlined />} color="processing">Quantity</Tag>
     },
     {
       title: 'Actions', key: 'actions', width: 120, align: 'center',
@@ -194,7 +194,7 @@ const Categories = () => {
   const attributeColumns = [
     { title: 'Attribute Name', dataIndex: 'attribute_name', key: 'attribute_name' },
     { title: 'Type', dataIndex: 'attribute_type', key: 'attribute_type', render: type => <Tag>{type.toUpperCase()}</Tag> },
-    { title: 'Required', dataIndex: 'is_required', key: 'is_required', render: req => req ? <Tag color={token.colorSuccess}>Yes</Tag> : <Tag>No</Tag> },
+    { title: 'Required', dataIndex: 'is_required', key: 'is_required', render: req => req ? <Tag color="success">Yes</Tag> : <Tag>No</Tag> },
     {
         title: 'Actions', key: 'actions', width: 120, align: 'center',
         render: (_, record) => (
