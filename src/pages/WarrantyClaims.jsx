@@ -3,6 +3,8 @@ import { Typography, Input, Card, Row, Col, Button, Table, Tag, Space, App, Empt
 import { SearchOutlined, SafetyCertificateOutlined, ToolOutlined, HistoryOutlined, DeleteOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { getPlanLimits } from '../config/subscriptionPlans';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import dayjs from 'dayjs';
 
@@ -96,6 +98,29 @@ const WarrantyClaims = () => {
         const diff = dayjs(expiryDate).diff(dayjs(), 'day');
         return diff;
     };
+
+    // --- SUBSCRIPTION CHECK ---
+    const navigate = useNavigate();
+    const limits = getPlanLimits(profile?.subscription_tier);
+    const isWarrantyLocked = !limits.allow_warranty_system;
+
+    if (isWarrantyLocked) {
+        return (
+            <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+                <Card style={{ maxWidth: 500, margin: '0 auto', borderRadius: 12 }}>
+                    <SafetyCertificateOutlined style={{ fontSize: 60, color: '#bfbfbf', marginBottom: 20 }} />
+                    <Title level={3}>Warranty System is Locked</Title>
+                    <Text type="secondary" style={{ fontSize: 16, display: 'block', marginBottom: 24 }}>
+                        Track repairs, manage claims, and print warranty cards with the Pro Plan.
+                    </Text>
+                    <Button type="primary" size="large" onClick={() => navigate('/subscription')}>
+                        View Upgrade Plans
+                    </Button>
+                </Card>
+            </div>
+        );
+    }
+    // --------------------------
 
     return (
         <div style={{ padding: isMobile ? '12px 4px' : '4px' }}>

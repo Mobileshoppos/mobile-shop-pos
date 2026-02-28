@@ -7,7 +7,7 @@ export const db = new Dexie('MobileShopDB');
 // Note: Hum sirf wohi columns likhte hain jin se hamein search ya filter karna ho.
 // Baqi data khud ba khud save ho jata hai.
 
-db.version(36).stores({
+db.version(44).stores({
   // --- Business Data Tables (Jo Supabase se sync honge) ---
   
   // Products: ID, Category, Name aur Barcode se search karne ke liye
@@ -27,7 +27,7 @@ db.version(36).stores({
   purchase_items: 'id, purchase_id, product_id', // Purchase ke andar kya items thay
   
   // Sales (Farokht)
-  sales: 'id, local_id, invoice_id, customer_id, sale_date, user_id, payment_method, updated_at, created_at',
+  sales: 'id, local_id, invoice_id, customer_id, sale_date, user_id, payment_method, updated_at, created_at, staff_id',
   sale_items: 'id, local_id, sale_id, product_id, product_name_snapshot, inventory_id, purchase_price',
   
   // Expenses (Akhrajat)
@@ -36,7 +36,7 @@ db.version(36).stores({
 
   inventory: 'id, local_id, product_id, purchase_id, status, user_id, variant_id, imei, available_qty, sold_qty, updated_at, purchase_price', 
   customer_payments: 'id, local_id, customer_id, user_id, payment_method, updated_at',
-  sale_returns: 'id, local_id, sale_id, customer_id, user_id, updated_at, created_at',
+  sale_returns: 'id, local_id, sale_id, customer_id, user_id, updated_at, created_at, staff_id',
   sale_return_items: 'id, return_id, inventory_id',
   purchase_return_items: 'id, return_id, product_id',
   credit_payouts: 'id, local_id, customer_id, user_id, payment_method, updated_at',
@@ -48,6 +48,11 @@ db.version(36).stores({
   cash_adjustments: 'id, local_id, user_id, type, payment_method, created_at, transfer_to, updated_at',
   daily_closings: 'id, local_id, user_id, closing_date, created_at, updated_at',
   warranty_claims: 'id, local_id, user_id, inventory_id, customer_id, imei, status, updated_at',
+  // Naya: Staff ki mukammal details (Phone, CNIC, Bank etc.)
+  staff_members: 'id, local_id, user_id, pin_code, salary, balance, joining_date, phone, cnic, email, is_active, updated_at',
+  // expense_id add kiya taake payment aur expense ka link rahe
+  staff_ledger: 'id, local_id, staff_id, user_id, entry_date, salary_month, expense_id, updated_at',
+  system_logs: 'id, user_id, level, category, created_at',
   
   // --- Offline System Tables (Jo sirf Local rahenge) ---
   

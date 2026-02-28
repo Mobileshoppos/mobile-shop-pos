@@ -42,14 +42,18 @@ const SalesHistory = () => {
         const customerIds = localSales.map(s => s.customer_id).filter(id => id);
         const saleIds = localSales.map(s => s.id);
 
-        const [allCustomers, allSaleItems] = await Promise.all([
+        const [allCustomers, allSaleItems, allStaff] = await Promise.all([
             db.customers.where('id').anyOf(customerIds).toArray(),
-            db.sale_items.where('sale_id').anyOf(saleIds).toArray()
+            db.sale_items.where('sale_id').anyOf(saleIds).toArray(),
+            db.staff_members.toArray() // <--- NAYA IZAFA (AUDIT TRAIL)
         ]);
 
         // 5. MAPPING (Data Jorna)
         const customerMap = {};
         allCustomers.forEach(c => { customerMap[c.id] = c; });
+
+        const staffMap = {};
+        allStaff.forEach(s => { staffMap[s.id] = s.name; }); // <--- NAYA IZAFA (AUDIT TRAIL)
 
         const itemsMap = {};
         allSaleItems.forEach(item => {
@@ -82,7 +86,8 @@ const SalesHistory = () => {
                 total_items: totalItems,
                 total_amount: sale.total_amount,
                 payment_status: sale.payment_status,
-                salesperson_name: 'Owner',
+                // Agar staff_id hai toh uska naam dikhao, warna 'Owner'
+                salesperson_name: staffMap[sale.staff_id] || 'Owner', 
                 payment_method: sale.payment_method || 'Cash',
                 sync_status: status,
                 sync_error: errorMsg

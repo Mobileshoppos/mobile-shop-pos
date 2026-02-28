@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { supabase } from '../supabaseClient';
 import { db } from '../db';
+import { getPlanLimits } from '../config/subscriptionPlans';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -17,7 +18,7 @@ const Categories = () => {
   const { token } = theme.useToken(); // Control Center Connection
   const { message } = AntApp.useApp();
   const isMobile = useMediaQuery('(max-width: 992px)');
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   
   const [categories, setCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
@@ -183,9 +184,30 @@ const Categories = () => {
           <Tooltip title="Edit Category">
             <Button size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); showCategoryModal(record); }} />
           </Tooltip>
-          <Popconfirm title="Delete this category?" onConfirm={(e) => { e.stopPropagation(); handleDeleteCategory(record.id); }} onCancel={(e) => e.stopPropagation()} okText="Yes" cancelText="No">
-            <Button size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
-          </Popconfirm>
+          {(() => {
+             const limits = getPlanLimits(profile?.subscription_tier);
+             const isLocked = !limits.allow_custom_categories;
+             return (
+               <Tooltip title={isLocked ? "Delete is disabled in Free Plan" : ""}>
+                 <Popconfirm 
+                   title="Delete this category?" 
+                   onConfirm={(e) => { e.stopPropagation(); handleDeleteCategory(record.id); }} 
+                   onCancel={(e) => e.stopPropagation()} 
+                   okText="Yes" 
+                   cancelText="No"
+                   disabled={isLocked} // Popconfirm bhi disable
+                 >
+                   <Button 
+                     size="small" 
+                     danger 
+                     icon={<DeleteOutlined />} 
+                     onClick={(e) => e.stopPropagation()} 
+                     disabled={isLocked} // Button bhi disable
+                   />
+                 </Popconfirm>
+               </Tooltip>
+             );
+          })()}
         </Space>
       ),
     },
@@ -200,9 +222,25 @@ const Categories = () => {
         render: (_, record) => (
             <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => showAttributeModal(record)} />
-                <Popconfirm title="Delete this attribute?" onConfirm={() => handleDeleteAttribute(record.id)} okText="Yes" cancelText="No">
-                    <Button size="small" danger icon={<DeleteOutlined />} />
-                </Popconfirm>
+                {(() => {
+                   const isLocked = !profile?.subscription_tier || profile?.subscription_tier === 'free';
+                   return (
+                     <Popconfirm 
+                       title="Delete this attribute?" 
+                       onConfirm={() => handleDeleteAttribute(record.id)} 
+                       okText="Yes" 
+                       cancelText="No"
+                       disabled={isLocked}
+                     >
+                       <Button 
+                         size="small" 
+                         danger 
+                         icon={<DeleteOutlined />} 
+                         disabled={isLocked}
+                       />
+                     </Popconfirm>
+                   );
+                })()}
             </Space>
         )
     }
@@ -220,7 +258,28 @@ const Categories = () => {
           <Card>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <Title level={4} style={{ margin: 0 }}>Product Categories</Title>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => showCategoryModal()}>Add New</Button>
+              {(() => {
+                const limits = getPlanLimits(profile?.subscription_tier);
+                const isLocked = !limits.allow_custom_categories;
+                return (
+                  <Tooltip title={isLocked ? "Upgrade to add custom categories" : ""}>
+                    <Button 
+                      type="primary" 
+                      icon={<PlusOutlined />} 
+                      onClick={() => {
+                        if (isLocked) {
+                          message.warning("Please upgrade to Growth Plan to add custom categories.");
+                        } else {
+                          showCategoryModal();
+                        }
+                      }}
+                      style={{ opacity: isLocked ? 0.7 : 1 }}
+                    >
+                      Add New {isLocked && "(Locked)"}
+                    </Button>
+                  </Tooltip>
+                );
+              })()}
             </div>
             <Table columns={categoryColumns} dataSource={categories} loading={loadingCategories} rowKey="id" size="small"
             scroll={{ x: true }}
@@ -235,7 +294,21 @@ const Categories = () => {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <Title level={4} style={{ margin: 0 }}>Attributes for: <Text style={{ color: token.colorSuccess }}>{selectedCategory.name}</Text></Title>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => showAttributeModal()}>Add New</Button>
+                    {(() => {
+                      const isLocked = !profile?.subscription_tier || profile?.subscription_tier === 'free';
+                      return (
+                        <Tooltip title={isLocked ? "Upgrade to add custom attributes" : ""}>
+                          <Button 
+                            type="primary" 
+                            icon={<PlusOutlined />} 
+                            onClick={() => isLocked ? message.warning("Attribute management is locked in Free Plan.") : showAttributeModal()}
+                            disabled={isLocked}
+                          >
+                            Add New
+                          </Button>
+                        </Tooltip>
+                      );
+                    })()}
                 </div>
                 <Table columns={attributeColumns} dataSource={attributes} loading={loadingAttributes} rowKey="id" size="small" pagination={false} scroll={{ x: true }} />
               </div>

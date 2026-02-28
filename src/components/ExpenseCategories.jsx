@@ -15,6 +15,7 @@ import {
 import { PlusOutlined, EditOutlined, DeleteOutlined, FileProtectOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
+import { getPlanLimits } from '../config/subscriptionPlans';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { db } from '../db'; // Database ko import kiya
 
@@ -24,7 +25,7 @@ const ExpenseCategories = () => {
   const { token } = theme.useToken(); // Control Center Connection
   const { message } = AntApp.useApp();
   const isMobile = useMediaQuery('(max-width: 768px)');
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -52,6 +53,12 @@ const ExpenseCategories = () => {
   }, [getCategories]);
 
   const showModal = async (category = null) => {
+    // NAYA: System Category Check
+    if (category && category.name === 'Salaries & Wages') {
+      message.warning("This is a System Category used for Staff Ledger. It cannot be renamed.");
+      return;
+    }
+
     let inUse = false;
     
     // Agar Edit mode hai, to check karein ke kya is category mein expenses hain?
@@ -104,8 +111,14 @@ const ExpenseCategories = () => {
     }
   };
   
- const handleDelete = async (categoryId) => {
+ const handleDelete = async (categoryId, categoryName) => {
     try {
+      // NAYA: System Category Check
+      if (categoryName === 'Salaries & Wages') {
+        message.warning("This is a System Category used for Staff Ledger. It cannot be deleted.");
+        return;
+      }
+
       // Delete (Offline)
       await DataService.deleteExpenseCategory(categoryId);
       message.success('Category deleted successfully!');
@@ -126,29 +139,64 @@ const ExpenseCategories = () => {
       key: 'actions',
       width: 150,
       align: 'center',
-      render: (_, record) => (
-        <Space>
-          <Button size="small" icon={<EditOutlined />} onClick={() => showModal(record)} />
-          <Popconfirm
-            title="Delete this category?"
-            description="This cannot be undone."
-            onConfirm={() => handleDelete(record.id)}
-            okText="Yes" cancelText="No"
-          >
-            <Button size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      ),
+      render: (_, record) => {
+        const limits = getPlanLimits(profile?.subscription_tier);
+        const isLocked = !limits.allow_custom_categories; // Control Center se poocha
+        
+        return (
+          <Space>
+            <Tooltip title={isLocked ? "Upgrade to edit categories" : ""}>
+              <Button 
+                size="small" 
+                icon={<EditOutlined />} 
+                onClick={() => isLocked ? message.warning("Please upgrade to Growth Plan to edit custom expense categories.") : showModal(record)} 
+                disabled={isLocked}
+              />
+            </Tooltip>
+            <Tooltip title={isLocked ? "Upgrade to delete categories" : ""}>
+              <Popconfirm
+                title="Delete this category?"
+                description="This cannot be undone."
+                // NAYA: ID ke sath Name bhi bheja
+                onConfirm={() => handleDelete(record.id, record.name)}
+                okText="Yes" cancelText="No"
+              >
+                <Button 
+                  size="small" 
+                  danger 
+                  icon={<DeleteOutlined />} 
+                  disabled={isLocked}
+                />
+              </Popconfirm>
+            </Tooltip>
+          </Space>
+        );
+      },
     },
   ];
 
   return (
     <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: isMobile ? 'space-between' : 'flex-end', marginBottom: '16px', gap: '16px' }}>
-        <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()} style={{ width: isMobile ? '100%' : 'auto' }}>
-    Add New Category
-  </Button>
-</div>
+        {(() => {
+          const limits = getPlanLimits(profile?.subscription_tier);
+          const isLocked = !limits.allow_custom_categories; // Control Center se poocha
+          
+          return (
+            <Tooltip title={isLocked ? "Expense Categories are limited in Free Plan. Use default ones." : ""}>
+              <Button 
+                type="primary" 
+                icon={<PlusOutlined />} 
+                size="large" 
+                onClick={() => isLocked ? message.warning("Please upgrade to Growth Plan to add custom expense categories.") : showModal()} 
+                style={{ width: isMobile ? '100%' : 'auto', opacity: isLocked ? 0.6 : 1 }}
+              >
+                Add New Category {isLocked && "(Locked)"}
+              </Button>
+            </Tooltip>
+          );
+        })()}
+      </div>
       {isMobile && (
         <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
           <FileProtectOutlined /> Manage Expense Categories

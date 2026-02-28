@@ -92,21 +92,30 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
         {
             title: 'Details',
             key: 'details',
-            render: (_, record) => (
-                <Space wrap>
-                    {record.item_attributes && Object.entries(record.item_attributes).map(([key, value]) => {
-                        // 1. IMEI aur Serial wale tags ko yahan se filter karein taake double na ho
+            render: (_, record) => {
+                // 1. Attributes ko ikatha karke comma-separated string banayein
+                const attrValues =[];
+                if (record.item_attributes) {
+                    Object.entries(record.item_attributes).forEach(([key, value]) => {
                         const upperKey = key.toUpperCase();
-                        if (upperKey.includes('IMEI') || upperKey.includes('SERIAL')) return null;
+                        if (!upperKey.includes('IMEI') && !upperKey.includes('SERIAL') && value) {
+                            attrValues.push(value);
+                        }
+                    });
+                }
+                
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                        {/* 2. Text ko comma ke sath aur thore bare font (15px) mein dikhayein */}
+                        {attrValues.length > 0 && (
+                            <span style={{ fontSize: '15px' }}>{attrValues.join(', ')}</span>
+                        )}
                         
-                        // 2. Sirf 'value' dikhayein (e.g., "8" ya "White"), label nahi
-                        return <Tag key={key}>{value}</Tag>;
-                    })}
-                    
-                    {/* 3. IMEI ko alag se Purple tag mein dikhayein (Bina "IMEI:" label ke) */}
-                    {record.imei && <Tag color="purple">{record.imei}</Tag>}
-                </Space>
-            )
+                        {/* 3. IMEI ko alag se pehchan ke liye tag mein hi rakhein */}
+                        {record.imei && <Tag color="purple" style={{ margin: 0 }}>{record.imei}</Tag>}
+                    </div>
+                );
+            }
         },
         { title: 'In Stock', dataIndex: 'stock', key: 'stock', align: 'center' },
         { title: 'Sale Price', dataIndex: 'sale_price', key: 'sale_price', align: 'right', render: (price) => formatCurrency(price, profile?.currency) },
@@ -114,6 +123,7 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
             title: 'Select Item',
             key: 'action',
             align: 'center',
+            width: 120,
             render: (_, record) => {
                 // 1. Check karein ke kya yeh item abhi Modal mein select hua hai?
                 const isSelectedNow = selectedVariants.some(v => v.key === record.key);
@@ -136,6 +146,7 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
                             type={isSelectedNow ? "primary" : "default"}
                             icon={isSelectedNow ? <CheckOutlined /> : <PlusOutlined />}
                             onClick={() => handleQuantityChange(record.key, isSelectedNow ? 0 : 1)}
+                            style={{ width: '110px' }}
                         >
                             {isSelectedNow ? "Selected" : "Add"}
                         </Button>

@@ -2,6 +2,8 @@ import { supabase } from './supabaseClient';
 import { db } from './db';
 import { generateInvoiceId } from './utils/idGenerator';
 import { checkSupabaseConnection } from './utils/connectionCheck';
+import { getPlanLimits } from './config/subscriptionPlans';
+import bcrypt from 'bcryptjs';
 
 // --- DEFAULT CATEGORIES BLUEPRINT ---
 const DEFAULT_CATEGORIES = [
@@ -76,25 +78,21 @@ const precise = (num) => Math.round((num + Number.EPSILON) * 100) / 100;
 
 // --- SUBSCRIPTION HELPER (Limit Checker) ---
 const checkSubscriptionLimit = async (newItemsCount = 0) => {
-  // --- OFFLINE-FIRST FIX ---
-  // Supabase ke bajaye seedha local settings se profile uthayein
+  // 1. Local settings se profile uthayein
   const profile = await db.user_settings.toCollection().first();
-  
-  // Agar profile nahi mila (maslan pehli baar login), to check skip karein
-  if (!profile) return;
+  if (!profile) return; // Profile nahi to check skip
 
-  // 1. Agar Pro hai to koi pabandi nahi
-  if (profile.subscription_tier === 'pro') return;
+  // 2. Control Center se Limits mangwayein
+  const limits = getPlanLimits(profile.subscription_tier);
 
-  // 2. Mojooda stock ginein (Available items)
+  // 3. Mojooda stock ginein (Available items)
   const allInventory = await db.inventory.where('status').anyOf('Available', 'available').toArray();
   const currentStock = allInventory.reduce((sum, item) => sum + (Number(item.available_qty) || 0), 0);
+  const totalAfterAdd = currentStock + newItemsCount;
 
-  // 3. Agar limit (50) cross ho rahi ho to Error throw karein
-  if (currentStock + newItemsCount > 50) {
-    const errorMsg = `Subscription Limit: You currently have ${currentStock} items in stock. Adding ${newItemsCount} more would exceed the 50-item limit of the Free Plan. Please upgrade to Pro to add more stock.`;
-    
-    // Yeh error message user ko screen par nazar aayega
+  // 4. Check karein ke kya limit cross ho rahi hai?
+  if (totalAfterAdd > limits.max_items) {
+    const errorMsg = `Subscription Limit Reached: Your plan (${limits.name}) allows ${limits.max_items} items. You currently have ${currentStock}. Adding ${newItemsCount} more will exceed the limit. Please upgrade.`;
     throw new Error(errorMsg);
   }
 };
@@ -882,6 +880,7 @@ async addCustomer(customerData) {
     const saleData = {
       id: saleId,
       user_id: salePayload.user_id,
+      staff_id: salePayload.staff_id,
       customer_id: salePayload.customer_id,
       subtotal: salePayload.subtotal,
       discount: salePayload.discount,
@@ -1876,11 +1875,20 @@ async addCustomer(customerData) {
     let totalCustomerCredits = 0;
     const customerNameMap = {}; 
 
+    // 1. Customers ka hisaab
     await db.customers.each(c => {
         const bal = c.balance || 0;
-        if (bal > 0) totalReceivables += bal;
-        else if (bal < 0) totalCustomerCredits += Math.abs(bal);
+        if (bal > 0) totalReceivables += bal; // Customer ne dene hain (Udhaar)
+        else if (bal < 0) totalCustomerCredits += Math.abs(bal); // Hum ne wapis karne hain (Advance/Return)
         customerNameMap[c.id] = c.name;
+    });
+
+    // 2. NAYA: Staff ka hisaab (Salary Due vs Advance)
+    let totalStaffPayables = 0;
+    await db.staff_members.each(s => {
+        const bal = s.balance || 0;
+        if (bal > 0) totalStaffPayables += bal; // Salary Due (Hum ne deni hai -> Payable)
+        else if (bal < 0) totalReceivables += Math.abs(bal); // Advance diya hua hai (Hum ne lena hai -> Receivable)
     });
 
     const suppliers = await db.suppliers.toArray();
@@ -2073,9 +2081,9 @@ async addCustomer(customerData) {
     // Suppliers ka udhaar (Payables)
     const totalSupplierPayables = suppliers.reduce((sum, s) => sum + (s.balance_due || 0), 0);
 
-    // Total Payables (Suppliers + Customers jinko wapis karna hai)
-    // Business mein yeh dono "Liabilities" hain.
-    const totalLiabilities = totalSupplierPayables + totalCustomerCredits;
+    // Total Payables (Suppliers + Customers + Staff Salary Due)
+    // Business mein yeh sab "Liabilities" hain.
+    const totalLiabilities = totalSupplierPayables + totalCustomerCredits + totalStaffPayables;
 
     // stockCounts upar Step 1 mein pehle hi calculate ho chuka hai.
 
@@ -2151,6 +2159,7 @@ async addCustomer(customerData) {
         totalPayables: totalLiabilities, 
         totalInventoryValue,
         totalCustomerCredits, 
+        totalStaffPayables, // NAYA: Staff ki raqam alag se bheji 
         
         lowStockItems,
         totalProducts: products.length,
@@ -2407,6 +2416,316 @@ async addCustomer(customerData) {
       action: 'update',
       data: { id: inventoryId, ...updates }
     });
+
+    return true;
+  },
+
+  // --- STAFF MANAGEMENT FUNCTIONS (New) ---
+
+  // 1. Staff List Mangwana
+  async getStaffMembers() {
+    const staff = await db.staff_members.toArray();
+    // Javascript ke zariye naam ke hisaab se tartib (sort) kar rahe hain
+    return staff.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  },
+
+  // 2. Naya Staff Add karna
+  async addStaffMember(staffData) {
+    if (!staffData.id) staffData.id = crypto.randomUUID();
+    
+    // PIN ko Hash (Encrypt) karein
+    const hashedPassword = bcrypt.hashSync(staffData.pin_code, 10);
+
+    // Default values set karein
+    const newStaff = {
+      ...staffData, // Yeh line khud hi Phone, CNIC, Bank waghera utha legi
+      pin_code: hashedPassword, 
+      salary: staffData.salary || 0, // Naya: Salary save karein
+      joining_date: staffData.joining_date || new Date().toISOString().split('T')[0], // NAYA: Joining Date
+      balance: 0, // Naya: Shuruat mein balance 0 hoga
+      local_id: staffData.id,
+      is_active: true,
+      permissions: staffData.permissions || {},
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    // Local DB Save
+    await db.staff_members.add(newStaff);
+
+    // Sync Queue
+    await db.sync_queue.add({
+      table_name: 'staff_members',
+      action: 'create',
+      data: newStaff
+    });
+
+    return newStaff;
+  },
+
+  // 3. Staff Update karna
+  async updateStaffMember(id, updates) {
+    // Agar naya PIN aaya hai, to usay Hash karein
+    if (updates.pin_code) {
+        // Check karein ke kya ye pehle se hash to nahi? (Agar length < 20 hai to matlab plain text hai)
+        if (updates.pin_code.length < 20) {
+            updates.pin_code = bcrypt.hashSync(updates.pin_code, 10);
+    }
+  }
+  
+  // Naya: Salary ko update data mein shamil karna
+  if (updates.salary !== undefined) updates.salary = Number(updates.salary);
+
+  const updatedData = { ...updates, updated_at: new Date().toISOString() };
+    
+    // Local Update
+    await db.staff_members.update(id, updatedData);
+
+    // Sync Queue
+    await db.sync_queue.add({
+      table_name: 'staff_members',
+      action: 'update',
+      data: { id, ...updatedData }
+    });
+
+    return true;
+  },
+
+  // 4. Staff Delete karna
+  async deleteStaffMember(id) {
+    // Local Delete
+    await db.staff_members.delete(id);
+
+    // Sync Queue
+    await db.sync_queue.add({
+      table_name: 'staff_members',
+      action: 'delete',
+      data: { id }
+    });
+
+    return true;
+  },
+
+  // 5. PIN Verify karna (Login ke liye)
+  async verifyStaffPin(pin) {
+    // 1. Saare active staff members layein
+    const activeStaffMembers = await db.staff_members
+      .filter(s => s.is_active === true)
+      .toArray();
+
+    // 2. Har staff ka PIN check karein
+    for (const staff of activeStaffMembers) {
+      // Agar PIN Hash hai (bcrypt hashes aam tor par $2 se shuru hote hain)
+      if (staff.pin_code && staff.pin_code.startsWith('$2')) {
+         const isMatch = bcrypt.compareSync(pin, staff.pin_code);
+         if (isMatch) return staff;
+      } 
+      // Agar Purana Plain Text PIN hai (Legacy support)
+      else if (staff.pin_code === pin) {
+         return staff;
+      }
+    }
+    
+    return null; // Agar koi match na mile
+  },
+
+  // --- STAFF LEDGER FUNCTIONS (New) ---
+
+  // 1. Ledger Entry Add karna
+  async addStaffLedgerEntry(entryData) {
+    if (!entryData.id) entryData.id = crypto.randomUUID();
+    entryData.local_id = entryData.id;
+    entryData.created_at = new Date().toISOString();
+    entryData.updated_at = new Date().toISOString();
+
+    // NAYA: Check for duplicate salary month
+    if (entryData.type === 'Salary' && entryData.salary_month) {
+      const existing = await db.staff_ledger
+        .where('staff_id').equals(entryData.staff_id)
+        .filter(e => e.type === 'Salary' && e.salary_month === entryData.salary_month)
+        .first();
+      
+      if (existing) {
+        throw new Error(`Salary for ${entryData.salary_month} is already added!`);
+      }
+    }
+
+    // NAYA: Agar Payment ya Advance hai, to Expense bhi banao (Cash Out)
+    if (entryData.type === 'Payment' || entryData.type === 'Advance') {
+      // 1. Category dhoondo
+      const salaryCat = await db.expense_categories
+        .filter(c => c.name === 'Salaries & Wages')
+        .first();
+      
+      if (salaryCat) {
+        // 2. Staff ka naam dhoondo (Reference ke liye)
+        const staffMember = await db.staff_members.get(entryData.staff_id);
+        
+        // 3. Expense ka data tayyar karo
+        const expenseId = crypto.randomUUID();
+        const expenseData = {
+          id: expenseId,
+          local_id: expenseId,
+          user_id: entryData.user_id,
+          category_id: salaryCat.id,
+          amount: Number(entryData.amount),
+          title: `${entryData.type} to ${staffMember ? staffMember.name : 'Staff'}`, // e.g. Payment to Khalid
+          expense_date: entryData.entry_date,
+          payment_method: 'Cash', // Filhal Cash assume kar rahe hain
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        // 4. Expense save karo
+        await db.expenses.add(expenseData);
+        await db.sync_queue.add({ table_name: 'expenses', action: 'create', data: expenseData });
+
+        // 5. Link save karo (Linking Pin)
+        entryData.expense_id = expenseId;
+      }
+    }
+
+    // Local DB Save
+    await db.staff_ledger.add(entryData);
+
+    // Sync Queue
+    await db.sync_queue.add({
+      table_name: 'staff_ledger',
+      action: 'create',
+      data: entryData
+    });
+
+    // NAYA: Balance foran update karein
+    await this.recalculateStaffBalance(entryData.staff_id);
+
+    return entryData;
+  },
+
+  // --- HELPER: Balance Recalculation (Local) ---
+  async recalculateStaffBalance(staffId) {
+    const entries = await db.staff_ledger.where('staff_id').equals(staffId).toArray();
+    
+    let newBalance = 0;
+    entries.forEach(item => {
+      const amount = Number(item.amount) || 0;
+      if (item.type === 'Salary' || item.type === 'Commission') {
+        newBalance += amount;
+      } else {
+        newBalance -= amount;
+      }
+    });
+
+    await db.staff_members.update(staffId, { balance: newBalance });
+    
+    // Server ko bhi batayein ke balance update hua hai
+    await db.sync_queue.add({
+      table_name: 'staff_members',
+      action: 'update',
+      data: { id: staffId, balance: newBalance }
+    });
+  },
+
+  // 2. Kisi khas staff ka ledger mangwana
+  async getStaffLedger(staffId) {
+    const entries = await db.staff_ledger
+      .where('staff_id')
+      .equals(staffId)
+      .toArray();
+    
+    // Tarikh ke hisab se sort karein (Nayi entries upar)
+    return entries.sort((a, b) => new Date(b.entry_date) - new Date(a.entry_date));
+  },
+
+  // 3. Ledger Entry Edit karna (SUPER SMART LOGIC)
+  async updateStaffLedgerEntry(id, updates) {
+    updates.updated_at = new Date().toISOString();
+    
+    const existingEntry = await db.staff_ledger.get(id);
+    if (!existingEntry) return false;
+
+    // Purani aur Nayi Type check karein
+    const oldType = existingEntry.type;
+    const newType = updates.type || oldType;
+
+    // Check karein ke kisme Expense banta hai aur kisme nahi
+    const oldNeedsExpense = (oldType === 'Payment' || oldType === 'Advance');
+    const newNeedsExpense = (newType === 'Payment' || newType === 'Advance');
+
+    const staffMember = await db.staff_members.get(existingEntry.staff_id);
+
+    // SCENARIO 1: Expense tha, ab NAHI hai (e.g. Advance -> Salary) => DELETE EXPENSE
+    if (oldNeedsExpense && !newNeedsExpense) {
+      if (existingEntry.expense_id) {
+        await db.expenses.delete(existingEntry.expense_id);
+        await db.sync_queue.add({ table_name: 'expenses', action: 'delete', data: { id: existingEntry.expense_id } });
+        updates.expense_id = null; // Link khatam kar dein
+      }
+    } 
+    // SCENARIO 2: Expense nahi tha, ab HAI (e.g. Salary -> Advance) => CREATE EXPENSE
+    else if (!oldNeedsExpense && newNeedsExpense) {
+      const salaryCat = await db.expense_categories.filter(c => c.name === 'Salaries & Wages').first();
+      if (salaryCat) {
+        const expenseId = crypto.randomUUID();
+        const expenseData = {
+          id: expenseId,
+          local_id: expenseId,
+          user_id: existingEntry.user_id,
+          category_id: salaryCat.id,
+          amount: Number(updates.amount || existingEntry.amount),
+          title: `${newType} to ${staffMember ? staffMember.name : 'Staff'}`,
+          expense_date: updates.entry_date || existingEntry.entry_date,
+          payment_method: 'Cash',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        await db.expenses.add(expenseData);
+        await db.sync_queue.add({ table_name: 'expenses', action: 'create', data: expenseData });
+        updates.expense_id = expenseId; // Naya link save karein
+      }
+    } 
+    // SCENARIO 3: Pehle bhi Expense tha, ab bhi HAI (e.g. Advance -> Payment, ya Amount change ki) => UPDATE EXPENSE
+    else if (oldNeedsExpense && newNeedsExpense) {
+      if (existingEntry.expense_id) {
+        const expenseUpdates = {
+          amount: Number(updates.amount || existingEntry.amount),
+          expense_date: updates.entry_date || existingEntry.entry_date,
+          title: `${newType} to ${staffMember ? staffMember.name : 'Staff'}`, // Naam bhi update karein
+          updated_at: new Date().toISOString()
+        };
+        await db.expenses.update(existingEntry.expense_id, expenseUpdates);
+        await db.sync_queue.add({ table_name: 'expenses', action: 'update', data: { id: existingEntry.expense_id, ...expenseUpdates } });
+      }
+    }
+    // SCENARIO 4: Pehle bhi nahi tha, ab bhi nahi hai (e.g. Salary -> Commission) => KUCH MAT KARO
+
+    // Aakhir mein Staff Ledger ko update karein
+    await db.staff_ledger.update(id, updates);
+    await db.sync_queue.add({ table_name: 'staff_ledger', action: 'update', data: { id, ...updates } });
+    
+    // Balance theek karein
+    await this.recalculateStaffBalance(existingEntry.staff_id);
+
+    return true;
+  },
+
+  // 4. Ledger Entry Delete karna
+  async deleteStaffLedgerEntry(id) {
+    // Pehle entry dhoond lein taake staff_id mil jaye
+    const entry = await db.staff_ledger.get(id);
+
+    if (entry) {
+        // NAYA: Agar Expense juda hua hai to usay bhi delete karein
+        if (entry.expense_id) {
+            await db.expenses.delete(entry.expense_id);
+            await db.sync_queue.add({ table_name: 'expenses', action: 'delete', data: { id: entry.expense_id } });
+        }
+
+        await db.staff_ledger.delete(id);
+        await db.sync_queue.add({ table_name: 'staff_ledger', action: 'delete', data: { id } });
+        
+        // NAYA: Balance adjust karein
+        await this.recalculateStaffBalance(entry.staff_id);
+    }
 
     return true;
   },

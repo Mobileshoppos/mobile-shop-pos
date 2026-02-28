@@ -6,6 +6,8 @@ import {
 import { UserSwitchOutlined, UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined, MoreOutlined, EditOutlined, ReloadOutlined, InboxOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { getPlanLimits } from '../config/subscriptionPlans';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
@@ -1084,15 +1086,38 @@ const handleCloseInvoiceSearchModal = () => {
         </Space>
 
         {/* Add Customer Button */}
-        <Button
-            type="primary"
-            icon={<UserAddOutlined />}
-            size="large"
-            onClick={() => setIsAddModalOpen(true)}
-            style={{ width: isMobile ? '100%' : 'auto' }}
-        >
-            Add Customer
-        </Button>
+        {(() => {
+            const limits = getPlanLimits(profile?.subscription_tier);
+            const isLocked = !limits.allow_customer_management;
+            
+            return (
+                <Button
+                    type="primary"
+                    icon={<UserAddOutlined />}
+                    size="large"
+                    onClick={() => {
+                        if (isLocked) {
+                            modal.info({
+                                title: 'Customer Management Locked',
+                                content: (
+                                    <div>
+                                        <p>In Free Plan, you can only use the built-in <b>Walk-in Customer</b>.</p>
+                                        <p>To save customer details and maintain ledgers (Khata), please upgrade to Growth Plan.</p>
+                                    </div>
+                                ),
+                                okText: 'View Plans',
+                                onOk: () => window.location.href = '/subscription' // Simple redirect
+                            });
+                        } else {
+                            setIsAddModalOpen(true);
+                        }
+                    }}
+                    style={{ width: isMobile ? '100%' : 'auto', opacity: isLocked ? 0.7 : 1 }}
+                >
+                    Add Customer {isLocked && "(Locked)"}
+                </Button>
+            );
+        })()}
     </div>
 </div> {isMobile ? (
     <List

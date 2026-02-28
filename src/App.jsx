@@ -19,10 +19,12 @@ import PurchaseDetails from './components/PurchaseDetails';
 import SupplierDashboard from './components/SupplierDashboard';
 import SalesHistory from './components/SalesHistory';
 import SettingsPage from './pages/SettingsPage';
+import StaffManagement from './pages/StaffManagement';
 import SubscriptionPage from './pages/SubscriptionPage';
 import UpdatePasswordPage from './pages/UpdatePasswordPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SyncProvider, useSync } from './context/SyncContext';
+import { StaffProvider } from './context/StaffContext';
 import { CustomThemeProvider, useTheme } from './context/ThemeContext';
 import { supabase } from './supabaseClient';
 import { darkThemeTokens, lightThemeTokens } from './theme/themeConfig';
@@ -36,12 +38,30 @@ import DamagedStock from './pages/DamagedStock';
 import FloatingNav from './components/FloatingNav';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
 import About from './pages/About';
+import { useStaff } from './context/StaffContext';
+import LockScreen from './components/LockScreen';
+
+// NAYA SECURITY GUARD: Sirf Owner ko aane dega
+const OwnerOnly = ({ children }) => {
+  const { activeStaff } = useStaff();
+  // Agar koi Staff member in pages par aane ki koshish kare, to usay wapis Dashboard (/) par bhej do
+  if (activeStaff) {
+    return <Navigate to="/" replace />;
+  }
+  return children;
+};
 
 const { Content } = Layout;
 
 const MainLayout = ({ isDarkMode, toggleTheme }) => {
   const { syncAllData } = useSync();
   const { profile } = useAuth();
+  const { isAppLocked } = useStaff(); // Nayi line
+
+  // Agar app lock hai, to baqi sab kuch chupa kar sirf Lock Screen dikhao
+  if (isAppLocked) {
+    return <LockScreen />;
+  }
   
   useEffect(() => {
     syncAllData();
@@ -139,7 +159,6 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
     <Routes>
       {/* Hum ne /update-password route yahan bhi shamil kiya hai taake agar session ban'ne mein thori der ho to bhi page sahi kaam kare */}
       <Route path="/update-password" element={<UpdatePasswordPage />} />
-      
       <Route path="/" element={<MainLayout isDarkMode={isDarkMode} toggleTheme={toggleTheme} />}>
         <Route index element={<Dashboard />} />
         <Route path="inventory" element={<Inventory />} />
@@ -152,14 +171,18 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route path="purchases" element={<Purchases />} />
         <Route path="purchases/:id" element={<PurchaseDetails />} />
         <Route path="categories" element={<Categories />} />
-        <Route path="profile" element={<Profile />} />
+        {/* IN PAGES PAR SECURITY GUARD LAGA DIYA */}
+        <Route path="profile" element={<OwnerOnly><Profile /></OwnerOnly>} />
         <Route path="expenses" element={<Expenses />} />
         <Route path="expense-categories" element={<ExpenseCategories />} />
         <Route path="sales-history" element={<SalesHistory />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="subscription" element={<SubscriptionPage />} />
+        {/* IN PAGES PAR SECURITY GUARD LAGA DIYA */}
+        <Route path="settings" element={<OwnerOnly><SettingsPage /></OwnerOnly>} />
+        <Route path="staff" element={<OwnerOnly><StaffManagement /></OwnerOnly>} />
+        <Route path="subscription" element={<OwnerOnly><SubscriptionPage /></OwnerOnly>} />
         <Route path="*" element={<Navigate to="/" />} />
-        <Route path="/logs" element={<SystemLogs />} />
+        {/* LOGS BHI SIRF OWNER DEKH SAKTA HAI */}
+        <Route path="/logs" element={<OwnerOnly><SystemLogs /></OwnerOnly>} />
         <Route path="about" element={<About />} />
       </Route>
     </Routes>
@@ -181,8 +204,9 @@ const ThemeAppliedLayout = () => {
       }}
     >
       <AntApp>
-        {/* isDarkMode aur toggleTheme ab context se pass ho rahe hain */}
-        <AppRoutes isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
+        <StaffProvider>
+          <AppRoutes isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
+        </StaffProvider>
       </AntApp>
     </ConfigProvider>
   );

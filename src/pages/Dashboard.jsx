@@ -17,7 +17,8 @@ import {
   HistoryOutlined,
   CheckCircleOutlined,
   UserOutlined, 
-  TransactionOutlined
+  TransactionOutlined,
+  ShoppingCartOutlined
 } from '@ant-design/icons';
 import { Area, Pie } from '@ant-design/charts'; 
 import { useNavigate } from 'react-router-dom';
@@ -25,6 +26,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery';
 import DataService from '../DataService';
 import { db } from '../db';
 import { useAuth } from '../context/AuthContext';
+import { useStaff } from '../context/StaffContext'; 
 import { formatCurrency } from '../utils/currencyFormatter';
 import { useTheme } from '../context/ThemeContext';
 import PageTour from '../components/PageTour';
@@ -34,6 +36,7 @@ const { Title, Text } = Typography;
 
 const Dashboard = () => {
   const { isDarkMode } = useTheme();
+  const { can, activeStaff } = useStaff(); 
   const isMobile = useMediaQuery('(max-width: 768px)');  
   const [stats, setStats] = useState(null);
   const [chartData, setChartData] = useState([]);
@@ -314,16 +317,66 @@ const Dashboard = () => {
           </Title>
         )}
         
-        {/* Time Filter Buttons */}
-        <Radio.Group value={timeRange} onChange={(e) => setTimeRange(e.target.value)} buttonStyle="solid">
-          <Radio.Button value="today">Today</Radio.Button>
-          <Radio.Button value="week">This Week</Radio.Button>
-          <Radio.Button value="month">This Month</Radio.Button>
-        </Radio.Group>
+        {/* Time Filter Buttons (Sirf Owner ke liye) */}
+        {can('can_view_reports') && (
+          <Radio.Group value={timeRange} onChange={(e) => setTimeRange(e.target.value)} buttonStyle="solid">
+            <Radio.Button value="today">Today</Radio.Button>
+            <Radio.Button value="week">This Week</Radio.Button>
+            <Radio.Button value="month">This Month</Radio.Button>
+          </Radio.Group>
+        )}
       </div>
 
       {/* --- SECTION 1: STATS CARDS --- */}
-      <Row gutter={[16, 16]}>
+      {!can('can_view_reports') ? (
+        /* STAFF WELCOME CARD */
+        <Col span={24}>
+          <Card 
+            style={{ 
+              borderRadius: 12, 
+              background: isDarkMode ? '#1f1f1f' : '#ffffff',
+              border: `1px solid ${token.colorBorder}`,
+              padding: '20px 10px'
+            }}
+          >
+            <Row align="middle" gutter={[24, 24]}>
+              <Col xs={24} md={4} style={{ textAlign: 'center' }}>
+                <div style={{ 
+                  width: 80, height: 80, borderRadius: '50%', 
+                  background: token.colorPrimary, display: 'flex', 
+                  alignItems: 'center', justifyContent: 'center', margin: '0 auto' 
+                }}>
+                  <UserOutlined style={{ fontSize: 40, color: '#fff' }} />
+                </div>
+              </Col>
+              <Col xs={24} md={20}>
+                <Title level={2} style={{ margin: 0 }}>Assalam-o-alaikum, {activeStaff?.name || 'Staff'}!</Title>
+                <Text type="secondary" style={{ fontSize: '16px' }}>
+                  Welcome back to <b>{profile?.shop_name}</b>. Today is {new Date().toLocaleDateString('en-PK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
+                </Text>
+                <div style={{ marginTop: 16 }}>
+                  <Tag color="blue" icon={<CheckCircleOutlined />}>Shift Active</Tag>
+                  <Tag color="cyan">{activeStaff?.role || 'Staff Member'}</Tag>
+                </div>
+
+                {/* Salesman ke liye jaldi kaam shuru karne ka button */}
+                <div style={{ marginTop: 24 }}>
+                  <Button 
+                    type="primary" 
+                    size="large" 
+                    icon={<ShoppingCartOutlined />} 
+                    onClick={() => navigate('/pos')}
+                    style={{ height: '45px', padding: '0 30px', fontSize: '16px', borderRadius: '8px' }}
+                  >
+                    Start Selling (POS)
+                  </Button>
+                </div>
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+      ) : (
+        <Row gutter={[16, 16]} style={{ width: '100%', margin: 0 }}>
         {/* Card 1: Sales */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
           <Card ref={refSales} style={{ ...cardStyle, backgroundColor: isDarkMode ? '#2C3E50' : token.colorPrimary }}>
@@ -500,10 +553,18 @@ const Dashboard = () => {
                 {/* 1. Supplier Payables */}
                 <div style={{ fontSize: '13px', display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.85)' }}>
                     <span>Suppliers:</span>
-                    <span style={{ fontWeight: 'bold' }}>{formatCurrency(stats?.totalPayables - (stats?.totalCustomerCredits || 0), profile?.currency)}</span>
+                    <span style={{ fontWeight: 'bold' }}>{formatCurrency(stats?.totalPayables - (stats?.totalCustomerCredits || 0) - (stats?.totalStaffPayables || 0), profile?.currency)}</span>
                 </div>
 
-                {/* 2. Customer Credits (Due to returns) */}
+                {/* 2. Staff Salaries (Due) */}
+                {stats?.totalStaffPayables > 0 && (
+                    <div style={{ fontSize: '13px', display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.85)', marginTop: 2 }}>
+                        <span>Staff Salaries:</span>
+                        <span style={{ fontWeight: 'bold' }}>{formatCurrency(stats.totalStaffPayables, profile?.currency)}</span>
+                    </div>
+                )}
+
+                {/* 3. Customer Credits (Due to returns) */}
                 {stats?.totalCustomerCredits > 0 && (
                     <div style={{ fontSize: '13px', display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.85)', marginTop: 2 }}>
                         <span>Customer Credits:</span>
@@ -514,11 +575,13 @@ const Dashboard = () => {
           </Card>
         </Col>
       </Row>
+      )}
 
       {/* --- SECTION 2: GRAPH & ALERTS --- */}
       <Row gutter={[16, 16]} style={{ marginTop: 10 }}>
         
-        {/* Left Side: Sales Graph AND Recent Transactions */}
+        {/* Left Side: Sales Graph AND Recent Transactions (Sirf Owner ko nazar aayega) */}
+        {can('can_view_reports') && (
         <Col xs={24} lg={16}>
           {/* 1. Graph Card */}
           <Card 
@@ -579,8 +642,10 @@ const Dashboard = () => {
             />
           </Card>
         </Col>
+        )}
 
-        {/* Right Side: Low Stock & Actions */}
+        {/* Right Side: Low Stock & Actions (Sirf Owner ke liye) */}
+        {can('can_view_reports') && (
         <Col xs={24} lg={8}>
           <Row gutter={[0, 16]}>
             
@@ -672,6 +737,7 @@ const Dashboard = () => {
 
           </Row>
         </Col>
+        )}
       </Row>
       {/* CASH ADJUSTMENT MODAL */}
       <Modal

@@ -22,6 +22,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { db } from '../db'; // Database check karne ke liye
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -69,7 +70,17 @@ const Expenses = () => {
     getData();
   }, [getData]);
 
-  const showModal = (expense = null) => {
+  const showModal = async (expense = null) => {
+    // NAYA: Check karein ke kya yeh Staff Payment hai?
+    if (expense) {
+      const linkedStaffEntry = await db.staff_ledger.where('expense_id').equals(expense.id).first();
+      
+      if (linkedStaffEntry) {
+        message.warning("This is a Staff Payment. Please edit it from Staff Management to keep balances correct.");
+        return; // Yahin ruk jao, modal mat kholo
+      }
+    }
+
     setEditingExpense(expense);
     if (expense) {
       form.setFieldsValue({
@@ -118,6 +129,14 @@ const Expenses = () => {
   
   const handleDelete = async (expenseId) => {
     try {
+      // NAYA: Check karein ke kya yeh Staff Payment hai?
+      const linkedStaffEntry = await db.staff_ledger.where('expense_id').equals(expenseId).first();
+      
+      if (linkedStaffEntry) {
+        message.warning("Cannot delete here! This is linked to Staff Ledger. Please delete it from Staff Management.");
+        return;
+      }
+
       // Delete Expense (Offline)
       await DataService.deleteExpense(expenseId);
       message.success('Expense deleted successfully!');

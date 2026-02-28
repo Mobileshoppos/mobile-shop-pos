@@ -143,6 +143,10 @@ export const SyncProvider = ({ children }) => {
       const { data: customers } = await supabase.from('customers_with_balance').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('customers', customers, pendingIds);
 
+      // 4.1 Staff Members (New)
+      const { data: staffMembers } = await supabase.from('staff_members').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('staff_members', staffMembers, pendingIds);
+
       // 5. Suppliers & Expenses
       const { data: suppliers } = await supabase.from('suppliers_with_balance').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('suppliers', suppliers, pendingIds);
@@ -193,6 +197,9 @@ export const SyncProvider = ({ children }) => {
 
       const { data: claims } = await supabase.from('warranty_claims').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('warranty_claims', claims, pendingIds);
+
+      const { data: ledger } = await supabase.from('staff_ledger').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('staff_ledger', ledger, pendingIds);
 
       // Professional Way: Agli dafa ke liye wahi waqt save karein jo sync shuru hone par server ne bataya tha
       await db.user_settings.put({ id: 'last_sync', value: serverNow });
@@ -342,6 +349,23 @@ export const SyncProvider = ({ children }) => {
             else if (item.table_name === 'customers' && item.action === 'delete') {
                 const realId = idMappingRef.current[item.data.id] || item.data.id;
                 const { error: supError } = await supabase.from('customers').delete().eq('id', realId);
+                error = supError;
+            }
+
+            // --- Staff Members Sync (New) ---
+            else if (item.table_name === 'staff_members' && item.action === 'create') {
+                const { error: supError } = await supabase
+                    .from('staff_members')
+                    .upsert([item.data], { onConflict: 'id' });
+                error = supError;
+            }
+            else if (item.table_name === 'staff_members' && item.action === 'update') {
+                const { id, ...updates } = item.data;
+                const { error: supError } = await supabase.from('staff_members').update(updates).eq('id', id);
+                error = supError;
+            }
+            else if (item.table_name === 'staff_members' && item.action === 'delete') {
+                const { error: supError } = await supabase.from('staff_members').delete().eq('id', item.data.id);
                 error = supError;
             }
 
@@ -646,6 +670,26 @@ export const SyncProvider = ({ children }) => {
                     .from('warranty_claims')
                     .delete()
                     .eq('id', realId);
+                error = supError;
+            }
+
+            else if (item.table_name === 'system_logs' && item.action === 'create') {
+                const { error: supError } = await supabase.from('system_logs').insert([item.data]);
+                error = supError;
+            }
+
+            else if (item.table_name === 'staff_ledger' && item.action === 'create') {
+                const { error: supError } = await supabase.from('staff_ledger').upsert([item.data], { onConflict: 'id' });
+                error = supError;
+            }
+
+            else if (item.table_name === 'staff_ledger' && item.action === 'update') {
+                const { id, ...updates } = item.data;
+                const { error: supError } = await supabase.from('staff_ledger').update(updates).eq('id', id);
+                error = supError;
+            }
+            else if (item.table_name === 'staff_ledger' && item.action === 'delete') {
+                const { error: supError } = await supabase.from('staff_ledger').delete().eq('id', item.data.id);
                 error = supError;
             }
 

@@ -20,12 +20,14 @@ import {
   ProfileOutlined,
   CreditCardOutlined,
   ToolOutlined,
-  PieChartOutlined
+  PieChartOutlined,
+  TeamOutlined 
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useSync } from '../context/SyncContext';
 import { db } from '../db';
+import { getPlanLimits } from '../config/subscriptionPlans';
 
 const { Header } = Layout;
 const { Text } = Typography;
@@ -247,6 +249,11 @@ return (
                        <ToolOutlined style={{ marginRight: '8px' }} /> App Settings
                      </span>
                   )}
+                  {location.pathname === '/staff' && (
+                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                       <TeamOutlined style={{ marginRight: '8px' }} /> Staff Management
+                     </span>
+                  )}
                   {location.pathname.startsWith('/purchases/') && (
                      <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <FileTextOutlined style={{ marginRight: '8px' }} /> Purchase Details
@@ -263,19 +270,32 @@ return (
 
           {/* Right Side: Icons & Subscription Button */}
           <Space align="center" size="small">
-            <Tooltip title={isPro ? "Pro Plan Active" : "Free Plan Limit: 50 Items"} placement="bottom">
-              <Button 
-                type={isPro ? 'primary' : 'default'} 
-                ghost={isPro}
-                icon={isPro ? <CrownOutlined /> : null}
-                onClick={() => navigate('/subscription')}
-                style={!isPro && stockCount >= 45 && stockCount < 50 ? { borderColor: token.colorWarning, color: token.colorWarning } : {}}
-                danger={!isPro && stockCount >= 50}
-                size="small"
-              >
-                {isPro ? 'PRO' : `Stock: ${stockCount}/50`}
-              </Button>
-            </Tooltip>
+            {(() => {
+              // Control Center se limit mangwayein
+              const limits = getPlanLimits(profile?.subscription_tier);
+              const maxItems = limits.max_items;
+              const isUnlimited = maxItems > 10000; // Agar limit bohot zyada hai to unlimited samjhein
+              
+              // Warning logic
+              const isNearLimit = !isUnlimited && stockCount >= (maxItems * 0.9); // 90% bhar gaya
+              const isFull = !isUnlimited && stockCount >= maxItems;
+
+              return (
+                <Tooltip title={isUnlimited ? "Pro Plan Active" : `Plan Limit: ${maxItems} Items`} placement="bottom">
+                  <Button 
+                    type={isUnlimited ? 'primary' : 'default'} 
+                    ghost={isUnlimited}
+                    icon={isUnlimited ? <CrownOutlined /> : null}
+                    onClick={() => navigate('/subscription')}
+                    style={isNearLimit && !isFull ? { borderColor: token.colorWarning, color: token.colorWarning } : {}}
+                    danger={isFull}
+                    size="small"
+                  >
+                    {isUnlimited ? 'PRO' : `Stock: ${stockCount}/${maxItems}`}
+                  </Button>
+                </Tooltip>
+              );
+            })()}
           </Space>
         </div>
       </Header>

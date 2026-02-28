@@ -83,7 +83,7 @@ export const lightThemeTokens = {
   colorHeaderText: '#09637E',    // Header ke Text aur Icons (Deep Teal)
   
   // --- Side Menu Controls ---
-  colorSiderBg: '#ffffff',           // Side Menu ka Background
+  colorSiderBg: '#EBF4F6',           // Side Menu ka Background
   colorMenuText: '#555555',          // Aam Menu ki likhai (Grey)
   colorMenuSelectedBg: '#EBF4F6',    // Selected Menu ka background (Ice Blue)
   colorMenuSelectedText: '#09637E',  // Selected Menu ki likhai (Deep Teal)

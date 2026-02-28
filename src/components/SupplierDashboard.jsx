@@ -10,6 +10,7 @@ import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
 import { useSync } from '../context/SyncContext';
 import { useTheme } from '../context/ThemeContext';
+import { getPlanLimits } from '../config/subscriptionPlans';
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -349,7 +350,26 @@ const SupplierDashboard = () => {
         }
     };
 
-    const handleAddNew = () => { setEditingSupplier(null); setIsModalVisible(true); };
+    const handleAddNew = () => { 
+        const limits = getPlanLimits(profile?.subscription_tier);
+        const isLocked = !limits.allow_supplier_management;
+        if (isLocked) {
+            modal.info({
+                title: 'Supplier Ledger Locked',
+                content: (
+                    <div>
+                        <p>Free Plan only supports <b>Cash Purchases</b>.</p>
+                        <p>To manage Supplier Ledgers (Udhaar/Khata) and Payments, please upgrade to Growth Plan.</p>
+                    </div>
+                ),
+                okText: 'Upgrade Now',
+                onOk: () => window.location.href = '/subscription'
+            });
+            return;
+        }
+        setEditingSupplier(null); 
+        setIsModalVisible(true); 
+    };
     const handleEdit = (supplier) => { setEditingSupplier(supplier); setIsModalVisible(true); };
     const handleDelete = async (supplierId) => {
         try {

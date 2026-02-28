@@ -1,0 +1,1 @@
+ALTER TABLE public.staff_ledger ADD COLUMN salary_month text;

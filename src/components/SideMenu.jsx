@@ -24,11 +24,13 @@ import {
   AlertOutlined,
   InfoCircleOutlined,
   MenuUnfoldOutlined,
-  MenuFoldOutlined
+  MenuFoldOutlined,
+  LockOutlined
 } from '@ant-design/icons';
-import { theme } from 'antd'; // Control Center connection
+import { theme } from 'antd'; 
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { useStaff } from '../context/StaffContext';
 
 const { Sider } = Layout;
 
@@ -91,6 +93,7 @@ const menuItems = [
       icon: <SettingOutlined />,
       label: 'Settings',
       children: [
+        { key: '/staff', icon: <TeamOutlined />, label: <Link to="/staff">Staff / Team</Link> },
         { key: '/profile', icon: <ProfileOutlined />, label: <Link to="/profile">Profile</Link> },
         { key: '/subscription', icon: <CreditCardOutlined />, label: <Link to="/subscription">Subscription</Link> },
         { key: '/settings', icon: <ToolOutlined />, label: <Link to="/settings">App Settings</Link> },
@@ -103,9 +106,10 @@ const menuItems = [
 const rootSubmenuKeys = ['products', 'people', 'finance', 'settings_group'];
 
 const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
-  const { token } = theme.useToken(); // Control Center se colors mangwaye
+  const { token } = theme.useToken();
   const location = useLocation();
   const { profile } = useAuth();
+  const { activeStaff, lockApp } = useStaff(); // lockApp add kiya 
   
   // State: Kaunsa menu khula hai, shuru mein khali rakha hai (sab band)
   const [openKeys, setOpenKeys] = useState([]);
@@ -130,13 +134,23 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
     await supabase.auth.signOut();
   };
 
-  // 1. Pehle menu items ko filter karein (Warranty ON/OFF ke mutabiq)
-  const filteredMenuItems = menuItems.filter(item => {
-    if (item.key === '/warranty' && profile?.warranty_system_enabled === false) {
-      return false;
+  // 1. Pehle menu items ko filter karein
+  const filteredMenuItems = menuItems.map(item => {
+    // Agar Settings Group hai, to uske bacchon (children) ko filter karein
+    if (item.key === 'settings_group') {
+      return {
+        ...item,
+        children: item.children.filter(child => {
+          // Agar Staff login hai, to Staff Management chupao
+          if (child.key === '/staff' && activeStaff) return false;
+          return true;
+        })
+      };
     }
-    return true;
+    return item;
   });
+  // Note: Humne Warranty wala check hata diya hai taake wo hamesha nazar aaye
+  // aur user jab click kare to usay "Upgrade Plan" ka message mile.
 
   // 2. Phir filtered items par map chalayein (Mobile menu band karne ke liye)
   const processedMenuItems = filteredMenuItems.map(item => {
@@ -153,10 +167,32 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
   const menuItemsWithLogout = [
     ...processedMenuItems,
     { type: 'divider' }, 
-    { key: 'logout', icon: <LogoutOutlined />, danger: true, label: 'Logout', onClick: () => {
-      handleLogout();
-      handleMenuItemClick();
-    }},
+    
+    // Naya Lock Terminal Button (Sirf Growth/Pro ke liye)
+    ...(profile?.subscription_tier !== 'free' ? [{ 
+      key: 'lock', 
+      icon: <LockOutlined />, 
+      label: activeStaff ? 'Exit Shift (Lock)' : 'Lock Terminal', 
+      onClick: () => {
+        lockApp();
+        handleMenuItemClick();
+      }
+    }] : []),
+
+    // Security: Logout button sirf tab dikhao jab koi Staff login NA HO (yani sirf Owner mode mein)
+    ...(!activeStaff ? [
+      { 
+        key: 'logout', 
+        icon: <LogoutOutlined />, 
+        danger: true, 
+        label: 'Logout Account', 
+        onClick: () => {
+          handleLogout();
+          handleMenuItemClick();
+        }
+      }
+    ] : []),
+
     { 
       key: 'toggle', 
       icon: collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />, 

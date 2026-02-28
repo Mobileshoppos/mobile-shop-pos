@@ -14,6 +14,7 @@
     "@sentry/react": "^10.29.0",
     "@supabase/supabase-js": "^2.56.0",
     "antd": "^5.27.1",
+    "bcryptjs": "^3.0.3",
     "dexie": "^4.2.1",
     "dexie-react-hooks": "^4.2.0",
     "jspdf": "^3.0.3",

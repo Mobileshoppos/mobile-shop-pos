@@ -8,6 +8,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery';
 import { formatCurrency } from '../utils/currencyFormatter';
 import DataService from '../DataService';
 import { useSync } from '../context/SyncContext';
+import { useStaff } from '../context/StaffContext';
 import { db } from '../db';
 import { useTheme } from '../context/ThemeContext';
 import AddPurchaseForm from './AddPurchaseForm';
@@ -51,6 +52,7 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
   const { token } = theme.useToken(); // Control Center Connection
   const { profile } = useAuth();
   const { isDarkMode } = useTheme();
+  const { can } = useStaff(); // <--- Naya Guard
   
   const memoizedProducts = React.useMemo(() => {
     if (!products) return [];
@@ -149,7 +151,8 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                     {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
                   </Text>
                   
-                  {/* 3-DOTS MENU (Ab Price ke barabar mein) */}
+                  {/* 3-DOTS MENU (Sirf Ijazat walo ke liye) */}
+                  {can('can_edit_inventory') && (
                   <Dropdown 
                     trigger={['click']}
                     menu={{
@@ -186,6 +189,7 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                         style={{ marginTop: '-2px' }} 
                     />
                   </Dropdown>
+                  )}
 
                 </div>
               </div>
@@ -223,11 +227,13 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                            <span style={{ fontSize: '12px', opacity: 0.8, marginRight: '4px', color: token.colorTextSecondary }}>Sale:</span>
                            {formatCurrency(variant.sale_price, profile?.currency)}
                         </Text>
-                        {/* BUY PRICE - FONT INCREASED TO 12px */}
-                        <Text type="secondary" style={{ fontSize: '12px', lineHeight: '1.2' }}>
-                           <span style={{ fontSize: '10px', opacity: 0.8, marginRight: '4px' }}>Buy:</span>
-                           {formatCurrency(variant.purchase_price, profile?.currency)}
-                        </Text>
+                        {/* BUY PRICE - Sirf Owner ya Report dekhne wale ko dikhega */}
+                        {can('can_view_reports') && (
+                          <Text type="secondary" style={{ fontSize: '12px', lineHeight: '1.2' }}>
+                             <span style={{ fontSize: '10px', opacity: 0.8, marginRight: '4px' }}>Buy:</span>
+                             {formatCurrency(variant.purchase_price, profile?.currency)}
+                          </Text>
+                        )}
                       </div>
 
                       {/* ATTRIBUTES - FONT INCREASED TO 14px */}
@@ -250,36 +256,40 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                       </div>
                     </div>
 
-                    {/* ADD STOCK BUTTON */}
-<Button 
-  type="text" 
-  icon={<PlusOutlined />} 
-  size="small" 
-  style={{ marginLeft: '8px', color: token.colorSuccess, fontSize: '16px' }} 
-  onClick={() => onAddStock(variant)} 
-  title="Add Stock / Add New Variants"
-/>
-<Button 
-  type="text" 
-  icon={<EditOutlined />} 
-  size="small" 
-  style={{ marginLeft: '8px', color: 'token.colorPrimary', fontSize: '16px' }} 
-  onClick={() => {
-      const cat = categories?.find(c => c.id === product.category_id);
-      const isImei = cat ? cat.is_imei_based : false;
-      onQuickEdit(variant, isImei); 
-  }}
-  title="Edit Barcode/Price"
-/>
-<Button 
-  type="text" 
-  danger
-  icon={<AlertOutlined />} 
-  size="small" 
-  style={{ marginLeft: '8px', fontSize: '16px' }} 
-  onClick={() => onMarkDamaged(variant)} 
-  title="Mark as Damaged/Defective"
-/>
+                    {/* ADD STOCK BUTTON (Sirf Ijazat walo ke liye) */}
+{can('can_edit_inventory') && (
+  <>
+    <Button 
+      type="text" 
+      icon={<PlusOutlined />} 
+      size="small" 
+      style={{ marginLeft: '8px', color: token.colorSuccess, fontSize: '16px' }} 
+      onClick={() => onAddStock(variant)} 
+      title="Add Stock / Add New Variants"
+    />
+    <Button 
+      type="text" 
+      icon={<EditOutlined />} 
+      size="small" 
+      style={{ marginLeft: '8px', color: 'token.colorPrimary', fontSize: '16px' }} 
+      onClick={() => {
+          const cat = categories?.find(c => c.id === product.category_id);
+          const isImei = cat ? cat.is_imei_based : false;
+          onQuickEdit(variant, isImei); 
+      }}
+      title="Edit Barcode/Price"
+    />
+    <Button 
+      type="text" 
+      danger
+      icon={<AlertOutlined />} 
+      size="small" 
+      style={{ marginLeft: '8px', fontSize: '16px' }} 
+      onClick={() => onMarkDamaged(variant)} 
+      title="Mark as Damaged/Defective"
+    />
+  </>
+)}
                   </div>
                 ))}
                 {/* AGAR PRODUCT KHALI HAI TO YEH DIKHAO */}
@@ -292,14 +302,18 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                       border: '1px dashed #d9d9d9'
                   }}>
                       <Text type="secondary" style={{ display: 'block', marginBottom: '8px' }}>No stock added yet</Text>
-                      <Button 
-                        ref={refFirstStock}
-                        type="dashed" 
-                        icon={<PlusOutlined />} 
-                        onClick={() => onAddStock(product)} // Yahan hum poora product pass kar rahe hain
-                      >
-                        Add First Stock
-                      </Button>
+                      
+                      {/* Sirf Owner stock add kar sake */}
+                      {can('can_edit_inventory') && (
+                        <Button 
+                          ref={refFirstStock}
+                          type="dashed" 
+                          icon={<PlusOutlined />} 
+                          onClick={() => onAddStock(product)} 
+                        >
+                          Add First Stock
+                        </Button>
+                      )}
                   </div>
                 )}
               </div>
@@ -313,6 +327,7 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
 
 const Inventory = () => {
   const { token } = theme.useToken(); // Control Center Connection
+  const { can } = useStaff(); // <--- Naya Guard
   const refAddModel = useRef(null);
   const refSearch = useRef(null);
   const refFilters = useRef(null);
@@ -891,7 +906,7 @@ const Inventory = () => {
             <DatabaseOutlined /> {showLowStockOnly ? 'Low Stock Products' : 'Inventory'}
           </Title>
         )}
-        {isMobile && (<Button ref={refAddModel} type="primary" size="middle" onClick={() => setIsProductModalOpen(true)} style={{ width: '100%', marginTop: '10px' }}>Add New Product Model</Button>)}
+        {isMobile && can('can_edit_inventory') && (<Button ref={refAddModel} type="primary" size="middle" onClick={() => setIsProductModalOpen(true)} style={{ width: '100%', marginTop: '10px' }}>Add New Product Model</Button>)}
       </div>
 
       <div style={{ marginBottom: '18px', padding: isMobile ? '0 8px' : '0' }}>
@@ -966,7 +981,7 @@ const Inventory = () => {
                 onClick={handleResetFilters} 
                 title="Reset All Filters" 
              />
-             {!isMobile && (
+             {!isMobile && can('can_edit_inventory') && (
                <Button 
                  ref={refAddModel} 
                  type="primary" 

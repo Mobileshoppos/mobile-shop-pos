@@ -16,6 +16,8 @@ import { useSync } from '../context/SyncContext';
 import DataService from '../DataService';
 import { generateInvoiceId } from '../utils/idGenerator';
 import { useTheme } from '../context/ThemeContext';
+import { getPlanLimits } from '../config/subscriptionPlans';
+import { useStaff } from '../context/StaffContext';
 
 const { Title, Text } = Typography;
 // Global Countries List
@@ -65,6 +67,7 @@ const POS = () => {
   const [advancedFilters, setAdvancedFilters] = useState([]);
   const { message, modal } = App.useApp();
   const { user, profile, refetchStockCount } = useAuth();
+  const { activeStaff } = useStaff(); // <--- NAYA IZAFA (AUDIT TRAIL)
   const { processSyncQueue } = useSync();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -553,6 +556,7 @@ const POS = () => {
               amount_paid_at_sale: paymentMethod === 'Paid' ? grandTotal : amountPaid, 
               payment_status: (paymentMethod === 'Unpaid' && (grandTotal - amountPaid > 0)) ? 'Unpaid' : 'Paid', 
               user_id: user.id,
+              staff_id: activeStaff?.id || null, // <--- NAYA IZAFA (AUDIT TRAIL)
               created_at: saleDate
           };
 
@@ -587,45 +591,64 @@ const POS = () => {
                 });
                 inventoryIdsToUpdate.push({ id: inventoryId, qtySold: 1 });
             } else {
-                // Bulk Item: Sirf wo row dhoondein jis mein kafi quantity ho
-                const batchItem = await db.inventory
+                // --- FIFO LOGIC START (Updated for Multi-Batch Sales) ---
+                let qtyNeeded = cartItem.quantity;
+
+                // 1. Saare available batches dhoondein (Purane se naye ki taraf sorted)
+                const allBatches = await db.inventory
                     .where('product_id').equals(cartItem.product_id)
                     .filter(item => 
                         (item.status || '').toLowerCase() === 'available' && 
-                        (item.available_qty || 0) >= cartItem.quantity &&
+                        (item.available_qty || 0) > 0 &&
                         JSON.stringify(item.item_attributes || {}) === JSON.stringify(cartItem.item_attributes || {})
                     )
-                    .first();
+                    .sortBy('created_at'); // FIFO: Oldest first
 
-                if (!batchItem) {
-                     throw new Error(`Not enough stock locally for ${cartItem.product_name}.`);
+                // 2. Check: Kya total stock kaafi hai?
+                const totalAvailable = allBatches.reduce((sum, b) => sum + (b.available_qty || 0), 0);
+                if (totalAvailable < qtyNeeded) {
+                     throw new Error(`Not enough stock locally for ${cartItem.product_name}. Required: ${qtyNeeded}, Available: ${totalAvailable}`);
                 }
 
-                // Warranty Calculation for Bulk
-                const parentProductBulk = allProducts.find(p => p.id === cartItem.product_id);
-                const warrantyDaysBulk = parentProductBulk?.default_warranty_days || 0;
-                let expiryDateBulk = null;
-                
-                if (profile?.warranty_system_enabled !== false && !cartItem.no_warranty && warrantyDaysBulk > 0) {
-                    const d = new Date();
-                    d.setDate(d.getDate() + warrantyDaysBulk);
-                    expiryDateBulk = d.toISOString();
-                }
+                // 3. Batches mein se stock nikalein (Loop)
+                for (const batch of allBatches) {
+                    if (qtyNeeded <= 0) break;
 
-                allSaleItemsToInsert.push({
-                    id: crypto.randomUUID(),
-                    sale_id: saleId,
-                    inventory_id: batchItem.id,
-                    product_id: cartItem.product_id,
-                    product_name_snapshot: cartItem.product_name,
-                    quantity: cartItem.quantity,
-                    price_at_sale: cartItem.sale_price,
-                    purchase_price: cartItem.purchase_price || 0,
-                    user_id: user.id,
-                    warranty_expiry: expiryDateBulk // Naya Column
-                });
-                // Hum ID aur bechi gayi quantity dono save kar rahe hain
-                inventoryIdsToUpdate.push({ id: batchItem.id, qtySold: cartItem.quantity });
+                    // Is batch se kitna le sakte hain? Ya to poora batch, ya jitna chahiye
+                    const takeFromBatch = Math.min(qtyNeeded, batch.available_qty);
+
+                    // Warranty Calculation (Har batch ke liye same rahegi)
+                    const parentProductBulk = allProducts.find(p => p.id === cartItem.product_id);
+                    const warrantyDaysBulk = parentProductBulk?.default_warranty_days || 0;
+                    let expiryDateBulk = null;
+                    
+                    if (profile?.warranty_system_enabled !== false && !cartItem.no_warranty && warrantyDaysBulk > 0) {
+                        const d = new Date();
+                        d.setDate(d.getDate() + warrantyDaysBulk);
+                        expiryDateBulk = d.toISOString();
+                    }
+
+                    // Sale Item Entry (Har batch ke liye alag entry banegi)
+                    allSaleItemsToInsert.push({
+                        id: crypto.randomUUID(),
+                        sale_id: saleId,
+                        inventory_id: batch.id,
+                        product_id: cartItem.product_id,
+                        product_name_snapshot: cartItem.product_name,
+                        quantity: takeFromBatch, // Sirf utna jitna is batch se liya
+                        price_at_sale: cartItem.sale_price,
+                        purchase_price: batch.purchase_price || 0, // Asli khareed qeemat is batch ki
+                        user_id: user.id,
+                        warranty_expiry: expiryDateBulk
+                    });
+
+                    // Update List mein daalein
+                    inventoryIdsToUpdate.push({ id: batch.id, qtySold: takeFromBatch });
+
+                    // Baqi kitna chahiye?
+                    qtyNeeded -= takeFromBatch;
+                }
+                // --- FIFO LOGIC END ---
             }
           }
 
@@ -1128,7 +1151,36 @@ const POS = () => {
             <Form.Item label="Customer" style={{ marginBottom: '8px' }}>
               <Space.Compact style={{ width: '100%' }}>
                 <Select showSearch placeholder="Select a customer (optional)" style={{ width: '100%' }} value={selectedCustomer} onChange={(value) => setSelectedCustomer(value)} filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())} options={customers.map(customer => ({ value: customer.id, label: `${customer.name} - ${customer.phone_number}` }))} allowClear />
-                <Button icon={<UserAddOutlined />} onClick={() => setIsAddCustomerModalOpen(true)} />
+                {(() => {
+                  const limits = getPlanLimits(profile?.subscription_tier);
+                  const isLocked = !limits.allow_customer_management;
+                  return (
+                    <Tooltip title={isLocked ? "Upgrade to add new customers" : ""}>
+                      <Button 
+                        icon={<UserAddOutlined />} 
+                        onClick={() => {
+                          if (isLocked) {
+                              modal.info({
+                                  title: 'Customer Management Locked',
+                                  content: (
+                                      <div>
+                                          <p>In Free Plan, you can only use the built-in <b>Walk-in Customer</b>.</p>
+                                          <p>To save customer details and maintain ledgers (Khata), please upgrade to Growth Plan.</p>
+                                      </div>
+                                  ),
+                                  okText: 'View Plans',
+                                  onOk: () => window.location.href = '/subscription'
+                              });
+                          } else {
+                              setIsAddCustomerModalOpen(true);
+                          }
+                        }}
+                        disabled={isLocked} // Button ko disable bhi karna hai
+                        style={{ opacity: isLocked ? 0.7 : 1 }}
+                      />
+                    </Tooltip>
+                  );
+                })()}
               </Space.Compact>
             </Form.Item>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px', flexWrap: 'wrap' }}>
@@ -1185,15 +1237,22 @@ const POS = () => {
                             
                             <div style={{ marginTop: '4px' }}>
                               <Space wrap size={[0, 4]}>
-                                {/* General attributes (sirf value dikhayein) */}
-                                {item.item_attributes && Object.entries(item.item_attributes).map(([key, value]) => {
-                                  if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) {
-                                    return null;
+                                {/* General attributes (comma separated) */}
+                                {(() => {
+                                  const attrValues =[];
+                                  if (item.item_attributes) {
+                                    Object.entries(item.item_attributes).forEach(([key, value]) => {
+                                      if (value && !key.toLowerCase().includes('imei') && !key.toLowerCase().includes('serial')) {
+                                        attrValues.push(value);
+                                      }
+                                    });
                                   }
-                                  return <Tag key={key}>{value}</Tag>;
-                                })}
+                                  return attrValues.length > 0 ? (
+                                    <Text type="secondary" style={{ fontSize: '14px', marginRight: '4px' }}>{attrValues.join(', ')}</Text>
+                                  ) : null;
+                                })()}
                                 {/* IMEI/Serial ke liye alag se Tag (sirf value dikhayein) */}
-                                {item.imei && <Tag color="purple" key="imei">{item.imei}</Tag>}
+                                {item.imei && <Tag color="purple" key="imei" style={{ margin: 0 }}>{item.imei}</Tag>}
                                 
                                 {/* Global Switch Check */}
                             {profile?.warranty_system_enabled !== false && item.warranty_days > 0 && (
@@ -1226,30 +1285,35 @@ const POS = () => {
                           <Col><Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleFullRemoveFromCart(item.variant_id)} /></Col>
                         </Row>
                         
-                        {(item.category_is_imei_based || item.imei) ? (
-  <Row justify="space-between" align="middle" style={{ marginTop: '4px' }}>
-    <Col><Text type="secondary">Price:</Text></Col>
-    <Col><Text strong>{formatCurrency(item.sale_price, profile?.currency)}</Text></Col>
-  </Row>
-) : (
-  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-    <InputNumber size="small" style={{ flex: 1 }} prefix={profile?.currency ? `${profile.currency} ` : ''} value={item.sale_price} 
-      onChange={(value) => handleCartItemUpdate(item.variant_id, 'sale_price', value || 0)} 
-      min={0} 
-    />
-    <InputNumber 
-      size="small" 
-      style={{ width: '60px' }}
-      value={item.quantity} 
-      onChange={(value) => handleCartItemUpdate(item.variant_id, 'quantity', value || 1)} 
-      min={1} 
-      max={allProducts.find(p => p.id === item.product_id)?.quantity || item.quantity} 
-    />
-    <Text strong style={{ flex: 1, textAlign: 'right', minWidth: '80px' }}>
-  {formatCurrency(item.sale_price * item.quantity, profile?.currency)}
-</Text>
-  </div>
-)}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                          {profile?.allow_cart_price_change !== false ? (
+                            <InputNumber size="small" style={{ flex: 1 }} prefix={profile?.currency ? `${profile.currency} ` : ''} value={item.sale_price} 
+                              onChange={(value) => handleCartItemUpdate(item.variant_id, 'sale_price', value || 0)} 
+                              min={0} 
+                            />
+                          ) : (
+                            <div style={{ flex: 1 }}>
+                              <Text type="secondary" style={{ marginRight: '8px' }}>Price:</Text>
+                              <Text strong>{formatCurrency(item.sale_price, profile?.currency)}</Text>
+                            </div>
+                          )}
+                          
+                          {!(item.category_is_imei_based || item.imei) && (
+                            <>
+                              <InputNumber 
+                                size="small" 
+                                style={{ width: '60px' }}
+                                value={item.quantity} 
+                                onChange={(value) => handleCartItemUpdate(item.variant_id, 'quantity', value || 1)} 
+                                min={1} 
+                                max={allProducts.find(p => p.id === item.product_id)?.quantity || item.quantity} 
+                              />
+                              <Text strong style={{ flex: 1, textAlign: 'right', minWidth: '80px' }}>
+                                {formatCurrency(item.sale_price * item.quantity, profile?.currency)}
+                              </Text>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </List.Item>
                   ); 
