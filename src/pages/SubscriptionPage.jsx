@@ -13,7 +13,7 @@ import {
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import { formatCurrency } from '../utils/currencyFormatter';
+import { useNavigate } from 'react-router-dom';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -21,11 +21,12 @@ const SubscriptionPage = () => {
   const { token } = theme.useToken();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [selectedPlan, setSelectedPlan] = useState(null);
 
-  // --- PLANS CONFIGURATION ---
+  // --- PLANS CONFIGURATION (Marketing Optimized) ---
   const plans = [
     {
       key: 'free',
@@ -33,13 +34,17 @@ const SubscriptionPage = () => {
       icon: <StarOutlined style={{ fontSize: '24px', color: '#8c8c8c' }} />,
       priceMonthly: 0,
       priceYearly: 0,
-      description: 'Perfect for new or very small shops.',
+      description: 'Foundational suite for nano-retailers.',
       features: [
-        'Up to 50 Stock Items',
-        '0 Staff Members (Owner only)',
-        'Basic POS & Sales',
-        'PDF & Thermal Receipts',
-        'Customer Management'
+        '200 Active Inventory Slots (SKUs)',
+        '100 Master Product Profiles',
+        '50 Intelligent Customer Directories',
+        '10 Strategic Supplier Profiles',
+        'Owner-Only Master Access',
+        'Standard POS Execution Terminal',
+        'PDF & Thermal Receipt Engine',
+        'Real-time Cloud Data Redundancy',
+        'Basic Inventory Threshold Alerts'
       ],
       color: '#8c8c8c'
     },
@@ -49,16 +54,21 @@ const SubscriptionPage = () => {
       icon: <ThunderboltOutlined style={{ fontSize: '24px', color: token.colorPrimary }} />,
       priceMonthly: 999,
       priceYearly: 9500,
-      description: 'Best for growing shops with a salesman.',
+      description: 'High-performance engine for rising shops.',
       features: [
-        'Up to 500 Stock Items',
-        '1 Staff Member (PIN System)',
-        'Supplier Ledger & Business',
-        'Expense Tracking',
-        'Unlimited Sales History'
+        '2,500 High-Capacity Inventory Slots',
+        '1,000 Master Product Profiles',
+        '1,000 Advanced Customer Ledgers',
+        '100 Strategic Vendor Profiles',
+        '2 Secure Staff Execution Seats',
+        'Multi-Level Access Security (MAS)',
+        'Full Expense & Overhead Tracking',
+        'Automated Supplier Payment Ledger',
+        'Dynamic Sales Forecasting (7 Days)',
+        'Comprehensive Business Audit Trail',
+        'Global Data Synchronization'
       ],
-      color: token.colorPrimary,
-      popular: true
+      color: token.colorPrimary
     },
     {
       key: 'pro',
@@ -66,15 +76,23 @@ const SubscriptionPage = () => {
       icon: <CrownOutlined style={{ fontSize: '24px', color: '#faad14' }} />,
       priceMonthly: 1799,
       priceYearly: 17500,
-      description: 'Ultimate power for professional shops.',
+      description: 'Enterprise-grade suite for power users.',
       features: [
-        'Unlimited Stock Items',
-        'Up to 3 Staff Members',
-        'Warranty & Claims System',
-        'Advanced Profit/Loss Reports',
-        'Priority WhatsApp Support'
+        '50,000 Industrial-Grade Stock Slots',
+        '5,000 Master Product Profiles',
+        '5,000 Premium Customer Accounts',
+        '500 Strategic Supplier Partnerships',
+        '5 Concurrent User Terminals (Staff)',
+        'End-to-End Warranty Lifecycle (RMA)',
+        'Enterprise Profit/Loss Analytics',
+        'Custom Low-Stock Intelligence',
+        'Archived History Management (500)',
+        'Priority 24/7 Technical Support',
+        'Advanced Data Export & Backup Suite',
+        'Early Access to New Modules'
       ],
-      color: '#faad14'
+      color: '#faad14',
+      popular: true // User ki request par Pro ko popular kiya
     }
   ];
 
@@ -89,10 +107,10 @@ const SubscriptionPage = () => {
     <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
       <div style={{ textAlign: 'center', marginBottom: '40px' }}>
         <Title level={isMobile ? 3 : 1}>
-          <CreditCardOutlined /> Choose the Right Plan for Your Business
+          <CreditCardOutlined /> Elevate Your Business Intelligence
         </Title>
         <Paragraph type="secondary" style={{ fontSize: '16px' }}>
-          No setup fees. No hidden charges. Upgrade or downgrade anytime.
+          Select a scalable architecture that aligns with your operational volume.
         </Paragraph>
 
         <Radio.Group 
@@ -103,8 +121,8 @@ const SubscriptionPage = () => {
           size="large"
           style={{ marginTop: '10px' }}
         >
-          <Radio.Button value="monthly">Monthly</Radio.Button>
-          <Radio.Button value="yearly">Yearly (Save ~20%)</Radio.Button>
+          <Radio.Button value="monthly">Monthly Billing</Radio.Button>
+          <Radio.Button value="yearly">Yearly (Loyalty Discount ~20%)</Radio.Button>
         </Radio.Group>
       </div>
 
@@ -115,7 +133,11 @@ const SubscriptionPage = () => {
           
           return (
             <Col xs={24} lg={plan.popular ? 8 : 7} key={plan.key}>
-              <Badge.Ribbon text="Best Value" color="volcano" style={{ display: plan.popular ? 'block' : 'none' }}>
+              <Badge.Ribbon 
+                text="Most Popular" 
+                color="gold" 
+                style={{ display: plan.popular ? 'block' : 'none' }}
+              >
                 <Card
                   hoverable
                   style={{
@@ -130,19 +152,19 @@ const SubscriptionPage = () => {
                   <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                     {plan.icon}
                     <Title level={3} style={{ margin: '10px 0 0 0' }}>{plan.title}</Title>
-                    {isCurrent && <Tag color="green" style={{ marginTop: '5px' }}>Current Plan</Tag>}
+                    {isCurrent && <Tag color="green" style={{ marginTop: '5px' }}>Active Subscription</Tag>}
                   </div>
 
                   <div style={{ textAlign: 'center', marginBottom: '20px', minHeight: '80px' }}>
                     <Title level={2} style={{ margin: 0 }}>
                       {price === 0 ? 'FREE' : `PKR ${price.toLocaleString()}`}
                     </Title>
-                    <Text type="secondary">per {billingCycle === 'monthly' ? 'month' : 'year'}</Text>
+                    <Text type="secondary">per {billingCycle === 'monthly' ? 'month' : 'annum'}</Text>
                   </div>
 
                   <Divider style={{ margin: '12px 0' }} />
                   
-                  <Text strong style={{ display: 'block', marginBottom: '15px', textAlign: 'center' }}>
+                  <Text strong style={{ display: 'block', marginBottom: '15px', textAlign: 'center', minHeight: '40px' }}>
                     {plan.description}
                   </Text>
 
@@ -150,8 +172,8 @@ const SubscriptionPage = () => {
                     dataSource={plan.features}
                     renderItem={(item) => (
                       <List.Item style={{ border: 'none', padding: '6px 0' }}>
-                        <CheckCircleOutlined style={{ color: token.colorSuccess, marginRight: '10px' }} />
-                        <Text>{item}</Text>
+                        <CheckCircleOutlined style={{ color: token.colorSuccess, marginRight: '10px', fontSize: '12px' }} />
+                        <Text style={{ fontSize: '13px' }}>{item}</Text>
                       </List.Item>
                     )}
                   />
@@ -172,7 +194,7 @@ const SubscriptionPage = () => {
                     disabled={isCurrent || plan.key === 'free'}
                     onClick={() => handleUpgradeClick(plan)}
                   >
-                    {isCurrent ? 'Active Now' : plan.key === 'free' ? 'Basic Features' : `Upgrade to ${plan.key.toUpperCase()}`}
+                    {isCurrent ? 'Current Plan' : plan.key === 'free' ? 'Standard Access' : `Deploy ${plan.title}`}
                   </Button>
                 </Card>
               </Badge.Ribbon>
@@ -188,39 +210,39 @@ const SubscriptionPage = () => {
         onCancel={() => setIsModalVisible(false)}
         footer={[
           <Button key="close" type="primary" onClick={() => setIsModalVisible(false)}>
-            I have made the payment
+            I have completed the transfer
           </Button>,
         ]}
       >
         <Paragraph>
-          To activate your <strong>{selectedPlan?.title}</strong>, please follow these steps:
+          To initialize your <strong>{selectedPlan?.title}</strong> architecture, please complete the following verification steps:
         </Paragraph>
         <Divider />
         <Steps direction="vertical" current={0} size="small">
           <Steps.Step 
-            title="Transfer Payment" 
+            title="Secure Asset Transfer" 
             icon={<BankOutlined />}
             description={
               <div style={{ marginTop: '8px' }}>
                 <Text>
-                  Amount: <Text strong style={{ fontSize: '16px', color: token.colorError }}>
+                  Settlement Amount: <Text strong style={{ fontSize: '16px', color: token.colorError }}>
                     PKR {(billingCycle === 'monthly' ? selectedPlan?.priceMonthly : selectedPlan?.priceYearly)?.toLocaleString()}
                   </Text>
                 </Text>
                 <Card size="small" style={{ marginTop: '10px', backgroundColor: token.colorFillAlter }}>
-                  <Text strong>Account Title:</Text> Rashid Ali<br/>
-                  <Text strong>EasyPaisa/Raast ID:</Text> 0326 2324446<br/>
-                  <Text type="secondary" style={{ fontSize: '12px' }}>* Please mention your shop name in payment notes.</Text>
+                  <Text strong>Beneficiary Name:</Text> Rashid Ali<br/>
+                  <Text strong>Digital Wallet/Raast:</Text> 0326 2324446<br/>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>* Attach shop identifier in transaction notes for expedited sync.</Text>
                 </Card>
               </div>
             } 
           />
           <Steps.Step 
-            title="Send Receipt" 
+            title="Authentication & Proof" 
             icon={<WhatsAppOutlined />}
             description={
               <Text>
-                Send payment screenshot to: <br/>
+                Dispatch digital receipt to our verification node: <br/>
                 <a href="https://wa.me/923262324446" target="_blank" rel="noreferrer">
                   <strong>+92 326 2324446</strong>
                 </a>
@@ -228,20 +250,20 @@ const SubscriptionPage = () => {
             } 
           />
           <Steps.Step 
-            title="Enjoy Premium Features" 
+            title="Module Activation" 
             icon={<RocketOutlined />}
-            description="Your account will be upgraded within 1-2 hours after verification." 
+            description="Enterprise modules will be provisioned within 60-120 minutes post-verification." 
           />
         </Steps>
       </Modal>
 
-      {/* --- EXPIRY INFO (If Pro/Growth) --- */}
+      {/* --- EXPIRY INFO --- */}
       {(currentTier !== 'free') && profile?.subscription_expires_at && (
         <div style={{ textAlign: 'center', marginTop: '40px' }}>
           <Alert
             message={
               <Text>
-                Your current subscription is valid until: <strong>
+                Your enterprise license is active until: <strong>
                 {new Date(profile.subscription_expires_at).toLocaleDateString('en-PK', { year: 'numeric', month: 'long', day: 'numeric' })}
                 </strong>
               </Text>

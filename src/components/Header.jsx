@@ -21,7 +21,8 @@ import {
   CreditCardOutlined,
   ToolOutlined,
   PieChartOutlined,
-  TeamOutlined 
+  TeamOutlined,
+  SyncOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -44,8 +45,16 @@ const titleContainerStyle = {
 // Hum ne yahan 'collapsed' aur 'setCollapsed' receive kiya hai App.jsx se
 const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
   const { profile, isPro, stockCount, lowStockCount } = useAuth();
-  const { pendingCount, stuckCount, retryAll } = useSync();
+  const { pendingCount, stuckCount, retryAll, isSyncing, syncAllData, processSyncQueue } = useSync();
   const [isSyncModalOpen, setIsSyncModalOpen] = React.useState(false);
+
+  // NAYA: Manual Sync Function (Upload & Download)
+  const handleManualSync = async () => {
+    if (!isSyncing) {
+      await processSyncQueue(); // 1. Pehle local data server par bhejein
+      await syncAllData();      // 2. Phir server se naya data download karein
+    }
+  };
   const isSyncMenuOpen = isSyncModalOpen;
   const [stuckItems, setStuckItems] = React.useState([]);
 
@@ -169,6 +178,21 @@ return (
                     boxShadow: (pendingCount === 0 && stuckCount === 0) ? `0 0 8px ${token.colorSuccess}` : 'none',
                     transition: 'all 0.3s'
                   }} />
+                </Tooltip>
+
+                {/* NAYA: Sync Now Button (Icon) */}
+                <Tooltip title={isSyncing ? "Syncing data..." : "Sync Now (Upload & Download)"}>
+                  <SyncOutlined 
+                    spin={isSyncing} 
+                    onClick={handleManualSync}
+                    style={{ 
+                      fontSize: '16px', 
+                      color: isSyncing ? token.colorPrimary : token.colorTextSecondary,
+                      cursor: isSyncing ? 'default' : 'pointer',
+                      marginLeft: '4px',
+                      transition: 'color 0.3s'
+                    }} 
+                  />
                 </Tooltip>
               </div>
               {/* Page Titles (Left Aligned) */}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List, Dropdown, Tabs, Descriptions, Divider } from 'antd';
-import { ShopOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, EyeOutlined } from '@ant-design/icons';
+import { ShopOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, EyeOutlined, LockOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -273,6 +273,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
 
 
 const SupplierDashboard = () => {
+    const navigate = useNavigate(); // Naya Hook
     const { token } = theme.useToken();
     const { isDarkMode } = useTheme();
     const searchInputRef = useRef(null);
@@ -352,18 +353,32 @@ const SupplierDashboard = () => {
 
     const handleAddNew = () => { 
         const limits = getPlanLimits(profile?.subscription_tier);
-        const isLocked = !limits.allow_supplier_management;
+        const isFeatureLocked = !limits.allow_supplier_management;
+        const currentCount = suppliers.length;
+        const isLimitReached = currentCount >= limits.max_suppliers;
+        const isLocked = isFeatureLocked || isLimitReached;
+        
         if (isLocked) {
-            modal.info({
-                title: 'Supplier Ledger Locked',
+            modal.confirm({
+                title: isFeatureLocked ? 'Supplier Ledger Locked' : 'Supplier Limit Reached',
                 content: (
                     <div>
-                        <p>Free Plan only supports <b>Cash Purchases</b>.</p>
-                        <p>To manage Supplier Ledgers (Udhaar/Khata) and Payments, please upgrade to Growth Plan.</p>
+                        {isFeatureLocked ? (
+                            <>
+                                <p>Free Plan only supports <b>Cash Purchases</b>.</p>
+                                <p>To manage Supplier Ledgers (Udhaar/Khata) and Payments, please upgrade to Growth or Pro Plan.</p>
+                            </>
+                        ) : (
+                            <>
+                                <p>You have reached your plan's limit of <b>{limits.max_suppliers} suppliers</b>.</p>
+                                <p>Please upgrade your subscription to add more suppliers.</p>
+                            </>
+                        )}
                     </div>
                 ),
-                okText: 'Upgrade Now',
-                onOk: () => window.location.href = '/subscription'
+                okText: 'View Plans',
+                cancelText: 'Close',
+                onOk: () => navigate('/subscription')
             });
             return;
         }
@@ -576,23 +591,50 @@ const SupplierDashboard = () => {
                     renderSupplierDetails()
                 ) : (
                     <Card>
-                        <div style={{ padding: '8px 0 16px 0' }}>
-                            <Flex gap="small">
-                                <Input
-                                    ref={searchInputRef}
-                                    placeholder="Search..."
-                                    prefix={<SearchOutlined />}
-                                    value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
-                                    style={{ flexGrow: 1 }}
-                                />
-                                <Button 
-                                    icon={showArchived ? <ReloadOutlined /> : <InboxOutlined />} 
-                                    onClick={() => setShowArchived(!showArchived)} 
-                                    danger={showArchived}
-                                />
-                                <Button type="primary" icon={<PlusOutlined />} onClick={handleAddNew} />
-                            </Flex>
+                        <div style={{ marginBottom: '16px' }}>
+                            {(() => {
+                                const limits = getPlanLimits(profile?.subscription_tier);
+                                const isFeatureLocked = !limits.allow_supplier_management;
+                                const currentCount = suppliers.length;
+                                const isLimitReached = currentCount >= limits.max_suppliers;
+                                const isLocked = isFeatureLocked || isLimitReached;
+                                return (
+                                    <Flex vertical gap="middle">
+                                        <Flex justify="space-between" align="center">
+                                            <Space size="middle">
+                                                <Button 
+                                                    icon={showArchived ? <ReloadOutlined /> : <InboxOutlined />} 
+                                                    onClick={() => setShowArchived(!showArchived)} 
+                                                    type={showArchived ? 'primary' : 'default'}
+                                                    danger={showArchived}
+                                                    title={showArchived ? 'Back to Active' : 'View Archived'}
+                                                />
+                                            </Space>
+                                            <Button
+                                                type="primary"
+                                                icon={isLocked ? <LockOutlined /> : <PlusOutlined />}
+                                                size="large"
+                                                onClick={handleAddNew}
+                                                style={isLocked ? { 
+                                                    color: token.colorTextDisabled, 
+                                                    backgroundColor: token.colorFillTertiary, 
+                                                    borderColor: token.colorBorder 
+                                                } : {}}
+                                            >
+                                                Add Supplier
+                                            </Button>
+                                        </Flex>
+                                        <Input
+                                            ref={searchInputRef}
+                                            placeholder="Search by name..."
+                                            prefix={<SearchOutlined />}
+                                            value={searchTerm}
+                                            onChange={e => setSearchTerm(e.target.value)}
+                                            allowClear
+                                        />
+                                    </Flex>
+                                );
+                            })()}
                         </div>
                         {loading ? <div style={{textAlign: 'center', padding: '20px'}}><Spin/></div> :
                             <List
@@ -615,26 +657,49 @@ const SupplierDashboard = () => {
                 // Background ko 'transparent' kar diya taake colors kharab na hon
                 <Layout style={{ background: 'transparent', borderRadius: token.borderRadiusLG, overflow: 'hidden', height: 'calc(100vh - 140px)' }}>
                     <Sider width={320} style={{ background: token.colorBgContainer, borderRight: `1px solid ${token.colorBorderSecondary}` }}>
-                        <div style={{ padding: '12px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
-                            <Flex gap="small">
-                                <Input
-                                    ref={searchInputRef}
-                                    placeholder="Search..."
-                                    prefix={<SearchOutlined />}
-                                    value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
-                                    style={{ flexGrow: 1 }}
-                                />
-                                {/* Archive Button Yahan Aa Gaya */}
-                                <Button 
-                                    icon={showArchived ? <ReloadOutlined /> : <InboxOutlined />} 
-                                    onClick={() => setShowArchived(!showArchived)} 
-                                    type={showArchived ? 'primary' : 'default'}
-                                    danger={showArchived}
-                                    title={showArchived ? 'Back to Active' : 'View Archived'}
-                                />
-                                <Button type="primary" icon={<PlusOutlined />} onClick={handleAddNew} />
-                            </Flex>
+                        <div style={{ padding: '16px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+                            {(() => {
+                                const limits = getPlanLimits(profile?.subscription_tier);
+                                const isFeatureLocked = !limits.allow_supplier_management;
+                                const currentCount = suppliers.length;
+                                const isLimitReached = currentCount >= limits.max_suppliers;
+                                const isLocked = isFeatureLocked || isLimitReached;
+                                return (
+                                    <Flex vertical gap="middle">
+                                        <Flex justify="space-between" align="center">
+                                            <Space size="middle">
+                                                <Button 
+                                                    icon={showArchived ? <ReloadOutlined /> : <InboxOutlined />} 
+                                                    onClick={() => setShowArchived(!showArchived)} 
+                                                    type={showArchived ? 'primary' : 'default'}
+                                                    danger={showArchived}
+                                                    title={showArchived ? 'Back to Active' : 'View Archived'}
+                                                />
+                                            </Space>
+                                            <Button
+                                                type="primary"
+                                                icon={isLocked ? <LockOutlined /> : <PlusOutlined />}
+                                                onClick={handleAddNew}
+                                                style={isLocked ? { 
+                                                    color: token.colorTextDisabled, 
+                                                    backgroundColor: token.colorFillTertiary, 
+                                                    borderColor: token.colorBorder 
+                                                } : {}}
+                                            >
+                                                Add Supplier
+                                            </Button>
+                                        </Flex>
+                                        <Input
+                                            ref={searchInputRef}
+                                            placeholder="Search by name..."
+                                            prefix={<SearchOutlined />}
+                                            value={searchTerm}
+                                            onChange={e => setSearchTerm(e.target.value)}
+                                            allowClear
+                                        />
+                                    </Flex>
+                                );
+                            })()}
                         </div>
                         {loading ? <div style={{textAlign: 'center', padding: '20px'}}><Spin/></div> :
                             <Menu

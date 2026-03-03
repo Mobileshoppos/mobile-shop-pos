@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme } from 'antd';
-import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined } from '@ant-design/icons';
+import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined, LockOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -13,6 +13,7 @@ import { db } from '../db';
 import { useTheme } from '../context/ThemeContext';
 import AddPurchaseForm from './AddPurchaseForm';
 import PageTour from '../components/PageTour';
+import { getPlanLimits } from '../config/subscriptionPlans';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -862,14 +863,14 @@ const Inventory = () => {
     // Step 1: Product Model (Sirf pehli baar)
     ...(!hasSeenInitialTour ? [{
       title: 'Product Model Banayein',
-      description: 'Sab se pehle yahan click karke product ka model banayein (maslan: Samsung A54). Model sirf ek baar banta hai.',
+      description: 'First, click here to create a product model (example: Samsung A54). The model is created only once.',
       target: () => refAddModel.current,
     }] : []),
 
     // Step 2: Stock Add (Sirf tab jab product ban jaye)
     ...(products.length > 0 ? [{
       title: 'Stock Add Karein',
-      description: 'Mubarak ho! Aap ne model bana liya. Ab yahan click karke is ka asli stock (IMEI ya Quantity) add karein.',
+      description: 'Congratulations! You have created your first model. Now click here to add stock (number or quantity) for this product.',
       target: () => refFirstStock.current,
     }] : []),
 
@@ -877,17 +878,17 @@ const Inventory = () => {
     ...(!hasSeenInitialTour ? [
       {
         title: 'Smart Search',
-        description: 'Apne stock mein se kuch bhi dhoondne ke liye naam, brand ya IMEI yahan scan/type karein.',
+        description: 'Scan / type the name, brand, Serial or IMEI to search for anything in your stock.',
         target: () => refSearch.current,
       },
       {
         title: 'Advanced Filters',
-        description: 'Price range ya attributes (RAM, ROM) ke hisab se stock dekhne ke liye yahan click karein.',
+        description: 'Click here to view stocks by price range or attributes (Size, Color).',
         target: () => refFilters.current,
       },
       {
         title: 'Archive (Hidden Items)',
-        description: 'Jo items aap ne hide (archive) kiye hain, unhain yahan click karke dekh sakte hain.',
+        description: 'You can view and restore your archived products by clicking here.',
         target: () => refArchive.current,
       }
     ] : []),
@@ -902,12 +903,54 @@ const Inventory = () => {
 />
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: isMobile ? 'space-between' : 'flex-end', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: isMobile ? '16px' : '0' }}>
         {isMobile && (
-          <Title level={2} style={{ margin: 0, marginLeft: '8px', fontSize: '23px' }}>
-            <DatabaseOutlined /> {showLowStockOnly ? 'Low Stock Products' : 'Inventory'}
-          </Title>
-        )}
-        {isMobile && can('can_edit_inventory') && (<Button ref={refAddModel} type="primary" size="middle" onClick={() => setIsProductModalOpen(true)} style={{ width: '100%', marginTop: '10px' }}>Add New Product Model</Button>)}
-      </div>
+        <Title level={2} style={{ margin: 0, marginLeft: '8px', fontSize: '23px' }}>
+          <DatabaseOutlined /> {showLowStockOnly ? 'Low Stock Products' : 'Inventory'}
+        </Title>
+      )}
+      {(() => {
+        const limits = getPlanLimits(profile?.subscription_tier);
+        const currentModelCount = products.length;
+        const isLimitReached = currentModelCount >= limits.max_models;
+
+        return isMobile && can('can_edit_inventory') && (
+          <Button 
+            ref={refAddModel} 
+            type="primary" 
+            size="middle" 
+            icon={isLimitReached ? <LockOutlined /> : null}
+            onClick={() => {
+              if (isLimitReached) {
+                modal.confirm({
+                  title: 'Product Model Limit Reached',
+                  content: (
+                    <div>
+                      <p>You have reached your plan's limit of <b>{limits.max_models} product models</b>.</p>
+                      <p>Please upgrade your subscription to add more models.</p>
+                    </div>
+                  ),
+                  okText: 'View Plans',
+                  cancelText: 'Close',
+                  onOk: () => window.location.href = '/subscription'
+                });
+              } else {
+                setIsProductModalOpen(true);
+              }
+            }} 
+            style={{ 
+              width: '100%', 
+              marginTop: '10px',
+              ...(isLimitReached ? { 
+                  color: token.colorTextDisabled, 
+                  backgroundColor: token.colorFillTertiary, 
+                  borderColor: token.colorBorder 
+              } : {})
+            }}
+          >
+            Add New Product Model
+          </Button>
+        );
+      })()}
+    </div>
 
       <div style={{ marginBottom: '18px', padding: isMobile ? '0 8px' : '0' }}>
         <Row gutter={[8, 8]} align="middle">
@@ -981,16 +1024,44 @@ const Inventory = () => {
                 onClick={handleResetFilters} 
                 title="Reset All Filters" 
              />
-             {!isMobile && can('can_edit_inventory') && (
-               <Button 
-                 ref={refAddModel} 
-                 type="primary" 
-                 icon={<PlusOutlined />}
-                 onClick={() => setIsProductModalOpen(true)}
-               >
-                 New Product Model
-               </Button>
-             )}
+             {(() => {
+               const limits = getPlanLimits(profile?.subscription_tier);
+               const currentModelCount = products.length;
+               const isLimitReached = currentModelCount >= limits.max_models;
+
+               return !isMobile && can('can_edit_inventory') && (
+                 <Button 
+                   ref={refAddModel} 
+                   type="primary" 
+                   icon={isLimitReached ? <LockOutlined /> : <PlusOutlined />}
+                   onClick={() => {
+                     if (isLimitReached) {
+                       modal.confirm({
+                         title: 'Product Model Limit Reached',
+                         content: (
+                           <div>
+                             <p>You have reached your plan's limit of <b>{limits.max_models} product models</b>.</p>
+                             <p>Please upgrade your subscription to add more models.</p>
+                           </div>
+                         ),
+                         okText: 'View Plans',
+                         cancelText: 'Close',
+                         onOk: () => window.location.href = '/subscription'
+                       });
+                     } else {
+                       setIsProductModalOpen(true);
+                     }
+                   }}
+                   style={isLimitReached ? { 
+                       color: token.colorTextDisabled, 
+                       backgroundColor: token.colorFillTertiary, 
+                       borderColor: token.colorBorder 
+                   } : {}}
+                 >
+                   New Product Model
+                 </Button>
+               );
+             })()}
           </Col>
         </Row>
 
@@ -1087,11 +1158,13 @@ const Inventory = () => {
                     <InputNumber style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
                 </Form.Item>
             </Col>
-            <Col span={24}>
-                <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)" tooltip="How many days warranty do you usually give to customers for this product?">
-                    <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330 (for 11 months)" />
-                </Form.Item>
-            </Col>
+            {profile?.warranty_system_enabled !== false && (
+                <Col span={24}>
+                    <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)" tooltip="How many days warranty do you usually give to customers for this product?">
+                        <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330 (for 11 months)" />
+                    </Form.Item>
+                </Col>
+            )}
           </Row>
         </Form>
       </Modal>
@@ -1136,9 +1209,11 @@ const Inventory = () => {
         <Form form={productEditForm} layout="vertical" onFinish={handleProductModelUpdate}>
           <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="brand" label="Brand"><Input /></Form.Item>
-          <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)">
-            <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
-          </Form.Item>
+          {profile?.warranty_system_enabled !== false && (
+              <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)">
+                <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
+              </Form.Item>
+          )}
         </Form>
       </Modal>
       

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Input, Button, Typography, Card, App } from 'antd';
+import { Input, Button, Typography, Card, App, theme } from 'antd';
 import { LockOutlined, SafetyOutlined } from '@ant-design/icons';
 import { useStaff } from '../context/StaffContext';
 import bcrypt from 'bcryptjs';
@@ -14,6 +14,7 @@ const LockScreen = () => {
   const { loginStaff, unlockAsOwner } = useStaff();
   const { message } = App.useApp();
   const { user } = useAuth(); // User ki maloomat nikaali
+  const { token } = theme.useToken(); // Theme colors nikaalne ke liye
 
   // Check karein ke kya Owner ne pehli baar lock kiya hai aur Master PIN set karna baqi hai?
   const isSetupNeeded = !localStorage.getItem('device_master_pin');
@@ -38,66 +39,75 @@ const LockScreen = () => {
       return;
     }
 
-    if (pin.length === 4) {
-      const result = await loginStaff(pin);
-      if (!result.success) {
-        setLocalError(result.errorMsg); // Error screen par set kar diya
-      }
-    } else if (pin.length === 6) {
-      const lockUntil = localStorage.getItem('owner_lock_until');
-      if (lockUntil && Date.now() < parseInt(lockUntil)) {
-        setLocalError("Terminal is temporarily locked due to multiple failed attempts.");
-        setPin('');
-        return;
-      }
+    // 1. Pehle check karein ke kya App Locked hai? (Unified Lock)
+    const lockUntil = localStorage.getItem('app_lock_until');
+    if (lockUntil && Date.now() < parseInt(lockUntil)) {
+      const remainingMinutes = Math.ceil((parseInt(lockUntil) - Date.now()) / 60000);
+      setLocalError(`Terminal is temporarily locked. Try again in ${remainingMinutes} minutes.`);
+      setPin('');
+      return;
+    }
 
-      const success = unlockAsOwner(pin);
-      
-      if (success) {
-        localStorage.removeItem('owner_failed_attempts');
-        localStorage.removeItem('owner_lock_until');
-      } else {
-        let attempts = parseInt(localStorage.getItem('owner_failed_attempts') || '0') + 1;
-        localStorage.setItem('owner_failed_attempts', attempts.toString());
+    // 2. Koshish karein (Pehle Staff, Phir Owner) - Khamoshi se
+    let isSuccess = false;
+
+    // Pehle Staff Login Try karein
+    const staffResult = await loginStaff(pin);
+    if (staffResult.success) {
+      isSuccess = true;
+    } 
+    // Agar Staff fail hua, to Owner Try karein
+    else {
+      const ownerSuccess = unlockAsOwner(pin);
+      if (ownerSuccess) {
+        isSuccess = true;
+      }
+    }
+
+    // 3. Nateeja (Result)
+    if (isSuccess) {
+      // Agar kamyab ho gaye to purani ghalat koshishein bhool jayen
+      localStorage.removeItem('failed_attempts');
+      localStorage.removeItem('app_lock_until');
+      setLocalError('');
+    } else {
+      // Agar nakaam hue to ginti barhayen (Chahe Staff ho ya Owner)
+      let attempts = parseInt(localStorage.getItem('failed_attempts') || '0') + 1;
+      localStorage.setItem('failed_attempts', attempts.toString());
+
+      // Agar 5 bar ghalat hua to 5 minute ke liye lock
+      if (attempts >= 5) {
+        const unlockTime = Date.now() + 5 * 60 * 1000; // 5 Minutes Lock
+        localStorage.setItem('app_lock_until', unlockTime.toString());
         
-        if (attempts >= 3) {
-          const unlockTime = Date.now() + 5 * 60 * 1000;
-          localStorage.setItem('owner_lock_until', unlockTime.toString());
-          
-          // --- SILENT ALARM (SYSTEM LOGS) ---
-          const logData = {
-              id: crypto.randomUUID(),
-              user_id: user?.id, 
-              level: 'warning',
-              category: 'security',
-              // Message mein waqt shamil kiya taake foran nazar aaye
-              message: `Security Alert: 3 failed Master PIN attempts detected at ${new Date().toLocaleTimeString()}.`,
-              // Device ki maloomat shamil ki
-              device_info: {
-                browser: navigator.userAgent.split(') ')[1] || 'Unknown Browser',
-                platform: navigator.platform,
-                url: window.location.href
-              },
-              created_at: new Date().toISOString()
-          };
+        // --- SILENT ALARM (SYSTEM LOGS) ---
+        const logData = {
+            id: crypto.randomUUID(),
+            user_id: user?.id, 
+            level: 'warning',
+            category: 'security',
+            message: `Security Alert: 5 failed PIN attempts detected at ${new Date().toLocaleTimeString()}.`,
+            device_info: {
+              browser: navigator.userAgent.split(') ')[1] || 'Unknown Browser',
+              platform: navigator.platform,
+              url: window.location.href
+            },
+            created_at: new Date().toISOString()
+        };
 
-          // [FIX]: Check karein ke table majood hai ya nahi
-          if (db.system_logs) {
-            try {
-              await db.system_logs.add(logData);
-              await db.sync_queue.add({ table_name: 'system_logs', action: 'create', data: logData });
-              console.log("Security log saved locally and queued for sync.");
-            } catch (err) {
-              console.error("Logging to DB failed:", err);
-            }
-          } else {
-            console.error("Database Error: system_logs table not found. Please refresh the app.");
+        if (db.system_logs) {
+          try {
+            await db.system_logs.add(logData);
+            await db.sync_queue.add({ table_name: 'system_logs', action: 'create', data: logData });
+          } catch (err) {
+            console.error("Logging failed:", err);
           }
         }
-        setLocalError("Invalid Master PIN");
+        setLocalError("Too many failed attempts. Terminal locked for 5 minutes.");
+      } else {
+        // Generic Error Message (Taake length ka pata na chale)
+        setLocalError("Invalid PIN");
       }
-    } else {
-      setLocalError("PIN must be 4 or 6 digits");
     }
     setPin('');
   };
@@ -105,33 +115,46 @@ const LockScreen = () => {
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: '#f0f2f5', zIndex: 99999, // Sab se upar dikhane ke liye
+      zIndex: 99999,
       display: 'flex', justifyContent: 'center', alignItems: 'center',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      // Theme-based Background with Texture
+      backgroundColor: token.colorBgLayout,
+      backgroundImage: `radial-gradient(${token.colorTextQuaternary} 1px, transparent 1px)`,
+      backgroundSize: '20px 20px', // Halka sa texture
     }}>
-      <Card style={{ width: 350, textAlign: 'center', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}>
+      <Card style={{ 
+        width: 350, 
+        textAlign: 'center', 
+        borderRadius: token.borderRadiusLG, 
+        boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+        background: token.colorBgContainer, // Card ka rang theme ke mutabiq
+        border: `1px solid ${token.colorBorderSecondary}`
+      }}>
         
         {isSetupNeeded ? 
-          <SafetyOutlined style={{ fontSize: 48, color: '#52c41a', marginBottom: 16 }} /> : 
-          <LockOutlined style={{ fontSize: 48, color: '#1890ff', marginBottom: 16 }} />
+          <SafetyOutlined style={{ fontSize: 48, color: token.colorSuccess, marginBottom: 16 }} /> : 
+          <LockOutlined style={{ fontSize: 48, color: token.colorPrimary, marginBottom: 16 }} />
         }
 
-        <Title level={3}>{isSetupNeeded ? "Setup Master PIN" : "Terminal Locked"}</Title>
+        <Title level={3} style={{ color: token.colorTextHeading }}>
+          {isSetupNeeded ? "Setup Master PIN" : "Terminal Locked"}
+        </Title>
 
-        <Text type="secondary" style={{ display: 'block', marginBottom: localError ? 12 : 24 }}>
+        <Text style={{ display: 'block', marginBottom: localError ? 12 : 24, color: token.colorTextSecondary }}>
           {isSetupNeeded ? "Set your Master PIN to secure this device." : "Enter your PIN to unlock"}
         </Text>
 
-        {/* NAYA: Error Box */}
+        {/* Theme-based Error Box */}
         {localError && (
           <div style={{ 
-            color: '#ef5350', 
-            backgroundColor: 'rgba(239, 83, 80, 0.1)', 
+            color: token.colorError, 
+            backgroundColor: token.colorErrorBg, 
             padding: '8px 12px', 
             borderRadius: '6px', 
             marginBottom: '16px', 
             fontSize: '13px', 
-            border: '1px solid rgba(239, 83, 80, 0.3)',
+            border: `1px solid ${token.colorErrorBorder}`,
             textAlign: 'left'
           }}>
             {localError}
@@ -141,11 +164,18 @@ const LockScreen = () => {
         <Input.Password
           size="large"
           placeholder="Enter PIN"
-          maxLength={10} // Security by obscurity: Limit barha di taake guess karna mushkil ho
+          maxLength={10}
           value={pin}
-          onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ''))} // Sirf numbers allow karein
+          onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ''))}
           onPressEnter={handleAction}
-          style={{ textAlign: 'center', fontSize: 24, letterSpacing: 8, marginBottom: 16 }}
+          style={{ 
+            textAlign: 'center', 
+            fontSize: 24, 
+            letterSpacing: 8, 
+            marginBottom: 16,
+            backgroundColor: token.colorBgContainer,
+            color: token.colorText
+          }}
           autoFocus
         />
 

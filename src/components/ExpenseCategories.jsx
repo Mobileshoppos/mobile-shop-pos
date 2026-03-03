@@ -12,7 +12,8 @@ import {
   Tooltip,
   theme
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, FileProtectOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, FileProtectOutlined, LockOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom'; // Naya Import
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
 import { getPlanLimits } from '../config/subscriptionPlans';
@@ -22,8 +23,9 @@ import { db } from '../db'; // Database ko import kiya
 const { Title } = Typography;
 
 const ExpenseCategories = () => {
+  const navigate = useNavigate(); // Naya Hook
   const { token } = theme.useToken(); // Control Center Connection
-  const { message } = AntApp.useApp();
+  const { message, modal } = AntApp.useApp(); // 'modal' shamil kiya
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { user, profile } = useAuth();
   const [categories, setCategories] = useState([]);
@@ -180,20 +182,42 @@ const ExpenseCategories = () => {
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: isMobile ? 'space-between' : 'flex-end', marginBottom: '16px', gap: '16px' }}>
         {(() => {
           const limits = getPlanLimits(profile?.subscription_tier);
-          const isLocked = !limits.allow_custom_categories; // Control Center se poocha
-          
+          const isLocked = !limits.allow_custom_categories;
+
           return (
-            <Tooltip title={isLocked ? "Expense Categories are limited in Free Plan. Use default ones." : ""}>
-              <Button 
-                type="primary" 
-                icon={<PlusOutlined />} 
-                size="large" 
-                onClick={() => isLocked ? message.warning("Please upgrade to Growth Plan to add custom expense categories.") : showModal()} 
-                style={{ width: isMobile ? '100%' : 'auto', opacity: isLocked ? 0.6 : 1 }}
-              >
-                Add New Category {isLocked && "(Locked)"}
-              </Button>
-            </Tooltip>
+            <Button 
+              type="primary" 
+              icon={isLocked ? <LockOutlined /> : <PlusOutlined />} 
+              size="large" 
+              onClick={() => {
+                if (isLocked) {
+                  modal.confirm({
+                    title: 'Expense Categories Locked',
+                    content: (
+                      <div>
+                        <p>In Free Plan, you can only use the <b>Standard Expense Categories</b> provided by the system.</p>
+                        <p>To create or manage your own custom categories, please upgrade to Growth or Pro Plan.</p>
+                      </div>
+                    ),
+                    okText: 'View Plans',
+                    cancelText: 'Close',
+                    onOk: () => navigate('/subscription')
+                  });
+                } else {
+                  showModal();
+                }
+              }}
+              style={{ 
+                width: isMobile ? '100%' : 'auto',
+                ...(isLocked ? { 
+                  color: token.colorTextDisabled, 
+                  backgroundColor: token.colorFillTertiary, 
+                  borderColor: token.colorBorder 
+                } : {})
+              }}
+            >
+              Add New Category
+            </Button>
           );
         })()}
       </div>

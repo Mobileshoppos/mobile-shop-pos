@@ -122,10 +122,22 @@ const AuthPage = () => {
           <Title level={3} style={{ textAlign: 'center' }}>
             <AppstoreOutlined style={{ marginRight: '8px', color: token.colorPrimary }} /> SadaPos
           </Title>
-          <Tabs defaultActiveKey="1" centered>
-            <Tabs.TabPane tab="Login" key="1">{loginForm}</Tabs.TabPane>
-            <Tabs.TabPane tab="Sign Up" key="2">{signupForm}</Tabs.TabPane>
-          </Tabs>
+          <Tabs 
+            defaultActiveKey="1" 
+            centered
+            items={[
+              {
+                label: 'Login',
+                key: '1',
+                children: loginForm,
+              },
+              {
+                label: 'Sign Up',
+                key: '2',
+                children: signupForm,
+              },
+            ]}
+          />
           <Divider style={{ margin: '12px 0' }} />
           <div style={{ textAlign: 'center' }}>
             <Space size="small" split={<Divider type="vertical" />}>
@@ -135,7 +147,7 @@ const AuthPage = () => {
               <Typography.Link href="https://www.sadapos.com/p/terms-of-service.html" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
                 Terms
               </Typography.Link>
-              <Typography.Link href="https://www.sadapos.com/p/refund-policy.html" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+              <Typography.Link href="https://www.sadapos.com/p/refunds-policy.html" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
                 Refund
               </Typography.Link>
             </Space>

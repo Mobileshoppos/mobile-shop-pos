@@ -1153,19 +1153,32 @@ const POS = () => {
                 <Select showSearch placeholder="Select a customer (optional)" style={{ width: '100%' }} value={selectedCustomer} onChange={(value) => setSelectedCustomer(value)} filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())} options={customers.map(customer => ({ value: customer.id, label: `${customer.name} - ${customer.phone_number}` }))} allowClear />
                 {(() => {
                   const limits = getPlanLimits(profile?.subscription_tier);
-                  const isLocked = !limits.allow_customer_management;
+                  const isFeatureLocked = !limits.allow_customer_management;
+                  const currentCount = customers.length;
+                  const isLimitReached = currentCount >= limits.max_customers;
+                  const isLocked = isFeatureLocked || isLimitReached;
+
                   return (
-                    <Tooltip title={isLocked ? "Upgrade to add new customers" : ""}>
+                    <Tooltip title={isLocked ? (isFeatureLocked ? "Upgrade to add new customers" : "Customer limit reached") : ""}>
                       <Button 
                         icon={<UserAddOutlined />} 
                         onClick={() => {
                           if (isLocked) {
                               modal.info({
-                                  title: 'Customer Management Locked',
+                                  title: isFeatureLocked ? 'Customer Management Locked' : 'Customer Limit Reached',
                                   content: (
                                       <div>
-                                          <p>In Free Plan, you can only use the built-in <b>Walk-in Customer</b>.</p>
-                                          <p>To save customer details and maintain ledgers (Khata), please upgrade to Growth Plan.</p>
+                                          {isFeatureLocked ? (
+                                              <>
+                                                  <p>In Free Plan, you can only use the built-in <b>Walk-in Customer</b>.</p>
+                                                  <p>To save customer details and maintain ledgers (Khata), please upgrade to Growth Plan.</p>
+                                              </>
+                                          ) : (
+                                              <>
+                                                  <p>You have reached your plan's limit of <b>{limits.max_customers} customers</b>.</p>
+                                                  <p>Please upgrade your subscription to add more customers.</p>
+                                              </>
+                                          )}
                                       </div>
                                   ),
                                   okText: 'View Plans',

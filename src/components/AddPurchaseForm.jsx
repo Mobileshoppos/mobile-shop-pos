@@ -247,26 +247,32 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                 <Row gutter={16}>
                     <Col span={12}><Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
                     <Col span={12}><Form.Item name="sale_price" label="Sale Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    
+                    {/* --- NAYA CODE: IMEI Warranty Check --- */}
+                    {profile?.warranty_system_enabled !== false && (
                     <Col span={12}>
-    <Form.Item shouldUpdate={(prev, curr) => prev.warranty_days !== curr.warranty_days}>
-        {({ getFieldValue }) => {
-            const supplierDays = getFieldValue('warranty_days') || 0;
-            const customerDays = product?.default_warranty_days || 0;
-            const isRisky = supplierDays < customerDays;
-            return (
-                <Form.Item 
-                    name="warranty_days" 
-                    label="Supplier Warranty (Days)" 
-                    validateStatus={isRisky ? "warning" : ""}
-                    help={isRisky ? `Risk: Less than Customer Warranty (${customerDays} Days)` : ""}
-                    tooltip="Enter warranty in number of days"
-                >
-                    <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 365" />
-                </Form.Item>
-            );
-        }}
-    </Form.Item>
-</Col>
+                        <Form.Item shouldUpdate={(prev, curr) => prev.warranty_days !== curr.warranty_days}>
+                            {({ getFieldValue }) => {
+                                const supplierDays = getFieldValue('warranty_days') || 0;
+                                const customerDays = product?.default_warranty_days || 0;
+                                const isRisky = supplierDays < customerDays;
+                                return (
+                                    <Form.Item 
+                                        name="warranty_days" 
+                                        label="Supplier Warranty (Days)" 
+                                        validateStatus={isRisky ? "warning" : ""}
+                                        help={isRisky ? `Risk: Less than Customer Warranty (${customerDays} Days)` : ""}
+                                        tooltip="Enter warranty in number of days"
+                                    >
+                                        <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 365" />
+                                    </Form.Item>
+                                );
+                            }}
+                        </Form.Item>
+                    </Col>
+                    )}
+                    {/* ------------------------------------- */}
+
                     {attributes.map(attr => <Col span={12} key={attr.id}>{renderAttributeField(attr)}</Col>)}
                 </Row>
                 <Divider />
@@ -285,26 +291,32 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                 <Row gutter={16}>
                     <Col span={12}><Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
                     <Col span={12}><Form.Item name="sale_price" label="Sale Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    
+                    {/* --- NAYA CODE: Bulk Warranty Check --- */}
+                    {profile?.warranty_system_enabled !== false && (
                     <Col span={12}>
-    <Form.Item shouldUpdate={(prev, curr) => prev.warranty_days !== curr.warranty_days}>
-        {({ getFieldValue }) => {
-            const supplierDays = getFieldValue('warranty_days') || 0;
-            const customerDays = product?.default_warranty_days || 0;
-            const isRisky = supplierDays < customerDays;
-            return (
-                <Form.Item 
-                    name="warranty_days" 
-                    label="Supplier Warranty (Days)" 
-                    validateStatus={isRisky ? "warning" : ""}
-                    help={isRisky ? `Risk: Less than Customer Warranty (${customerDays} Days)` : ""}
-                    tooltip="Enter warranty in number of days"
-                >
-                    <InputNumber style={{ width: '100%' }} min={0} />
-                </Form.Item>
-            );
-        }}
-    </Form.Item>
-</Col>
+                        <Form.Item shouldUpdate={(prev, curr) => prev.warranty_days !== curr.warranty_days}>
+                            {({ getFieldValue }) => {
+                                const supplierDays = getFieldValue('warranty_days') || 0;
+                                const customerDays = product?.default_warranty_days || 0;
+                                const isRisky = supplierDays < customerDays;
+                                return (
+                                    <Form.Item 
+                                        name="warranty_days" 
+                                        label="Supplier Warranty (Days)" 
+                                        validateStatus={isRisky ? "warning" : ""}
+                                        help={isRisky ? `Risk: Less than Customer Warranty (${customerDays} Days)` : ""}
+                                        tooltip="Enter warranty in number of days"
+                                    >
+                                        <InputNumber style={{ width: '100%' }} min={0} />
+                                    </Form.Item>
+                                );
+                            }}
+                        </Form.Item>
+                    </Col>
+                    )}
+                    {/* ------------------------------------- */}
+
                     <Col span={12}>
     <Form.Item 
         name="quantity" 

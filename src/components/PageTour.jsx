@@ -10,16 +10,18 @@ const PageTour = ({ pageKey, steps }) => {
     // Check karein ke kya user ne is page ka tour pehle dekha hai?
     const hasSeenTour = profile?.tours_completed?.[pageKey];
     
-    // Tour sirf tab dikhao jab:
-    // 1. Profile mojood ho
-    // 2. Setup Wizard khatam ho chuka ho (is_setup_completed: true)
-    // 3. User ne pehle yeh tour na dekha ho
-    if (profile && profile.is_setup_completed && !hasSeenTour) {
+    // NAYA GUARD: Check karein ke kya guide dikhane ke liye steps (buttons) screen par mojood hain?
+    const hasValidSteps = steps && steps.length > 0;
+    
+    if (profile && profile.is_setup_completed && !hasSeenTour && hasValidSteps) {
       // Thora delay taake page sahi se load ho jaye
       const timer = setTimeout(() => setOpen(true), 1500);
       return () => clearTimeout(timer);
+    } else {
+      // Agar steps mojood nahi hain, to popup ko zabardasti band rakhein taake flash na ho
+      setOpen(false);
     }
-  }, [profile, pageKey]);
+  }, [profile, pageKey, steps]);
 
   const handleClose = async () => {
     setOpen(false);

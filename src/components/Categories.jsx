@@ -3,9 +3,10 @@ import {
   Typography, Table, Button, Modal, Form, Input, App as AntApp,
   Space, Popconfirm, Tooltip, Row, Col, Card, Empty, Select, Switch, Tag, theme
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, MobileOutlined, TagsOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, MobileOutlined, TagsOutlined, LockOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom'; // Naya Import
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { supabase } from '../supabaseClient';
 import { db } from '../db';
@@ -16,7 +17,8 @@ const { Option } = Select;
 
 const Categories = () => {
   const { token } = theme.useToken(); // Control Center Connection
-  const { message } = AntApp.useApp();
+  const { message, modal } = AntApp.useApp(); // 'modal' shamil kiya
+  const navigate = useNavigate(); // Hook initialize kiya
   const isMobile = useMediaQuery('(max-width: 992px)');
   const { user, profile } = useAuth();
   
@@ -202,7 +204,8 @@ const Categories = () => {
                      danger 
                      icon={<DeleteOutlined />} 
                      onClick={(e) => e.stopPropagation()} 
-                     disabled={isLocked} // Button bhi disable
+                     disabled={isLocked}
+                     style={isLocked ? { color: token.colorTextDisabled, opacity: 0.5 } : {}}
                    />
                  </Popconfirm>
                </Tooltip>
@@ -262,22 +265,35 @@ const Categories = () => {
                 const limits = getPlanLimits(profile?.subscription_tier);
                 const isLocked = !limits.allow_custom_categories;
                 return (
-                  <Tooltip title={isLocked ? "Upgrade to add custom categories" : ""}>
-                    <Button 
-                      type="primary" 
-                      icon={<PlusOutlined />} 
-                      onClick={() => {
-                        if (isLocked) {
-                          message.warning("Please upgrade to Growth Plan to add custom categories.");
-                        } else {
-                          showCategoryModal();
-                        }
-                      }}
-                      style={{ opacity: isLocked ? 0.7 : 1 }}
-                    >
-                      Add New {isLocked && "(Locked)"}
-                    </Button>
-                  </Tooltip>
+                  <Button 
+                    type="primary" 
+                    icon={isLocked ? <LockOutlined /> : <PlusOutlined />} 
+                    onClick={() => {
+                      if (isLocked) {
+                        modal.confirm({
+                          title: 'Custom Categories Locked',
+                          content: (
+                            <div>
+                              <p>In Free Plan, you can only use the <b>Standard Categories</b> provided by the system.</p>
+                              <p>To create your own custom categories and attributes, please upgrade to Growth or Pro Plan.</p>
+                            </div>
+                          ),
+                          okText: 'View Plans',
+                          cancelText: 'Close',
+                          onOk: () => navigate('/subscription')
+                        });
+                      } else {
+                        showCategoryModal();
+                      }
+                    }}
+                    style={isLocked ? { 
+                      color: token.colorTextDisabled, 
+                      backgroundColor: token.colorFillTertiary, 
+                      borderColor: token.colorBorder 
+                    } : {}}
+                  >
+                    Add New
+                  </Button>
                 );
               })()}
             </div>
@@ -295,18 +311,33 @@ const Categories = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <Title level={4} style={{ margin: 0 }}>Attributes for: <Text style={{ color: token.colorSuccess }}>{selectedCategory.name}</Text></Title>
                     {(() => {
-                      const isLocked = !profile?.subscription_tier || profile?.subscription_tier === 'free';
+                      const limits = getPlanLimits(profile?.subscription_tier);
+                      const isLocked = !limits.allow_custom_categories;
                       return (
-                        <Tooltip title={isLocked ? "Upgrade to add custom attributes" : ""}>
-                          <Button 
-                            type="primary" 
-                            icon={<PlusOutlined />} 
-                            onClick={() => isLocked ? message.warning("Attribute management is locked in Free Plan.") : showAttributeModal()}
-                            disabled={isLocked}
-                          >
-                            Add New
-                          </Button>
-                        </Tooltip>
+                        <Button 
+                          type="primary" 
+                          icon={isLocked ? <LockOutlined /> : <PlusOutlined />} 
+                          onClick={() => {
+                            if (isLocked) {
+                              modal.confirm({
+                                title: 'Attribute Management Locked',
+                                content: 'Creating custom attributes for categories requires a Growth or Pro plan.',
+                                okText: 'View Plans',
+                                cancelText: 'Close',
+                                onOk: () => navigate('/subscription')
+                              });
+                            } else {
+                              showAttributeModal();
+                            }
+                          }}
+                          style={isLocked ? { 
+                            color: token.colorTextDisabled, 
+                            backgroundColor: token.colorFillTertiary, 
+                            borderColor: token.colorBorder 
+                          } : {}}
+                        >
+                          Add New
+                        </Button>
                       );
                     })()}
                 </div>

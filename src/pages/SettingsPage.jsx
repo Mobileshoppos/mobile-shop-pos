@@ -30,6 +30,8 @@ const SettingsPage = () => {
   const limits = getPlanLimits(profile?.subscription_tier);
   const isAdvancedLocked = !limits.allow_advanced_settings;
   const isWarrantyLocked = !limits.allow_warranty_system;
+  const isThresholdLocked = !limits.allow_custom_threshold;
+  const isPriceChangeLocked = !limits.allow_price_change_control; // <-- NAYA LINK
 
   // Naya: Active Tab ki state
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || '1');
@@ -263,28 +265,34 @@ const SettingsPage = () => {
                   </Row>
                   <Divider />
                   <Row align="middle" gutter={[16, 16]}>
-  <Col xs={24} sm={6}>
-    <Text strong>Enable POS Discount</Text>
-    <Text type="secondary" style={{ display: 'block' }}>Show or hide the discount field on the POS screen.</Text>
-  </Col>
-  <Col xs={24} sm={18}><Switch checked={posDiscountEnabled} onChange={setPosDiscountEnabled} disabled={isAdvancedLocked} /></Col>
-</Row>
-<Divider />
-<Row align="middle" gutter={[16, 16]}>
-  <Col xs={24} sm={6}>
-    <Text strong>Allow Price Change in Cart</Text>
-    <Text type="secondary" style={{ display: 'block' }}>Allow staff to manually change item prices in the POS cart.</Text>
-  </Col>
-  <Col xs={24} sm={18}><Switch checked={allowCartPriceChange} onChange={setAllowCartPriceChange} disabled={isAdvancedLocked} /></Col>
-</Row>
-<Divider />
+                    <Col xs={24} sm={6}>
+                      <Text strong>Enable POS Discount</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>Show or hide the discount field on the POS screen.</Text>
+                     </Col>
+                  <Col xs={24} sm={18}><Switch checked={posDiscountEnabled} onChange={setPosDiscountEnabled} disabled={isAdvancedLocked} /></Col>
+                  </Row>
+                  <Divider />
+                  <Row align="middle" gutter={[16, 16]}>
+                    <Col xs={24} sm={6}>
+                      <Text strong>Allow Price Change in Cart</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>Allow staff to manually change item prices in the POS cart.</Text>
+                    </Col>
+                  <Col xs={24} sm={18}>
+                   <Switch 
+                     checked={allowCartPriceChange} 
+                     onChange={setAllowCartPriceChange} 
+                     disabled={isPriceChangeLocked} // <-- Hamesha False rahega (yani Active)
+                  />
+                    </Col>
+                  </Row>
+                  <Divider />
                   <Row align="top" gutter={[16, 16]}>
                     <Col xs={24} sm={6}>
                       <Text strong>Receipt Footer / Warranty Policy</Text>
                       <Text type="secondary" style={{ display: 'block' }}>This text will appear at the bottom of your receipts.</Text>
                     </Col>
-                    <Col xs={24} sm={18}>
-                      <TextArea rows={4} value={warrantyPolicy} onChange={(e) => setWarrantyPolicy(e.target.value)} placeholder="Enter your warranty terms here..." />
+                  <Col xs={24} sm={18}>
+                    <TextArea rows={4} value={warrantyPolicy} onChange={(e) => setWarrantyPolicy(e.target.value)} placeholder="Enter your warranty terms here..." />
                     </Col>
                   </Row>
                 </div>
@@ -310,19 +318,19 @@ const SettingsPage = () => {
                     <Col xs={24} sm={18}>
                       {(() => {
                          return (
-                           <Tooltip title={isAdvancedLocked ? "Custom alerts are available in Growth Plan." : ""}>
+                           <Tooltip title={isThresholdLocked ? "Custom threshold is available in Growth Plan." : ""}>
                              <InputNumber 
                                min={1} 
                                max={50} 
                                style={{ width: '100%' }} 
                                value={lowStockThreshold} 
                                onChange={setLowStockThreshold} 
-                               disabled={!lowStockAlerts || isAdvancedLocked} 
+                               disabled={!lowStockAlerts || isThresholdLocked} 
                              />
                            </Tooltip>
                          );
                       })()}
-                      {isAdvancedLocked && <Text type="warning" style={{fontSize: '11px'}}>Default: 5 (Upgrade to change)</Text>}
+                      {isThresholdLocked && <Text type="warning" style={{fontSize: '11px'}}>Default: 5 (Upgrade to change)</Text>}
                     </Col>
                   </Row>
                 </div>

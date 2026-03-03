@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table, Radio, Modal, Form, InputNumber, Input, App, Tooltip, Tabs, theme } from 'antd';
+import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table, Radio, Modal, Form, InputNumber, Input, App, Tooltip, Tabs, theme, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 import {
   HomeOutlined,
   ShoppingOutlined,
@@ -18,8 +19,10 @@ import {
   CheckCircleOutlined,
   UserOutlined, 
   TransactionOutlined,
-  ShoppingCartOutlined
+  ShoppingCartOutlined,
+  LockOutlined // <-- Naya Icon
 } from '@ant-design/icons';
+import { getPlanLimits } from '../config/subscriptionPlans'; // <-- Control Center Import
 import { Area, Pie } from '@ant-design/charts'; 
 import { useNavigate } from 'react-router-dom';
 import { useMediaQuery } from '../hooks/useMediaQuery'; 
@@ -36,15 +39,20 @@ const { Title, Text } = Typography;
 
 const Dashboard = () => {
   const { isDarkMode } = useTheme();
-  const { can, activeStaff } = useStaff(); 
+  const { can, activeStaff } = useStaff();
+  const { user, profile } = useAuth(); // User aur Profile dono shamil kar liye
+  const limits = getPlanLimits(profile?.subscription_tier);
+  const isMonthLocked = !limits.allow_monthly_reports;
+  const isCustomLocked = !limits.allow_custom_date_reports; 
   const isMobile = useMediaQuery('(max-width: 768px)');  
   const [stats, setStats] = useState(null);
   const [chartData, setChartData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const[loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('today');
+  const [customDates, setCustomDates] = useState([]); // NAYA: Custom dates save karne ke liye
   const [topSellingFilter, setTopSellingFilter] = useState('qty'); 
 
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const { token } = theme.useToken();
   const refSales = useRef(null);
   const refCash = useRef(null);
@@ -57,22 +65,22 @@ const Dashboard = () => {
   const tourSteps = [
     {
       title: 'Sales Overview',
-      description: 'Yahan aap apni aaj ki, is hafte ki ya is mahine ki kul sales dekh sakte hain.',
+      description: 'Here you can see your total sales for today, this week, This month or from the selected custom range.',
       target: () => refSales.current,
     },
     {
       title: 'Galla (Cash in Hand)',
-      description: 'Yeh aapke gally mein majood naqad raqam hai. Aap yahan se cash in/out bhi kar sakte hain.',
+      description: 'This is the cash in your drawer. You can also cash in / out from here.',
       target: () => refCash.current,
     },
     {
       title: 'Net Profit',
-      description: 'Tamam akhrajat nikalne ke baad aapka asli munafa yahan nazar aayega.',
+      description: 'Your real profit will appear here after all expenses are taken out.',
       target: () => refProfit.current,
     },
     {
       title: 'Quick Actions',
-      description: 'Nayi sale karne ya stock add karne ke liye in shortcuts ka istemal karein.',
+      description: 'Use shortcuts to make new sales or add stock, you can also customize shortcuts from app settings',
       target: () => refQuickActions.current,
     },
   ];
@@ -177,15 +185,16 @@ const Dashboard = () => {
     }
   };
   
-  const { user, profile } = useAuth();
   const navigate = useNavigate();
 
   const loadDashboard = useCallback(async () => {
     // Agar stats pehle se hain to poora page white na ho, sirf data update ho
     if (!stats) setLoading(true); 
     try {
-      const dashboardStats = await DataService.getDashboardStats(profile?.low_stock_threshold, timeRange);
-      const salesChart = await DataService.getLast7DaysSales();
+      // NAYA: customDates bhi pass kar rahe hain
+      const dashboardStats = await DataService.getDashboardStats(profile?.low_stock_threshold, timeRange, customDates);
+      // NAYA: Ab graph bhi filter ke hisaab se update hoga
+      const salesChart = await DataService.getSalesChartData(timeRange, customDates);
       setStats(dashboardStats);
       setChartData(salesChart);
     } catch (error) {
@@ -193,7 +202,7 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [profile, timeRange]);
+  }, [profile, timeRange, customDates]); // NAYA: customDates add kiya
 
   useEffect(() => {
     loadDashboard();
@@ -217,6 +226,9 @@ const Dashboard = () => {
 
   // --- Helper: Trend Renderer ---
   const renderTrend = (percent) => {
+    // NAYA: Custom range mein trend hide karein (Option A)
+    if (timeRange === 'custom') return null;
+    
     if (percent === undefined || percent === null) return null;
     const isPositive = percent >= 0;
     
@@ -319,11 +331,80 @@ const Dashboard = () => {
         
         {/* Time Filter Buttons (Sirf Owner ke liye) */}
         {can('can_view_reports') && (
-          <Radio.Group value={timeRange} onChange={(e) => setTimeRange(e.target.value)} buttonStyle="solid">
-            <Radio.Button value="today">Today</Radio.Button>
-            <Radio.Button value="week">This Week</Radio.Button>
-            <Radio.Button value="month">This Month</Radio.Button>
-          </Radio.Group>
+          <Space wrap>
+            <Radio.Group 
+              value={timeRange} 
+              onChange={(e) => {
+                const val = e.target.value;
+                
+                // --- PROFESSIONAL MODAL LOCK LOGIC ---
+                const showUpgradeModal = (title, feature) => {
+                  modal.confirm({
+                    title: `${title} Locked`,
+                    content: (
+                      <div>
+                        <p>In Free Plan, <b>{feature}</b> are restricted.</p>
+                        <p>To view advanced analytics and history, please upgrade to Growth Plan.</p>
+                      </div>
+                    ),
+                    okText: 'View Plans',
+                    cancelText: 'Close', // Yeh naya button add ho gaya
+                    onOk: () => navigate('/subscription')
+                  });
+                };
+
+                if (val === 'month' && isMonthLocked) {
+                    showUpgradeModal("Monthly Reports", "Monthly sales insights");
+                    return;
+                }
+                if (val === 'custom' && isCustomLocked) {
+                    showUpgradeModal("Custom Reports", "Custom date range filtering");
+                    return;
+                }
+                // --- END LOCK LOGIC ---
+
+                setTimeRange(val);
+                if(val !== 'custom') {
+                  setCustomDates([]);
+                }
+              }} 
+              buttonStyle="solid"
+            >
+              <Radio.Button value="today">Today</Radio.Button>
+              <Radio.Button value="week">This Week</Radio.Button>
+              
+              <Radio.Button 
+                value="month" 
+                style={isMonthLocked ? { color: token.colorTextDisabled, cursor: 'pointer' } : {}}
+              >
+                This Month {isMonthLocked && <LockOutlined style={{ fontSize: '11px', marginLeft: '4px', color: token.colorTextDisabled }} />}
+              </Radio.Button>
+
+              <Radio.Button 
+                value="custom" 
+                style={isCustomLocked ? { color: token.colorTextDisabled, cursor: 'pointer' } : {}}
+              >
+                Custom {isCustomLocked && <LockOutlined style={{ fontSize: '11px', marginLeft: '4px', color: token.colorTextDisabled }} />}
+              </Radio.Button>
+            </Radio.Group>
+            
+            {/* NAYA: Agar Custom select ho to DatePicker dikhayein */}
+            {timeRange === 'custom' && (
+              <DatePicker.RangePicker 
+                format="DD/MM/YYYY"
+                // NAYA: Calendar ko bol rahe hain ke hamesha memory wali dates dikhao
+                value={customDates.length === 2 ? [dayjs(customDates[0]), dayjs(customDates[1])] : null}
+                onChange={(dates) => {
+                  if (dates) {
+                    setCustomDates([dates[0].toISOString(), dates[1].toISOString()]);
+                  } else {
+                    setCustomDates([]);
+                  }
+                }}
+                allowClear={true}
+              />
+            )}
+          </Space>
         )}
       </div>
 
@@ -382,7 +463,7 @@ const Dashboard = () => {
           <Card ref={refSales} style={{ ...cardStyle, backgroundColor: isDarkMode ? '#2C3E50' : token.colorPrimary }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>
-                {timeRange === 'today' ? "Today's Sales" : timeRange === 'week' ? "Weekly Sales" : "Monthly Sales"}
+                {timeRange === 'today' ? "Today's Sales" : timeRange === 'week' ? "Weekly Sales" : timeRange === 'month' ? "Monthly Sales" : "Custom Range Sales"}
               </span>}
               value={stats?.totalSales || 0}
               prefix={<ShoppingOutlined />}
@@ -458,7 +539,7 @@ const Dashboard = () => {
             
             {/* Net Profit ki description - Ab yeh upar hai */}
             <div style={{ marginTop: -4, marginBottom: 10, fontSize: '11px', opacity: 0.8 }}>
-                {timeRange === 'today' ? "Today's" : "Total"} profit after expenses
+                {timeRange === 'today' ? "Today's" : timeRange === 'custom' ? "Selected range" : "Total"} profit after expenses
             </div>
             <div style={{ marginTop: 3 }}>
               <Tag 
@@ -585,7 +666,12 @@ const Dashboard = () => {
         <Col xs={24} lg={16}>
           {/* 1. Graph Card */}
           <Card 
-  title="Sales Overview (Last 7 Days)" 
+  title={
+    timeRange === 'today' ? "Sales Overview (Last 7 Days)" : 
+    timeRange === 'week' ? "Sales Overview (This Week)" : 
+    timeRange === 'month' ? "Sales Overview (This Month)" : 
+    "Sales Overview (Custom Range)"
+  } 
   // variant="borderless" hata diya
   style={{ borderRadius: 5, border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9' }} // <--- Border add kiya
 >

@@ -4,6 +4,7 @@ import { generateInvoiceId } from './utils/idGenerator';
 import { checkSupabaseConnection } from './utils/connectionCheck';
 import { getPlanLimits } from './config/subscriptionPlans';
 import bcrypt from 'bcryptjs';
+import { encryptData, decryptData } from './utils/cryptoUtils'; // <--- NAYA IZAFA
 
 // --- DEFAULT CATEGORIES BLUEPRINT ---
 const DEFAULT_CATEGORIES = [
@@ -99,44 +100,46 @@ const checkSubscriptionLimit = async (newItemsCount = 0) => {
 
 const DataService = {
   isInitializing: false,
+  isInitializing: false,
   async initializeUserCategories(userId) {
-    if (!userId || this.isInitializing) return;
+    if (!userId || DataService.isInitializing) return;
+    DataService.isInitializing = true; // Lock lag gaya
 
-    // Li-Fi Fix: Agar asli internet nahi hai, to initialization skip karein
+    // Li-Fi Fix: Connection check
     const hasInternet = await checkSupabaseConnection();
-    if (!hasInternet) return;
-
-    this.isInitializing = true;
+    if (!hasInternet) {
+      DataService.isInitializing = false;
+      return;
+    }
 
     try {
-      // 1. SAB SE PEHLE SERVER SE POOCHEIN: Kya initialization ho chuki hai?
+      // 1. Server se check karein ke kya pehle hi setup ho chuka hai?
       const { data: profile, error: profError } = await supabase
         .from('profiles')
         .select('categories_initialized')
         .eq('user_id', userId)
         .single();
 
-      // Agar server keh raha hai ke pehle hi ho chuka hai, to yahin ruk jao
       if (profError || profile?.categories_initialized) {
+        DataService.isInitializing = false; // Kaam ho chuka hai, lock khol dein
         return;
       }
 
-      console.log("Checking for missing standard categories...");
+      console.log("Starting safe initialization...");
 
-      // 2. Local Database se check karein (Duplicate protection)
-      const existingCats = await db.categories.where('user_id').equals(userId).toArray();
-      const existingExpCats = await db.expense_categories.where('user_id').equals(userId).toArray();
-
-      const existingCatNames = existingCats.map(c => c.name.toLowerCase().trim());
-      const existingExpCatNames = existingExpCats.map(c => c.name.toLowerCase().trim());
-
-      // 3. PRODUCT CATEGORIES LOOP
+      // 2. PRODUCT CATEGORIES SETUP
       for (const catTemplate of DEFAULT_CATEGORIES) {
-        if (existingCatNames.includes(catTemplate.name.toLowerCase().trim())) continue;
+        // [IMPORTANT]: Har category ko add karne se pehle DB mein check karein
+        const alreadyExists = await db.categories
+          .where('name').equals(catTemplate.name)
+          .and(c => c.user_id === userId)
+          .first();
+
+        if (alreadyExists) continue; // Agar Call 1 ne bana di hai, to Call 2 yahan ruk jayegi
 
         const categoryId = crypto.randomUUID();
         const categoryData = {
-          id: categoryId, // Asli UUID ID
+          id: categoryId,
           name: catTemplate.name,
           is_imei_based: catTemplate.is_imei_based,
           user_id: userId,
@@ -162,9 +165,14 @@ const DataService = {
         }
       }
 
-      // 4. EXPENSE CATEGORIES LOOP
+      // 3. EXPENSE CATEGORIES SETUP
       for (const expCat of DEFAULT_EXPENSE_CATEGORIES) {
-        if (existingExpCatNames.includes(expCat.name.toLowerCase().trim())) continue;
+        // [IMPORTANT]: Dobara check karein taake duplicate na ho
+        const alreadyExists = await db.expense_categories
+          .filter(c => c.name === expCat.name && c.user_id === userId)
+          .first();
+
+        if (alreadyExists) continue;
 
         const expCatId = crypto.randomUUID();
         const expCatData = {
@@ -177,14 +185,14 @@ const DataService = {
         await db.sync_queue.add({ table_name: 'expense_categories', action: 'create', data: expCatData });
       }
 
-      // 5. Server par flag update kar dein (Islaah ke saath)
-      await supabase.from('profiles').update({ categories_initialized: true }).eq('user_id', userId).select();
+      // 4. Server par flag update kar dein
+      await supabase.from('profiles').update({ categories_initialized: true }).eq('user_id', userId);
+      console.log("Safe Initialization complete.");
       
-      console.log("Smart Initialization complete.");
     } catch (error) {
       console.error("Initialization failed:", error);
     } finally {
-      this.isInitializing = false;
+      DataService.isInitializing = false; // Aakhir mein lock khol dein
     }
   },
 
@@ -1602,15 +1610,6 @@ async addCustomer(customerData) {
   },
 
   async getExpenseCategories() {
-    // Li-Fi Fix: Pehle connection check karein
-    const hasInternet = await checkSupabaseConnection();
-
-    if (hasInternet) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await this.initializeUserCategories(user.id);
-      }
-    }
     return await db.expense_categories.toArray();
   },
 
@@ -1709,16 +1708,6 @@ async addCustomer(customerData) {
   // --- PRODUCT CATEGORIES & ATTRIBUTES SECTION ---
 
   async getProductCategories() {
-    // Li-Fi Fix: Pehle connection check karein
-    const hasInternet = await checkSupabaseConnection();
-    
-    if (hasInternet) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await this.initializeUserCategories(user.id);
-      }
-    }
-
     // Local DB se data hamesha return hoga, chahe net ho ya na ho
     const categories = await db.categories.orderBy('name').toArray();
     return categories;
@@ -1816,14 +1805,30 @@ async addCustomer(customerData) {
 
   // --- DASHBOARD FUNCTIONS ---
 
-  async getDashboardStats(threshold = 5, timeRange = 'today') {
+  async getDashboardStats(threshold = 5, timeRange = 'today', customDates =[]) {
     // 1. Date Ranges (Wohi purana logic)
     const now = new Date();
     let currentStart = new Date();
+    let currentEnd = new Date(); // NAYA: Custom range ke liye end date
     let previousStart = new Date();
     let previousEnd = new Date();
 
-    if (timeRange === 'week') {
+    if (timeRange === 'custom') {
+        if (customDates && customDates.length === 2) {
+            // Jab user ne dono dates select kar li hon
+            currentStart = new Date(customDates[0]);
+            currentStart.setHours(0,0,0,0);
+            currentEnd = new Date(customDates[1]);
+            currentEnd.setHours(23,59,59,999);
+        } else {
+            // Jab sirf 'Custom' par click kiya ho magar date select na ki ho (0 stats dikhane ke liye)
+            currentStart = new Date('2099-01-01'); // Mustaqbil ki date jahan koi sale nahi
+            currentEnd = new Date('2099-01-01');
+        }
+        previousStart = new Date(currentStart); // Option A: No comparison
+        previousEnd = new Date(currentStart);
+    } 
+    else if (timeRange === 'week') {
         const day = currentStart.getDay() || 7; 
         if (day !== 1) currentStart.setHours(-24 * (day - 1));
         else currentStart.setHours(0,0,0,0);
@@ -1938,7 +1943,7 @@ async addCustomer(customerData) {
         const sDate = new Date(s.sale_date || s.created_at);
         
         // Stats aur Growth ke liye
-        if (sDate >= currentStart) {
+        if (sDate >= currentStart && sDate <= currentEnd) { // NAYA: <= currentEnd add kiya
             rawSalesCurrent += (s.total_amount || 0);
             currentSalesData.push(s);
         } else if (sDate >= previousStart && sDate < (timeRange === 'today' ? previousEnd : currentStart)) {
@@ -1957,7 +1962,7 @@ async addCustomer(customerData) {
     await db.sale_returns.where('created_at').aboveOrEqual(earliestNeededDate).each(r => {
         returns.push(r); // Crash bachane ke liye data yahan save karein
         const rDate = new Date(r.created_at);
-        if (rDate >= currentStart) {
+        if (rDate >= currentStart && rDate <= currentEnd) { // NAYA: <= currentEnd add kiya
             rawReturnsCurrent += (r.total_refund_amount || 0);
             totalReturnFeesCurrent += (Number(r.return_fee) || 0);
             currentReturnsData.push(r);
@@ -1966,7 +1971,10 @@ async addCustomer(customerData) {
         }
     });
 
-    const currentExpensesData = expenses.filter(e => new Date(e.expense_date) >= currentStart);
+    const currentExpensesData = expenses.filter(e => {
+        const d = new Date(e.expense_date);
+        return d >= currentStart && d <= currentEnd; // NAYA: <= currentEnd add kiya
+    });
     const previousExpensesData = expenses.filter(e => {
         const d = new Date(e.expense_date);
         return d >= previousStart && d < (timeRange === 'today' ? previousEnd : currentStart);
@@ -2168,42 +2176,64 @@ async addCustomer(customerData) {
     };
   },
 
-  async getLast7DaysSales() {
-    // 1. Sirf pichle 7 din ka data mangwayenge
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const dateLimit = sevenDaysAgo.toISOString();
+  async getSalesChartData(timeRange = 'today', customDates =[]) {
+    let start = new Date();
+    let end = new Date();
 
+    // 1. Dates Set Karein (Aap ke idea ke mutabiq)
+    if (timeRange === 'custom' && customDates && customDates.length === 2) {
+        start = new Date(customDates[0]); start.setHours(0,0,0,0);
+        end = new Date(customDates[1]); end.setHours(23,59,59,999);
+    } else if (timeRange === 'month') {
+        start.setDate(1); start.setHours(0,0,0,0);
+    } else if (timeRange === 'week') {
+        const day = start.getDay() || 7;
+        if (day !== 1) start.setHours(-24 * (day - 1)); else start.setHours(0,0,0,0);
+    } else {
+        // 'today' select hone par Graph hamesha pichle 7 din dikhayega (Aap ka behtareen idea!)
+        start.setDate(start.getDate() - 6); // Aaj mila kar 7 din
+        start.setHours(0,0,0,0);
+    }
+
+    const dateLimit = start.toISOString();
+    
+    // 2. Database se data layein
     const sales = await db.sales.where('created_at').aboveOrEqual(dateLimit).toArray();
     const returns = await db.sale_returns.where('created_at').aboveOrEqual(dateLimit).toArray();
     
     const map = {};
     
-    // 2. Pichle 7 din ka map banayein
-    for(let i=6; i>=0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split('T')[0];
+    // 3. Start aur End Date ke darmian tamam dinon ka map banayein
+    let currentDate = new Date(start);
+    while (currentDate <= end) {
+        const dateStr = currentDate.toISOString().split('T')[0];
         map[dateStr] = 0;
+        currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    // 3. Sales Jama (Add) karein
+    // 4. Sales Jama (Add) karein
     sales.forEach(s => {
-        const dateStr = (s.sale_date || s.created_at).split('T')[0];
-        if (map[dateStr] !== undefined) {
-            map[dateStr] += (s.total_amount || 0);
+        const sDate = new Date(s.sale_date || s.created_at);
+        if (sDate <= end) {
+            const dateStr = sDate.toISOString().split('T')[0];
+            if (map[dateStr] !== undefined) {
+                map[dateStr] += (s.total_amount || 0);
+            }
         }
     });
 
-    // 4. Returns Manfi (Subtract) karein <--- NAYA STEP
+    // 5. Returns Manfi (Subtract) karein
     returns.forEach(r => {
-        const dateStr = (r.created_at).split('T')[0];
-        if (map[dateStr] !== undefined) {
-            map[dateStr] -= (r.total_refund_amount || 0);
+        const rDate = new Date(r.created_at);
+        if (rDate <= end) {
+            const dateStr = rDate.toISOString().split('T')[0];
+            if (map[dateStr] !== undefined) {
+                map[dateStr] -= (r.total_refund_amount || 0);
+            }
         }
     });
 
-    // 5. Data wapis karein (Math.max use kiya taake graph negative mein na jaye)
+    // 6. Graph ke liye data wapis bhejein
     return Object.keys(map).sort().map(date => ({
         date, 
         amount: Math.max(0, map[date]) 
@@ -2425,8 +2455,18 @@ async addCustomer(customerData) {
   // 1. Staff List Mangwana
   async getStaffMembers() {
     const staff = await db.staff_members.toArray();
+    
+    // --- NAYA: Har staff ki permissions ko wapis Decrypt karein ---
+    const decryptedStaff = await Promise.all(staff.map(async (s) => {
+        // Agar permission text (encrypted) hai, to chabi se khol lein
+        if (s.permissions && typeof s.permissions === 'string') {
+            s.permissions = await decryptData(s.permissions);
+        }
+        return s;
+    }));
+
     // Javascript ke zariye naam ke hisaab se tartib (sort) kar rahe hain
-    return staff.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    return decryptedStaff.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   },
 
   // 2. Naya Staff Add karna
@@ -2435,6 +2475,12 @@ async addCustomer(customerData) {
     
     // PIN ko Hash (Encrypt) karein
     const hashedPassword = bcrypt.hashSync(staffData.pin_code, 10);
+
+    // --- NAYA: Permissions ko Taala lagayen (Encrypt Karein) ---
+    let encryptedPermissions = "";
+    if (staffData.permissions) {
+        encryptedPermissions = await encryptData(staffData.permissions);
+    }
 
     // Default values set karein
     const newStaff = {
@@ -2445,7 +2491,7 @@ async addCustomer(customerData) {
       balance: 0, // Naya: Shuruat mein balance 0 hoga
       local_id: staffData.id,
       is_active: true,
-      permissions: staffData.permissions || {},
+      permissions: encryptedPermissions, // <--- NAYA: Ab yahan ajeeb sa text save hoga
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -2475,6 +2521,11 @@ async addCustomer(customerData) {
   
   // Naya: Salary ko update data mein shamil karna
   if (updates.salary !== undefined) updates.salary = Number(updates.salary);
+
+  // --- NAYA: Agar permissions update ho rahi hain to unhein Encrypt karein ---
+  if (updates.permissions) {
+      updates.permissions = await encryptData(updates.permissions);
+  }
 
   const updatedData = { ...updates, updated_at: new Date().toISOString() };
     
@@ -2515,14 +2566,22 @@ async addCustomer(customerData) {
 
     // 2. Har staff ka PIN check karein
     for (const staff of activeStaffMembers) {
+      let isMatch = false;
       // Agar PIN Hash hai (bcrypt hashes aam tor par $2 se shuru hote hain)
       if (staff.pin_code && staff.pin_code.startsWith('$2')) {
-         const isMatch = bcrypt.compareSync(pin, staff.pin_code);
-         if (isMatch) return staff;
+         isMatch = bcrypt.compareSync(pin, staff.pin_code);
       } 
       // Agar Purana Plain Text PIN hai (Legacy support)
       else if (staff.pin_code === pin) {
-         return staff;
+         isMatch = true;
+      }
+
+      if (isMatch) {
+          // --- NAYA: Login hone par permissions Decrypt karke wapis bhejein ---
+          if (staff.permissions && typeof staff.permissions === 'string') {
+              staff.permissions = await decryptData(staff.permissions);
+          }
+          return staff; // Kamyab Login
       }
     }
     

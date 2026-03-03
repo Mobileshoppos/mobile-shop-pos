@@ -15,10 +15,19 @@ const { Sider, Content } = Layout; // <--- YEH LINE BOHOT ZAROORI HAI
 const { Title, Text } = Typography;
 
 const permissionOptions = [
-  { label: 'View Reports & Dashboard Stats', value: 'can_view_reports' },
-  { label: 'Edit or Delete Inventory', value: 'can_edit_inventory' },
-  { label: 'Delete Sales / Process Returns', value: 'can_delete_sales' },
-  { label: 'Manage Customers & Suppliers', value: 'can_manage_people' }
+  // --- Left Column (5 Items) ---
+  { label: 'View Reports & Stats', value: 'can_view_reports' },
+  { label: 'View Sales History', value: 'can_view_sales_history' },
+  { label: 'Manage Categories', value: 'can_manage_categories' },
+  { label: 'Manage Purchases', value: 'can_manage_purchases' },
+  { label: 'Manage Suppliers', value: 'can_manage_suppliers' },
+
+  // --- Right Column (5 Items) ---
+  { label: 'Manage Expenses', value: 'can_manage_expenses' },           // <--- NAYA
+  { label: 'Manage Exp. Categories', value: 'can_manage_expense_categories' }, // <--- NAYA
+  { label: 'Manage Shop Profile', value: 'can_manage_profile' },        // <--- NAYA
+  { label: 'Edit/Delete Inventory', value: 'can_edit_inventory' },
+  { label: 'Manage Customers', value: 'can_manage_people' }
 ];
 
 const StaffManagement = () => {
@@ -599,7 +608,14 @@ const StaffManagement = () => {
                   </Col>
                   <Col span={24}>
                     <Form.Item name="permissions" label="App Permissions">
-                      <Checkbox.Group options={permissionOptions} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }} />
+                      <Checkbox.Group 
+                        options={permissionOptions} 
+                        style={{ 
+                          display: 'grid', 
+                          gridTemplateColumns: '1fr 1fr', // 2 Barabar Columns banayega
+                          gap: '12px 8px' // Oopar-Neeche 12px, Daayen-Baayen 8px ka faasla
+                        }} 
+                      />
                     </Form.Item>
                   </Col>
                   <Col span={24}>

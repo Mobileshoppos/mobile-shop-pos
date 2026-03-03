@@ -255,7 +255,7 @@ export const SyncProvider = ({ children }) => {
         setPendingCount(allQueueItems.length);
         
         if (queueItems.length === 0) {
-            await syncAllData();
+            // await syncAllData();  <-- Isko disable kar diya taake faltu download na ho
             return;
         }
 
@@ -722,7 +722,7 @@ export const SyncProvider = ({ children }) => {
           }
         }
         
-        await syncAllData();
+        // await syncAllData();  <-- Isko bhi disable kar diya
 
     } catch (err) {
         console.error("Critical Sync Error:", err);
@@ -778,7 +778,7 @@ const retryAll = async () => {
       if (count > 0 && navigator.onLine) {
         processSyncQueue();
       }
-    }, 10000); // Isay 10 second kar dein taake system par bojh na paray
+    }, 3000); // Har 2 minute (120,000 ms) baad check karein taake server par API calls ka bojh na paray
 
     return () => clearInterval(interval);
   }, []);

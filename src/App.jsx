@@ -51,6 +51,20 @@ const OwnerOnly = ({ children }) => {
   return children;
 };
 
+// NAYA PERMISSION GUARD: Staff ki ijazat check karega
+const PermissionGuard = ({ permission, children }) => {
+  const { activeStaff, can } = useStaff();
+  
+  // 1. Agar Owner hai (activeStaff null), to sab ijazat hai.
+  // 2. Agar Staff hai, to check karo ke kya uske paas 'permission' hai?
+  if (!activeStaff || can(permission)) {
+    return children;
+  }
+  
+  // Agar ijazat nahi, to wapis Dashboard bhej do
+  return <Navigate to="/" replace />;
+};
+
 const { Content } = Layout;
 
 const MainLayout = ({ isDarkMode, toggleTheme }) => {
@@ -163,19 +177,59 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route index element={<Dashboard />} />
         <Route path="inventory" element={<Inventory />} />
         <Route path="warranty" element={<WarrantyClaims />} />
-        <Route path="/damaged-stock" element={<DamagedStock />} />
+        <Route path="/damaged-stock" element={
+          <PermissionGuard permission="can_edit_inventory">
+            <DamagedStock />
+          </PermissionGuard>
+        } />
         <Route path="pos" element={<POS />} />
         <Route path="reports" element={<Reports />} />
-        <Route path="customers" element={<Customers />} />
-        <Route path="suppliers" element={<SupplierDashboard />} />
-        <Route path="purchases" element={<Purchases />} />
-        <Route path="purchases/:id" element={<PurchaseDetails />} />
-        <Route path="categories" element={<Categories />} />
+        <Route path="customers" element={
+          <PermissionGuard permission="can_manage_people">
+            <Customers />
+          </PermissionGuard>
+        } />
+        <Route path="suppliers" element={
+          <PermissionGuard permission="can_manage_suppliers">
+            <SupplierDashboard />
+          </PermissionGuard>
+        } />
+        <Route path="purchases" element={
+          <PermissionGuard permission="can_manage_purchases">
+            <Purchases />
+          </PermissionGuard>
+        } />
+        <Route path="purchases/:id" element={
+          <PermissionGuard permission="can_manage_purchases">
+            <PurchaseDetails />
+          </PermissionGuard>
+        } />
+        <Route path="categories" element={
+          <PermissionGuard permission="can_manage_categories">
+            <Categories />
+          </PermissionGuard>
+        } />
         {/* IN PAGES PAR SECURITY GUARD LAGA DIYA */}
-        <Route path="profile" element={<OwnerOnly><Profile /></OwnerOnly>} />
-        <Route path="expenses" element={<Expenses />} />
-        <Route path="expense-categories" element={<ExpenseCategories />} />
-        <Route path="sales-history" element={<SalesHistory />} />
+        <Route path="profile" element={
+          <PermissionGuard permission="can_manage_profile">
+            <Profile />
+          </PermissionGuard>
+        } />
+        <Route path="expenses" element={
+         <PermissionGuard permission="can_manage_expenses">
+            <Expenses />
+          </PermissionGuard>
+        } />
+        <Route path="expense-categories" element={
+         <PermissionGuard permission="can_manage_expense_categories">
+            <ExpenseCategories />
+          </PermissionGuard>
+        } />
+        <Route path="sales-history" element={
+          <PermissionGuard permission="can_view_sales_history">
+            <SalesHistory />
+          </PermissionGuard>
+        } />
         {/* IN PAGES PAR SECURITY GUARD LAGA DIYA */}
         <Route path="settings" element={<OwnerOnly><SettingsPage /></OwnerOnly>} />
         <Route path="staff" element={<OwnerOnly><StaffManagement /></OwnerOnly>} />
