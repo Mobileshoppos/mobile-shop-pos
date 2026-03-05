@@ -16,26 +16,11 @@ const LockScreen = () => {
   const { user } = useAuth(); // User ki maloomat nikaali
   const { token } = theme.useToken(); // Theme colors nikaalne ke liye
 
-  // Check karein ke kya Owner ne pehli baar lock kiya hai aur Master PIN set karna baqi hai?
-  const isSetupNeeded = !localStorage.getItem('device_master_pin');
-
   const handleAction = async () => {
     setLocalError(''); // Pehle purana error saaf karein
     
     if (!pin) {
       setLocalError("Please enter a PIN");
-      return;
-    }
-
-    if (isSetupNeeded) {
-      if (pin.length !== 6) {
-        message.error("Master PIN must be exactly 6 digits");
-        return;
-      }
-      const hashedPin = bcrypt.hashSync(pin, 10);
-      localStorage.setItem('device_master_pin', hashedPin);
-      message.success("Master PIN set successfully!");
-      setPin('');
       return;
     }
 
@@ -132,17 +117,14 @@ const LockScreen = () => {
         border: `1px solid ${token.colorBorderSecondary}`
       }}>
         
-        {isSetupNeeded ? 
-          <SafetyOutlined style={{ fontSize: 48, color: token.colorSuccess, marginBottom: 16 }} /> : 
-          <LockOutlined style={{ fontSize: 48, color: token.colorPrimary, marginBottom: 16 }} />
-        }
+        <LockOutlined style={{ fontSize: 48, color: token.colorPrimary, marginBottom: 16 }} />
 
         <Title level={3} style={{ color: token.colorTextHeading }}>
-          {isSetupNeeded ? "Setup Master PIN" : "Terminal Locked"}
+          Terminal Locked
         </Title>
 
         <Text style={{ display: 'block', marginBottom: localError ? 12 : 24, color: token.colorTextSecondary }}>
-          {isSetupNeeded ? "Set your Master PIN to secure this device." : "Enter your PIN to unlock"}
+          Enter your PIN to unlock
         </Text>
 
         {/* Theme-based Error Box */}
@@ -180,7 +162,7 @@ const LockScreen = () => {
         />
 
         <Button type="primary" size="large" block onClick={handleAction}>
-          {isSetupNeeded ? "Save Master PIN" : "Unlock"}
+          Unlock
         </Button>
       </Card>
     </div>

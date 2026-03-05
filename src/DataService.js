@@ -1441,7 +1441,8 @@ async addCustomer(customerData) {
       const d = new Date(s.sale_date || s.created_at).getTime();
       return d >= start && d <= end;
     });
-    const totalRevenueFromSales = precise(filteredSales.reduce((sum, s) => sum + (s.total_amount || 0), 0));
+    // --- NAYA IZAFA: Tax ko munafay (revenue) se nikalna ---
+    const totalRevenueFromSales = precise(filteredSales.reduce((sum, s) => sum + ((s.total_amount || 0) - (s.tax_amount || 0)), 0));
 
     // B. Returns (Refunds)
     const allReturns = await db.sale_returns.toArray();
@@ -1449,7 +1450,8 @@ async addCustomer(customerData) {
       const d = new Date(r.created_at).getTime();
       return d >= start && d <= end;
     });
-    const totalRefunds = precise(filteredReturns.reduce((sum, r) => sum + (r.total_refund_amount || 0), 0));
+    // --- NAYA IZAFA: Tax refund ko bhi nikalna ---
+    const totalRefunds = precise(filteredReturns.reduce((sum, r) => sum + ((r.total_refund_amount || 0) - (r.tax_refunded || 0)), 0));
     
     // Net Revenue
     const totalRevenue = precise(totalRevenueFromSales - totalRefunds);
@@ -1944,10 +1946,10 @@ async addCustomer(customerData) {
         
         // Stats aur Growth ke liye
         if (sDate >= currentStart && sDate <= currentEnd) { // NAYA: <= currentEnd add kiya
-            rawSalesCurrent += (s.total_amount || 0);
+            rawSalesCurrent += ((s.total_amount || 0) - (s.tax_amount || 0)); // <--- NAYA IZAFA (Tax Excluded)
             currentSalesData.push(s);
         } else if (sDate >= previousStart && sDate < (timeRange === 'today' ? previousEnd : currentStart)) {
-            rawSalesPrevious += (s.total_amount || 0);
+            rawSalesPrevious += ((s.total_amount || 0) - (s.tax_amount || 0)); // <--- NAYA IZAFA (Tax Excluded)
             previousSalesData.push(s);
         }
 
@@ -1963,11 +1965,11 @@ async addCustomer(customerData) {
         returns.push(r); // Crash bachane ke liye data yahan save karein
         const rDate = new Date(r.created_at);
         if (rDate >= currentStart && rDate <= currentEnd) { // NAYA: <= currentEnd add kiya
-            rawReturnsCurrent += (r.total_refund_amount || 0);
+            rawReturnsCurrent += ((r.total_refund_amount || 0) - (r.tax_refunded || 0)); // <--- NAYA IZAFA (Tax Excluded)
             totalReturnFeesCurrent += (Number(r.return_fee) || 0);
             currentReturnsData.push(r);
         } else if (rDate >= previousStart && rDate < (timeRange === 'today' ? previousEnd : currentStart)) {
-            rawReturnsPrevious += (r.total_refund_amount || 0);
+            rawReturnsPrevious += ((r.total_refund_amount || 0) - (r.tax_refunded || 0)); // <--- NAYA IZAFA (Tax Excluded)
         }
     });
 
@@ -2217,7 +2219,7 @@ async addCustomer(customerData) {
         if (sDate <= end) {
             const dateStr = sDate.toISOString().split('T')[0];
             if (map[dateStr] !== undefined) {
-                map[dateStr] += (s.total_amount || 0);
+                map[dateStr] += ((s.total_amount || 0) - (s.tax_amount || 0)); // <--- NAYA IZAFA
             }
         }
     });
@@ -2228,7 +2230,7 @@ async addCustomer(customerData) {
         if (rDate <= end) {
             const dateStr = rDate.toISOString().split('T')[0];
             if (map[dateStr] !== undefined) {
-                map[dateStr] -= (r.total_refund_amount || 0);
+                map[dateStr] -= ((r.total_refund_amount || 0) - (r.tax_refunded || 0)); // <--- NAYA IZAFA
             }
         }
     });

@@ -551,6 +551,8 @@ const POS = () => {
               customer_id: finalCustomerId, 
               subtotal: subtotal, 
               discount: discountAmount, 
+              tax_amount: taxAmount, 
+              tax_rate_applied: profile?.tax_enabled ? profile?.tax_rate : 0, 
               total_amount: grandTotal, 
               payment_method: paymentMethod === 'Paid' ? cashOrBank : 'Cash',
               amount_paid_at_sale: paymentMethod === 'Paid' ? grandTotal : amountPaid, 
@@ -770,6 +772,11 @@ const POS = () => {
                  amountPaid: saleDataForReceipt.amount_paid_at_sale,
                  paymentStatus: saleDataForReceipt.payment_status,
                  grandTotal: saleDataForReceipt.total_amount,
+                 // --- NAYA IZAFA: Receipt ke liye Tax Data ---
+                 taxAmount: saleDataForReceipt.tax_amount,
+                 taxName: profile?.tax_name || 'Tax',
+                 taxRate: saleDataForReceipt.tax_rate_applied,
+                 // --------------------------------------------
                  footerMessage: profile?.warranty_policy,
                  showQrCode: profile?.qr_code_enabled ?? true
              };
@@ -809,7 +816,15 @@ const POS = () => {
     }
   }, [isWalkIn, paymentMethod]);
   let discountAmount = discountType === 'Amount' ? discount : (subtotal * discount) / 100;
-  const grandTotal = Math.max(0, subtotal - discountAmount);
+  const totalAfterDiscount = Math.max(0, subtotal - discountAmount);
+  
+  // --- NAYA IZAFA: Tax Calculation ---
+  let taxAmount = 0;
+  if (profile?.tax_enabled && profile?.tax_rate > 0) {
+      taxAmount = (totalAfterDiscount * profile.tax_rate) / 100;
+  }
+  const grandTotal = totalAfterDiscount + taxAmount;
+  // -----------------------------------
 
   // NAYA handleAddCustomer (Offline-First)
   const handleAddCustomer = async (values) => {
@@ -1344,6 +1359,13 @@ const POS = () => {
             <Row justify="space-between"><Text>Subtotal</Text><Text>{formatCurrency(subtotal, profile?.currency)}</Text></Row>
             {profile?.pos_discount_enabled !== false && (
             <Row justify="space-between"><Text>Discount</Text><Text style={{ color: token.colorError }}>- {formatCurrency(discountAmount, profile?.currency)}</Text></Row>
+            )}
+            {/* --- NAYA IZAFA: Tax UI --- */}
+            {profile?.tax_enabled && profile?.tax_rate > 0 && (
+            <Row justify="space-between">
+              <Text>{profile.tax_name} ({profile.tax_rate}%)</Text>
+              <Text style={{ color: token.colorWarning }}>+ {formatCurrency(taxAmount, profile?.currency)}</Text>
+            </Row>
             )}
             <Divider style={{ margin: '8px 0' }}/>
             <Row justify="space-between" align="middle">

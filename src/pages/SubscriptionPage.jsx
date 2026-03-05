@@ -1,19 +1,16 @@
 import React, { useState } from 'react';
-import { Card, Row, Col, Typography, Button, List, Tag, Modal, Steps, Divider, Tooltip, Radio, theme, Badge, Alert } from 'antd';
+import { Card, Row, Col, Typography, Button, List, Modal, Steps, Divider, Radio, theme, Badge, Tag } from 'antd';
 import { 
-  CheckCircleOutlined, 
-  RocketOutlined, 
+  CheckOutlined, 
   BankOutlined, 
   WhatsAppOutlined, 
-  InfoCircleOutlined, 
-  CreditCardOutlined,
+  RocketOutlined,
   ThunderboltOutlined,
-  CrownOutlined,
-  StarOutlined
+  WifiOutlined,
+  SafetyCertificateOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import { useNavigate } from 'react-router-dom';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -21,82 +18,90 @@ const SubscriptionPage = () => {
   const { token } = theme.useToken();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { profile } = useAuth();
-  const navigate = useNavigate();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [selectedPlan, setSelectedPlan] = useState(null);
 
-  // --- PLANS CONFIGURATION (Marketing Optimized) ---
+  const currentTier = profile?.subscription_tier?.toLowerCase() || 'free';
+
+  // --- CORE HIGHLIGHTS (Supabase Style Top Banner) ---
+  const coreHighlights = [
+    { icon: <WifiOutlined />, title: "Offline First", desc: "Works without internet" },
+    { icon: <ThunderboltOutlined />, title: "Delta Sync", desc: "Super fast data backup" },
+    { icon: <SafetyCertificateOutlined />, title: "No Setup Charges", desc: "Free onboarding & support" },
+  ];
+
+  // --- SIMPLIFIED PLANS ---
+  // --- PLANS CONFIGURATION (Fixed per Instructions) ---
   const plans = [
     {
       key: 'free',
-      title: 'Free Plan',
-      icon: <StarOutlined style={{ fontSize: '24px', color: '#8c8c8c' }} />,
+      title: 'Free',
       priceMonthly: 0,
       priceYearly: 0,
-      description: 'Foundational suite for nano-retailers.',
+      description: 'Perfect for startups and nano-retailers just getting started.',
       features: [
-        '200 Active Inventory Slots (SKUs)',
-        '100 Master Product Profiles',
-        '50 Intelligent Customer Directories',
-        '10 Strategic Supplier Profiles',
-        'Owner-Only Master Access',
-        'Standard POS Execution Terminal',
-        'PDF & Thermal Receipt Engine',
-        'Real-time Cloud Data Redundancy',
-        'Basic Inventory Threshold Alerts'
+        'Offline-First Architecture', // Khaas Feature
+        'Delta Sync Engine',          // Khaas Feature
+        '200 Stock Items (SKUs)',
+        '100 Product Models',
+        '10 Customers Directory',
+        '10 Suppliers Directory',
+        'Basic POS Terminal',
+        'PDF & Thermal Receipts',
+        'Real-time Cloud Backup',
+        'No Setup Charges',           // Khaas Feature
+        'No Hidden Fees'
       ],
-      color: '#8c8c8c'
+      buttonText: 'Start for Free',
+      isPopular: false
     },
     {
       key: 'growth',
-      title: 'Growth Plan',
-      icon: <ThunderboltOutlined style={{ fontSize: '24px', color: token.colorPrimary }} />,
+      title: 'Growth',
       priceMonthly: 999,
-      priceYearly: 9500,
-      description: 'High-performance engine for rising shops.',
+      priceYearly: 10799, // 10% Discount
+      description: 'For scaling shops that need advanced inventory and reporting.',
+      previousPlan: 'Free', // Yeh line "Everything in Free..." show karegi
       features: [
-        '2,500 High-Capacity Inventory Slots',
-        '1,000 Master Product Profiles',
-        '1,000 Advanced Customer Ledgers',
-        '100 Strategic Vendor Profiles',
-        '2 Secure Staff Execution Seats',
-        'Multi-Level Access Security (MAS)',
-        'Full Expense & Overhead Tracking',
-        'Automated Supplier Payment Ledger',
-        'Dynamic Sales Forecasting (7 Days)',
-        'Comprehensive Business Audit Trail',
-        'Global Data Synchronization'
+        '2,500 Stock Items (SKUs)',
+        '1,000 Product Models',
+        '1,000 Customers Directory',
+        '100 Suppliers Directory',
+        '2 Staff/Salesman Accounts',
+        'Supplier Ledger (Udhaar/Khata)',
+        'Expense Tracking Module',
+        'Profit & Loss Analytics',
+        'Low Stock Alerts',
+        'No Setup Charges'
       ],
-      color: token.colorPrimary
+      buttonText: 'Upgrade to Growth',
+      isPopular: false, 
     },
     {
       key: 'pro',
-      title: 'Pro Plan',
-      icon: <CrownOutlined style={{ fontSize: '24px', color: '#faad14' }} />,
+      title: 'Pro',
       priceMonthly: 1799,
-      priceYearly: 17500,
-      description: 'Enterprise-grade suite for power users.',
+      priceYearly: 19429, // 10% Discount
+      description: 'For large-scale enterprises requiring maximum power and control.',
+      previousPlan: 'Growth', // Yeh line "Everything in Growth..." show karegi
       features: [
-        '50,000 Industrial-Grade Stock Slots',
-        '5,000 Master Product Profiles',
-        '5,000 Premium Customer Accounts',
-        '500 Strategic Supplier Partnerships',
-        '5 Concurrent User Terminals (Staff)',
-        'End-to-End Warranty Lifecycle (RMA)',
-        'Enterprise Profit/Loss Analytics',
-        'Custom Low-Stock Intelligence',
-        'Archived History Management (500)',
-        'Priority 24/7 Technical Support',
-        'Advanced Data Export & Backup Suite',
-        'Early Access to New Modules'
+        '50,000 Industrial Stock Items',
+        '5,000 Master Product Models',
+        'Unlimited Customer Profiles',
+        '500 Strategic Suppliers',
+        '5 Concurrent Staff Terminals',
+        'Complete Warranty System (RMA)',
+        'Advanced Business Intelligence',
+        'Priority 24/7 Support',
+        'Data Export & Excel Reports',
+        'No Setup Charges'
       ],
-      color: '#faad14',
-      popular: true // User ki request par Pro ko popular kiya
+      buttonText: 'Get Pro Power',
+      isPopular: true, // AAP KI HIDAYAT: Pro Plan ab Most Popular hai
+      highlightColor: '#faad14' // Gold Color
     }
   ];
-
-  const currentTier = profile?.subscription_tier?.toLowerCase() || 'free';
 
   const handleUpgradeClick = (plan) => {
     setSelectedPlan(plan);
@@ -104,106 +109,160 @@ const SubscriptionPage = () => {
   };
 
   return (
-    <div style={{ padding: isMobile ? '12px 4px' : '24px' }}>
-      <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-        <Title level={isMobile ? 3 : 1}>
-          <CreditCardOutlined /> Elevate Your Business Intelligence
+    <div style={{ padding: isMobile ? '12px' : '40px', maxWidth: '1200px', margin: '0 auto' }}>
+      
+      {/* 1. HEADER SECTION */}
+      <div style={{ textAlign: 'center', marginBottom: '50px' }}>
+        <Title level={isMobile ? 2 : 1} style={{ marginBottom: '10px' }}>
+          Predictable pricing, designed to scale
         </Title>
-        <Paragraph type="secondary" style={{ fontSize: '16px' }}>
-          Select a scalable architecture that aligns with your operational volume.
+        <Paragraph type="secondary" style={{ fontSize: '18px' }}>
+          Start building for free, then scale as your shop grows.
         </Paragraph>
 
+        {/* 2. CORE FEATURES BANNER (Highlights) */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          gap: isMobile ? '10px' : '40px', 
+          flexWrap: 'wrap',
+          margin: '30px 0' 
+        }}>
+          {coreHighlights.map((item, index) => (
+            <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: token.colorFillQuaternary, padding: '8px 16px', borderRadius: '50px' }}>
+              <span style={{ color: token.colorPrimary, fontSize: '18px' }}>{item.icon}</span>
+              <div>
+                <Text strong style={{ display: 'block', lineHeight: 1 }}>{item.title}</Text>
+                <Text type="secondary" style={{ fontSize: '11px' }}>{item.desc}</Text>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* BILLING TOGGLE */}
         <Radio.Group 
           value={billingCycle} 
           onChange={(e) => setBillingCycle(e.target.value)}
           optionType="button"
           buttonStyle="solid"
           size="large"
-          style={{ marginTop: '10px' }}
         >
-          <Radio.Button value="monthly">Monthly Billing</Radio.Button>
-          <Radio.Button value="yearly">Yearly (Loyalty Discount ~20%)</Radio.Button>
+          <Radio.Button value="monthly">Monthly</Radio.Button>
+          <Radio.Button value="yearly">Yearly <Tag color="success" style={{ marginLeft: 5, fontSize: 10 }}>-10%</Tag></Radio.Button>
         </Radio.Group>
       </div>
 
-      <Row gutter={[24, 32]} justify="center" align="bottom">
+      {/* 3. PRICING CARDS ROW */}
+      <Row gutter={[24, 24]} justify="center" align="stretch">
         {plans.map((plan) => {
           const isCurrent = currentTier === plan.key;
           const price = billingCycle === 'monthly' ? plan.priceMonthly : plan.priceYearly;
-          
+          const isPopular = plan.isPopular; 
+
           return (
-            <Col xs={24} lg={plan.popular ? 8 : 7} key={plan.key}>
-              <Badge.Ribbon 
-                text="Most Popular" 
-                color="gold" 
-                style={{ display: plan.popular ? 'block' : 'none' }}
+            <Col xs={24} md={8} key={plan.key}>
+              <Card
+                hoverable
+                style={{
+                  height: '100%',
+                  borderRadius: '12px',
+                  // Popular plan (Pro) ko highlight karein
+                  border: isPopular ? `2px solid ${plan.highlightColor || token.colorPrimary}` : `1px solid ${token.colorBorder}`,
+                  background: token.colorBgContainer,
+                  position: 'relative',
+                  overflow: 'hidden',
+                  transform: isPopular && !isMobile ? 'scale(1.05)' : 'none',
+                  zIndex: isPopular ? 2 : 1,
+                  textAlign: 'left' // AAP KI HIDAYAT: Text Left Aligned hoga
+                }}
+                styles={{ body: { padding: '32px 24px' } }}
               >
-                <Card
-                  hoverable
-                  style={{
-                    borderRadius: '16px',
-                    border: isCurrent ? `2px solid ${plan.color}` : `1px solid ${token.colorBorderSecondary}`,
-                    boxShadow: plan.popular ? '0 10px 30px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.05)',
-                    transform: !isMobile && plan.popular ? 'scale(1.05)' : 'none',
-                    transition: 'all 0.3s ease',
-                    zIndex: plan.popular ? 2 : 1
+                {/* POPULAR BADGE - Sirf Pro Plan par */}
+                {isPopular && (
+                  <div style={{
+                    position: 'absolute', top: 12, right: 12,
+                    background: plan.highlightColor || token.colorPrimary, color: '#fff',
+                    padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                  }}>
+                    Most Popular
+                  </div>
+                )}
+
+                {/* PLAN TITLE */}
+                <Title level={3} style={{ margin: 0, color: isPopular ? (plan.highlightColor || token.colorPrimary) : 'inherit' }}>
+                  {plan.title}
+                </Title>
+                <Paragraph type="secondary" style={{ marginBottom: '24px', minHeight: '44px', fontSize: '14px' }}>
+                  {plan.description}
+                </Paragraph>
+
+                {/* PRICE */}
+                <div style={{ marginBottom: '24px' }}>
+                  <Text style={{ fontSize: '14px', verticalAlign: 'top', marginRight: 2 }}>PKR</Text>
+                  <Title level={1} style={{ margin: 0, display: 'inline-block' }}>
+                    {price.toLocaleString()}
+                  </Title>
+                  <Text type="secondary">/{billingCycle === 'monthly' ? 'month' : 'year'}</Text>
+                  {/* Discount Tag */}
+                  {billingCycle === 'yearly' && price > 0 && (
+                    <Tag color="green" style={{ marginLeft: 10, verticalAlign: 'middle' }}>10% OFF</Tag>
+                  )}
+                </div>
+
+                {/* ACTION BUTTON */}
+                <Button 
+                  type={isPopular ? 'primary' : 'default'}
+                  block 
+                  size="large"
+                  style={{ 
+                    marginBottom: '24px', 
+                    height: '48px', 
+                    fontWeight: 600,
+                    backgroundColor: isPopular ? (plan.highlightColor || token.colorPrimary) : 'transparent',
+                    borderColor: isPopular ? (plan.highlightColor || token.colorPrimary) : undefined,
+                    color: isPopular ? '#fff' : undefined
                   }}
+                  disabled={isCurrent || (plan.key === 'free')}
+                  onClick={() => handleUpgradeClick(plan)}
                 >
-                  <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-                    {plan.icon}
-                    <Title level={3} style={{ margin: '10px 0 0 0' }}>{plan.title}</Title>
-                    {isCurrent && <Tag color="green" style={{ marginTop: '5px' }}>Active Subscription</Tag>}
+                  {isCurrent ? 'Current Plan' : plan.buttonText}
+                </Button>
+
+                <Divider />
+
+                {/* "EVERYTHING IN..." LINE (AAP KI HIDAYAT) */}
+                {plan.previousPlan && (
+                  <div style={{ marginBottom: '12px', fontSize: '14px', fontWeight: 600, color: token.colorTextHeading }}>
+                    Everything in {plan.previousPlan} Plan, plus:
                   </div>
+                )}
 
-                  <div style={{ textAlign: 'center', marginBottom: '20px', minHeight: '80px' }}>
-                    <Title level={2} style={{ margin: 0 }}>
-                      {price === 0 ? 'FREE' : `PKR ${price.toLocaleString()}`}
-                    </Title>
-                    <Text type="secondary">per {billingCycle === 'monthly' ? 'month' : 'annum'}</Text>
-                  </div>
-
-                  <Divider style={{ margin: '12px 0' }} />
-                  
-                  <Text strong style={{ display: 'block', marginBottom: '15px', textAlign: 'center', minHeight: '40px' }}>
-                    {plan.description}
-                  </Text>
-
-                  <List
-                    dataSource={plan.features}
-                    renderItem={(item) => (
-                      <List.Item style={{ border: 'none', padding: '6px 0' }}>
-                        <CheckCircleOutlined style={{ color: token.colorSuccess, marginRight: '10px', fontSize: '12px' }} />
-                        <Text style={{ fontSize: '13px' }}>{item}</Text>
-                      </List.Item>
-                    )}
-                  />
-
-                  <Button 
-                    type={plan.popular ? 'primary' : 'default'} 
-                    size="large" 
-                    block 
-                    style={{ 
-                      marginTop: '30px', 
-                      height: '50px', 
-                      borderRadius: '8px',
-                      fontWeight: 'bold',
-                      backgroundColor: plan.popular ? plan.color : 'transparent',
-                      borderColor: plan.color,
-                      color: plan.popular ? '#fff' : plan.color
-                    }}
-                    disabled={isCurrent || plan.key === 'free'}
-                    onClick={() => handleUpgradeClick(plan)}
-                  >
-                    {isCurrent ? 'Current Plan' : plan.key === 'free' ? 'Standard Access' : `Deploy ${plan.title}`}
-                  </Button>
-                </Card>
-              </Badge.Ribbon>
+                {/* FEATURES LIST */}
+                <List
+                  dataSource={plan.features}
+                  split={false}
+                  renderItem={(item) => (
+                    <List.Item style={{ padding: '6px 0', border: 'none', justifyContent: 'flex-start' }}>
+                      <div style={{ display: 'flex', alignItems: 'start', gap: '10px' }}>
+                        <CheckOutlined style={{ color: token.colorSuccess, marginTop: '4px' }} />
+                        <Text style={{ fontSize: '14px' }}>
+                          {/* Khaas features ko Bold karein */}
+                          {(item.includes('Offline-First') || item.includes('Delta Sync') || item.includes('No Setup')) 
+                            ? <strong>{item}</strong> 
+                            : item}
+                        </Text>
+                      </div>
+                    </List.Item>
+                  )}
+                />
+              </Card>
             </Col>
           );
         })}
       </Row>
 
-      {/* --- PAYMENT MODAL --- */}
+      {/* --- PAYMENT MODAL (UNCHANGED LOGIC) --- */}
       <Modal
         title={<Title level={4}>Upgrade to {selectedPlan?.title}</Title>}
         open={isModalVisible}
@@ -215,34 +274,34 @@ const SubscriptionPage = () => {
         ]}
       >
         <Paragraph>
-          To initialize your <strong>{selectedPlan?.title}</strong> architecture, please complete the following verification steps:
+          To activate your <strong>{selectedPlan?.title}</strong> plan, please complete the transfer:
         </Paragraph>
         <Divider />
         <Steps direction="vertical" current={0} size="small">
           <Steps.Step 
-            title="Secure Asset Transfer" 
+            title="Transfer Amount" 
             icon={<BankOutlined />}
             description={
               <div style={{ marginTop: '8px' }}>
                 <Text>
-                  Settlement Amount: <Text strong style={{ fontSize: '16px', color: token.colorError }}>
+                  Total: <Text strong style={{ fontSize: '16px', color: token.colorError }}>
                     PKR {(billingCycle === 'monthly' ? selectedPlan?.priceMonthly : selectedPlan?.priceYearly)?.toLocaleString()}
                   </Text>
                 </Text>
-                <Card size="small" style={{ marginTop: '10px', backgroundColor: token.colorFillAlter }}>
-                  <Text strong>Beneficiary Name:</Text> Rashid Ali<br/>
-                  <Text strong>Digital Wallet/Raast:</Text> 0326 2324446<br/>
-                  <Text type="secondary" style={{ fontSize: '12px' }}>* Attach shop identifier in transaction notes for expedited sync.</Text>
+                <Card size="small" style={{ marginTop: '10px', background: token.colorFillAlter }}>
+                  <Text strong>Bank/Wallet:</Text> Raast / EasyPaisa<br/>
+                  <Text strong>Account:</Text> 0326 2324446<br/>
+                  <Text strong>Name:</Text> Rashid Ali
                 </Card>
               </div>
             } 
           />
           <Steps.Step 
-            title="Authentication & Proof" 
+            title="Send Proof" 
             icon={<WhatsAppOutlined />}
             description={
               <Text>
-                Dispatch digital receipt to our verification node: <br/>
+                WhatsApp the screenshot to: <br/>
                 <a href="https://wa.me/923262324446" target="_blank" rel="noreferrer">
                   <strong>+92 326 2324446</strong>
                 </a>
@@ -250,30 +309,12 @@ const SubscriptionPage = () => {
             } 
           />
           <Steps.Step 
-            title="Module Activation" 
+            title="Activation" 
             icon={<RocketOutlined />}
-            description="Enterprise modules will be provisioned within 60-120 minutes post-verification." 
+            description="Your plan will be active within 1-2 hours." 
           />
         </Steps>
       </Modal>
-
-      {/* --- EXPIRY INFO --- */}
-      {(currentTier !== 'free') && profile?.subscription_expires_at && (
-        <div style={{ textAlign: 'center', marginTop: '40px' }}>
-          <Alert
-            message={
-              <Text>
-                Your enterprise license is active until: <strong>
-                {new Date(profile.subscription_expires_at).toLocaleDateString('en-PK', { year: 'numeric', month: 'long', day: 'numeric' })}
-                </strong>
-              </Text>
-            }
-            type="info"
-            showIcon
-            style={{ display: 'inline-block', borderRadius: '10px' }}
-          />
-        </div>
-      )}
     </div>
   );
 };

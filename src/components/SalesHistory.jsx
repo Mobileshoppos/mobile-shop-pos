@@ -180,6 +180,13 @@ const SalesHistory = () => {
           items: finalReceiptItems, 
           subtotal: sale.subtotal,
           discount: sale.discount,
+          
+          // --- NAYA IZAFA: Tax on Reprint ---
+          taxAmount: sale.tax_amount || 0,
+          taxName: profile?.tax_name || 'Tax',
+          taxRate: sale.tax_rate_applied || 0,
+          // ----------------------------------
+
           grandTotal: sale.total_amount,
           amountPaid: sale.amount_paid_at_sale,
           paymentStatus: sale.payment_status,

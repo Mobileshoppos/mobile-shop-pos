@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List, Dropdown, Tabs, Descriptions, Divider } from 'antd';
+import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List, Dropdown, Tabs, Descriptions, Divider, Switch } from 'antd';
 import { ShopOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, EyeOutlined, LockOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
@@ -284,6 +284,7 @@ const SupplierDashboard = () => {
     const isMobile = useMediaQuery('(max-width: 768px)');
     
     const [suppliers, setSuppliers] = useState([]);
+    const [totalCount, setTotalCount] = useState(0); // <--- NAYA
     const [selectedSupplierId, setSelectedSupplierId] = useState(null);
     const [loading, setLoading] = useState(true);
     const { notification, modal } = AntApp.useApp();
@@ -324,6 +325,10 @@ const SupplierDashboard = () => {
     const fetchSuppliers = useCallback(async (selectIdAfterFetch = null) => {
         setLoading(true);
         try {
+            // NAYA: Pehle database se total ginti mangwayein
+            const allCount = await db.suppliers.count();
+            setTotalCount(allCount);
+
             const data = await DataService.getSuppliers(showArchived);
             setSuppliers(data || []);
             
@@ -586,7 +591,7 @@ const SupplierDashboard = () => {
             </Row>
 
             {isMobile ? (
-                // --- MOBILE LAYOUT ---
+                // --- MOBILE LAYOUT (UPDATED) ---
                 selectedSupplierId ? (
                     renderSupplierDetails()
                 ) : (
@@ -595,25 +600,25 @@ const SupplierDashboard = () => {
                             {(() => {
                                 const limits = getPlanLimits(profile?.subscription_tier);
                                 const isFeatureLocked = !limits.allow_supplier_management;
-                                const currentCount = suppliers.length;
-                                const isLimitReached = currentCount >= limits.max_suppliers;
+                                const isLimitReached = totalCount >= limits.max_suppliers;
                                 const isLocked = isFeatureLocked || isLimitReached;
                                 return (
-                                    <Flex vertical gap="middle">
-                                        <Flex justify="space-between" align="center">
-                                            <Space size="middle">
-                                                <Button 
-                                                    icon={showArchived ? <ReloadOutlined /> : <InboxOutlined />} 
-                                                    onClick={() => setShowArchived(!showArchived)} 
-                                                    type={showArchived ? 'primary' : 'default'}
-                                                    danger={showArchived}
-                                                    title={showArchived ? 'Back to Active' : 'View Archived'}
+                                    <>
+                                        <Flex gap="small" align="center" justify="space-between" style={{ marginBottom: '12px' }}>
+                                            <Space>
+                                                <Switch 
+                                                    checked={showArchived} 
+                                                    onChange={(val) => setShowArchived(val)} 
+                                                    size="small" 
                                                 />
+                                                <Text type="secondary" style={{ fontSize: '11px' }}>
+                                                    {showArchived ? "Archived" : "Active"}
+                                                </Text>
                                             </Space>
-                                            <Button
-                                                type="primary"
-                                                icon={isLocked ? <LockOutlined /> : <PlusOutlined />}
-                                                size="large"
+                                            <Button 
+                                                type="primary" 
+                                                size="small" 
+                                                icon={isLocked ? <LockOutlined /> : <PlusOutlined />} 
                                                 onClick={handleAddNew}
                                                 style={isLocked ? { 
                                                     color: token.colorTextDisabled, 
@@ -626,13 +631,14 @@ const SupplierDashboard = () => {
                                         </Flex>
                                         <Input
                                             ref={searchInputRef}
-                                            placeholder="Search by name..."
+                                            placeholder="Search supplier..."
                                             prefix={<SearchOutlined />}
+                                            size="small"
                                             value={searchTerm}
                                             onChange={e => setSearchTerm(e.target.value)}
                                             allowClear
                                         />
-                                    </Flex>
+                                    </>
                                 );
                             })()}
                         </div>
@@ -644,8 +650,15 @@ const SupplierDashboard = () => {
                                         onClick={() => setSelectedSupplierId(s.id)}
                                         style={{ cursor: 'pointer', padding: '12px 8px' }}
                                     >
-                                        <List.Item.Meta title={<Text style={{ color: 'inherit' }}>{s.name}</Text>} />
-                                        {s.balance_due > 0 && <Tag color="red">{formatCurrency(s.balance_due, profile?.currency)}</Tag>}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                            <Text strong style={{ color: 'inherit' }}>{s.name}</Text>
+                                            <Text 
+                                                strong 
+                                                style={{ fontSize: '13px', color: s.balance_due > 0 ? token.colorError : token.colorSuccess }}
+                                            >
+                                                {formatCurrency(s.balance_due, profile?.currency)}
+                                            </Text>
+                                        </div>
                                     </List.Item>
                                 )}
                             />
@@ -657,28 +670,29 @@ const SupplierDashboard = () => {
                 // Background ko 'transparent' kar diya taake colors kharab na hon
                 <Layout style={{ background: 'transparent', borderRadius: token.borderRadiusLG, overflow: 'hidden', height: 'calc(100vh - 140px)' }}>
                     <Sider width={320} style={{ background: token.colorBgContainer, borderRight: `1px solid ${token.colorBorderSecondary}` }}>
-                        <div style={{ padding: '16px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+                        <div style={{ padding: '12px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
                             {(() => {
                                 const limits = getPlanLimits(profile?.subscription_tier);
                                 const isFeatureLocked = !limits.allow_supplier_management;
-                                const currentCount = suppliers.length;
-                                const isLimitReached = currentCount >= limits.max_suppliers;
+                                const isLimitReached = totalCount >= limits.max_suppliers;
                                 const isLocked = isFeatureLocked || isLimitReached;
                                 return (
-                                    <Flex vertical gap="middle">
-                                        <Flex justify="space-between" align="center">
-                                            <Space size="middle">
-                                                <Button 
-                                                    icon={showArchived ? <ReloadOutlined /> : <InboxOutlined />} 
-                                                    onClick={() => setShowArchived(!showArchived)} 
-                                                    type={showArchived ? 'primary' : 'default'}
-                                                    danger={showArchived}
-                                                    title={showArchived ? 'Back to Active' : 'View Archived'}
+                                    <>
+                                        <Flex gap="small" align="center" justify="space-between" style={{ marginBottom: '12px' }}>
+                                            <Space>
+                                                <Switch 
+                                                    checked={showArchived} 
+                                                    onChange={(val) => setShowArchived(val)} 
+                                                    size="small" 
                                                 />
+                                                <Text type="secondary" style={{ fontSize: '11px' }}>
+                                                    {showArchived ? "Archived" : "Active"}
+                                                </Text>
                                             </Space>
-                                            <Button
-                                                type="primary"
-                                                icon={isLocked ? <LockOutlined /> : <PlusOutlined />}
+                                            <Button 
+                                                type="primary" 
+                                                size="small" 
+                                                icon={isLocked ? <LockOutlined /> : <PlusOutlined />} 
                                                 onClick={handleAddNew}
                                                 style={isLocked ? { 
                                                     color: token.colorTextDisabled, 
@@ -691,34 +705,55 @@ const SupplierDashboard = () => {
                                         </Flex>
                                         <Input
                                             ref={searchInputRef}
-                                            placeholder="Search by name..."
+                                            placeholder="Search supplier..."
                                             prefix={<SearchOutlined />}
+                                            size="small"
                                             value={searchTerm}
                                             onChange={e => setSearchTerm(e.target.value)}
                                             allowClear
                                         />
-                                    </Flex>
+                                    </>
                                 );
                             })()}
                         </div>
                         {loading ? <div style={{textAlign: 'center', padding: '20px'}}><Spin/></div> :
-                            <Menu
-                                mode="inline"
-                                selectedKeys={[String(selectedSupplierId)]}
-                                onClick={({ key }) => setSelectedSupplierId(key)}
-                                style={{ height: 'calc(100vh - 310px)', overflowY: 'auto', borderRight: 0, background: 'transparent' }}
-                                className="custom-scrollbar" // Scrollbar fix
-                                items={filteredSuppliers.map(s => ({
-                                    key: s.id,
-                                    label: (
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            {/* Text component khud hi light/dark mode ke mutabiq rang badal lega */}
-                                            <Text>{s.name}</Text>
-                                            {s.balance_due > 0 && <Tag color="red" style={{ fontSize: '10px' }}>{formatCurrency(s.balance_due, profile?.currency)}</Tag>}
-                                        </div>
-                                    )
-                                }))}
-                            />
+                            <div style={{ height: 'calc(100vh - 310px)', overflowY: 'auto' }} className="custom-scrollbar">
+                                <Table 
+                                    dataSource={filteredSuppliers} 
+                                    rowKey="id" 
+                                    loading={loading}
+                                    pagination={false}
+                                    showHeader={false}
+                                    onRow={(record) => ({
+                                        onClick: () => setSelectedSupplierId(record.id),
+                                        style: { cursor: 'pointer' }
+                                    })}
+                                    rowClassName={(record) => record.id === selectedSupplierId ? 'ant-table-row-selected' : ''}
+                                    columns={[
+                                        {
+                                            title: 'Supplier',
+                                            key: 'supplier_info',
+                                            render: (_, record) => (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '4px 0' }}>
+                                                    <div style={{ maxWidth: '60%' }}>
+                                                        <Text strong style={{ color: 'inherit', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                            {record.name}
+                                                        </Text>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <Text 
+                                                            strong 
+                                                            style={{ fontSize: '12px', color: record.balance_due > 0 ? token.colorError : token.colorSuccess }}
+                                                        >
+                                                            {formatCurrency(record.balance_due, profile?.currency)}
+                                                        </Text>
+                                                    </div>
+                                                </div>
+                                            )
+                                        }
+                                    ]}
+                                />
+                            </div>
                         }
                     </Sider>
                     <Layout style={{ background: 'transparent' }}>{renderSupplierDetails()}</Layout>

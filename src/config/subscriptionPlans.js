@@ -18,7 +18,7 @@ export const SUBSCRIPTION_PLANS = {
     // --- Ginti (Limits) ---
     max_items: 200,             // Kul Available Stock (IMEI/Quantity)
     max_models: 100,            // Kul Product Models (Active + Archive)
-    max_customers: 10,          // Kul Customers (Active + Archive)
+    max_customers: 25,          // Kul Customers (Active + Archive)
     max_suppliers: 10,          // Kul Suppliers (Active + Archive)
     max_staff: 0,               // Sirf Active Staff Seats
     max_total_staff: 500,       // Global Safety Limit (Active + Archive)

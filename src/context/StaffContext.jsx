@@ -9,8 +9,9 @@ import bcrypt from 'bcryptjs';
 const StaffContext = createContext();
 
 export const StaffProvider = ({ children }) => {
-  const[activeStaff, setActiveStaff] = useState(null);
-  const [isAppLocked, setIsAppLocked] = useState(false);
+  const [activeStaff, setActiveStaff] = useState(null);
+  // NAYA: App ko initialize hi locked halat mein karein agar flag set hai (No Flicker Fix)
+  const [isAppLocked, setIsAppLocked] = useState(localStorage.getItem('is_app_locked') === 'true');
   const { message } = App.useApp();
   const { profile } = useAuth(); // Plan check karne ke liye profile nikala
   // useApp wali line yahan se hata di gayi hai

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout, Modal, Space, Divider, Checkbox, theme } from 'antd';
-import { LockOutlined, MailOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { LockOutlined, MailOutlined, AppstoreOutlined, KeyOutlined } from '@ant-design/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const { Title } = Typography;
@@ -14,6 +14,9 @@ const AuthPage = () => {
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [isTokenModalVisible, setIsTokenModalVisible] = useState(false);
+  const [otpStep, setOtpStep] = useState(false); 
+  const [tokenEmail, setTokenEmail] = useState('');
 
   const handleLogin = async (values) => {
     try {
@@ -61,6 +64,75 @@ const AuthPage = () => {
       setResetLoading(false);
     }
   };
+
+  // --- NAYA FUNCTION: Token ko check karne ke liye ---
+  const handleTokenLogin = async (values) => {
+    try {
+      setLoading(true);
+      // 1. Token se extra spaces khatam karein aur decode karein
+      const cleanToken = values.token.trim().replace(/\n/g, '');
+      const decoded = atob(cleanToken);
+      const parts = decoded.split('|');
+      
+      if (parts[0] !== 'TERMINAL_ACCESS' || !parts[1]) {
+        throw new Error("Invalid Terminal Token Format");
+      }
+
+      const email = parts[1];
+      setTokenEmail(email);
+
+      // 2. Supabase se OTP mangwayein
+      const { error } = await supabase.auth.signInWithOtp({ 
+        email,
+        options: {
+          shouldCreateUser: false // Sirf mojooda user (Owner) login ho sake
+        }
+      });
+      
+      if (error) throw error;
+
+      message.success(`Token Valid! A 6-digit code sent to Owner email.`);
+      setOtpStep(true);
+    } catch (error) {
+      console.error("Token Login Error:", error);
+      message.error(error.message || "Invalid or Expired Token");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- NAYA FUNCTION: OTP Code verify karne ke liye ---
+  const handleVerifyOtp = async (values) => {
+    try {
+      setLoading(true);
+
+      // [SECURITY FIX]: Login finalize hone se PEHLE hi lock laga dein
+      // Taake app jab login ho kar khule, to wo pehle frame se hi Locked ho.
+      localStorage.setItem('is_app_locked', 'true');
+
+      const { error } = await supabase.auth.verifyOtp({
+        email: tokenEmail,
+        token: values.otp,
+        type: 'email' 
+      });
+
+      if (error) {
+        // Agar code ghalat ho jaye to lock wapis khol dein taake login screen nazar aati rahe
+        localStorage.removeItem('is_app_locked');
+        throw error;
+      }
+
+      message.success("Login successful! Secure Terminal Active.");
+
+      // Fori tor par Home page par bhej dein taake koi purana URL (Settings waghera) baqi na rahe
+      window.location.href = "/";
+      
+    } catch (error) {
+      message.error("Invalid Code. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
   
   const loginForm = (
     <Form onFinish={handleLogin} layout="vertical">
@@ -80,6 +152,14 @@ const AuthPage = () => {
           Log In
         </Button>
       </Form.Item>
+      <Divider style={{ fontSize: '12px' }}>OR</Divider>
+      <Button 
+        block 
+        icon={<KeyOutlined />} 
+        onClick={() => { setIsTokenModalVisible(true); setOtpStep(false); }}
+      >
+        Login with Terminal Token
+      </Button>
     </Form>
   );
 
@@ -174,6 +254,47 @@ const AuthPage = () => {
               </Button>
             </Form.Item>
           </Form>
+        </Modal>
+
+        <Modal
+          title="Terminal Token Login"
+          open={isTokenModalVisible}
+          onCancel={() => setIsTokenModalVisible(false)}
+          footer={null}
+          destroyOnHidden
+        >
+          {!otpStep ? (
+            <Form onFinish={handleTokenLogin} layout="vertical">
+              <p style={{ fontSize: '13px', color: token.colorTextSecondary }}>
+                Paste the Terminal Token provided by the Shop Owner to begin secure access.
+              </p>
+              <Form.Item name="token" label="Terminal Token" rules={[{ required: true, message: 'Please paste the token' }]}>
+                <Input.TextArea rows={4} placeholder="Paste your token here..." />
+              </Form.Item>
+              <Button type="primary" htmlType="submit" loading={loading} block>
+                Verify Token
+              </Button>
+            </Form>
+          ) : (
+            <Form onFinish={handleVerifyOtp} layout="vertical">
+              <p style={{ fontSize: '13px' }}>
+                Token verified. Enter the <b>6-digit code</b> sent to the Shop Owner's email.
+              </p>
+              <Form.Item name="otp" label="Verification Code" rules={[{ required: true, len: 6, message: 'Must be 6 digits' }]}>
+                <Input 
+                  placeholder="123456" 
+                  maxLength={6} 
+                  style={{ textAlign: 'center', fontSize: '24px', letterSpacing: '8px', fontWeight: 'bold' }} 
+                />
+              </Form.Item>
+              <Button type="primary" htmlType="submit" loading={loading} block size="large">
+                Complete Login
+              </Button>
+              <Button type="link" onClick={() => setOtpStep(false)} block style={{ marginTop: '8px' }}>
+                Back to Token
+              </Button>
+            </Form>
+          )}
         </Modal>
       </Content>
     </Layout>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layout, Flex, Card, Table, Button, Modal, Form, Input, Select, Checkbox, Switch, Typography, App, Space, Popconfirm, Tag, Divider, Alert, theme, Drawer, List, Statistic, DatePicker, Radio, Row, Col, InputNumber, Empty, Tooltip, Tabs, Descriptions, } from 'antd';
 import dayjs from 'dayjs'; // Tarikh handle karne ke liye
-import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined, InboxOutlined, ReloadOutlined, HistoryOutlined, ArrowLeftOutlined, DollarCircleOutlined, ArrowUpOutlined, ArrowDownOutlined, EyeOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined, InboxOutlined, ReloadOutlined, HistoryOutlined, ArrowLeftOutlined, DollarCircleOutlined, ArrowUpOutlined, ArrowDownOutlined, EyeOutlined, LockOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext'; 
@@ -40,7 +40,7 @@ const StaffManagement = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
   const [form] = Form.useForm();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { token } = theme.useToken(); // Theme colors nikaalne ke liye
   const { isDarkMode } = useTheme(); // Dark mode check karne ke liye
@@ -84,6 +84,20 @@ const StaffManagement = () => {
   useEffect(() => {
     loadStaff();
   }, [showInactive]);
+
+  // NAYA: Page khulne par ya list badalne par pehle staff ko auto-select karne ke liye
+  useEffect(() => {
+    // Sirf computer (Desktop) par auto-select karein, Mobile par nahi
+    if (staffList.length > 0 && !isMobile) {
+      // Check karein ke kya abhi jo staff selected hai wo is list mein mojood hai?
+      const isStillInList = staffList.find(s => s.id === selectedStaff?.id);
+      
+      // Agar koi selected nahi hai, ya purana selected staff is list mein nahi hai (e.g. toggle switch kiya)
+      if (!selectedStaff || !isStillInList) {
+        handleOpenLedger(staffList[0]);
+      }
+    }
+  }, [staffList, isMobile]);
   const handleOpenLedger = async (staff) => {
     setSelectedStaff(staff);
     // setIsLedgerOpen(true); // Yeh line hum ne hata di hai
@@ -364,10 +378,30 @@ const StaffManagement = () => {
               <Button 
                 type="primary" 
                 size="small" 
-                icon={<PlusOutlined />} 
-                onClick={() => handleOpenModal()}
-                // NAYA: Ab hum sirf limit check karenge. Agar limit full hai to button hamesha band rahega.
-                disabled={isLimitReached}
+                icon={isLimitReached ? <LockOutlined /> : <PlusOutlined />} 
+                onClick={() => {
+                  if (isLimitReached) {
+                    modal.confirm({
+                      title: 'Staff Limit Reached',
+                      content: (
+                        <div>
+                          <p>You have reached your plan's limit of <b>{staffLimit} staff members</b>.</p>
+                          <p>To add more team members and manage their permissions, please upgrade your subscription.</p>
+                        </div>
+                      ),
+                      okText: 'View Plans',
+                      cancelText: 'Close',
+                      onOk: () => navigate('/subscription')
+                    });
+                  } else {
+                    handleOpenModal();
+                  }
+                }}
+                style={isLimitReached ? { 
+                  color: token.colorTextDisabled, 
+                  backgroundColor: token.colorFillTertiary, 
+                  borderColor: token.colorBorder 
+                } : {}}
               >
                 Add Staff
               </Button>

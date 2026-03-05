@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag, Dropdown, Menu, Tooltip, Select, theme
+  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag, Dropdown, Menu, Tooltip, Select, theme, Switch
 } from 'antd';
 import { UserSwitchOutlined, UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined, MoreOutlined, EditOutlined, ReloadOutlined, InboxOutlined, DeleteOutlined, SearchOutlined, LockOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
@@ -41,6 +41,7 @@ const Customers = () => {
   const { processSyncQueue } = useSync();
   
   const [customers, setCustomers] = useState([]);
+  const [totalCount, setTotalCount] = useState(0); // <--- NAYA: Total ginti ke liye
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isLedgerModalOpen, setIsLedgerModalOpen] = useState(false);
@@ -106,6 +107,7 @@ const Customers = () => {
     try {
       setLoading(true);
       let data = await db.customers.toArray();
+      setTotalCount(data.length); // <--- NAYA: Filter hone se pehle poori ginti save kar li
       
       // 1. Archive Filter
       data = data.filter(c => showArchived ? c.is_active === false : c.is_active !== false);
@@ -483,6 +485,7 @@ const handleCloseInvoiceSearchModal = () => {
           sale_id: selectedSale.id,
           customer_id: selectedSale.customer_id,
           total_refund_amount: refundCashNow ? maxCashRefundable : totalRefundAmount,
+          tax_refunded: taxRefundable, // <--- NAYA IZAFA (TAX)
           return_fee: returnFee,
           reason: values.reason,
           user_id: user.id,
@@ -608,13 +611,23 @@ const handleCloseInvoiceSearchModal = () => {
     }
   };
   
-  const { totalRefundAmount, debtOnInvoice, maxCashRefundable } = useMemo(() => {
+  const { totalRefundAmount, debtOnInvoice, maxCashRefundable, taxRefundable } = useMemo(() => {
     const grossRefund = selectedReturnItems.reduce((sum, i) => sum + (i.return_qty * i.price_at_sale), 0);
     const subtotal = selectedSale?.subtotal || grossRefund || 1;
     const discountRatio = (selectedSale?.discount || 0) / subtotal;
     const refundDiscount = grossRefund * discountRatio;
-    const netRefundable = grossRefund - refundDiscount;
-    const finalRefund = Math.max(0, netRefundable - returnFee);
+    const netRefundableBeforeTax = grossRefund - refundDiscount;
+    
+    // --- NAYA IZAFA: Tax Return Calculation ---
+    // Agar asal bill par tax laga tha, to return par bhi utna hi hissa tax wapis hoga
+    let taxToReturn = 0;
+    if (selectedSale?.tax_rate_applied > 0) {
+        taxToReturn = (netRefundableBeforeTax * selectedSale.tax_rate_applied) / 100;
+    }
+    const netRefundableWithTax = netRefundableBeforeTax + taxToReturn;
+    // ------------------------------------------
+
+    const finalRefund = Math.max(0, netRefundableWithTax - returnFee);
 
     // Naya Hisaab: Is invoice par kitna udhaar baki tha?
     const invoiceTotal = selectedSale?.total_amount || 0;
@@ -627,7 +640,8 @@ const handleCloseInvoiceSearchModal = () => {
     return { 
       totalRefundAmount: finalRefund, 
       debtOnInvoice: unpaidOnInvoice, 
-      maxCashRefundable: maxCash 
+      maxCashRefundable: maxCash,
+      taxRefundable: taxToReturn // <--- NAYA IZAFA
     };
   }, [selectedReturnItems, selectedSale, returnFee]);
   
@@ -952,6 +966,15 @@ const handleCloseInvoiceSearchModal = () => {
             {/* --- IN 5 JAGAHON PAR TABDEELI HUI HAI --- */}
             <Descriptions.Item label="Subtotal">{formatCurrency(record.details.subtotal || 0, profile?.currency)}</Descriptions.Item>
             <Descriptions.Item label="Discount">- {formatCurrency(record.details.discount || 0, profile?.currency)}</Descriptions.Item>
+            
+            {/* --- NAYA IZAFA: Ledger mein Tax dikhana --- */}
+            {record.details.tax_amount > 0 && (
+              <Descriptions.Item label={`Tax (${record.details.tax_rate_applied || 0}%)`}>
+                + {formatCurrency(record.details.tax_amount, profile?.currency)}
+              </Descriptions.Item>
+            )}
+            {/* ------------------------------------------ */}
+
             <Descriptions.Item label="Grand Total"><strong>{formatCurrency(record.details.total_amount || 0, profile?.currency)}</strong></Descriptions.Item>
             <Descriptions.Item label="Amount Paid at Sale">{formatCurrency(record.details.amount_paid_at_sale || 0, profile?.currency)}</Descriptions.Item>
             <Descriptions.Item label="New Udhaar from this Sale"><strong>{formatCurrency(record.debit, profile?.currency)}</strong></Descriptions.Item>
@@ -1070,26 +1093,29 @@ const handleCloseInvoiceSearchModal = () => {
         width: isMobile ? '100%' : 'auto' 
     }}>
         {/* Return aur Archive Buttons - Ye hamesha ek hi row mein rahenge */}
-        <Space size="middle">
+        <Space size="middle" align="center">
             <Button 
                 icon={<SwapOutlined />} 
                 onClick={() => setIsInvoiceSearchModalOpen(true)} 
                 title="Return by Invoice"
             />
-            <Button 
-                icon={showArchived ? <ReloadOutlined /> : <InboxOutlined />} 
-                onClick={() => setShowArchived(!showArchived)} 
-                type={showArchived ? 'primary' : 'default'}
-                danger={showArchived}
-                title={showArchived ? 'Back to Active' : 'View Archived'}
-            />
+            <Space>
+                <Switch 
+                    checked={showArchived} 
+                    onChange={(val) => setShowArchived(val)} 
+                    size="small" 
+                />
+                <Text type="secondary" style={{ fontSize: '11px' }}>
+                    {showArchived ? "Archived" : "Active"}
+                </Text>
+            </Space>
         </Space>
 
         {/* Add Customer Button */}
         {(() => {
             const limits = getPlanLimits(profile?.subscription_tier);
             const isFeatureLocked = !limits.allow_customer_management;
-            const currentCount = customers.length;
+            const currentCount = totalCount; // <--- NAYA: Ab yeh Total (Active+Archive) ginega
             const isLimitReached = currentCount >= limits.max_customers;
             const isLocked = isFeatureLocked || isLimitReached;
             

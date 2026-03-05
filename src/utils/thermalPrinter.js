@@ -7,7 +7,8 @@ import dayjs from 'dayjs';
 export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
     const {
         shopName, shopAddress, shopPhone, saleId, invoice_id, saleDate, customerName,
-        items, subtotal, discount, grandTotal, amountPaid, footerMessage, showQrCode
+        items, subtotal, discount, grandTotal, amountPaid, footerMessage, showQrCode,
+        taxAmount, taxName, taxRate // <--- NAYA IZAFA
     } = saleDetails;
 
     const formatNumber = (num) => Number(num).toFixed(2);
@@ -115,6 +116,14 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
                     <span>Discount:</span>
                     <span>${formatMoney(discount)}</span>
                 </div>
+                
+                <!-- NAYA IZAFA: Tax Row -->
+                ${taxAmount > 0 ? `
+                <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                    <span>${taxName || 'Tax'} (${taxRate}%):</span>
+                    <span>+${formatMoney(taxAmount)}</span>
+                </div>
+                ` : ''}
                 
                 <hr style="border-top: 1px solid #000; margin: 5px 0;">
                 

@@ -53,6 +53,15 @@ const Dashboard = () => {
   const [topSellingFilter, setTopSellingFilter] = useState('qty'); 
 
   const { message, modal } = App.useApp();
+
+  // NAYA: Waqt ke mutabiq Greeting generate karne ka function
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good Morning";
+    if (hour < 17) return "Good Afternoon";
+    if (hour < 21) return "Good Evening";
+    return "Hello";
+  };
   const { token } = theme.useToken();
   const refSales = useRef(null);
   const refCash = useRef(null);
@@ -431,7 +440,7 @@ const Dashboard = () => {
                 </div>
               </Col>
               <Col xs={24} md={20}>
-                <Title level={2} style={{ margin: 0 }}>Assalam-o-alaikum, {activeStaff?.name || 'Staff'}!</Title>
+                <Title level={2} style={{ margin: 0 }}>{getGreeting()}, {activeStaff?.name || 'Staff'}!</Title>
                 <Text type="secondary" style={{ fontSize: '16px' }}>
                   Welcome back to <b>{profile?.shop_name}</b>. Today is {new Date().toLocaleDateString('en-PK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
                 </Text>

@@ -119,6 +119,14 @@ export const SyncProvider = ({ children }) => {
       const { data: serverProfile } = await supabase.from('profiles').select('*').eq('user_id', user.id).single();
       if (serverProfile) {
         await db.user_settings.put({ ...serverProfile, id: user.id });
+        
+        // --- SECURITY FIX: Master PIN Restore ---
+        // Agar server par PIN majood hai, to usay Local Storage mein wapis layein
+        if (serverProfile.master_pin) {
+           localStorage.setItem('device_master_pin', serverProfile.master_pin);
+           console.log("Security Update: Master PIN restored from Cloud.");
+        }
+        
         // Dispatch event taake AuthContext ko pata chale profile badal gaya hai
         window.dispatchEvent(new CustomEvent('local-db-updated'));
       }

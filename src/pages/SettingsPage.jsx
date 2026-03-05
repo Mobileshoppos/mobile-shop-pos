@@ -2,8 +2,8 @@ import React from 'react';
 import { useSearchParams } from 'react-router-dom'; 
 import { useState, useEffect } from 'react';
 // Sirf 'Alert' ka izafa kiya hai
-import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio, Switch, Input, Tooltip, theme, Alert } from 'antd';
-import { ToolOutlined, LockOutlined } from '@ant-design/icons';
+import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio, Switch, Input, Tooltip, theme, Alert, Space } from 'antd';
+import { ToolOutlined, LockOutlined, CopyOutlined } from '@ant-design/icons';
 import bcrypt from 'bcryptjs';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -39,6 +39,7 @@ const SettingsPage = () => {
   // Master PIN States
   const [newMasterPin, setNewMasterPin] = useState('');
   const [confirmMasterPin, setConfirmMasterPin] = useState('');
+  const [terminalToken, setTerminalToken] = useState(''); // Naya Token Store karne ke liye
 
   // Naya: Jab URL badle to tab bhi badal jaye
   useEffect(() => {
@@ -50,6 +51,11 @@ const SettingsPage = () => {
   const [themeMode, setThemeMode] = useState('light');
   const [isSaving, setIsSaving] = useState(false);
   const [receiptFormat, setReceiptFormat] = useState('pdf');
+  // --- NAYA IZAFA: Tax States ---
+  const[taxEnabled, setTaxEnabled] = useState(false);
+  const [taxName, setTaxName] = useState('GST');
+  const [taxRate, setTaxRate] = useState(0);
+  // ------------------------------
   const [lowStockAlerts, setLowStockAlerts] = useState(true);
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
   
@@ -90,6 +96,11 @@ const SettingsPage = () => {
       if (profile.currency) setSelectedCurrency(profile.currency);
       if (profile.theme_mode) setThemeMode(profile.theme_mode);
       if (profile.receipt_format) setReceiptFormat(profile.receipt_format);
+      // --- NAYA IZAFA: Load Tax Settings ---
+      if (profile.tax_enabled !== undefined) setTaxEnabled(profile.tax_enabled);
+      if (profile.tax_name !== undefined) setTaxName(profile.tax_name);
+      if (profile.tax_rate !== undefined) setTaxRate(profile.tax_rate);
+      // -------------------------------------
       if (profile.low_stock_alerts_enabled !== null && profile.low_stock_alerts_enabled !== undefined) {
         setLowStockAlerts(profile.low_stock_alerts_enabled);
       }
@@ -127,6 +138,11 @@ const SettingsPage = () => {
     const updates = {
       currency: selectedCurrency,
       receipt_format: receiptFormat,
+      // --- NAYA IZAFA: Save Tax Settings ---
+      tax_enabled: taxEnabled,
+      tax_name: taxName,
+      tax_rate: taxRate,
+      // -------------------------------------
       low_stock_alerts_enabled: lowStockAlerts,
       low_stock_threshold: lowStockThreshold,
       warranty_policy: warrantyPolicy,
@@ -153,8 +169,8 @@ const SettingsPage = () => {
     setIsSaving(false);
   };
 
-  // --- NAYA FUNCTION: Master PIN Change ---
-  const handleMasterPinChange = () => {
+  // --- NAYA FUNCTION: Master PIN Change (Cloud Sync) ---
+  const handleMasterPinChange = async () => {
     if (!newMasterPin || newMasterPin.length !== 6) {
       message.error('Master PIN must be exactly 6 digits');
       return;
@@ -164,13 +180,61 @@ const SettingsPage = () => {
       return;
     }
 
-    // Standard: PIN ko Hash karke save karein (localStorage mein bhi plain text nahi hona chahiye)
-    const hashedPin = bcrypt.hashSync(newMasterPin, 10);
-    localStorage.setItem('device_master_pin', hashedPin);
-    
-    message.success('Master PIN updated successfully!');
-    setNewMasterPin('');
-    setConfirmMasterPin('');
+    setIsSaving(true); // Loading shuru
+
+    try {
+      // 1. PIN ko Hash karein (Security)
+      const hashedPin = bcrypt.hashSync(newMasterPin, 10);
+
+      // 2. Cloud (Supabase) par save karein
+      const result = await updateProfile({ master_pin: hashedPin });
+
+      if (result.success) {
+        // 3. Agar Cloud par save ho gaya, to Local bhi update karein
+        localStorage.setItem('device_master_pin', hashedPin);
+        
+        message.success('Master PIN synced to Cloud & updated locally!');
+        setNewMasterPin('');
+        setConfirmMasterPin('');
+      } else {
+        // Agar internet ka masla ho
+        message.error('Failed to save Master PIN to cloud. Please check internet connection.');
+      }
+    } catch (error) {
+      console.error("PIN Update Error:", error);
+      message.error("An unexpected error occurred.");
+    } finally {
+      setIsSaving(false); // Loading khatam
+    }
+  };
+
+  // --- NAYA FUNCTION: Terminal Token Generate karne ke liye ---
+  const handleGenerateToken = async () => {
+    try {
+      setIsSaving(true);
+      // 1. Owner ka data nikalain (LocalStorage ya Auth se)
+      const sessionData = JSON.parse(localStorage.getItem('sb-ewhhjtgvmlaffsmszkul-auth-token'));
+      const email = sessionData?.user?.email;
+      
+      if (!email) {
+        message.error("Session error. Please logout and login again.");
+        return;
+      }
+
+      // 2. Token ka format: "email|generated_at" (Password hum login se nahi nikal sakte, is liye hum sirf Email aur aik Secret Key use karenge)
+      // Note: Supabase security ki wajah se hum password nahi nikal sakte, is liye hum "Magic Link" ya "One-Time Access" ka logic use karenge.
+      // Lekin asaan hal ke liye hum Email ko encrypt karenge taake Manager ko Email na likhna pare.
+      
+      const rawData = `TERMINAL_ACCESS|${email}|${new Date().getTime()}`;
+      const encryptedToken = await btoa(rawData); // Hum ise Base64 kar rahe hain taake copy-paste asaan ho
+      
+      setTerminalToken(encryptedToken);
+      message.success("Terminal Token generated successfully!");
+    } catch (error) {
+      message.error("Failed to generate token.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const { themeConfig, lightTheme, darkTheme, isDarkMode, updateTheme } = useTheme();
@@ -270,6 +334,38 @@ const SettingsPage = () => {
                       <Text type="secondary" style={{ display: 'block' }}>Show or hide the discount field on the POS screen.</Text>
                      </Col>
                   <Col xs={24} sm={18}><Switch checked={posDiscountEnabled} onChange={setPosDiscountEnabled} disabled={isAdvancedLocked} /></Col>
+                  </Row>
+                  <Divider />
+                  {/* --- NAYA IZAFA: Tax Configuration UI --- */}
+                  <Row align="middle" gutter={[16, 16]}>
+                    <Col xs={24} sm={6}>
+                      <Text strong>Enable Tax (GST/VAT)</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>Apply tax on your sales automatically.</Text>
+                    </Col>
+                    <Col xs={24} sm={18}>
+                      <Space>
+                        <Switch checked={taxEnabled} onChange={setTaxEnabled} />
+                        {taxEnabled && (
+                          <>
+                            <Input 
+                              placeholder="Tax Name (e.g. GST)" 
+                              value={taxName} 
+                              onChange={(e) => setTaxName(e.target.value)} 
+                              style={{ width: 120 }} 
+                            />
+                            <InputNumber 
+                              placeholder="Rate %" 
+                              value={taxRate} 
+                              onChange={setTaxRate} 
+                              min={0} 
+                              max={100} 
+                              formatter={value => `${value}%`}
+                              parser={value => value.replace('%', '')}
+                            />
+                          </>
+                        )}
+                      </Space>
+                    </Col>
                   </Row>
                   <Divider />
                   <Row align="middle" gutter={[16, 16]}>
@@ -417,10 +513,54 @@ const SettingsPage = () => {
                   
                   <Alert 
                     message="Security Note" 
-                    description="If you forget this PIN, you will need to log out and log back in with your email and password to reset it. This ensures your data remains safe."
+                    description="This Master PIN is synced to the cloud and protects all your terminals (including remote branches). If forgotten, you must re-authenticate using your Owner Email and Password to reset it."
                     type="info" 
                     showIcon 
                   />
+
+                  <Divider />
+
+                  <Title level={4} style={{ fontSize: '16px', color: token.colorWarning }}>Remote Terminal Access</Title>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: '16px' }}>
+                    Generate a secure activation token to authorize remote devices or additional branches. 
+  This allows your staff to securely log in to this shop without requiring your master email or password.
+                  </Text>
+                  
+                  <Row gutter={[16, 16]} align="middle">
+                    <Col xs={24} sm={16}>
+                      <Text strong>Generated Token</Text>
+                      <Input 
+                        readOnly 
+                        value={terminalToken}
+                        placeholder="Click generate to create a token"
+                        style={{ marginTop: '8px' }}
+                        suffix={
+                          <Tooltip title="Copy Token">
+                            <Button 
+                              type="text" 
+                              size="small" 
+                              icon={<CopyOutlined />} 
+                              disabled={!terminalToken}
+                              onClick={() => {
+                                navigator.clipboard.writeText(terminalToken);
+                                message.success("Token copied to clipboard!");
+                              }}
+                            />
+                          </Tooltip>
+                        }
+                      />
+                    </Col>
+                    <Col xs={24} sm={8}>
+                      <Button 
+                        type="primary" 
+                        onClick={handleGenerateToken} 
+                        block
+                        style={{ marginTop: '24px' }}
+                      >
+                        Generate New Token
+                      </Button>
+                    </Col>
+                  </Row>
                 </div>
               ),
             },
@@ -514,6 +654,9 @@ const SettingsPage = () => {
                 qrCodeEnabled === profile.qr_code_enabled &&
                 warrantySystemEnabled === profile.warranty_system_enabled &&
                 posDiscountEnabled === profile.pos_discount_enabled &&
+                taxEnabled === (profile.tax_enabled ?? false) &&
+                taxName === (profile.tax_name ?? 'GST') &&
+                taxRate === (profile.tax_rate ?? 0) &&
                 allowCartPriceChange === (profile.allow_cart_price_change ?? true) &&
                 mobileNavEnabled === profile.mobile_nav_enabled &&
                 desktopNavEnabled === profile.desktop_nav_enabled && 

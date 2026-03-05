@@ -70,17 +70,13 @@ const { Content } = Layout;
 const MainLayout = ({ isDarkMode, toggleTheme }) => {
   const { syncAllData } = useSync();
   const { profile } = useAuth();
-  const { isAppLocked } = useStaff(); // Nayi line
+  const { isAppLocked } = useStaff();
 
-  // Agar app lock hai, to baqi sab kuch chupa kar sirf Lock Screen dikhao
-  if (isAppLocked) {
-    return <LockScreen />;
-  }
-  
+  // NAYA FIX: Sync ko lock check se upar rakhein taake locked screen par bhi data download ho sake
   useEffect(() => {
     syncAllData();
   }, []); 
-
+  
   const location = useLocation();
   const { token } = theme.useToken();
   const [collapsed, setCollapsed] = useState(true);
@@ -101,6 +97,11 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
     handleResize();
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // NAYA FIX: Lock check ko tamam hooks ke neechay rakha gaya hai taake React Error na aaye
+  if (isAppLocked) {
+    return <LockScreen />;
+  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>

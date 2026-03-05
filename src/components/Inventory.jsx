@@ -352,6 +352,7 @@ const Inventory = () => {
   const [globalSearchMap, setGlobalSearchMap] = useState({});
   
   const [products, setProducts] = useState([]);
+  const [totalModelCount, setTotalModelCount] = useState(0); // <--- NAYA: Total Models ki ginti
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [advancedFilters, setAdvancedFilters] = useState([]);
@@ -518,6 +519,10 @@ const Inventory = () => {
     const searchHandler = setTimeout(async () => {
       setLoading(true);
       try {
+        // NAYA: Pehle database se total models ginein (Active + Archive)
+        const allModelsCount = await db.products.count();
+        setTotalModelCount(allModelsCount);
+
         const { productsData } = await DataService.getInventoryData(showArchived);
         let filteredProducts = productsData;
 
@@ -909,7 +914,7 @@ const Inventory = () => {
       )}
       {(() => {
         const limits = getPlanLimits(profile?.subscription_tier);
-        const currentModelCount = products.length;
+        const currentModelCount = totalModelCount; // <--- NAYA: Ab yeh Total ginega
         const isLimitReached = currentModelCount >= limits.max_models;
 
         return isMobile && can('can_edit_inventory') && (
@@ -1026,7 +1031,7 @@ const Inventory = () => {
              />
              {(() => {
                const limits = getPlanLimits(profile?.subscription_tier);
-               const currentModelCount = products.length;
+               const currentModelCount = totalModelCount; // <--- NAYA: Ab yeh Total ginega
                const isLimitReached = currentModelCount >= limits.max_models;
 
                return !isMobile && can('can_edit_inventory') && (

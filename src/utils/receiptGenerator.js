@@ -21,7 +21,7 @@ export const generateSaleReceipt = async (saleDetails, currency = 'PKR') => {
   const {
     shopName, shopAddress, shopPhone, saleId, invoice_id, saleDate, customerName,
     items, subtotal, discount, grandTotal, amountPaid, paymentStatus,
-    footerMessage, showQrCode
+    footerMessage, showQrCode, taxAmount, taxName, taxRate // <--- NAYA IZAFA
   } = saleDetails;
 
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -130,26 +130,35 @@ export const generateSaleReceipt = async (saleDetails, currency = 'PKR') => {
       doc.text(value, rightMargin, y, { align: 'right' });
   };
 
+  printTotalRow('Payment Method:', safeString(saleDetails.payment_method || 'Cash'), finalY - 6);
   printTotalRow('Subtotal:', formatCurrency(subtotal || 0, currency), finalY);
   printTotalRow('Discount:', `-${formatCurrency(discount || 0, currency)}`, finalY + 6);
   
-  doc.setDrawColor(0, 0, 0);
-  doc.line(rightMargin - 80, finalY + 9, rightMargin, finalY + 9);
-  
-  printTotalRow('GRAND TOTAL:', formatCurrency(grandTotal || 0, currency), finalY + 16, true);
+  let currentY = finalY + 6;
 
-  printTotalRow('Payment Method:', safeString(saleDetails.payment_method || 'Cash'), finalY - 6);
+  // --- NAYA IZAFA: Tax Row ---
+  if (taxAmount > 0) {
+      currentY += 6;
+      printTotalRow(`${taxName || 'Tax'} (${taxRate}%):`, `+${formatCurrency(taxAmount || 0, currency)}`, currentY);
+  }
+  // ---------------------------
+
+  doc.setDrawColor(0, 0, 0);
+  doc.line(rightMargin - 80, currentY + 3, rightMargin, currentY + 3);
+  
+  currentY += 10;
+  printTotalRow('GRAND TOTAL:', formatCurrency(grandTotal || 0, currency), currentY, true);
 
   if (paymentStatus === 'Unpaid') {
-    printTotalRow('Amount Paid:', formatCurrency(amountPaid || 0, currency), finalY + 24);
-    printTotalRow('Balance Due:', formatCurrency((grandTotal || 0) - (amountPaid || 0), currency), finalY + 30);
+    printTotalRow('Amount Paid:', formatCurrency(amountPaid || 0, currency), currentY + 8);
+    printTotalRow('Balance Due:', formatCurrency((grandTotal || 0) - (amountPaid || 0), currency), currentY + 14);
   } else {
-    printTotalRow('Amount Paid:', formatCurrency(amountPaid || 0, currency), finalY + 24);
+    printTotalRow('Amount Paid:', formatCurrency(amountPaid || 0, currency), currentY + 8);
   }
 
   // --- WARRANTY / POLICY SECTION ---
   if (footerMessage) {
-      const policyY = finalY + 40;
+      const policyY = currentY + 24;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
