@@ -47,6 +47,7 @@ const Dashboard = () => {
   const isMobile = useMediaQuery('(max-width: 768px)');  
   const [stats, setStats] = useState(null);
   const [chartData, setChartData] = useState([]);
+  const [staffMembers, setStaffMembers] = useState([]); // <--- NAYA IZAFA
   const[loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('today');
   const [customDates, setCustomDates] = useState([]); // NAYA: Custom dates save karne ke liye
@@ -106,7 +107,9 @@ const Dashboard = () => {
     // Dono tables se data uthayein
     const adjustments = await db.cash_adjustments.orderBy('created_at').reverse().toArray();
     const closings = await db.daily_closings.orderBy('created_at').reverse().toArray();
+    const staff = await DataService.getStaffMembers(); // <--- NAYA IZAFA
     
+    setStaffMembers(staff); // <--- NAYA IZAFA
     setHistoryData(adjustments);
     setClosingHistoryData(closings);
     setIsHistoryModalOpen(true);
@@ -122,6 +125,7 @@ const Dashboard = () => {
         user_id: user?.id, 
         amount: values.amount,
         type: values.type,
+        staff_id: activeStaff?.id, // <--- NAYA IZAFA
         payment_method: values.payment_method,
         transfer_to: values.type === 'Transfer' ? values.transfer_to : null,
         notes: values.notes || '',
@@ -165,6 +169,7 @@ const Dashboard = () => {
         local_id: crypto.randomUUID(),
         user_id: user?.id,
         closing_date: new Date().toISOString().split('T')[0], // Aaj ki date
+        staff_id: activeStaff?.id, // <--- NAYA IZAFA
         expected_cash: expected,
         actual_cash: actual,
         difference: diff,
@@ -213,8 +218,19 @@ const Dashboard = () => {
     }
   }, [profile, timeRange, customDates]); // NAYA: customDates add kiya
 
+  // --- NAYA: SILENT REFRESH LISTENER (Dashboard stats ko chupke se update karne ke liye) ---
   useEffect(() => {
+    // Dashboard khulne par pehli dafa data load karein (Initial Call)
     loadDashboard();
+
+    const handleRefresh = () => {
+      // Hum sirf loadDashboard ko dobara chalayenge
+      // Kyunke loadDashboard mein pehle se check laga hua hai 'if (!stats) setLoading(true)',
+      // is liye ye dobara chalne par spinner nahi dikhayega balkeh chupke se stats update kar dega.
+      loadDashboard();
+    };
+    window.addEventListener('local-db-updated', handleRefresh);
+    return () => window.removeEventListener('local-db-updated', handleRefresh);
   }, [loadDashboard]);
   
   // --- NAYA IZAFA: Auto-Initialize Categories for New Users ---
@@ -925,6 +941,11 @@ const Dashboard = () => {
                     { title: 'Type', dataIndex: 'type', render: (type) => <Tag color={type === 'In' ? 'green' : type === 'Out' ? 'red' : 'blue'}>{type.toUpperCase()}</Tag> },
                     { title: 'Method', dataIndex: 'payment_method', render: (m) => <Tag>{m}</Tag> },
                     { title: 'Amount', dataIndex: 'amount', align: 'right', render: (val) => <Text strong>{formatCurrency(val, profile?.currency)}</Text> },
+                    { 
+                      title: 'Staff', 
+                      key: 'staff', 
+                      render: (_, record) => staffMembers.find(s => s.id === record.staff_id)?.name || 'Owner' 
+                    },
                     { title: 'Notes', dataIndex: 'notes', ellipsis: true }
                   ]}
                 />
@@ -943,6 +964,11 @@ const Dashboard = () => {
                     { title: 'Date', dataIndex: 'closing_date', render: (date) => new Date(date).toLocaleDateString() },
                     { title: 'Expected', dataIndex: 'expected_cash', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
                     { title: 'Actual', dataIndex: 'actual_cash', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
+                    { 
+                      title: 'Staff', 
+                      key: 'staff', 
+                      render: (_, record) => staffMembers.find(s => s.id === record.staff_id)?.name || 'Owner' 
+                    },
                     { 
                       title: 'Difference', 
                       dataIndex: 'difference', 

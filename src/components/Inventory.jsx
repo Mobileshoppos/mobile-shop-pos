@@ -328,7 +328,7 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
 
 const Inventory = () => {
   const { token } = theme.useToken(); // Control Center Connection
-  const { can } = useStaff(); // <--- Naya Guard
+  const { can, activeStaff } = useStaff(); // <--- activeStaff ka izafa
   const refAddModel = useRef(null);
   const refSearch = useRef(null);
   const refFilters = useRef(null);
@@ -421,12 +421,19 @@ const Inventory = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [nameSuggestions, setNameSuggestions] = useState([]);
 
-  
-
   const [searchText, setSearchText] = useState('');
   const [filterCategory, setFilterCategory] = useState(null);
   const [priceRange, setPriceRange] = useState([null, null]);
   const [sortBy, setSortBy] = useState('name_asc');
+  // --- NAYA: SILENT REFRESH LISTENER (Inventory ko chupke se update karne ke liye) ---
+  useEffect(() => {
+    const handleRefresh = () => {
+      // Hum sirf refreshTrigger ko badha denge taake list khud refresh ho jaye
+      setRefreshTrigger(prev => prev + 1);
+    };
+    window.addEventListener('local-db-updated', handleRefresh);
+    return () => window.removeEventListener('local-db-updated', handleRefresh);
+  }, []);
   
   const selectedCategoryId = Form.useWatch('category_id', productForm);
   const selectedBrand = Form.useWatch('brand', productForm);
@@ -517,7 +524,8 @@ const Inventory = () => {
     fetchDropdownData();
 
     const searchHandler = setTimeout(async () => {
-      setLoading(true);
+      // Naya: Agar pehle se data mojud hai to loading spinner mat dikhao (Silent Refresh)
+      if (products.length === 0) setLoading(true);
       try {
         // NAYA: Pehle database se total models ginein (Active + Archive)
         const allModelsCount = await db.products.count();
@@ -849,8 +857,8 @@ const Inventory = () => {
     try {
       if (!damagedItem || !damagedItem.ids) return;
       
-      // Tamam IDs ki list bhejein (DataService ab loops handle kar lega)
-      await DataService.markItemAsDamaged(damagedItem.ids, values.quantity, values.notes);
+      // Tamam IDs ki list bhejein (DataService ab loops handle kar lega aur staffId bhi save karega)
+      await DataService.markItemAsDamaged(damagedItem.ids, values.quantity, values.notes, activeStaff?.id);
       
       message.success('Stock adjusted! Damaged quantity recorded.');
       setIsDamagedModalOpen(false);

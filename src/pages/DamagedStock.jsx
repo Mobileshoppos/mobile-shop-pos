@@ -3,6 +3,7 @@ import { Typography, Table, Card, Tag, App, Button, Space, Row, Col, Statistic, 
 import { AlertOutlined, ReloadOutlined, SearchOutlined, RollbackOutlined, PrinterOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
+import { useStaff } from '../context/StaffContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { formatCurrency } from '../utils/currencyFormatter';
 import dayjs from 'dayjs';
@@ -22,6 +23,7 @@ const DamagedStock = () => {
     const [dateRange, setDateRange] = useState([dayjs().subtract(1, 'month'), dayjs()]);
     
     const { profile } = useAuth();
+    const { activeStaff } = useStaff(); // <--- NAYA IZAFA
     const { message } = App.useApp();
 
     const fetchReport = async () => {
@@ -58,7 +60,7 @@ const DamagedStock = () => {
 
     const handleRevert = async (record) => {
         try {
-            await DataService.revertDamagedStock(record.id, record.damaged_qty);
+            await DataService.revertDamagedStock(record.id, record.damaged_qty, activeStaff?.id);
             message.success("Stock reverted to Available!");
             fetchReport();
         } catch (error) {

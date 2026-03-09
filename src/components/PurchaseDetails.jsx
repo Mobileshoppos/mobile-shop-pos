@@ -6,6 +6,7 @@ import DataService from '../DataService';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
+import { useStaff } from '../context/StaffContext'; // <--- NAYA IZAFA
 import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
 import { useSync } from '../context/SyncContext';
@@ -25,6 +26,7 @@ const PurchaseDetails = () => {
         }
     };
     const { profile } = useAuth();
+    const { activeStaff } = useStaff(); // <--- NAYA IZAFA
     const { processSyncQueue, isSyncing } = useSync();
     const { id } = useParams();
     const isMobile = useMediaQuery('(max-width: 768px)');
@@ -147,7 +149,7 @@ const PurchaseDetails = () => {
     ];
     
     const showPaymentModal = () => { paymentForm.setFieldsValue({ amount: purchase.balance_due, payment_date: dayjs(), payment_method: 'Cash' }); setIsPaymentModalVisible(true); };
-    const handlePaymentSubmit = async (values) => { try { if (values.amount > purchase.balance_due) { notification.warning({ message: 'Warning', description: 'Payment amount cannot be greater than the balance due.' }); return; } const paymentData = { local_id: crypto.randomUUID(), amount: values.amount, payment_date: values.payment_date.format('YYYY-MM-DD'), payment_method: values.payment_method, notes: values.notes || null, supplier_id: purchase.supplier_id, purchase_id: purchase.id, }; await DataService.recordPurchasePayment(paymentData); notification.success({ message: 'Success', description: 'Payment recorded successfully!' }); setIsPaymentModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to record payment.' }); } };
+    const handlePaymentSubmit = async (values) => { try { if (values.amount > purchase.balance_due) { notification.warning({ message: 'Warning', description: 'Payment amount cannot be greater than the balance due.' }); return; } const paymentData = { local_id: crypto.randomUUID(), amount: values.amount, payment_date: values.payment_date.format('YYYY-MM-DD'), payment_method: values.payment_method, notes: values.notes || null, supplier_id: purchase.supplier_id, purchase_id: purchase.id, staff_id: activeStaff?.id }; await DataService.recordPurchasePayment(paymentData); notification.success({ message: 'Success', description: 'Payment recorded successfully!' }); setIsPaymentModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to record payment.' }); } };
 const showEditModal = () => {
         setIsEditModalVisible(true);
     };

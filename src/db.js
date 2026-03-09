@@ -7,7 +7,7 @@ export const db = new Dexie('MobileShopDB');
 // Note: Hum sirf wohi columns likhte hain jin se hamein search ya filter karna ho.
 // Baqi data khud ba khud save ho jata hai.
 
-db.version(46).stores({
+db.version(48).stores({
   // --- Business Data Tables (Jo Supabase se sync honge) ---
   
   // Products: ID, Category, Name aur Barcode se search karne ke liye
@@ -31,22 +31,22 @@ db.version(46).stores({
   sale_items: 'id, local_id, sale_id, product_id, product_name_snapshot, inventory_id, purchase_price',
   
   // Expenses (Akhrajat)
-  expenses: 'id, local_id, category_id, expense_date, user_id, payment_method, updated_at',
+  expenses: 'id, local_id, category_id, expense_date, user_id, staff_id, payment_method, updated_at',
   expense_categories: 'id, local_id, user_id',
 
-  inventory: 'id, local_id, product_id, purchase_id, status, user_id, variant_id, imei, available_qty, sold_qty, updated_at, purchase_price', 
-  customer_payments: 'id, local_id, customer_id, user_id, payment_method, updated_at',
+  inventory: 'id, local_id, product_id, purchase_id, status, user_id, staff_id, variant_id, imei, available_qty, sold_qty, updated_at, purchase_price', 
+  customer_payments: 'id, local_id, customer_id, user_id, staff_id, payment_method, updated_at',
   sale_returns: 'id, local_id, sale_id, customer_id, user_id, updated_at, created_at, staff_id, tax_refunded',
   sale_return_items: 'id, return_id, inventory_id',
   purchase_return_items: 'id, return_id, product_id',
-  credit_payouts: 'id, local_id, customer_id, user_id, payment_method, updated_at',
+  credit_payouts: 'id, local_id, customer_id, user_id, staff_id, payment_method, updated_at',
   category_attributes: 'id, category_id',
-  supplier_payments: 'id, local_id, supplier_id, purchase_id, user_id, payment_method, updated_at',
+  supplier_payments: 'id, local_id, supplier_id, purchase_id, user_id, staff_id, payment_method, updated_at',
   product_variants: 'id, product_id, barcode',
-  supplier_refunds: 'id, local_id, supplier_id, refund_date, user_id, payment_method, updated_at',
+  supplier_refunds: 'id, local_id, supplier_id, refund_date, user_id, staff_id, payment_method, updated_at',
   id_mappings: '++id, local_id, server_id, table_name',
-  cash_adjustments: 'id, local_id, user_id, type, payment_method, created_at, transfer_to, updated_at',
-  daily_closings: 'id, local_id, user_id, closing_date, created_at, updated_at',
+  cash_adjustments: 'id, local_id, user_id, staff_id, type, payment_method, created_at, transfer_to, updated_at',
+  daily_closings: 'id, local_id, user_id, staff_id, closing_date, created_at, updated_at',
   warranty_claims: 'id, local_id, user_id, inventory_id, customer_id, imei, status, updated_at',
   // Naya: Staff ki mukammal details (Phone, CNIC, Bank etc.)
   staff_members: 'id, local_id, user_id, pin_code, salary, balance, joining_date, phone, cnic, email, is_active, updated_at',

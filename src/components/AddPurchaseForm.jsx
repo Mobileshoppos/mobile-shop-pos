@@ -6,6 +6,7 @@ import { DeleteOutlined, BarcodeOutlined, EditOutlined } from '@ant-design/icons
 import DataService from '../DataService';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { useStaff } from '../context/StaffContext'; // <--- NAYA IZAFA
 import { formatCurrency } from '../utils/currencyFormatter';
 import { useSync } from '../context/SyncContext';
 import { db } from '../db';
@@ -356,6 +357,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
 // Yahan hum ne 'editingPurchase' aur 'editingItems' props add kiye hain
 const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, editingPurchase, editingItems }) => {
   const { profile } = useAuth();
+  const { activeStaff } = useStaff(); // <--- NAYA IZAFA
   const { message } = App.useApp();
   const { refetchStockCount } = useAuth();
   const { syncAllData, processSyncQueue } = useSync();
@@ -588,7 +590,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
         p_supplier_id: values.supplier_id,
         p_invoice_id: values.invoice_id || null, // <--- Added
         p_notes: values.notes || null,
-        p_inventory_items: purchaseItems.map(({ name, brand, categories, category_is_imei_based, ...item }) => item)
+        p_inventory_items: purchaseItems.map(({ name, brand, categories, category_is_imei_based, ...item }) => item),
+        staff_id: activeStaff?.id // <--- NAYA IZAFA
       };
 
       if (editingPurchase) {
@@ -598,7 +601,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
               invoice_id: values.invoice_id, // <--- Added
               notes: values.notes,
               amount_paid: values.amount_paid,
-              items: purchaseItems
+              items: purchaseItems,
+              staff_id: activeStaff?.id // <--- NAYA IZAFA
           });
           message.success("Purchase updated successfully!");
       } else {
@@ -614,7 +618,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
                   amount: amountPaid,
                   payment_method: values.payment_method,
                   payment_date: new Date().toISOString(),
-                  notes: `Initial payment for Purchase`
+                  notes: `Initial payment for Purchase`,
+                  staff_id: activeStaff?.id // <--- NAYA IZAFA
               });
           }
           message.success("Purchase invoice created successfully!");

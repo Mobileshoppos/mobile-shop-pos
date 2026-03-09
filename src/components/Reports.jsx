@@ -1,344 +1,254 @@
-import React, { useState, useEffect } from 'react';
-import { Typography, Table, Card, App as AntApp, Row, Col, Statistic, Spin, DatePicker, Space, Button, Tooltip } from 'antd';
-import { supabase } from '../supabaseClient';
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  Card, Row, Col, Typography, Tabs, DatePicker, Statistic, 
+  Table, Tag, Space, Button, Empty, Spin, theme, Divider, List
+} from 'antd';
+import { 
+  BarChartOutlined, DownloadOutlined, DollarOutlined, 
+  ShoppingCartOutlined, UserOutlined, FileSearchOutlined,
+  ArrowUpOutlined, ArrowDownOutlined, CalculatorOutlined,
+  HistoryOutlined, InboxOutlined
+} from '@ant-design/icons';
+import dayjs from 'dayjs';
+import { Area, Pie } from '@ant-design/charts';
+import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
-import { useMediaQuery } from '../hooks/useMediaQuery';
-import DataService from '../DataService';
-import dayjs from 'dayjs';
-import { QuestionCircleOutlined, PieChartOutlined } from '@ant-design/icons';
-import { Line, Pie } from '@ant-design/charts';
+import { db } from '../db';
 
 const { Title, Text } = Typography;
+const { RangePicker } = DatePicker;
 
 const Reports = () => {
-  const isMobile = useMediaQuery('(max-width: 768px)');
-  const { message } = AntApp.useApp();
-  const { user, profile } = useAuth();
-  const [products, setProducts] = useState([]);
-  const [stockLoading, setStockLoading] = useState(true);
+  const { token } = theme.useToken();
+  const { profile } = useAuth();
   
-  const [summaryData, setSummaryData] = useState({
-    totalRevenue: 0,
-    totalCost: 0,
-    grossProfit: 0,
-    totalExpenses: 0,
-    netProfit: 0,
-  });
-  const [summaryLoading, setSummaryLoading] = useState(true);
-  const [payableData, setPayableData] = useState([]);
-  const [payableLoading, setPayableLoading] = useState(true);
-  const [supplierReportData, setSupplierReportData] = useState([]);
-  const [supplierReportLoading, setSupplierReportLoading] = useState(false);
-  const [dateRange, setDateRange] = useState([dayjs().subtract(30, 'day'), dayjs()]);
-  const [chartData, setChartData] = useState([]);
-  const [expenseChartData, setExpenseChartData] = useState([]);
+  // States
+  const [loading, setLoading] = useState(true);
+  const [dates, setDates] = useState([dayjs().startOf('month'), dayjs().endOf('month')]);
+  const [reportData, setReportData] = useState(null);
+  const [salesHistory, setSalesHistory] = useState([]);
+  const [inventoryValuation, setInventoryValuation] = useState([]);
 
-  useEffect(() => {
-    const getStaticReports = async () => {
-      try {
-        setStockLoading(true);
-        // Stock ka data ab DataService se aayega (Offline)
-        const { productsData } = await DataService.getInventoryData();
-        setProducts(productsData || []);
-      } catch (error) {
-        message.error('Error fetching stock data: ' + error.message);
-      } finally {
-        setStockLoading(false);
-      }
+  // --- PROFESSIONAL AUDIT LOGIC ---
+  const loadAuditReports = useCallback(async () => {
+    setLoading(true);
+    try {
+      const start = dates[0].toISOString();
+      const end = dates[1].toISOString();
 
-      // Accounts Payable wala hissa
-      getPayableData();
-    };
-    
-    if (user) {
-      getStaticReports();
-    }
-  }, [user, message]);
-
-  // === NAYA EFFECT #2: Sirf date range tabdeel hone par chalta hai ===
-  useEffect(() => {
-    const getDatedReports = async () => {
-      if (!dateRange || dateRange.length !== 2) return;
+      // 1. Get Profit & Loss (Financial Audit)
+      const summary = await DataService.getProfitLossSummary(start, end);
       
-      const startDate = dateRange[0].startOf('day').toISOString();
-      const endDate = dateRange[1].endOf('day').toISOString();
+      // 2. Get All Sales for this period (Sales Journal)
+      const allSales = await db.sales
+        .where('created_at')
+        .between(start, end)
+        .reverse()
+        .toArray();
+      
+      const customers = await db.customers.toArray();
+      const custMap = {};
+      customers.forEach(c => custMap[c.id] = c.name);
 
-      // Summary, Charts, aur Supplier data fetch karna
-      getSummaryData(startDate, endDate);
-      getSupplierReportData(); // Iske andar pehle se hi dateRange istemal ho raha hai
-      getChartData(startDate, endDate);
-      getExpenseChartData(startDate, endDate);
-    };
+      const formattedSales = allSales.map(s => ({
+        ...s,
+        customer_name: custMap[s.customer_id] || 'Walk-in Customer',
+        key: s.id
+      }));
 
-    if (user) {
-      getDatedReports();
-    }
-  }, [dateRange, user, message]); // Yeh sirf dateRange ya user change hone par chalega
+      // 3. Inventory Valuation (Category-wise)
+      const { productsData } = await DataService.getInventoryData();
+      const catValuation = {};
+      productsData.forEach(p => {
+        const cat = p.category_name || 'Uncategorized';
+        const value = (p.quantity || 0) * (p.avg_purchase_price || 0);
+        if (!catValuation[cat]) catValuation[cat] = 0;
+        catValuation[cat] += value;
+      });
 
-  const getSummaryData = async (startDate, endDate) => {
-    try {
-      setSummaryLoading(true);
-      // Hum DataService se bana banaya hisaab mangwa rahe hain
-      const data = await DataService.getProfitLossSummary(startDate, endDate);
-      setSummaryData(data);
+      const valuationArray = Object.keys(catValuation).map(cat => ({
+        category: cat,
+        value: catValuation[cat]
+      }));
+
+      // 4. Charts Data
+      const sChart = await DataService.getSalesChartData('custom', [start, end]);
+
+      setReportData(summary);
+      setSalesHistory(formattedSales);
+      setInventoryValuation(valuationArray);
+      setSalesChartData(sChart);
+
     } catch (error) {
-      message.error('Error fetching summary data: ' + error.message);
+      console.error("Audit Report Error:", error);
     } finally {
-      setSummaryLoading(false);
+      setLoading(false);
     }
+  }, [dates]);
+
+  const [salesChartData, setSalesChartData] = useState([]);
+
+  useEffect(() => {
+    loadAuditReports();
+  }, [loadAuditReports]);
+
+  // Chart Configs
+  const salesTrendConfig = {
+    data: salesChartData,
+    xField: 'date',
+    yField: 'amount',
+    smooth: true,
+    areaStyle: { fill: `l(270) 0:#ffffff 0.5:${token.colorPrimary} 1:${token.colorPrimary}` },
+    color: token.colorPrimary,
   };
 
-  const getPayableData = async () => {
-        try {
-          setPayableLoading(true);
-          const data = await DataService.getAccountsPayable();
-          setPayableData(data || []);
-        } catch (error) {
-          message.error('Error fetching accounts payable: ' + error.message);
-        } finally {
-          setPayableLoading(false);
-        }
-      };
-
-  const getSupplierReportData = async () => {
-    if (!dateRange || dateRange.length !== 2) {
-      message.warning('Please select a valid date range.');
-      return;
-    }
-    try {
-      setSupplierReportLoading(true);
-      const startDate = dateRange[0].format('YYYY-MM-DD');
-      const endDate = dateRange[1].format('YYYY-MM-DD');
-      const data = await DataService.getSupplierPurchaseReport(startDate, endDate);
-      setSupplierReportData(data || []);
-    } catch (error) {
-      message.error('Error fetching supplier purchase report: ' + error.message);
-    } finally {
-      setSupplierReportLoading(false);
-    }
+  const valuationConfig = {
+    data: inventoryValuation,
+    angleField: 'value',
+    colorField: 'category',
+    radius: 0.7,
+    label: { type: 'inner', offset: '-20%', content: '{percentage}' },
   };
-
-  const getChartData = async (startDate, endDate) => {
-    try {
-      // Graph ka data ab Local DB se aayega
-      const data = await DataService.getDashboardCharts(startDate, endDate);
-      setChartData(data || []);
-    } catch (error) {
-      message.error('Error fetching chart data: ' + error.message);
-    }
-  };
-
-  const getExpenseChartData = async (startDate, endDate) => {
-    try {
-      // Kharchon ka chart data Local DB se aayega
-      const data = await DataService.getExpenseChartData(startDate, endDate);
-      setExpenseChartData(data || []);
-    } catch (error) {
-      message.error('Error fetching expense chart data: ' + error.message);
-    }
-  };
-
-  const stockColumns = [
-    { title: 'Product Name', dataIndex: 'name', key: 'name', width: 200 },
-    { title: 'Brand', dataIndex: 'brand', key: 'brand', width: 150 },
-    { title: 'Stock Quantity', dataIndex: 'quantity', key: 'quantity', align: 'right', width: 120 },
-    { title: 'Purchase Price', dataIndex: 'avg_purchase_price', key: 'purchase_price', align: 'right', render: (price) => formatCurrency(price, profile?.currency), width: 150 },
-    { title: 'Total Value', key: 'total_value', align: 'right', render: (text, record) => { const totalValue = (record.quantity || 0) * (record.avg_purchase_price || 0); return <Text strong>{formatCurrency(totalValue, profile?.currency)}</Text>; }, width: 150 }
-  ];
-
-  const totalStockValue = products.reduce((sum, product) => sum + ((product.quantity || 0) * (product.avg_purchase_price || 0)), 0);
 
   return (
-    <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
-      <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: isMobile ? '8px' : '0', fontSize: '23px' }}>
-        {isMobile && (
-          <PieChartOutlined style={{ marginRight: '8px' }} />
-        )}
-        {isMobile ? '' : (
-          <span style={{ fontSize: '23px' }}>
-            <PieChartOutlined style={{ marginRight: '8px' }} /> Reports
-          </span>
-        )}
-      </Title>
-      <div style={{ display: 'flex', justifyContent: isMobile ? 'space-between' : 'flex-end', alignItems: 'center', marginBottom: '16px', gap: '16px' }}>
-        <DatePicker.RangePicker
-            value={dateRange}
-            onChange={setDateRange}
-        />
-      </div>
-      
-      <Card style={{ marginBottom: '24px' }}>
-        <Title level={4}>Profit & Loss Summary</Title>
-        {summaryLoading ? <div style={{ textAlign: 'center', padding: '48px' }}><Spin size="large" /></div> : (
-          <>
-          <Row gutter={[16, 24]}>
-            <Col xs={24} sm={12} md={12}>
-              <Statistic 
-                title={<>Total Revenue <Tooltip title="Total income from sales before any costs are deducted."><QuestionCircleOutlined /></Tooltip></>} 
-                value={summaryData.totalRevenue} 
-                formatter={() => formatCurrency(summaryData.totalRevenue, profile?.currency)} 
+    <div style={{ padding: '8px' }}>
+      {/* PROFESSIONAL HEADER */}
+      <Card style={{ marginBottom: 16, borderRadius: 8, border: `1px solid ${token.colorBorder}` }}>
+        <Row gutter={[16, 16]} align="middle" justify="space-between">
+          <Col>
+            <Title level={2} style={{ margin: 0, color: token.colorPrimary }}>
+              <FileSearchOutlined /> Audit & Analytics
+            </Title>
+            <Text type="secondary">Comprehensive business performance and financial auditing</Text>
+          </Col>
+          <Col>
+            <Space wrap>
+              <RangePicker 
+                value={dates} 
+                onChange={(val) => val && setDates(val)}
+                format="DD MMM, YYYY"
+                style={{ borderRadius: 6 }}
               />
+              <Button type="primary" icon={<DownloadOutlined />} onClick={() => window.print()}>Export PDF</Button>
+            </Space>
+          </Col>
+        </Row>
+      </Card>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '100px' }}><Spin size="large" tip="Auditing Records..." /></div>
+      ) : (
+        <>
+          {/* SECTION 1: FINANCIAL P&L SNAPSHOT */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col xs={24} md={6}>
+              <Card bordered={false} style={{ background: token.colorFillAlter, borderLeft: `4px solid ${token.colorPrimary}` }}>
+                <Statistic title="Total Revenue (Net)" value={reportData?.totalRevenue} prefix={<ShoppingCartOutlined />} formatter={(v) => formatCurrency(v, profile?.currency)} />
+              </Card>
             </Col>
-            <Col xs={24} sm={12} md={12}>
-              <Statistic 
-                title={<>Cost of Goods <Tooltip title="The direct cost of the products that were sold in the selected period."><QuestionCircleOutlined /></Tooltip></>} 
-                value={summaryData.totalCost} 
-                formatter={() => formatCurrency(summaryData.totalCost, profile?.currency)} 
-              />
+            <Col xs={24} md={6}>
+              <Card bordered={false} style={{ background: token.colorFillAlter, borderLeft: `4px solid ${token.colorError}` }}>
+                <Statistic title="Cost of Goods (COGS)" value={reportData?.totalCost} prefix={<InboxOutlined />} formatter={(v) => formatCurrency(v, profile?.currency)} />
+              </Card>
             </Col>
-            <Col xs={24} sm={12} md={12}>
-              <Statistic 
-                title={<>Gross Profit <Tooltip title="The profit after deducting the cost of goods. (Revenue - Cost of Goods)"><QuestionCircleOutlined /></Tooltip></>} 
-                value={summaryData.grossProfit} 
-                formatter={() => formatCurrency(summaryData.grossProfit, profile?.currency)} 
-              />
+            <Col xs={24} md={6}>
+              <Card bordered={false} style={{ background: token.colorFillAlter, borderLeft: `4px solid ${token.colorWarning}` }}>
+                <Statistic title="Gross Profit" value={reportData?.grossProfit} prefix={<CalculatorOutlined />} formatter={(v) => formatCurrency(v, profile?.currency)} />
+              </Card>
             </Col>
-            <Col xs={24} sm={12} md={12}>
-              <Statistic 
-                title={<>Total Expenses <Tooltip title="All other business expenses recorded in the selected period (e.g., rent, bills)."><QuestionCircleOutlined /></Tooltip></>} 
-                value={summaryData.totalExpenses} 
-                valueStyle={{ color: '#cf1322' }} 
-                formatter={() => formatCurrency(summaryData.totalExpenses, profile?.currency)} 
-              />
-              {expenseChartData.length > 0 && (
-                // --- YEH NAYA CONTAINER HAI ---
-                <div style={{ position: 'relative', height: 150, marginTop: '16px' }}>
-                  <Pie
-                    data={expenseChartData}
-                    angleField='amount'
-                    colorField='category'
-                    radius={0.9}
-                    innerRadius={0.7}
-                    label={false}
-                    legend={false}
-                    height={150}
-                    // Humne yahan se statistic prop mukammal tor par hata diya hai
-                    tooltip={{
-                      formatter: (datum) => {
-                        // 'datum' chart ki slice ka data object hai
-                        const categoryName = datum.category;
-                        const amountValue = datum.amount;
-                        const formattedValue = formatCurrency(amountValue, profile?.currency);
-                        
-                        // Hum library ko batate hain ke naam kya dikhana hai aur value kya
-                        return { name: categoryName, value: formattedValue };
-                      },
-                    }}
-                  />
-                  {/* --- YEH TEXT WALA NAYA DIV HAI --- */}
-                  <div 
-                    style={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      transform: 'translate(-50%, -50%)',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <div style={{ fontSize: '12px', color: '#8c8c8c' }}>Total</div>
-                    <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
-                      {formatCurrency(summaryData.totalExpenses, profile?.currency)}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </Col>
-            
-            <Col xs={24}>
-              <Card>
-                <Statistic 
-                  title={<Title level={4}>Net Profit <Tooltip title="The final 'take-home' profit after all costs and expenses are deducted. (Gross Profit - Total Expenses)"><QuestionCircleOutlined /></Tooltip></Title>} 
-                  value={summaryData.netProfit} 
-                  formatter={() => formatCurrency(summaryData.netProfit, profile?.currency)} 
-                  valueStyle={{ color: summaryData.netProfit >= 0 ? '#3f8600' : '#cf1322', fontSize: '2.5rem' }} 
-                />
+            <Col xs={24} md={6}>
+              <Card bordered={false} style={{ background: token.colorFillAlter, borderLeft: `4px solid ${token.colorSuccess}` }}>
+                <Statistic title="Net Profit (Final)" value={reportData?.netProfit} valueStyle={{ color: token.colorSuccess }} prefix={<ArrowUpOutlined />} formatter={(v) => formatCurrency(v, profile?.currency)} />
               </Card>
             </Col>
           </Row>
-          <Line
-            data={chartData}
-            xField="date"
-            yField="value"
-            seriesField="category"
-            yAxis={{
-              label: {
-                formatter: (v) => `${profile?.currency || '$'}${v}`,
-              },
-            }}
-            legend={{ position: 'top' }}
-            smooth={true}
-            height={250}
-            style={{ marginTop: '24px' }}
-          />
-          </>
-        )}
-      </Card>
 
-      <Card>
-        <Title level={4}>Current Stock Report</Title>
-        <Table columns={stockColumns} dataSource={products} loading={stockLoading} rowKey="id" pagination={false} scroll={{ y: '40vh', x: 'max-content' }} summary={() => (<Table.Summary.Row><Table.Summary.Cell index={0} colSpan={4}><Text strong style={{ float: 'right' }}>Grand Total Stock Value</Text></Table.Summary.Cell><Table.Summary.Cell index={1} align="right"><Title level={5}>{formatCurrency(totalStockValue, profile?.currency)}</Title></Table.Summary.Cell></Table.Summary.Row>)} />
-      </Card>
+          {/* SECTION 2: ANALYTICS CHARTS */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col xs={24} lg={16}>
+              <Card title={<Space><HistoryOutlined /> Sales & Growth Trend</Space>} style={{ borderRadius: 8 }}>
+                <Area {...salesTrendConfig} height={280} />
+              </Card>
+            </Col>
+            <Col xs={24} lg={8}>
+              <Card title={<Space><InboxOutlined /> Stock Valuation by Category</Space>} style={{ borderRadius: 8 }}>
+                <Pie {...valuationConfig} height={280} />
+              </Card>
+            </Col>
+          </Row>
 
-      <Card style={{ marginTop: '24px' }}>
-        <Title level={4}>
-          Accounts Payable <Tooltip title="The total amount of money you currently owe to all your suppliers."><QuestionCircleOutlined /></Tooltip>
-        </Title>
-        <Table
-          columns={[
-            { title: 'Supplier Name', dataIndex: 'name', key: 'name' },
-            { title: 'Contact Person', dataIndex: 'contact_person', key: 'contact_person' },
-            { title: 'Phone', dataIndex: 'phone', key: 'phone' },
-            {
-              title: 'Balance Due',
-              dataIndex: 'balance_due',
-              key: 'balance_due',
-              align: 'right',
-              render: (amount) => ( <Text type="danger" strong>{formatCurrency(amount, profile?.currency)}</Text> ),
-            },
-          ]}
-          dataSource={payableData}
-          loading={payableLoading}
-          rowKey="name"
-          pagination={false}
-          summary={(data) => {
-            const totalPayable = data.reduce((sum, item) => sum + item.balance_due, 0);
-            return (
-              <Table.Summary.Row>
-                <Table.Summary.Cell index={0} colSpan={3}>
-                  <Text strong style={{ float: 'right' }}>
-                    Total Amount Payable
-                  </Text>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={1} align="right">
-                  <Title level={5} type="danger">{formatCurrency(totalPayable, profile?.currency)}</Title>
-                </Table.Summary.Cell>
-              </Table.Summary.Row>
-            );
-          }}
-        />
-      </Card>
-
-      <Card style={{ marginTop: '24px' }}>
-        <Title level={4}>Supplier Wise Purchase Report</Title>
-        <Table
-          columns={[
-            { title: 'Supplier Name', dataIndex: 'supplier_name', key: 'supplier_name' },
-            { title: 'Total Purchases', dataIndex: 'purchase_count', key: 'purchase_count', align: 'right' },
-            {
-              title: 'Total Amount',
-              dataIndex: 'total_purchase_amount',
-              key: 'total_purchase_amount',
-              align: 'right',
-              render: (amount) => ( <Text strong>{formatCurrency(amount, profile?.currency)}</Text> ),
-            },
-          ]}
-          dataSource={supplierReportData}
-          loading={supplierReportLoading}
-          rowKey="supplier_name"
-          pagination={false}
-        />
-      </Card>
+          {/* SECTION 3: DETAILED AUDIT TABS */}
+          <Card styles={{ body: { padding: '0px' } }} style={{ borderRadius: 8, overflow: 'hidden' }}>
+            <Tabs 
+              defaultActiveKey="1" 
+              type="line"
+              centered
+              items={[
+                {
+                  key: '1',
+                  label: <span style={{ padding: '0 20px' }}><ShoppingCartOutlined /> Sales Journal (Audit)</span>,
+                  children: (
+                    <Table 
+                      dataSource={salesHistory}
+                      size="small"
+                      columns={[
+                        { title: 'Date', dataIndex: 'created_at', render: (d) => dayjs(d).format('DD/MM/YY HH:mm') },
+                        { title: 'Invoice ID', dataIndex: 'invoice_id', render: (id, record) => id || record.id.slice(0,8) },
+                        { title: 'Customer', dataIndex: 'customer_name' },
+                        { title: 'Method', dataIndex: 'payment_method', render: (m) => <Tag>{m}</Tag> },
+                        { title: 'Total', dataIndex: 'total_amount', align: 'right', render: (v) => <Text strong>{formatCurrency(v, profile?.currency)}</Text> },
+                        { title: 'Status', dataIndex: 'payment_status', render: (s) => <Tag color={s === 'paid' ? 'green' : 'red'}>{s?.toUpperCase()}</Tag> }
+                      ]}
+                      pagination={{ pageSize: 10 }}
+                    />
+                  )
+                },
+                {
+                  key: '2',
+                  label: <span style={{ padding: '0 20px' }}><InboxOutlined /> Inventory Valuation</span>,
+                  children: (
+                    <div style={{ padding: '20px' }}>
+                      <Title level={4}>Detailed Stock Value</Title>
+                      <List
+                        grid={{ gutter: 16, column: 3 }}
+                        dataSource={inventoryValuation}
+                        renderItem={item => (
+                          <List.Item>
+                            <Card size="small" style={{ background: token.colorBgLayout }}>
+                              <Statistic title={item.category} value={item.value} formatter={(v) => formatCurrency(v, profile?.currency)} />
+                            </Card>
+                          </List.Item>
+                        )}
+                      />
+                    </div>
+                  )
+                },
+                {
+                  key: '3',
+                  label: <span style={{ padding: '0 20px' }}><CalculatorOutlined /> Profit & Loss Statement</span>,
+                  children: (
+                    <div style={{ padding: '40px', maxWidth: '600px', margin: '0 auto' }}>
+                      <div style={{ textAlign: 'center', marginBottom: 30 }}>
+                        <Title level={3}>Profit & Loss Statement</Title>
+                        <Text type="secondary">{dates[0].format('DD MMM YYYY')} - {dates[1].format('DD MMM YYYY')}</Text>
+                      </div>
+                      <Row justify="space-between"><Text size="large">Total Sales Revenue</Text><Text strong>{formatCurrency(reportData?.totalRevenue, profile?.currency)}</Text></Row>
+                      <Divider style={{ margin: '12px 0' }} />
+                      <Row justify="space-between"><Text type="secondary">Less: Cost of Goods Sold (COGS)</Text><Text type="danger">({formatCurrency(reportData?.totalCost, profile?.currency)})</Text></Row>
+                      <Divider />
+                      <Row justify="space-between"><Title level={4}>Gross Profit</Title><Title level={4}>{formatCurrency(reportData?.grossProfit, profile?.currency)}</Title></Row>
+                      <Row justify="space-between"><Text type="secondary">Less: Operating Expenses</Text><Text type="danger">({formatCurrency(reportData?.totalExpenses, profile?.currency)})</Text></Row>
+                      <Divider style={{ borderWidth: 2 }} />
+                      <Row justify="space-between"><Title level={3} style={{ color: token.colorSuccess }}>Net Profit</Title><Title level={3} style={{ color: token.colorSuccess }}>{formatCurrency(reportData?.netProfit, profile?.currency)}</Title></Row>
+                    </div>
+                  )
+                }
+              ]}
+            />
+          </Card>
+        </>
+      )}
     </div>
   );
 };

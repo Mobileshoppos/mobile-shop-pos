@@ -91,6 +91,23 @@ const POS = () => {
   const [popularCategories, setPopularCategories] = useState([]);
   const [activeCategoryId, setActiveCategoryId] = useState(null);
   const [topSellingProducts, setTopSellingProducts] = useState([]);
+  // --- NAYA: SILENT REFRESH LISTENER (Sahi Jagah) ---
+  useEffect(() => {
+    const handleRefresh = async () => {
+      try {
+        const { productsData } = await DataService.getInventoryData();
+        setAllProducts(productsData);
+        
+        if (!searchTerm && !activeCategoryId) {
+          setDisplayedProducts(productsData);
+        }
+      } catch (error) {
+        console.error("Refresh failed:", error);
+      }
+    };
+    window.addEventListener('local-db-updated', handleRefresh);
+    return () => window.removeEventListener('local-db-updated', handleRefresh);
+  }, [searchTerm, activeCategoryId]);
 
   // --- DATA PREPARATION FOR UI (Inventory Style) ---
   const productsWithVariants = React.useMemo(() => {

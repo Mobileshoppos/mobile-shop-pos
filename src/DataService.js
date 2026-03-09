@@ -415,7 +415,7 @@ const DataService = {
   },
 
   // --- INVENTORY ADJUSTMENT (DAMAGED STOCK) - SMART VERSION ---
-  async markItemAsDamaged(inventoryIds, totalQtyToMark, notes = "") {
+  async markItemAsDamaged(inventoryIds, totalQtyToMark, notes = "", staffId = null) {
     let remainingToMark = totalQtyToMark;
 
     // Hum un tamam IDs par loop chalayenge jo is product ki hain
@@ -441,6 +441,7 @@ const DataService = {
         damaged_qty: newDamaged,
         adjustment_notes: notes,
         status: newStatus,
+        staff_id: staffId, // <--- NAYA IZAFA
         updated_at: new Date().toISOString()
       };
 
@@ -745,6 +746,7 @@ async createNewPurchase(purchasePayload) {
         local_id: purchaseId,
         invoice_id: finalInvoiceId, // <--- SAVE HERE
         user_id: userId,
+        staff_id: purchasePayload.staff_id, // <--- NAYA IZAFA
         supplier_id: purchasePayload.p_supplier_id,
         purchase_date: new Date().toISOString(),
         total_amount: totalAmount,
@@ -1065,7 +1067,8 @@ async addCustomer(customerData) {
         total_amount: newTotal,
         amount_paid,
         balance_due: newBalance,
-        status: newStatus
+        status: newStatus,
+        staff_id: payload.staff_id // <--- NAYA IZAFA
     });
 
     // --- NAYA ACCOUNTING FIX: Payment Record Update ---
@@ -2422,7 +2425,7 @@ async addCustomer(customerData) {
   },
 
   // 8. Damaged Stock ko wapis theek karna (Undo Adjustment)
-  async revertDamagedStock(inventoryId, qtyToRevert) {
+  async revertDamagedStock(inventoryId, qtyToRevert, staffId = null) {
     // 1. Local DB se item nikalain (ID ab UUID hai, parseInt ki zaroorat nahi)
     const item = await db.inventory.get(inventoryId);
     if (!item) throw new Error("Item not found.");
@@ -2435,7 +2438,8 @@ async addCustomer(customerData) {
     const updates = {
       available_qty: (item.available_qty || 0) + qtyToRevert,
       damaged_qty: (item.damaged_qty || 0) - qtyToRevert,
-      status: 'Available', // Wapis bechne ke liye tayyar
+      status: 'Available', 
+      staff_id: staffId, // <--- NAYA IZAFA
       updated_at: new Date().toISOString()
     };
 
@@ -2628,6 +2632,7 @@ async addCustomer(customerData) {
           id: expenseId,
           local_id: expenseId,
           user_id: entryData.user_id,
+          staff_id: entryData.staff_id, // <--- NAYA IZAFA
           category_id: salaryCat.id,
           amount: Number(entryData.amount),
           title: `${entryData.type} to ${staffMember ? staffMember.name : 'Staff'}`, // e.g. Payment to Khalid
@@ -2731,6 +2736,7 @@ async addCustomer(customerData) {
           id: expenseId,
           local_id: expenseId,
           user_id: existingEntry.user_id,
+          staff_id: existingEntry.staff_id, // <--- NAYA IZAFA
           category_id: salaryCat.id,
           amount: Number(updates.amount || existingEntry.amount),
           title: `${newType} to ${staffMember ? staffMember.name : 'Staff'}`,

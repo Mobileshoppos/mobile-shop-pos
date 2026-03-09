@@ -120,11 +120,12 @@ export const SyncProvider = ({ children }) => {
       if (serverProfile) {
         await db.user_settings.put({ ...serverProfile, id: user.id });
         
-        // --- SECURITY FIX: Master PIN Restore ---
-        // Agar server par PIN majood hai, to usay Local Storage mein wapis layein
-        if (serverProfile.master_pin) {
+        // --- SECURITY FIX: Master PIN Restore (Smart Sync) ---
+        // Sirf tab update karein jab server wala PIN local se mukhtalif ho
+        const localPin = localStorage.getItem('device_master_pin');
+        if (serverProfile.master_pin && serverProfile.master_pin !== localPin) {
            localStorage.setItem('device_master_pin', serverProfile.master_pin);
-           console.log("Security Update: Master PIN restored from Cloud.");
+           console.log("Security Update: Master PIN updated from Cloud.");
         }
         
         // Dispatch event taake AuthContext ko pata chale profile badal gaya hai
@@ -212,8 +213,8 @@ export const SyncProvider = ({ children }) => {
       // Professional Way: Agli dafa ke liye wahi waqt save karein jo sync shuru hone par server ne bataya tha
       await db.user_settings.put({ id: 'last_sync', value: serverNow });
       console.log('Syncing completed successfully!');
-      // Naya: Agar koi data mismatch hai to local UI ko refresh karne ka signal dein
-      if (categories?.length > 0 || products?.length > 0) {
+      // Naya: Agar koi bhi data download hua hai to UI ko signal dein
+      if (categories?.length > 0 || products?.length > 0 || inventoryItems?.length > 0 || customers?.length > 0) {
         window.dispatchEvent(new CustomEvent('local-db-updated'));
       }
       
@@ -385,7 +386,8 @@ export const SyncProvider = ({ children }) => {
                     p_supplier_id: purchase.supplier_id, 
                     p_notes: purchase.notes,
                     p_inventory_items: items,
-                    p_invoice_id: purchase.invoice_id // <--- YEH NAYI LINE HAI
+                    p_invoice_id: purchase.invoice_id,
+                    p_staff_id: purchase.staff_id // <--- NAYA IZAFA
                 });
                 error = supError;
             }
@@ -401,7 +403,8 @@ export const SyncProvider = ({ children }) => {
                     p_amount_paid: amount_paid,
                     p_items: items,
                     p_local_id: item.data.p_local_id,
-                    p_invoice_id: invoice_id // <--- YEH NAYI LINE HAI
+                    p_invoice_id: invoice_id,
+                    p_staff_id: item.data.staff_id // <--- NAYA IZAFA
                 });
                 error = supError;
             }
@@ -457,7 +460,8 @@ export const SyncProvider = ({ children }) => {
                     p_amount: item.data.amount,
                     p_payment_method: item.data.payment_method,
                     p_payment_date: item.data.payment_date,
-                    p_notes: item.data.notes
+                    p_notes: item.data.notes,
+                    p_staff_id: item.data.staff_id // <--- NAYA IZAFA
                 });
                 error = supError;
             }
@@ -502,7 +506,8 @@ export const SyncProvider = ({ children }) => {
                     p_amount: item.data.amount,
                     p_refund_date: item.data.refund_date || item.data.payment_date,
                     p_method: item.data.payment_method || item.data.refund_method || 'Cash',
-                    p_notes: item.data.notes
+                    p_notes: item.data.notes,
+                    p_staff_id: item.data.staff_id // <--- NAYA IZAFA
                 });
                 error = supError;
             }
@@ -516,7 +521,8 @@ export const SyncProvider = ({ children }) => {
                     p_amount: item.data.amount,
                     p_payment_method: item.data.payment_method,
                     p_payment_date: item.data.payment_date,
-                    p_notes: item.data.notes
+                    p_notes: item.data.notes,
+                    p_staff_id: item.data.staff_id // <--- NAYA IZAFA
                 });
                 error = supError;
             }

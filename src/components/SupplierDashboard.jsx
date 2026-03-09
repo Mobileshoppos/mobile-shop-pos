@@ -6,6 +6,7 @@ import DataService from '../DataService';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
+import { useStaff } from '../context/StaffContext'; // <--- NAYA IZAFA
 import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
 import { useSync } from '../context/SyncContext';
@@ -18,8 +19,10 @@ const { Title, Text } = Typography;
 
 const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
     const { token } = theme.useToken(); // Control Center Connection
+    const { activeStaff } = useStaff(); // <--- NAYA IZAFA
     const { profile } = useAuth();
     const [ledgerData, setLedgerData] = useState([]);
+    const [staffMembers, setStaffMembers] = useState([]); // <--- NAYA IZAFA
     // NAYA: Stats save karne ke liye state
     const [calculatedStats, setCalculatedStats] = useState(null); 
     const [loading, setLoading] = useState(true);
@@ -30,8 +33,12 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
     const [refundForm] = Form.useForm();
 
     const fetchLedger = useCallback(async () => {
-        if (!supplier?.id) return; setLoading(true);
+        if (!supplier?.id) return; 
+        // Naya: Agar ledger pehle se khula hai to loading mat dikhao
+        if (ledgerData.length === 0) setLoading(true);
         try {
+            const staff = await DataService.getStaffMembers(); // <--- NAYA IZAFA
+            setStaffMembers(staff); // <--- NAYA IZAFA
             const { supplier: calculatedSup, purchases, payments, refunds } = await DataService.getSupplierLedgerDetails(supplier.id);
             
             const totalRefundsAmount = (refunds || []).reduce((sum, r) => sum + (r.amount || 0), 0);
@@ -47,6 +54,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                     details: `Purchase #${p.invoice_id || p.id.slice(0, 8)}`, // <--- Added invoice_id
                     debit: p.total_amount, 
                     credit: 0, 
+                    staff_id: p.staff_id, // <--- NAYA IZAFA 
                     link: `/purchases/${p.id}`
                 })),
                 ...(payments || []).map(p => {
@@ -68,6 +76,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                                  (p.notes ? ` - ${p.notes}` : ''), 
                         debit: 0, 
                         credit: p.amount,
+                        staff_id: p.staff_id, // <--- NAYA IZAFA
                     };
                 }),
                 ...(refunds || []).map(r => ({
@@ -78,6 +87,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                     details: `Refund Received via ${r.refund_method || r.payment_method || 'Cash'}` + (r.notes ? ` (${r.notes})` : ''), 
                     debit: r.amount, 
                     credit: 0, 
+                    staff_id: r.staff_id, // <--- NAYA IZAFA 
                 }))
             ];
            // A. Calculation ke liye pehle purani se nayi tarteeb (Oldest to Newest)
@@ -113,6 +123,14 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
     }, [supplier, notification]);
 
     useEffect(() => { fetchLedger(); }, [fetchLedger]);
+    // --- NAYA: SILENT REFRESH LISTENER (Sirf Ledger Data ke liye) ---
+    useEffect(() => {
+        const handleRefresh = () => {
+            fetchLedger();
+        };
+        window.addEventListener('local-db-updated', handleRefresh);
+        return () => window.removeEventListener('local-db-updated', handleRefresh);
+    }, [fetchLedger]);
 
     const showPaymentModal = () => { paymentForm.setFieldsValue({ amount: supplier.balance_due > 0 ? supplier.balance_due : undefined, payment_date: dayjs(), payment_method: 'Cash', notes: null }); setIsPaymentModalVisible(true); };
     const handlePaymentSubmit = async (values) => {
@@ -127,6 +145,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                 id: paymentId, 
                 local_id: paymentId, 
                 supplier_id: supplier.id, 
+                staff_id: activeStaff?.id, // <--- NAYA IZAFA
                 ...formattedValues 
             };
             
@@ -161,6 +180,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                 id: refundId, 
                 local_id: refundId, 
                 supplier_id: supplier.id, 
+                staff_id: activeStaff?.id, // <--- NAYA IZAFA
                 ...formattedValues 
             };
             
@@ -175,6 +195,17 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
 
     const ledgerColumns = [
         { title: 'Date', dataIndex: 'date', key: 'date', render: (d) => new Date(d).toLocaleDateString() },
+        { 
+          title: 'Staff', 
+          key: 'staff', 
+          render: (_, record) => {
+              // Hamara DataService ledger items mein 'staff_id' nahi bhejta, 
+              // is liye hum record ke andar se asli data nikalenge
+              const entry = record.type === 'Purchase' ? record : record; 
+              // Ledger items mein hum ne staff_id shamil nahi ki thi, isay dhoondne ke liye:
+              return staffMembers.find(s => s.id === record.staff_id)?.name || 'Owner';
+          }
+        },
         { title: 'Type', dataIndex: 'type', key: 'type', render: (t) => <Tag color={t === 'Purchase' ? 'error' : 'success'}>{t}</Tag> },
         { title: 'Details', dataIndex: 'details', key: 'details', render: (text, record) => record.link ? <Link to={record.link}>{text}</Link> : text },
         { title: 'Debit (Bill)', dataIndex: 'debit', key: 'debit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
@@ -275,6 +306,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
 const SupplierDashboard = () => {
     const navigate = useNavigate(); // Naya Hook
     const { token } = theme.useToken();
+    const { activeStaff } = useStaff(); // <--- NAYA IZAFA
     const { isDarkMode } = useTheme();
     const searchInputRef = useRef(null);
     const supplierNameInputRef = useRef(null);
@@ -323,7 +355,8 @@ const SupplierDashboard = () => {
 }, [isModalVisible, editingSupplier, form]);
 
     const fetchSuppliers = useCallback(async (selectIdAfterFetch = null) => {
-        setLoading(true);
+        // Naya: Agar pehle se data mojud hai to loading spinner mat dikhao (Silent Refresh)
+        if (suppliers.length === 0) setLoading(true);
         try {
             // NAYA: Pehle database se total ginti mangwayein
             const allCount = await db.suppliers.count();
@@ -342,6 +375,14 @@ const SupplierDashboard = () => {
     }, [notification, selectedSupplierId, isMobile, showArchived]);
 
     useEffect(() => { fetchSuppliers(); }, [showArchived, refreshTrigger]);
+    // --- NAYA: SILENT REFRESH LISTENER (Sirf Suppliers List ke liye) ---
+    useEffect(() => {
+        const handleRefresh = () => {
+            fetchSuppliers();
+        };
+        window.addEventListener('local-db-updated', handleRefresh);
+        return () => window.removeEventListener('local-db-updated', handleRefresh);
+    }, [fetchSuppliers]);
 
     const handleToggleArchive = async (supplier) => {
         try {

@@ -6,6 +6,7 @@ import {
 import { UserSwitchOutlined, UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined, MoreOutlined, EditOutlined, ReloadOutlined, InboxOutlined, DeleteOutlined, SearchOutlined, LockOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { useStaff } from '../context/StaffContext'; // <--- NAYA IZAFA
 import { useNavigate } from 'react-router-dom';
 import { getPlanLimits } from '../config/subscriptionPlans';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -38,6 +39,7 @@ const Customers = () => {
 
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { user, profile } = useAuth();
+  const { activeStaff } = useStaff(); // <--- NAYA IZAFA
   const { processSyncQueue } = useSync();
   
   const [customers, setCustomers] = useState([]);
@@ -52,6 +54,7 @@ const Customers = () => {
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
+  const [staffMembers, setStaffMembers] = useState([]); // <--- NAYA IZAFA
   const [showArchived, setShowArchived] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedSale, setSelectedSale] = useState(null);
@@ -105,7 +108,8 @@ const Customers = () => {
 
   const getCustomers = async () => {
     try {
-      setLoading(true);
+      // Naya: Agar pehle se data mojud hai to loading spinner mat dikhao (Silent Refresh)
+      if (customers.length === 0) setLoading(true);
       let data = await db.customers.toArray();
       setTotalCount(data.length); // <--- NAYA: Filter hone se pehle poori ginti save kar li
       
@@ -130,6 +134,15 @@ const Customers = () => {
   };
 
   useEffect(() => { if (user) getCustomers(); }, [user, showArchived, refreshTrigger, searchTerm]);
+  // --- NAYA: SILENT REFRESH LISTENER (Customers ko chupke se update karne ke liye) ---
+  useEffect(() => {
+    const handleRefresh = () => {
+      // Hum sirf getCustomers ko dobara chalayenge
+      getCustomers();
+    };
+    window.addEventListener('local-db-updated', handleRefresh);
+    return () => window.removeEventListener('local-db-updated', handleRefresh);
+  }, []); // Khali array taake sirf aik baar listener lagay
   // Dashboard shortcut ke liye logic
   useEffect(() => {
     if (searchParams.get('openReturn') === 'true') {
@@ -209,6 +222,7 @@ const Customers = () => {
           customer_id: selectedCustomer.id, 
           amount_paid: values.amount, 
           payment_method: cashOrBank,
+          staff_id: activeStaff?.id, // <--- NAYA IZAFA
           user_id: user.id,
           created_at: new Date().toISOString()
       };
@@ -267,6 +281,7 @@ const Customers = () => {
           customer_id: selectedCustomer.id, 
           amount_paid: values.amount, 
           payment_method: cashOrBank,
+          staff_id: activeStaff?.id, // <--- NAYA IZAFA
           remarks: values.remarks,
           user_id: user.id,
           created_at: new Date().toISOString()
@@ -510,6 +525,7 @@ const handleCloseInvoiceSearchModal = () => {
         customer_id: selectedSale.customer_id,
         amount_paid: -totalRefundAmount, // Negative amount for credit
         user_id: user.id,
+        staff_id: activeStaff?.id, // <--- NAYA IZAFA
         remarks: `Refund for Invoice #${selectedSale.id}`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -653,6 +669,8 @@ const handleCloseInvoiceSearchModal = () => {
         setLedgerLoading(true);
 
         // 1. Data Fetching
+        const staff = await DataService.getStaffMembers(); // <--- NAYA IZAFA
+        setStaffMembers(staff); // <--- NAYA IZAFA
         const sales = await db.sales.where('customer_id').equals(customer.id).toArray();
         const payments = await db.customer_payments.where('customer_id').equals(customer.id).toArray();
         const payouts = await db.credit_payouts.where('customer_id').equals(customer.id).toArray();
@@ -1336,6 +1354,11 @@ const handleCloseInvoiceSearchModal = () => {
                 columns={[
     { title: 'Date', dataIndex: 'date', render: d => new Date(d).toLocaleString() },
     { title: 'Description', dataIndex: 'description' },
+    { 
+      title: 'Staff', 
+      key: 'staff', 
+      render: (_, record) => staffMembers.find(s => s.id === record.details?.staff_id)?.name || 'Owner' 
+    },
     { title: 'Debit', dataIndex: 'debit', align: 'right', render: a => a > 0 ? <Text>{formatCurrency(a, profile?.currency)}</Text> : '-' },
     { title: 'Credit', dataIndex: 'credit', align: 'right', render: a => a > 0 ? <Text type="success">{formatCurrency(a, profile?.currency)}</Text> : '-' },
     { title: 'Balance', dataIndex: 'balance', align: 'right', render: a => <Text strong>{formatCurrency(a, profile?.currency)}</Text> }

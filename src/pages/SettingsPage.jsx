@@ -212,9 +212,9 @@ const SettingsPage = () => {
   const handleGenerateToken = async () => {
     try {
       setIsSaving(true);
-      // 1. Owner ka data nikalain (LocalStorage ya Auth se)
-      const sessionData = JSON.parse(localStorage.getItem('sb-ewhhjtgvmlaffsmszkul-auth-token'));
-      const email = sessionData?.user?.email;
+      // 1. Owner ka data nikalain (Supabase SDK se - Project ID independent)
+      const { data: { user } } = await supabase.auth.getUser();
+      const email = user?.email;
       
       if (!email) {
         message.error("Session error. Please logout and login again.");

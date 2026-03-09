@@ -14,11 +14,13 @@ import {
   Popconfirm,
   Radio,
   Tag,
+  Tooltip,
   theme
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, CloseCircleOutlined, DollarCircleOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
+import { useStaff } from '../context/StaffContext'; // <--- NAYA IZAFA
 import { formatCurrency } from '../utils/currencyFormatter';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -32,8 +34,10 @@ const Expenses = () => {
   const { message } = AntApp.useApp();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { user, profile } = useAuth();
+  const { activeStaff } = useStaff(); // <--- NAYA IZAFA
   const [expenses, setExpenses] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [staffMembers, setStaffMembers] = useState([]); // <--- NAYA IZAFA
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
@@ -56,9 +60,11 @@ const Expenses = () => {
       // Ab hum DataService se data le rahe hain
       const expensesData = await DataService.getExpenses();
       const categoriesData = await DataService.getExpenseCategories();
+      const staffData = await DataService.getStaffMembers(); // <--- NAYA IZAFA
 
       setExpenses(expensesData);
       setCategories(categoriesData);
+      setStaffMembers(staffData); // <--- NAYA IZAFA
     } catch (error) {
       message.error('Error fetching data: ' + error.message);
     } finally {
@@ -68,6 +74,13 @@ const Expenses = () => {
 
   useEffect(() => {
     getData();
+
+    // Live Sync: Jab bhi server se naya data aaye, table refresh ho jaye
+    window.addEventListener('local-db-updated', getData);
+    
+    return () => {
+      window.removeEventListener('local-db-updated', getData);
+    };
   }, [getData]);
 
   const showModal = async (expense = null) => {
@@ -108,6 +121,7 @@ const Expenses = () => {
       const expenseData = {
         ...values,
         user_id: user.id,
+        staff_id: activeStaff?.id, // <--- NAYA IZAFA
         expense_date: dayjs(values.expense_date).format('YYYY-MM-DD'),
       };
 
@@ -146,6 +160,33 @@ const Expenses = () => {
     }
   };
 
+  const handleVoid = async (expense) => {
+    try {
+      // NAYA: Check karein ke kya yeh Staff Payment hai?
+      const linkedStaffEntry = await db.staff_ledger.where('expense_id').equals(expense.id).first();
+      if (linkedStaffEntry) {
+        message.warning("This is a Staff Payment. Please handle it from Staff Management.");
+        return;
+      }
+
+      const voidData = {
+        title: expense.title.startsWith('[VOID]') ? expense.title : `[VOID] ${expense.title}`,
+        amount: 0,
+        category_id: expense.category_id,
+        expense_date: expense.expense_date,
+        payment_method: expense.payment_method,
+        user_id: user.id,
+        staff_id: activeStaff?.id // <--- NAYA IZAFA
+      };
+
+      await DataService.updateExpense(expense.id, voidData);
+      message.success('Transaction voided successfully!');
+      getData();
+    } catch (error) {
+      message.error('Void failed: ' + error.message);
+    }
+  };
+
   const columns = [
     { title: 'Date', dataIndex: 'expense_date', key: 'expense_date', render: (date) => dayjs(date).format('DD MMM, YYYY') },
     { title: 'Title / Description', dataIndex: 'title', key: 'title' },
@@ -157,18 +198,43 @@ const Expenses = () => {
       render: (method) => <Tag color={method === 'Bank' ? 'cyan' : 'default'}>{method || 'Cash'}</Tag> 
     },
     { title: 'Amount', dataIndex: 'amount', key: 'amount', align: 'right', render: (amount) => <Text strong>{formatCurrency(amount, profile?.currency)}</Text> },
+    { 
+      title: 'Handled By', 
+      key: 'staff', 
+      render: (_, record) => {
+        const staff = staffMembers.find(s => s.id === record.staff_id);
+        return <Text type="secondary" style={{ fontSize: '12px' }}>{staff ? staff.name : 'Owner'}</Text>;
+      }
+    },
     {
       title: 'Actions',
       key: 'actions',
       align: 'center',
-      render: (_, record) => (
-        <Space>
-          <Button size="small" icon={<EditOutlined />} onClick={() => showModal(record)} />
-          <Popconfirm title="Delete this expense?" onConfirm={() => handleDelete(record.id)} okText="Yes" cancelText="No">
-            <Button size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      ),
+      render: (_, record) => {
+        const isVoided = record.amount === 0;
+        return (
+          <Space>
+            {!isVoided && (
+              <>
+                <Button size="small" icon={<EditOutlined />} onClick={() => showModal(record)} />
+                <Popconfirm 
+                  title="VOID this transaction?" 
+                  description="This will set amount to 0 and keep the record for audit."
+                  onConfirm={() => handleVoid(record)} 
+                  okText="Yes, Void it" 
+                  cancelText="No"
+                  okButtonProps={{ danger: true }}
+                >
+                  <Tooltip title="Void / Cancel">
+                    <Button size="small" danger icon={<CloseCircleOutlined />} />
+                  </Tooltip>
+                </Popconfirm>
+              </>
+            )}
+            {isVoided && <Tag color="default">VOIDED</Tag>}
+          </Space>
+        );
+      },
     },
   ];
 
