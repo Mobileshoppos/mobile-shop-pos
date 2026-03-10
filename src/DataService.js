@@ -1495,11 +1495,11 @@ async addCustomer(customerData) {
         const returnItems = await db.sale_return_items.where('return_id').anyOf(returnIds).toArray();
         
         for (const rItem of returnItems) {
-            // Smart Lookup: Pehle dekho ke is sale item mein purchase_price freeze hui thi?
-            const sItem = await db.sale_items
-                .where('[sale_id+inventory_id]')
-                .equals([rItem.sale_id || '', rItem.inventory_id]) // Note: Agar sale_id return record mein hai
-                .first();
+            // [FIX]: Schema Error theek kiya. Pehle sale_id se dhoondein phir filter karein.
+        const sItem = await db.sale_items
+            .where('sale_id').equals(rItem.sale_id || '')
+            .filter(si => si.inventory_id === rItem.inventory_id)
+            .first();
 
             if (sItem && sItem.purchase_price) {
                 totalCostOfReturns += Number(sItem.purchase_price) * (rItem.quantity || 1);
@@ -1531,6 +1531,308 @@ async addCustomer(customerData) {
       grossProfit,
       totalExpenses,
       netProfit
+    };
+  },
+
+  // --- NAYA IZAFA: Reports Overview ke liye Data ---
+  async getReportsOverview(startDateStr, endDateStr) {
+    // 1. Profit & Loss ka data purane function se lein
+    const plSummary = await this.getProfitLossSummary(startDateStr, endDateStr);
+
+    // 2. Udhaar (Receivables & Payables) - Yeh current snapshot hota hai
+    let totalReceivables = 0;
+    let totalPayables = 0;
+    
+    // Customers jinhone hamare paise dene hain
+    await db.customers.each(c => { 
+        if ((c.balance || 0) > 0) totalReceivables += c.balance; 
+    });
+    
+    // Suppliers jinko hamne paise dene hain
+    await db.suppliers.each(s => { 
+        if ((s.balance_due || 0) > 0) totalPayables += s.balance_due; 
+    });
+
+    // 3. Dukan mein is waqt kitne ka maal (Stock) para hai
+    let totalInventoryValue = 0;
+    await db.inventory.where('status').anyOf('Available', 'available').each(item => {
+        if (item.available_qty > 0) {
+            totalInventoryValue += (Number(item.purchase_price) || 0) * item.available_qty;
+        }
+    });
+
+    return {
+        ...plSummary,
+        totalReceivables,
+        totalPayables,
+        totalInventoryValue
+    };
+  },
+
+  // --- NAYA IZAFA: Sales & Revenue Report ke liye Data ---
+  async getSalesAndRevenueReport(startDateStr, endDateStr) {
+    const start = new Date(startDateStr).getTime();
+    // End date ko us din ki aakhri raat tak set karna taake us din ki saari sales shamil hon
+    const end = new Date(endDateStr).getTime() + (24 * 60 * 60 * 1000) - 1;
+
+    // 1. Sales aur Returns layein
+    const allSales = await db.sales.toArray();
+    const filteredSales = allSales.filter(s => {
+      const d = new Date(s.sale_date || s.created_at).getTime();
+      return d >= start && d <= end;
+    });
+
+    const allReturns = await db.sale_returns.toArray();
+    const filteredReturns = allReturns.filter(r => {
+      const d = new Date(r.created_at).getTime();
+      return d >= start && d <= end;
+    });
+
+    // 2. Payment Method Breakdown (Cash vs Bank)
+    let cashSales = 0;
+    let bankSales = 0;
+    filteredSales.forEach(s => {
+      const amount = (s.total_amount || 0) - (s.tax_amount || 0); // Tax nikal kar asal revenue
+      if (s.payment_method === 'Cash') cashSales += amount;
+      else bankSales += amount; // Bank, Online Transfer etc.
+    });
+
+    // 3. Tax Summary
+    const totalTaxCollected = filteredSales.reduce((sum, s) => sum + (s.tax_amount || 0), 0);
+    const totalTaxRefunded = filteredReturns.reduce((sum, r) => sum + (r.tax_refunded || 0), 0);
+    const netTax = totalTaxCollected - totalTaxRefunded;
+
+    // 4. Staff Performance (Kis ne kitni sale ki)
+    const staffMap = {};
+    const staffMembers = await db.staff_members.toArray();
+    staffMembers.forEach(st => { staffMap[st.id] = st.name; });
+
+    const staffPerformanceMap = {};
+    filteredSales.forEach(s => {
+      const staffName = s.staff_id ? (staffMap[s.staff_id] || 'Unknown Staff') : 'Owner / Admin';
+      if (!staffPerformanceMap[staffName]) staffPerformanceMap[staffName] = { name: staffName, total_sales: 0, sale_count: 0 };
+      staffPerformanceMap[staffName].total_sales += ((s.total_amount || 0) - (s.tax_amount || 0));
+      staffPerformanceMap[staffName].sale_count += 1;
+    });
+    // Sab se zyada sale karne wale ko upar rakhna (Sort)
+    const staffPerformance = Object.values(staffPerformanceMap).sort((a, b) => b.total_sales - a.total_sales);
+
+    // 5. Top Selling Products (Kaunsi items zyada biki)
+    const saleIds = filteredSales.map(s => s.id);
+    const saleItems = await db.sale_items.where('sale_id').anyOf(saleIds).toArray();
+    
+    const productMap = {};
+    const products = await db.products.toArray();
+    products.forEach(p => { productMap[p.id] = p.name; });
+
+    const productSalesMap = {};
+    saleItems.forEach(item => {
+      const pName = productMap[item.product_id] || item.product_name_snapshot || 'Unknown Product';
+      if (!productSalesMap[pName]) productSalesMap[pName] = { name: pName, qty: 0, revenue: 0 };
+      productSalesMap[pName].qty += (item.quantity || 1);
+      productSalesMap[pName].revenue += ((item.quantity || 1) * (item.price_at_sale || 0));
+    });
+    
+    // Top 10 nikalna
+    const topProductsByQty = Object.values(productSalesMap).sort((a, b) => b.qty - a.qty).slice(0, 10);
+    const topProductsByRev = Object.values(productSalesMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+
+    // 6. Daily Trend (Chart ke liye)
+    const dailyMap = {};
+    filteredSales.forEach(s => {
+      const dateKey = new Date(s.sale_date || s.created_at).toISOString().split('T')[0];
+      if (!dailyMap[dateKey]) dailyMap[dateKey] = 0;
+      dailyMap[dateKey] += ((s.total_amount || 0) - (s.tax_amount || 0));
+    });
+    // --- NAYA IZAFA: Category wise Revenue for Pie/Doughnut Chart ---
+    const categoryRevenueMap = {};
+    const categoriesData = await db.categories.toArray();
+    const catIdToNameMap = {};
+    categoriesData.forEach(c => catIdToNameMap[c.id] = c.name);
+
+    saleItems.forEach(item => {
+      const product = products.find(p => p.id === item.product_id);
+      const catName = product ? (catIdToNameMap[product.category_id] || 'Uncategorized') : 'Uncategorized';
+      
+      if (!categoryRevenueMap[catName]) categoryRevenueMap[catName] = 0;
+      categoryRevenueMap[catName] += (item.quantity || 1) * (item.price_at_sale || 0);
+    });
+
+    const categoryBreakdown = Object.keys(categoryRevenueMap).map(name => ({
+      category: name,
+      revenue: categoryRevenueMap[name]
+    }));
+    const salesTrend = Object.keys(dailyMap).sort().map(date => ({
+      date,
+      amount: dailyMap[date]
+    }));
+
+    return {
+      categoryBreakdown, // Naya field shamil kiya
+      cashSales,
+      bankSales,
+      totalTaxCollected,
+      totalTaxRefunded,
+      netTax,
+      staffPerformance,
+      topProductsByQty,
+      topProductsByRev,
+      salesTrend
+    };
+  },
+
+  // --- NAYA IZAFA: Profit & Loss Report ke liye Data ---
+  async getDetailedProfitLossReport(startDateStr, endDateStr) {
+    // 1. Bunyadi P&L data purane function se lein (Jo pehle se mojood hai)
+    const plSummary = await this.getProfitLossSummary(startDateStr, endDateStr);
+
+    // 2. Expenses ka Breakdown (Kis cheez par kitna kharcha hua)
+    const start = new Date(startDateStr).getTime();
+    const end = new Date(endDateStr).getTime() + (24 * 60 * 60 * 1000) - 1;
+
+    const allExpenses = await db.expenses.toArray();
+    const filteredExpenses = allExpenses.filter(e => {
+      const d = new Date(e.expense_date).getTime();
+      return d >= start && d <= end;
+    });
+
+    const expenseCategories = await db.expense_categories.toArray();
+    const expenseCatMap = {};
+    expenseCategories.forEach(c => expenseCatMap[c.id] = c.name);
+
+    const breakdownMap = {};
+    filteredExpenses.forEach(e => {
+        const catName = expenseCatMap[e.category_id] || 'Other';
+        breakdownMap[catName] = (breakdownMap[catName] || 0) + (e.amount || 0);
+    });
+
+    const expenseBreakdown = Object.keys(breakdownMap).map(name => ({
+        category: name,
+        amount: breakdownMap[name]
+    })).sort((a, b) => b.amount - a.amount); // Sab se bara kharcha upar aayega
+
+    // 3. Profit Margin Calculation (Percentage)
+    const profitMargin = plSummary.totalRevenue > 0 
+        ? ((plSummary.netProfit / plSummary.totalRevenue) * 100).toFixed(1) 
+        : 0;
+
+    return {
+        ...plSummary,
+        expenseBreakdown,
+        profitMargin
+    };
+  },
+
+  // --- UPDATED: Inventory & Assets Report (With Slow Moving & Damaged) ---
+  async getInventoryReport() {
+    const products = await db.products.toArray();
+    const categories = await db.categories.toArray();
+    const inventory = await db.inventory.where('status').anyOf('Available', 'available').toArray();
+    const damaged = await db.inventory.filter(i => (i.damaged_qty || 0) > 0).toArray();
+    
+    // Slow Moving: Wo items jo pichle 30 din mein nahi biki
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const recentSales = await db.sale_items.filter(si => new Date(si.created_at || Date.now()) > thirtyDaysAgo).toArray();
+    const soldProductIds = new Set(recentSales.map(s => s.product_id));
+
+    const catMap = {};
+    categories.forEach(c => catMap[c.id] = c.name);
+
+    const categoryValuation = {};
+    const productStock = {};
+    inventory.forEach(item => {
+        const catName = catMap[item.product_id ? products.find(p => p.id === item.product_id)?.category_id : ''] || 'Uncategorized';
+        if (!categoryValuation[catName]) categoryValuation[catName] = { name: catName, value: 0, qty: 0 };
+        categoryValuation[catName].value += (Number(item.purchase_price) || 0) * (item.available_qty || 1);
+        categoryValuation[catName].qty += (item.available_qty || 1);
+        productStock[item.product_id] = (productStock[item.product_id] || 0) + (item.available_qty || 1);
+    });
+
+    const lowStockItems = products.map(p => ({
+        name: p.name,
+        brand: p.brand,
+        current_qty: productStock[p.id] || 0
+    })).filter(p => p.current_qty > 0 && p.current_qty <= 5);
+
+    // Slow Moving Items ki list
+    const slowMovingItems = products
+        .filter(p => productStock[p.id] > 0 && !soldProductIds.has(p.id))
+        .map(p => ({ name: p.name, brand: p.brand, qty: productStock[p.id] }))
+        .slice(0, 10);
+
+    const totalDamagedLoss = damaged.reduce((sum, i) => sum + (Number(i.purchase_price) || 0) * (i.damaged_qty || 0), 0);
+
+    return {
+        categoryValuation: Object.values(categoryValuation).sort((a, b) => b.value - a.value),
+        lowStockItems,
+        slowMovingItems, // Naya
+        totalDamagedLoss, // Naya
+        totalItems: inventory.reduce((sum, i) => sum + (i.available_qty || 1), 0)
+    };
+  },
+
+  // --- NAYA IZAFA: Khata & Ledgers Report ke liye Data ---
+  async getLedgerReport() {
+    // 1. Receivables (Customers jin se paise lene hain)
+    const customers = await db.customers.filter(c => (c.balance || 0) > 0).toArray();
+    const totalReceivable = customers.reduce((sum, c) => sum + (c.balance || 0), 0);
+    const topDebtors = customers.sort((a, b) => b.balance - a.balance).slice(0, 5);
+
+    // 2. Payables (Suppliers jin ko paise dene hain)
+    const suppliers = await db.suppliers.filter(s => (s.balance_due || 0) > 0).toArray();
+    const totalPayable = suppliers.reduce((sum, s) => sum + (s.balance_due || 0), 0);
+    const topCreditors = suppliers.sort((a, b) => b.balance_due - a.balance_due).slice(0, 5);
+
+    // 3. Customer Credits (Jin ke paise hamare paas jama hain - Returns ki wajah se)
+    const credits = await db.customers.filter(c => (c.balance || 0) < 0).toArray();
+    const totalCustomerCredits = Math.abs(credits.reduce((sum, c) => sum + (c.balance || 0), 0));
+
+    return {
+      totalReceivable,
+      totalPayable,
+      totalCustomerCredits,
+      topDebtors,
+      topCreditors
+    };
+  },
+
+  // --- NAYA IZAFA: Cash & Audit Report ke liye Data ---
+  async getCashAuditReport(startDateStr, endDateStr) {
+    const start = new Date(startDateStr).getTime();
+    const end = new Date(endDateStr).getTime() + (24 * 60 * 60 * 1000) - 1;
+
+    // 1. Cash Adjustments (In/Out)
+    const adjustments = await db.cash_adjustments.toArray();
+    const filteredAdjustments = adjustments.filter(a => {
+      const d = new Date(a.created_at).getTime();
+      return d >= start && d <= end;
+    });
+
+    // 2. Daily Closings (Fark nikalne ke liye)
+    const closings = await db.daily_closings.toArray();
+    const filteredClosings = closings.filter(c => {
+      const d = new Date(c.created_at || c.closing_date).getTime();
+      return d >= start && d <= end;
+    });
+
+    // 3. Staff Ledger (Payments/Salaries)
+    const staffLedger = await db.staff_ledger.toArray();
+    const filteredStaffLedger = staffLedger.filter(l => {
+      const d = new Date(l.entry_date).getTime();
+      return d >= start && d <= end;
+    });
+
+    const totalIn = filteredAdjustments.filter(a => a.type === 'In').reduce((sum, a) => sum + (a.amount || 0), 0);
+    const totalOut = filteredAdjustments.filter(a => a.type === 'Out').reduce((sum, a) => sum + (a.amount || 0), 0);
+    const totalDifference = filteredClosings.reduce((sum, c) => sum + (c.difference || 0), 0);
+
+    return {
+      totalIn,
+      totalOut,
+      totalDifference,
+      recentClosings: filteredClosings.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5),
+      staffTransactions: filteredStaffLedger.sort((a, b) => new Date(b.entry_date) - new Date(a.entry_date)).slice(0, 10)
     };
   },
 

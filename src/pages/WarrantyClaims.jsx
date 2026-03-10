@@ -104,26 +104,50 @@ const WarrantyClaims = () => {
     const limits = getPlanLimits(profile?.subscription_tier);
     const isWarrantyLocked = !limits.allow_warranty_system;
 
-    if (isWarrantyLocked) {
-        return (
-            <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-                <Card style={{ maxWidth: 500, margin: '0 auto', borderRadius: 12 }}>
-                    <SafetyCertificateOutlined style={{ fontSize: 60, color: '#bfbfbf', marginBottom: 20 }} />
-                    <Title level={3}>Warranty System is Locked</Title>
-                    <Text type="secondary" style={{ fontSize: 16, display: 'block', marginBottom: 24 }}>
-                        Track repairs, manage claims, and print warranty cards with the Pro Plan.
-                    </Text>
-                    <Button type="primary" size="large" onClick={() => navigate('/subscription')}>
-                        View Upgrade Plans
-                    </Button>
-                </Card>
-            </div>
-        );
-    }
     // --------------------------
 
     return (
-        <div style={{ padding: isMobile ? '12px 4px' : '4px' }}>
+        <div style={{ padding: isMobile ? '12px 4px' : '4px', position: 'relative', minHeight: '80vh' }}>
+            
+            {/* --- LOCK OVERLAY CARD --- */}
+            {isWarrantyLocked && (
+                <div style={{
+                    position: 'absolute',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    zIndex: 100,
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'flex-start',
+                    paddingTop: '100px',
+                    background: 'rgba(255, 255, 255, 0.01)', // Halka sa transparent
+                }}>
+                    <Card 
+                        style={{ 
+                            maxWidth: 500, 
+                            textAlign: 'center', 
+                            borderRadius: 12, 
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                            border: `1px solid ${token.colorBorder}`
+                        }}
+                    >
+                        <SafetyCertificateOutlined style={{ fontSize: 60, color: '#bfbfbf', marginBottom: 20 }} />
+                        <Title level={3}>Warranty System is Locked</Title>
+                        <Text type="secondary" style={{ fontSize: 16, display: 'block', marginBottom: 24 }}>
+                            Track repairs, manage claims, and print warranty cards with the Pro Plan.
+                        </Text>
+                        <Button type="primary" size="large" onClick={() => navigate('/subscription')}>
+                            View Upgrade Plans
+                        </Button>
+                    </Card>
+                </div>
+            )}
+
+            {/* --- ACTUAL CONTENT (Blurred if locked) --- */}
+            <div style={{ 
+                filter: isWarrantyLocked ? 'blur(3px)' : 'none', 
+                pointerEvents: isWarrantyLocked ? 'none' : 'auto',
+                transition: 'filter 0.3s ease'
+            }}>
             {isMobile && (
               <Title level={2} style={{marginLeft: '8px', fontSize: '23px', marginBottom: '16px'}}>
                 <SafetyCertificateOutlined /> Warranty & Claims Management
@@ -364,7 +388,8 @@ const WarrantyClaims = () => {
                     </Form.Item>
                 </Form>
             </Modal>
-        </div>
+        </div> {/* Content Wrapper End */}
+        </div> /* Main Container End */
     );
 };
 

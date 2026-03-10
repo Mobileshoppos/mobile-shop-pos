@@ -83,7 +83,7 @@ const menuItems = [
     },
 
     // 5. Reports
-    // { key: '/reports', icon: <PieChartOutlined />, label: <Link to="/reports">Reports</Link> },
+    { key: '/reports', icon: <PieChartOutlined />, label: <Link to="/reports">Reports</Link> },
 
     { type: 'divider' },
 

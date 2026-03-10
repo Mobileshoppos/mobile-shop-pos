@@ -26,7 +26,7 @@ const SettingsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams(); 
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { message } = App.useApp();
-  const { profile, updateProfile } = useAuth();
+  const { user, profile, updateProfile } = useAuth();
   const limits = getPlanLimits(profile?.subscription_tier);
   const isAdvancedLocked = !limits.allow_advanced_settings;
   const isWarrantyLocked = !limits.allow_warranty_system;
@@ -209,11 +209,11 @@ const SettingsPage = () => {
   };
 
   // --- NAYA FUNCTION: Terminal Token Generate karne ke liye ---
-  const handleGenerateToken = async () => {
+  const handleGenerateToken = () => {
     try {
       setIsSaving(true);
-      // 1. Owner ka data nikalain (Supabase SDK se - Project ID independent)
-      const { data: { user } } = await supabase.auth.getUser();
+      
+      // Context se user email nikalain (Network call ki zaroorat nahi)
       const email = user?.email;
       
       if (!email) {
@@ -221,16 +221,16 @@ const SettingsPage = () => {
         return;
       }
 
-      // 2. Token ka format: "email|generated_at" (Password hum login se nahi nikal sakte, is liye hum sirf Email aur aik Secret Key use karenge)
-      // Note: Supabase security ki wajah se hum password nahi nikal sakte, is liye hum "Magic Link" ya "One-Time Access" ka logic use karenge.
-      // Lekin asaan hal ke liye hum Email ko encrypt karenge taake Manager ko Email na likhna pare.
-      
+      // Token banana (TERMINAL_ACCESS|email|timestamp)
       const rawData = `TERMINAL_ACCESS|${email}|${new Date().getTime()}`;
-      const encryptedToken = await btoa(rawData); // Hum ise Base64 kar rahe hain taake copy-paste asaan ho
+      
+      // Base64 Encoding (Safe for all browsers)
+      const encryptedToken = btoa(rawData);
       
       setTerminalToken(encryptedToken);
       message.success("Terminal Token generated successfully!");
     } catch (error) {
+      console.error("Token Generation Error:", error);
       message.error("Failed to generate token.");
     } finally {
       setIsSaving(false);
