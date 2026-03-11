@@ -101,6 +101,13 @@ export const StaffProvider = ({ children }) => {
 
   // App ko Lock karna
   const lockApp = () => {
+    // Check: Kya Master PIN set hai?
+    const masterPin = localStorage.getItem('device_master_pin');
+    if (!masterPin) {
+      message.warning('Security Action Required: Please set your Master PIN in Settings before locking the terminal.');
+      return; // Lock hone se rok dein
+    }
+
     setActiveStaff(null);
     setIsAppLocked(true);
     localStorage.removeItem('active_staff_session');

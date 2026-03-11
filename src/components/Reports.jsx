@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Tabs, Card, Row, Col, Statistic, Spin, DatePicker, Space, theme, Table, Progress, Divider, Tag, Empty, Button, Dropdown, Menu } from 'antd';
+import { Typography, Tabs, Card, Row, Col, Statistic, Spin, DatePicker, Space, theme, Table, Progress, Divider, Tag, Empty, Button, Dropdown, Menu, Radio } from 'antd';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
@@ -89,6 +89,8 @@ const Reports = () => {
   const [auditData, setAuditData] = useState(null); // NAYI STATE: Audit Data
   const [staffList, setStaffList] = useState([]); // NAYI STATE: Staff Names ke liye
   const [dateRange, setDateRange] = useState([dayjs().startOf('month'), dayjs().endOf('month')]);
+const [timeRange, setTimeRange] = useState('month'); 
+const [productFilter, setProductFilter] = useState('qty'); // Naya: Top products toggle
   // --- NAYA IZAFA: EXCEL EXPORT LOGIC ---
   const downloadExcel = (dataSheets, fileName) => {
     const workbook = XLSX.utils.book_new();
@@ -100,6 +102,28 @@ const Reports = () => {
 
     XLSX.writeFile(workbook, `${fileName}_${dayjs().format('YYYY-MM-DD')}.xlsx`);
     message.success(`${fileName} downloaded successfully!`);
+  };
+
+  // --- NAYA IZAFA: Quick Date Filters Logic ---
+  const handleRangeChange = (e) => {
+    const val = e.target.value;
+    setTimeRange(val);
+
+    let start, end;
+    if (val === 'today') {
+      start = dayjs().startOf('day');
+      end = dayjs().endOf('day');
+    } else if (val === 'week') {
+      start = dayjs().startOf('week');
+      end = dayjs().endOf('day');
+    } else if (val === 'month') {
+      start = dayjs().startOf('month');
+      end = dayjs().endOf('day');
+    }
+
+    if (val !== 'custom') {
+      setDateRange([start, end]);
+    }
   };
 
   const handleCurrentTabExport = async () => {
@@ -535,9 +559,14 @@ const Reports = () => {
         </Card>
 
         <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
-          {/* Staff Performance */}
+          {/* Staff Performance (Aligned Header) */}
           <Col xs={24} lg={12}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}><TeamOutlined /> Staff Performance</Text>} style={cardStyle} styles={{ body: { padding: 0 } }}>
+            <Card 
+              title={<Text strong style={{ fontSize: '16px' }}><TeamOutlined /> Staff Performance</Text>} 
+              extra={<div style={{ height: 24 }} />} 
+              style={cardStyle} 
+              styles={{ body: { padding: 0 } }}
+            >
               <Table
                 dataSource={salesData.staffPerformance}
                 rowKey="name"
@@ -552,45 +581,49 @@ const Reports = () => {
             </Card>
           </Col>
 
-          {/* Top Selling Products */}
+          {/* Top Selling Products (Aligned Header) */}
           <Col xs={24} lg={12}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}><TrophyOutlined style={{ color: '#faad14' }} /> Top 10 Selling Products</Text>} style={cardStyle} styles={{ body: { padding: 0 } }}>
-              <Tabs defaultActiveKey="qty" centered items={[
-                {
-                  key: 'qty',
-                  label: 'By Quantity',
-                  children: (
-                    <Table
-                      dataSource={salesData.topProductsByQty}
-                      rowKey="name"
-                      pagination={false}
-                      size="small"
-                      scroll={{ x: true }}
-                      columns={[
-                        { title: 'Product', dataIndex: 'name', key: 'name' },
-                        { title: 'Qty Sold', dataIndex: 'qty', key: 'qty', align: 'center', render: (val) => <Tag color="cyan">{val}</Tag> }
-                      ]}
-                    />
-                  )
-                },
-                {
-                  key: 'rev',
-                  label: 'By Revenue',
-                  children: (
-                    <Table
-                      dataSource={salesData.topProductsByRev}
-                      rowKey="name"
-                      pagination={false}
-                      size="small"
-                      scroll={{ x: true }}
-                      columns={[
-                        { title: 'Product', dataIndex: 'name', key: 'name' },
-                        { title: 'Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right', render: (val) => <Text strong style={{ color: token.colorSuccess }}>{formatCurrency(val, profile?.currency)}</Text> }
-                      ]}
-                    />
-                  )
-                }
-              ]} />
+            <Card 
+              title={<Text strong style={{ fontSize: '16px' }}><TrophyOutlined style={{ color: '#faad14' }} /> Top 10 Selling Products</Text>} 
+              extra={
+                <Radio.Group 
+                  value={productFilter} 
+                  onChange={(e) => setProductFilter(e.target.value)} 
+                  size="small" 
+                  buttonStyle="solid"
+                >
+                  <Radio.Button value="qty">By Qty</Radio.Button>
+                  <Radio.Button value="rev">By Revenue</Radio.Button>
+                </Radio.Group>
+              }
+              style={cardStyle} 
+              styles={{ body: { padding: 0 } }}
+            >
+              {productFilter === 'qty' ? (
+                <Table
+                  dataSource={salesData.topProductsByQty}
+                  rowKey="name"
+                  pagination={false}
+                  size="small"
+                  scroll={{ x: true }}
+                  columns={[
+                    { title: 'Product', dataIndex: 'name', key: 'name' },
+                    { title: 'Qty Sold', dataIndex: 'qty', key: 'qty', align: 'right', render: (val) => <Tag color="cyan">{val}</Tag> }
+                  ]}
+                />
+              ) : (
+                <Table
+                  dataSource={salesData.topProductsByRev}
+                  rowKey="name"
+                  pagination={false}
+                  size="small"
+                  scroll={{ x: true }}
+                  columns={[
+                    { title: 'Product', dataIndex: 'name', key: 'name' },
+                    { title: 'Total Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right', render: (val) => <Text strong style={{ color: token.colorSuccess }}>{formatCurrency(val, profile?.currency)}</Text> }
+                  ]}
+                />
+              )}
             </Card>
           </Col>
         </Row>
@@ -930,17 +963,26 @@ const Reports = () => {
         )}
         
         <Space wrap>
-          {/* Calendar sirf un tabs par jahan date filter zaroori hai (Overview, Sales, P&L, Audit) */}
-          {['overview', 'sales', 'profit_loss', 'audit'].includes(activeTab) && (
-            <Space>
-              <Text strong>Select Date Range:</Text>
-              <RangePicker 
-                value={dateRange} 
-                onChange={(dates) => {
-                  if(dates) setDateRange(dates);
-                }} 
-                allowClear={false}
-              />
+          {/* Quick Filters (Today, Week, Month) */}
+          {['sales', 'profit_loss', 'audit'].includes(activeTab) && (
+            <Space wrap>
+              <Radio.Group value={timeRange} onChange={handleRangeChange} buttonStyle="solid">
+                <Radio.Button value="today">Today</Radio.Button>
+                <Radio.Button value="week">This Week</Radio.Button>
+                <Radio.Button value="month">This Month</Radio.Button>
+                <Radio.Button value="custom">Custom Range</Radio.Button>
+              </Radio.Group>
+
+              {/* RangePicker sirf tab dikhega jab 'Custom Range' select ho */}
+              {timeRange === 'custom' && (
+                <RangePicker 
+                  value={dateRange} 
+                  onChange={(dates) => {
+                    if(dates) setDateRange(dates);
+                  }} 
+                  allowClear={false}
+                />
+              )}
             </Space>
           )}
         </Space>
