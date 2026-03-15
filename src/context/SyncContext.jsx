@@ -744,10 +744,12 @@ export const SyncProvider = ({ children }) => {
     const duration = Date.now() - startTime; // Kitna waqt laga
 
     
-    // Agar queue mein items thay, tabhi performance report bhejein
+    // Agar queue mein items thay, tabhi performance report bhejein (Silenced for now)
+    /*
     if (pendingCount > 0) {
       Logger.info('sync_performance', `Sync completed in ${duration}ms`, `Internet Speed: ${duration < 3000 ? 'Tez (Fast)' : 'Ahista (Slow)'}`);
     }
+    */
 
     isSyncingRef.current = false;
     setIsSyncing(false);
@@ -792,7 +794,7 @@ const retryAll = async () => {
       if (count > 0 && navigator.onLine) {
         processSyncQueue();
       }
-    }, 3000); // Har 2 minute (120,000 ms) baad check karein taake server par API calls ka bojh na paray
+    }, 60000); // Har 1 munute baad check karein taake data server ke sath sync rahe paray
 
     return () => clearInterval(interval);
   }, []);

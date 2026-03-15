@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Input, Card, Row, Col, Button, Table, Tag, Space, App, Empty, Descriptions, Divider, Modal, Form, Select, Alert, List, theme } from 'antd';
+import { Typography, Input, Card, Row, Col, Button, Table, Tag, Space, App, Empty, Descriptions, Divider, Modal, Form, Select, Alert, List, theme, Spin } from 'antd';
 import { SearchOutlined, SafetyCertificateOutlined, ToolOutlined, HistoryOutlined, DeleteOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
@@ -102,9 +102,9 @@ const WarrantyClaims = () => {
     // --- SUBSCRIPTION CHECK ---
     const navigate = useNavigate();
     const limits = getPlanLimits(profile?.subscription_tier);
-    const isWarrantyLocked = !limits.allow_warranty_system;
+    const isWarrantyLocked = profile ? !limits.allow_warranty_system : false;
 
-    // --------------------------
+    if (!profile) return <div style={{ textAlign: 'center', padding: '100px' }}><Spin size="large" tip="Verifying Subscription..." /></div>;
 
     return (
         <div style={{ padding: isMobile ? '12px 4px' : '4px', position: 'relative', minHeight: '80vh' }}>

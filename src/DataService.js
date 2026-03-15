@@ -3,6 +3,7 @@ import { db } from './db';
 import { generateInvoiceId } from './utils/idGenerator';
 import { checkSupabaseConnection } from './utils/connectionCheck';
 import { getPlanLimits } from './config/subscriptionPlans';
+import dayjs from 'dayjs';
 import bcrypt from 'bcryptjs';
 import { encryptData, decryptData } from './utils/cryptoUtils'; // <--- NAYA IZAFA
 
@@ -1436,7 +1437,8 @@ async addCustomer(customerData) {
   // 3. Profit & Loss Summary (Sab se ahem function)
   async getProfitLossSummary(startDateStr, endDateStr) {
     const start = new Date(startDateStr).getTime();
-    const end = new Date(endDateStr).getTime();
+    // End date ko us din ke bilkul aakhir (23:59:59) tak set kiya taake aaj ka data mis na ho
+    const end = new Date(endDateStr).setHours(23, 59, 59, 999);
 
     // A. Revenue (Sales)
     const allSales = await db.sales.toArray();
@@ -1521,13 +1523,23 @@ async addCustomer(customerData) {
     });
     const totalExpenses = filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
-    // F. Final Calculation
+    // --- NAYA IZAFA: Date-wise Damaged Stock Loss ---
+    const allInventory = await db.inventory.toArray();
+    const damagedInRange = allInventory.filter(i => {
+        const d = new Date(i.updated_at).getTime();
+        return Number(i.damaged_qty || 0) > 0 && d >= start && d <= end;
+    });
+    const damagedLoss = precise(damagedInRange.reduce((sum, i) => sum + (Number(i.purchase_price || 0) * Number(i.damaged_qty || 0)), 0));
+
+    // F. Final Calculation (Damaged Loss ko Net Profit se minus kiya gaya)
     const grossProfit = totalRevenue - totalCost;
-    const netProfit = grossProfit - totalExpenses;
+    const netProfit = precise(grossProfit - totalExpenses - damagedLoss);
 
     return {
       totalRevenue,
+      totalRefunds,
       totalCost,
+      damagedLoss, // <--- Reports page ko bhejne ke liye
       grossProfit,
       totalExpenses,
       netProfit
@@ -1569,13 +1581,12 @@ async addCustomer(customerData) {
     };
   },
 
-  // --- NAYA IZAFA: Sales & Revenue Report ke liye Data ---
+  // --- FINAL FIX: Synchronized Sales & Revenue Report (No Reference Errors) ---
   async getSalesAndRevenueReport(startDateStr, endDateStr) {
     const start = new Date(startDateStr).getTime();
-    // End date ko us din ki aakhri raat tak set karna taake us din ki saari sales shamil hon
     const end = new Date(endDateStr).getTime() + (24 * 60 * 60 * 1000) - 1;
 
-    // 1. Sales aur Returns layein
+    // 1. Basic Data Fetching
     const allSales = await db.sales.toArray();
     const filteredSales = allSales.filter(s => {
       const d = new Date(s.sale_date || s.created_at).getTime();
@@ -1588,87 +1599,170 @@ async addCustomer(customerData) {
       return d >= start && d <= end;
     });
 
-    // 2. Payment Method Breakdown (Cash vs Bank)
+    const saleIds = filteredSales.map(s => s.id);
+    const saleItems = await db.sale_items.where('sale_id').anyOf(saleIds).toArray();
+    
+    const returnIds = filteredReturns.map(r => r.id);
+    const returnedItems = returnIds.length > 0 ? await db.sale_return_items.where('return_id').anyOf(returnIds).toArray() : [];
+
+    // 2. Net Revenue Calculation (Subtracting Returns)
+    const totalRefunds = filteredReturns.reduce((sum, r) => sum + ((r.total_refund_amount || 0) - (r.tax_refunded || 0)), 0);
+    
     let cashSales = 0;
     let bankSales = 0;
     filteredSales.forEach(s => {
-      const amount = (s.total_amount || 0) - (s.tax_amount || 0); // Tax nikal kar asal revenue
+      const amount = (s.total_amount || 0) - (s.tax_amount || 0);
       if (s.payment_method === 'Cash') cashSales += amount;
-      else bankSales += amount; // Bank, Online Transfer etc.
+      else bankSales += amount;
     });
+    
+    const totalRawSales = cashSales + bankSales;
+    if (totalRawSales > 0) {
+        const cashRatio = cashSales / totalRawSales;
+        const bankRatio = bankSales / totalRawSales;
+        cashSales -= (totalRefunds * cashRatio);
+        bankSales -= (totalRefunds * bankRatio);
+    }
 
     // 3. Tax Summary
     const totalTaxCollected = filteredSales.reduce((sum, s) => sum + (s.tax_amount || 0), 0);
     const totalTaxRefunded = filteredReturns.reduce((sum, r) => sum + (r.tax_refunded || 0), 0);
     const netTax = totalTaxCollected - totalTaxRefunded;
 
-    // 4. Staff Performance (Kis ne kitni sale ki)
-    const staffMap = {};
+    // 4. Staff Performance Logic
     const staffMembers = await db.staff_members.toArray();
+    const staffMap = {};
     staffMembers.forEach(st => { staffMap[st.id] = st.name; });
 
     const staffPerformanceMap = {};
+    const saleToStaffMap = {};
+
     filteredSales.forEach(s => {
       const staffName = s.staff_id ? (staffMap[s.staff_id] || 'Unknown Staff') : 'Owner / Admin';
-      if (!staffPerformanceMap[staffName]) staffPerformanceMap[staffName] = { name: staffName, total_sales: 0, sale_count: 0 };
-      staffPerformanceMap[staffName].total_sales += ((s.total_amount || 0) - (s.tax_amount || 0));
+      saleToStaffMap[s.id] = staffName;
+      if (!staffPerformanceMap[staffName]) {
+        staffPerformanceMap[staffName] = { name: staffName, total_sales: 0, sale_count: 0, items_sold: 0, profit: 0 };
+      }
       staffPerformanceMap[staffName].sale_count += 1;
+      staffPerformanceMap[staffName].total_sales += ((s.total_amount || 0) - (s.tax_amount || 0));
     });
-    // Sab se zyada sale karne wale ko upar rakhna (Sort)
+
+    // Returns ko staff se minus karein
+    filteredReturns.forEach(r => {
+        const staffName = r.staff_id ? (staffMap[r.staff_id] || 'Unknown Staff') : 'Owner / Admin';
+        if (staffPerformanceMap[staffName]) {
+            staffPerformanceMap[staffName].total_sales -= ((r.total_refund_amount || 0) - (r.tax_refunded || 0));
+        }
+    });
+
+    saleItems.forEach(item => {
+      const staffName = saleToStaffMap[item.sale_id];
+      if (staffName && staffPerformanceMap[staffName]) {
+          staffPerformanceMap[staffName].items_sold += (item.quantity || 1);
+          const cost = (Number(item.purchase_price) || 0) * (item.quantity || 1);
+          const revenue = (Number(item.price_at_sale) || 0) * (item.quantity || 1);
+          staffPerformanceMap[staffName].profit += (revenue - cost);
+      }
+    });
+
+    // Yeh line define karti hai staffPerformance ko (Jo pehle miss ho gayi thi)
     const staffPerformance = Object.values(staffPerformanceMap).sort((a, b) => b.total_sales - a.total_sales);
 
-    // 5. Top Selling Products (Kaunsi items zyada biki)
-    const saleIds = filteredSales.map(s => s.id);
-    const saleItems = await db.sale_items.where('sale_id').anyOf(saleIds).toArray();
-    
-    const productMap = {};
-    const products = await db.products.toArray();
-    products.forEach(p => { productMap[p.id] = p.name; });
-
+    // 5. Top Selling Products Logic
     const productSalesMap = {};
-    saleItems.forEach(item => {
-      const pName = productMap[item.product_id] || item.product_name_snapshot || 'Unknown Product';
-      if (!productSalesMap[pName]) productSalesMap[pName] = { name: pName, qty: 0, revenue: 0 };
-      productSalesMap[pName].qty += (item.quantity || 1);
-      productSalesMap[pName].revenue += ((item.quantity || 1) * (item.price_at_sale || 0));
+    const products = await db.products.toArray();
+    const productMap = {};
+    products.forEach(p => { 
+      productMap[p.id] = p.name; 
+      productMap[p.id + '_cat'] = p.category_id; 
     });
     
-    // Top 10 nikalna
-    const topProductsByQty = Object.values(productSalesMap).sort((a, b) => b.qty - a.qty).slice(0, 10);
-    const topProductsByRev = Object.values(productSalesMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
-
-    // 6. Daily Trend (Chart ke liye)
-    const dailyMap = {};
-    filteredSales.forEach(s => {
-      const dateKey = new Date(s.sale_date || s.created_at).toISOString().split('T')[0];
-      if (!dailyMap[dateKey]) dailyMap[dateKey] = 0;
-      dailyMap[dateKey] += ((s.total_amount || 0) - (s.tax_amount || 0));
-    });
-    // --- NAYA IZAFA: Category wise Revenue for Pie/Doughnut Chart ---
-    const categoryRevenueMap = {};
     const categoriesData = await db.categories.toArray();
     const catIdToNameMap = {};
     categoriesData.forEach(c => catIdToNameMap[c.id] = c.name);
 
     saleItems.forEach(item => {
-      const product = products.find(p => p.id === item.product_id);
-      const catName = product ? (catIdToNameMap[product.category_id] || 'Uncategorized') : 'Uncategorized';
-      
-      if (!categoryRevenueMap[catName]) categoryRevenueMap[catName] = 0;
-      categoryRevenueMap[catName] += (item.quantity || 1) * (item.price_at_sale || 0);
+      const pName = productMap[item.product_id] || item.product_name_snapshot || 'Unknown Product';
+      if (!productSalesMap[pName]) {
+        const catId = productMap[item.product_id + '_cat'];
+        productSalesMap[pName] = { name: pName, qty: 0, revenue: 0, profit: 0, category: catIdToNameMap[catId] || 'Other' };
+      }
+      const qty = item.quantity || 1;
+      const rev = qty * (Number(item.price_at_sale) || 0);
+      const cost = qty * (Number(item.purchase_price) || 0);
+      productSalesMap[pName].qty += qty;
+      productSalesMap[pName].revenue += rev;
+      productSalesMap[pName].profit += (rev - cost);
     });
 
-    const categoryBreakdown = Object.keys(categoryRevenueMap).map(name => ({
+    // Returned items ko products se minus karein
+    for (const rItem of returnedItems) {
+        const product = await db.products.get(rItem.product_id);
+        const pName = product?.name || 'Unknown Product';
+        if (productSalesMap[pName]) {
+            const qty = rItem.quantity || 1;
+            const rev = qty * (Number(rItem.price_at_return) || 0);
+            const inv = await db.inventory.get(rItem.inventory_id);
+            const cost = qty * (Number(inv?.purchase_price) || 0);
+            productSalesMap[pName].qty -= qty;
+            productSalesMap[pName].revenue -= rev;
+            productSalesMap[pName].profit -= (rev - cost);
+        }
+    }
+
+    const allProductStats = Object.values(productSalesMap);
+    const topProductsByQty = [...allProductStats].sort((a, b) => b.qty - a.qty).slice(0, 10);
+    const topProductsByRev = [...allProductStats].sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+    const topProductsByProfit = [...allProductStats].sort((a, b) => b.profit - a.profit).slice(0, 10);
+
+    // 6. Category Breakdown Logic
+    const categoryBreakdownMap = {};
+    allProductStats.forEach(p => {
+        if (!categoryBreakdownMap[p.category]) categoryBreakdownMap[p.category] = { revenue: 0, profit: 0 };
+        categoryBreakdownMap[p.category].revenue += p.revenue;
+        categoryBreakdownMap[p.category].profit += p.profit;
+    });
+
+    const categoryBreakdown = Object.keys(categoryBreakdownMap).map(name => ({
       category: name,
-      revenue: categoryRevenueMap[name]
-    }));
-    const salesTrend = Object.keys(dailyMap).sort().map(date => ({
-      date,
-      amount: dailyMap[date]
+      revenue: categoryBreakdownMap[name].revenue,
+      profit: categoryBreakdownMap[name].profit
     }));
 
+    // 7. Daily Trend Logic (Continuous Timeline)
+    const dailyMap = {};
+    const dailyProfitMap = {};
+    
+    filteredSales.forEach(s => {
+      const dateKey = new Date(s.sale_date || s.created_at).toISOString().split('T')[0];
+      if (!dailyMap[dateKey]) { dailyMap[dateKey] = 0; dailyProfitMap[dateKey] = 0; }
+      dailyMap[dateKey] += ((s.total_amount || 0) - (s.tax_amount || 0));
+    });
+    
+    filteredReturns.forEach(r => {
+        const dateKey = new Date(r.created_at).toISOString().split('T')[0];
+        if (dailyMap[dateKey] !== undefined) dailyMap[dateKey] -= ((r.total_refund_amount || 0) - (r.tax_refunded || 0));
+    });
+
+    const salesTrend = [];
+    let loopDate = new Date(startDateStr);
+    let endLimit = new Date(endDateStr);
+    while (loopDate <= endLimit) {
+      const dateStr = loopDate.toISOString().split('T')[0];
+      let dayProfit = 0;
+      const daySales = filteredSales.filter(s => new Date(s.sale_date || s.created_at).toISOString().split('T')[0] === dateStr);
+      const daySaleIds = daySales.map(s => s.id);
+      const dayItems = saleItems.filter(si => daySaleIds.includes(si.sale_id));
+      dayItems.forEach(i => { dayProfit += ((i.quantity || 1) * (i.price_at_sale - i.purchase_price)); });
+      const dayReturns = filteredReturns.filter(r => new Date(r.created_at).toISOString().split('T')[0] === dateStr);
+      dayReturns.forEach(r => { dayProfit -= ((r.total_refund_amount || 0) - (r.tax_refunded || 0)); });
+
+      salesTrend.push({ date: dateStr, amount: dailyMap[dateStr] || 0, profit: dayProfit });
+      loopDate.setDate(loopDate.getDate() + 1);
+    }
+
     return {
-      categoryBreakdown, // Naya field shamil kiya
+      categoryBreakdown,
       cashSales,
       bankSales,
       totalTaxCollected,
@@ -1677,162 +1771,399 @@ async addCustomer(customerData) {
       staffPerformance,
       topProductsByQty,
       topProductsByRev,
+      topProductsByProfit,
       salesTrend
     };
   },
 
-  // --- NAYA IZAFA: Profit & Loss Report ke liye Data ---
+  // --- FINAL FIX: Professional Profit & Loss Report (No Reference Errors) ---
   async getDetailedProfitLossReport(startDateStr, endDateStr) {
-    // 1. Bunyadi P&L data purane function se lein (Jo pehle se mojood hai)
+    const start = new Date(startDateStr);
+    const end = new Date(endDateStr);
+    const startTime = start.getTime();
+    const endTime = end.getTime() + (24 * 60 * 60 * 1000) - 1;
+
+    // 1. Basic P&L Summary (Revenue, COGS, Net Profit)
     const plSummary = await this.getProfitLossSummary(startDateStr, endDateStr);
 
-    // 2. Expenses ka Breakdown (Kis cheez par kitna kharcha hua)
-    const start = new Date(startDateStr).getTime();
-    const end = new Date(endDateStr).getTime() + (24 * 60 * 60 * 1000) - 1;
+    // 2. Fetch Sales Data (Profit Trend ke liye)
+    const sales = await db.sales.where('created_at').between(new Date(startTime).toISOString(), new Date(endTime).toISOString()).toArray();
+    const saleIds = sales.map(s => s.id);
+    const saleItems = await db.sale_items.where('sale_id').anyOf(saleIds).toArray();
+    
+    const dailyProfitMap = {};
+    const saleDateMap = {};
+    sales.forEach(s => {
+      saleDateMap[s.id] = new Date(s.sale_date || s.created_at).toISOString().split('T')[0];
+    });
 
+    saleItems.forEach(item => {
+      const dateKey = saleDateMap[item.sale_id];
+      if (dateKey) {
+        const qty = item.quantity || 1;
+        const rev = qty * (Number(item.price_at_sale) || 0);
+        const cost = qty * (Number(item.purchase_price) || 0);
+        dailyProfitMap[dateKey] = (dailyProfitMap[dateKey] || 0) + (rev - cost);
+      }
+    });
+
+    // 3. Fetch Expense Data (Ab yeh sahi waqt par ho raha hai)
     const allExpenses = await db.expenses.toArray();
     const filteredExpenses = allExpenses.filter(e => {
       const d = new Date(e.expense_date).getTime();
-      return d >= start && d <= end;
+      return d >= startTime && d <= endTime;
     });
 
+    // Daily Expenses Map banana
+    const dailyExpenseMap = {};
+    filteredExpenses.forEach(e => {
+      const dKey = new Date(e.expense_date).toISOString().split('T')[0];
+      dailyExpenseMap[dKey] = (dailyExpenseMap[dKey] || 0) + (e.amount || 0);
+    });
+
+    // 4. Gaps fill karna (Trend Line ke liye) - Profit aur Expense dono shamil
+    const profitTrend = [];
+    let loopDate = new Date(start);
+    while (loopDate <= end) {
+      const dateStr = loopDate.toISOString().split('T')[0];
+      profitTrend.push({
+        date: dayjs(dateStr).format('DD MMM'),
+        profit: dailyProfitMap[dateStr] || 0,
+        expense: dailyExpenseMap[dateStr] || 0
+      });
+      loopDate.setDate(loopDate.getDate() + 1);
+    }
+
+    // 5. Expense Breakdown (Doughnut Chart ke liye)
     const expenseCategories = await db.expense_categories.toArray();
     const expenseCatMap = {};
     expenseCategories.forEach(c => expenseCatMap[c.id] = c.name);
 
-    const breakdownMap = {};
+    const expMap = {};
+    const expCountMap = {}; // Naya map count ke liye
     filteredExpenses.forEach(e => {
-        const catName = expenseCatMap[e.category_id] || 'Other';
-        breakdownMap[catName] = (breakdownMap[catName] || 0) + (e.amount || 0);
+      const catName = expenseCatMap[e.category_id] || 'Other';
+      expMap[catName] = (expMap[catName] || 0) + (e.amount || 0);
+      expCountMap[catName] = (expCountMap[catName] || 0) + 1; // Har entry par +1
     });
 
-    const expenseBreakdown = Object.keys(breakdownMap).map(name => ({
-        category: name,
-        amount: breakdownMap[name]
-    })).sort((a, b) => b.amount - a.amount); // Sab se bara kharcha upar aayega
+    const expenseBreakdown = Object.keys(expMap).map(name => ({
+      category: name,
+      amount: expMap[name],
+      count: expCountMap[name] || 0 // Count bhi shamil kar liya
+    })).sort((a, b) => b.amount - a.amount);
 
-    // 3. Profit Margin Calculation (Percentage)
+    // 6. Profit Margin (Number mein convert kiya taake UI warning na de)
     const profitMargin = plSummary.totalRevenue > 0 
-        ? ((plSummary.netProfit / plSummary.totalRevenue) * 100).toFixed(1) 
+        ? Number(((plSummary.netProfit / plSummary.totalRevenue) * 100).toFixed(1))
         : 0;
 
     return {
-        ...plSummary,
-        expenseBreakdown,
-        profitMargin
+      ...plSummary,
+      profitTrend,
+      expenseBreakdown,
+      profitMargin
     };
   },
 
-  // --- UPDATED: Inventory & Assets Report (With Slow Moving & Damaged) ---
+  // --- UPDATED: Professional Inventory & Assets Report (With Potential Profit & Brand Logic) ---
   async getInventoryReport() {
     const products = await db.products.toArray();
     const categories = await db.categories.toArray();
     const inventory = await db.inventory.where('status').anyOf('Available', 'available').toArray();
-    const damaged = await db.inventory.filter(i => (i.damaged_qty || 0) > 0).toArray();
     
-    // Slow Moving: Wo items jo pichle 30 din mein nahi biki
+    // 1. Basic Maps
+    const catMap = {};
+    categories.forEach(c => catMap[c.id] = c.name);
+    
+    const productMap = {};
+    products.forEach(p => productMap[p.id] = p);
+
+    // 2. Calculation Containers
+    const catValuation = {};
+    const brandValuation = {};
+    let totalPotentialProfit = 0;
+    let totalAssetValue = 0;
+    let totalUnits = 0;
+    const productStock = {};
+
+    // 3. Process Inventory
+    inventory.forEach(item => {
+        const prod = productMap[item.product_id];
+        if (!prod) return;
+
+        const qty = Number(item.available_qty) || 0;
+        if (qty <= 0) return; // Agar quantity 0 hai to isay total mein shamil na karein
+        
+        const purchasePrice = Number(item.purchase_price) || 0;
+        const salePrice = Number(item.sale_price) || 0;
+        const itemValue = purchasePrice * qty;
+        const itemProfit = (salePrice - purchasePrice) * qty;
+
+        totalAssetValue += itemValue;
+        totalPotentialProfit += itemProfit;
+        totalUnits += qty;
+
+        // Category wise
+        const catName = catMap[prod.category_id] || 'Uncategorized';
+        if (!catValuation[catName]) catValuation[catName] = { name: catName, value: 0, qty: 0 };
+        catValuation[catName].value += itemValue;
+        catValuation[catName].qty += qty;
+
+        // Brand wise (Normalized)
+        let rawBrand = prod.brand ? prod.brand.trim() : 'No Brand';
+        // Pehla harf bara karne ki logic (e.g. apple -> Apple)
+        const brandName = rawBrand.charAt(0).toUpperCase() + rawBrand.slice(1).toLowerCase();
+        
+        if (!brandValuation[brandName]) brandValuation[brandName] = { name: brandName, value: 0, qty: 0, profit: 0 };
+        brandValuation[brandName].value += itemValue;
+        brandValuation[brandName].qty += qty;
+        brandValuation[brandName].profit += itemProfit;
+
+        // Stock tracking
+        productStock[prod.id] = (productStock[prod.id] || 0) + qty;
+    });
+
+    // 4. Alerts & Lists
+    const lowStockItems = products
+        .filter(p => (productStock[p.id] || 0) > 0 && (productStock[p.id] || 0) <= 5)
+        .map(p => ({ name: p.name, brand: p.brand, qty: productStock[p.id] }));
+
+    const outOfStockItems = products
+        .filter(p => p.is_active !== false && (productStock[p.id] || 0) === 0)
+        .map(p => ({ name: p.name, brand: p.brand }));
+
+    // Slow Moving: No sales in 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const recentSales = await db.sale_items.filter(si => new Date(si.created_at || Date.now()) > thirtyDaysAgo).toArray();
     const soldProductIds = new Set(recentSales.map(s => s.product_id));
 
-    const catMap = {};
-    categories.forEach(c => catMap[c.id] = c.name);
-
-    const categoryValuation = {};
-    const productStock = {};
-    inventory.forEach(item => {
-        const catName = catMap[item.product_id ? products.find(p => p.id === item.product_id)?.category_id : ''] || 'Uncategorized';
-        if (!categoryValuation[catName]) categoryValuation[catName] = { name: catName, value: 0, qty: 0 };
-        categoryValuation[catName].value += (Number(item.purchase_price) || 0) * (item.available_qty || 1);
-        categoryValuation[catName].qty += (item.available_qty || 1);
-        productStock[item.product_id] = (productStock[item.product_id] || 0) + (item.available_qty || 1);
-    });
-
-    const lowStockItems = products.map(p => ({
-        name: p.name,
-        brand: p.brand,
-        current_qty: productStock[p.id] || 0
-    })).filter(p => p.current_qty > 0 && p.current_qty <= 5);
-
-    // Slow Moving Items ki list
     const slowMovingItems = products
-        .filter(p => productStock[p.id] > 0 && !soldProductIds.has(p.id))
+        .filter(p => (productStock[p.id] || 0) > 0 && !soldProductIds.has(p.id))
         .map(p => ({ name: p.name, brand: p.brand, qty: productStock[p.id] }))
         .slice(0, 10);
 
-    const totalDamagedLoss = damaged.reduce((sum, i) => sum + (Number(i.purchase_price) || 0) * (i.damaged_qty || 0), 0);
+    const damaged = await db.inventory.filter(i => Number(i.damaged_qty || 0) > 0).toArray();
+    const totalDamagedLoss = damaged.reduce((sum, i) => {
+        const qty = Number(i.damaged_qty) || 0;
+        const price = Number(i.purchase_price) || 0;
+        return sum + (price * qty);
+    }, 0);
 
     return {
-        categoryValuation: Object.values(categoryValuation).sort((a, b) => b.value - a.value),
+        totalUnits,
+        totalAssetValue,
+        totalPotentialProfit,
+        totalDamagedLoss,
+        categoryValuation: Object.values(catValuation).sort((a, b) => b.value - a.value),
+        brandValuation: Object.values(brandValuation).sort((a, b) => b.value - a.value),
         lowStockItems,
-        slowMovingItems, // Naya
-        totalDamagedLoss, // Naya
-        totalItems: inventory.reduce((sum, i) => sum + (i.available_qty || 1), 0)
+        outOfStockItems,
+        slowMovingItems
     };
   },
 
-  // --- NAYA IZAFA: Khata & Ledgers Report ke liye Data ---
+  // --- FINAL FIX: Professional Ledgers Report (Balanced Aging & Stats) ---
   async getLedgerReport() {
-    // 1. Receivables (Customers jin se paise lene hain)
-    const customers = await db.customers.filter(c => (c.balance || 0) > 0).toArray();
-    const totalReceivable = customers.reduce((sum, c) => sum + (c.balance || 0), 0);
-    const topDebtors = customers.sort((a, b) => b.balance - a.balance).slice(0, 5);
+    const now = dayjs();
+    
+    // 1. Customers & Actual Balances
+    const customers = await db.customers.toArray();
+    let totalCustomerReceivable = 0;
+    let customerAging = { current: 0, mid: 0, old: 0 };
+    
+    const debtors = customers
+      .filter(c => (c.balance || 0) > 0)
+      .map(c => {
+        totalCustomerReceivable += c.balance;
+        return { id: c.id, name: c.name, balance: c.balance };
+      });
 
-    // 2. Payables (Suppliers jin ko paise dene hain)
-    const suppliers = await db.suppliers.filter(s => (s.balance_due || 0) > 0).toArray();
-    const totalPayable = suppliers.reduce((sum, s) => sum + (s.balance_due || 0), 0);
-    const topCreditors = suppliers.sort((a, b) => b.balance_due - a.balance_due).slice(0, 5);
+    // 2. Correct Aging Logic: Distribute ACTUAL balance across invoice dates
+    // Hum har debtor customer ki sales check karenge
+    for (const customer of debtors) {
+        let remainingBalance = customer.balance;
+        const customerSales = await db.sales
+            .where('customer_id').equals(customer.id)
+            .reverse() // Nayi sales pehle (FIFO for debt)
+            .sortBy('created_at');
 
-    // 3. Customer Credits (Jin ke paise hamare paas jama hain - Returns ki wajah se)
-    const credits = await db.customers.filter(c => (c.balance || 0) < 0).toArray();
-    const totalCustomerCredits = Math.abs(credits.reduce((sum, c) => sum + (c.balance || 0), 0));
+        for (const s of customerSales) {
+            if (remainingBalance <= 0) break;
+            
+            const unpaidOnInvoice = Math.min(remainingBalance, (s.total_amount || 0));
+            const days = now.diff(dayjs(s.created_at), 'day');
+
+            if (days <= 30) customerAging.current += unpaidOnInvoice;
+            else if (days <= 60) customerAging.mid += unpaidOnInvoice;
+            else customerAging.old += unpaidOnInvoice;
+
+            remainingBalance -= unpaidOnInvoice;
+        }
+        
+        // Agar sales se zyada balance hai (yani koi purana opening balance), usay 'Old' mein daal dein
+        if (remainingBalance > 0) {
+            customerAging.old += remainingBalance;
+        }
+    }
+
+    // 3. Suppliers & Aging
+    const suppliers = await db.suppliers.toArray();
+    let totalSupplierPayable = 0;
+    let supplierAging = { current: 0, mid: 0, old: 0 };
+
+    const creditors = suppliers
+      .filter(s => (s.balance_due || 0) > 0)
+      .map(s => {
+        totalSupplierPayable += s.balance_due;
+        return { id: s.id, name: s.name, balance: s.balance_due };
+      });
+
+    for (const supplier of creditors) {
+        let remainingDebt = supplier.balance;
+        const supplierPurchases = await db.purchases
+            .where('supplier_id').equals(supplier.id)
+            .reverse()
+            .sortBy('purchase_date');
+
+        for (const p of supplierPurchases) {
+            if (remainingDebt <= 0) break;
+            const unpaidOnBill = Math.min(remainingDebt, (p.total_amount || 0));
+            const days = now.diff(dayjs(p.purchase_date), 'day');
+
+            if (days <= 30) supplierAging.current += unpaidOnBill;
+            else if (days <= 60) supplierAging.mid += unpaidOnBill;
+            else supplierAging.old += unpaidOnBill;
+
+            remainingDebt -= unpaidOnBill;
+        }
+        if (remainingDebt > 0) supplierAging.old += remainingDebt;
+    }
+
+    // 4. Staff Ledgers
+    const staff = await db.staff_members.toArray();
+    let staffReceivable = 0;
+    let staffPayable = 0;
+    staff.forEach(s => {
+        const bal = s.balance || 0;
+        if (bal < 0) staffReceivable += Math.abs(bal);
+        else if (bal > 0) staffPayable += bal;
+    });
+
+    // Customer Credits (Negative balances) nikalna
+    const customerCreditsData = customers.filter(c => (c.balance || 0) < 0);
+    const totalCustomerCredits = Math.abs(customerCreditsData.reduce((sum, c) => sum + (c.balance || 0), 0));
+
+    const grandTotalReceivable = totalCustomerReceivable + staffReceivable;
+    // [FIX]: Payables mein Suppliers + Staff Salary + Customer Credits teeno shamil honge
+    const grandTotalPayable = totalSupplierPayable + staffPayable + totalCustomerCredits;
 
     return {
-      totalReceivable,
-      totalPayable,
-      totalCustomerCredits,
-      topDebtors,
-      topCreditors
+      totalCustomerReceivable,
+      totalSupplierPayable,
+      totalCustomerCredits, // Yeh ab return hoga
+      staffReceivable,
+      staffPayable,
+      grandTotalReceivable,
+      grandTotalPayable,
+      staffReceivable,
+      staffPayable,
+      grandTotalReceivable,
+      grandTotalPayable,
+      netPosition: grandTotalReceivable - grandTotalPayable,
+      customerAging,
+      supplierAging,
+      topDebtors: debtors.sort((a, b) => b.balance - a.balance).slice(0, 10),
+      // [NEW]: Credit Customers (Jin ko paise dene hain)
+      topCreditCustomers: customers
+        .filter(c => (c.balance || 0) < 0)
+        .map(c => ({ id: c.id, name: c.name, balance: Math.abs(c.balance) }))
+        .sort((a, b) => b.balance - a.balance).slice(0, 10),
+      topCreditors: creditors.sort((a, b) => b.balance - a.balance).slice(0, 10),
+      // [NEW]: Supplier Credits (Paisa jo Suppliers se wapis lena hai / Advance)
+      topSupplierCredits: suppliers
+        .filter(s => (s.credit_balance || 0) > 0)
+        .map(s => ({ id: s.id, name: s.name, balance: s.credit_balance }))
+        .sort((a, b) => b.balance - a.balance).slice(0, 10),
+      // [NEW]: Staff Balances (Lene ya dene wale)
+      staffBalances: staff
+        .filter(s => (s.balance || 0) !== 0)
+        .map(s => ({ id: s.id, name: s.name, balance: s.balance, role: s.role }))
+        .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance)).slice(0, 10)
     };
   },
 
-  // --- NAYA IZAFA: Cash & Audit Report ke liye Data ---
+  // --- UPDATED: Professional Cash & Audit Report (Investigation Grade) ---
   async getCashAuditReport(startDateStr, endDateStr) {
-    const start = new Date(startDateStr).getTime();
-    const end = new Date(endDateStr).getTime() + (24 * 60 * 60 * 1000) - 1;
+    const start = new Date(startDateStr);
+    const end = new Date(endDateStr);
+    const startTime = start.getTime();
+    const endTime = end.getTime() + (24 * 60 * 60 * 1000) - 1;
 
-    // 1. Cash Adjustments (In/Out)
+    // 1. Fetch Basic Data
     const adjustments = await db.cash_adjustments.toArray();
     const filteredAdjustments = adjustments.filter(a => {
       const d = new Date(a.created_at).getTime();
-      return d >= start && d <= end;
+      return d >= startTime && d <= endTime;
     });
 
-    // 2. Daily Closings (Fark nikalne ke liye)
     const closings = await db.daily_closings.toArray();
     const filteredClosings = closings.filter(c => {
       const d = new Date(c.created_at || c.closing_date).getTime();
-      return d >= start && d <= end;
+      return d >= startTime && d <= endTime;
     });
 
-    // 3. Staff Ledger (Payments/Salaries)
+    // 2. Cash Flow Categories (In vs Out Analysis)
+    let totalIn = 0;
+    let totalOut = 0;
+    const adjustmentBreakdown = { in: {}, out: {} };
+
+    filteredAdjustments.forEach(a => {
+      const amt = Number(a.amount) || 0;
+      const type = a.type === 'In' ? 'in' : 'out';
+      const method = a.payment_method || 'Cash';
+      
+      if (a.type === 'In') totalIn += amt;
+      else totalOut += amt;
+
+      adjustmentBreakdown[type][method] = (adjustmentBreakdown[type][method] || 0) + amt;
+    });
+
+    // 3. Discrepancy Analysis (Shortage vs Surplus)
+    let totalShortage = 0;
+    let totalSurplus = 0;
+    const dailyDiffTrend = [];
+
+    // Loop through filtered closings to find daily trend
+    filteredClosings.forEach(c => {
+      const diff = Number(c.difference) || 0;
+      if (diff < 0) totalShortage += Math.abs(diff);
+      else totalSurplus += diff;
+
+      dailyDiffTrend.push({
+        date: dayjs(c.closing_date).format('DD MMM'),
+        difference: diff
+      });
+    });
+
+    // 4. Staff Ledger Activity
     const staffLedger = await db.staff_ledger.toArray();
     const filteredStaffLedger = staffLedger.filter(l => {
       const d = new Date(l.entry_date).getTime();
-      return d >= start && d <= end;
+      return d >= startTime && d <= endTime;
     });
-
-    const totalIn = filteredAdjustments.filter(a => a.type === 'In').reduce((sum, a) => sum + (a.amount || 0), 0);
-    const totalOut = filteredAdjustments.filter(a => a.type === 'Out').reduce((sum, a) => sum + (a.amount || 0), 0);
-    const totalDifference = filteredClosings.reduce((sum, c) => sum + (c.difference || 0), 0);
 
     return {
       totalIn,
       totalOut,
-      totalDifference,
-      recentClosings: filteredClosings.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5),
-      staffTransactions: filteredStaffLedger.sort((a, b) => new Date(b.entry_date) - new Date(a.entry_date)).slice(0, 10)
+      totalShortage,
+      totalSurplus,
+      netDifference: totalSurplus - totalShortage,
+      adjustmentBreakdown,
+      dailyDiffTrend: dailyDiffTrend.sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix()),
+      staffTransactions: filteredStaffLedger.sort((a, b) => new Date(b.entry_date) - new Date(a.entry_date)).slice(0, 15),
+      recentClosings: filteredClosings.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 10)
     };
   },
 

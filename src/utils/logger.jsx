@@ -1,6 +1,15 @@
 import React from 'react'; // Ye line shamil karein
 import { supabase } from '../supabaseClient';
-import { notification, Button } from 'antd';
+import { Button } from 'antd';
+import { notification as antdNotification } from 'antd';
+
+// Hum aik variable bana rahe hain jo theme-aware notification ko hold karega
+let notification = antdNotification; 
+
+// Yeh function humein "App" component se notification tool pakrane mein madad dega
+export const setLoggerNotification = (instance) => {
+  notification = instance;
+};
 
 const Logger = {
   async log(level, category, message, errorDetails = null, userGuide = null) {
@@ -56,4 +65,4 @@ const Logger = {
   }
 };
 
-export default Logger;
+export { Logger as default };

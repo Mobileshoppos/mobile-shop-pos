@@ -40,6 +40,7 @@ import KeyboardShortcuts from './components/KeyboardShortcuts';
 import About from './pages/About';
 import { useStaff } from './context/StaffContext';
 import LockScreen from './components/LockScreen';
+import { setLoggerNotification } from './utils/logger';
 
 // NAYA SECURITY GUARD: Sirf Owner ko aane dega
 const OwnerOnly = ({ children }) => {
@@ -157,6 +158,12 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
 
 const AppRoutes = ({ isDarkMode, toggleTheme }) => {
   const { session, isPasswordRecovery } = useAuth();
+  const { notification } = AntApp.useApp(); // Ant Design ka theme-aware notification tool
+
+  useEffect(() => {
+    // Logger ko batana ke ab se theme wala notification use karein
+    setLoggerNotification(notification);
+  }, [notification]);
 
   // Agar user login nahi hai, to use sirf Auth aur Password Update page tak rasai dein
   if (!session || isPasswordRecovery) {
