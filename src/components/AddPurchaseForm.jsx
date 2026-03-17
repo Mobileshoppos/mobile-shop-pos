@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Radio, Collapse, Tag
+  Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Collapse, Tag
 } from 'antd';
 import { DeleteOutlined, BarcodeOutlined, EditOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
@@ -373,23 +373,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
   const [selectedProductAttributes, setSelectedProductAttributes] = useState([]);
   const [editingItemIndex, setEditingItemIndex] = useState(null);
   const selectedSupplierId = Form.useWatch('supplier_id', form);
-  const selectedSupplier = suppliers.find(s => s.id === selectedSupplierId);
-  const isCashPurchase = selectedSupplier?.name?.toLowerCase() === 'cash purchase';
   
   const totalAmount = purchaseItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.purchase_price || 0)), 0);
-
-  // Amount Paid Smart Logic (Updated for Edit Mode)
-  useEffect(() => {
-    if (visible) {
-        if (isCashPurchase) {
-            // Wapis 'Bank' kar diya gaya taake poori app consistent rahe
-            form.setFieldsValue({ amount_paid: totalAmount, payment_method: 'Bank' });
-        } else if (!editingPurchase) {
-            // Naye bill ke liye default
-            form.setFieldsValue({ amount_paid: 0, payment_method: 'Bank' });
-        }
-    }
-  }, [totalAmount, visible, form, editingPurchase, isCashPurchase]);
 
   const getProductsWithCategory = useCallback(async () => {
     try {
@@ -579,7 +564,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
   const handleSavePurchase = async () => {
     try {
       // Hum ne 'invoice_id' ko validation list mein add kiya hai
-      const values = await form.validateFields(['supplier_id', 'invoice_id', 'notes', 'amount_paid', 'payment_method']);
+      const values = await form.validateFields(['supplier_id', 'invoice_id', 'notes']);
       if (purchaseItems.length === 0) { message.error("Please add at least one item."); return; }
       
       setIsSubmitting(true);
@@ -600,7 +585,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
               supplier_id: values.supplier_id,
               invoice_id: values.invoice_id, // <--- Added
               notes: values.notes,
-              amount_paid: values.amount_paid,
+              amount_paid: editingPurchase.amount_paid || 0, // Purani payment mehfooz rakhein
               items: purchaseItems,
               staff_id: activeStaff?.id // <--- NAYA IZAFA
           });
@@ -609,19 +594,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
           // --- CREATE MODE (Offline Ready) ---
           const rpcData = await DataService.createNewPurchase(payload);
 
-          const amountPaid = values.amount_paid || 0;
-          if (amountPaid > 0) {
-              await DataService.recordPurchasePayment({
-                  local_id: crypto.randomUUID(),
-                  supplier_id: values.supplier_id,
-                  purchase_id: purchaseId,
-                  amount: amountPaid,
-                  payment_method: values.payment_method,
-                  payment_date: new Date().toISOString(),
-                  notes: `Initial payment for Purchase`,
-                  staff_id: activeStaff?.id // <--- NAYA IZAFA
-              });
-          }
+          // Payment record karne ka hissa yahan se hata diya gaya hai
+          
           message.success("Purchase invoice created successfully!");
       }
 
@@ -740,7 +714,26 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
       >
         <Form form={form} layout="vertical" style={{ marginTop: '24px' }}>
           <Row gutter={16}>
-            <Col span={12}><Form.Item name="supplier_id" label="Supplier" rules={[{ required: true }]}><Select placeholder="Select a supplier" loading={loading}>{(suppliers || []).map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}</Select></Form.Item></Col>
+            <Col span={12}>
+                <Form.Item name="supplier_id" label="Supplier" rules={[{ required: true }]}>
+                    <Select 
+                        placeholder="Select a supplier" 
+                        loading={loading}
+                        // SAFETY LOCK: Agar payment ho chuki hai to supplier badalna mana hai
+                        disabled={editingPurchase && editingPurchase.amount_paid > 0}
+                    >
+                        {(suppliers || []).map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}
+                    </Select>
+                </Form.Item>
+                {/* Dukandar ko wazahat dene ke liye niche text */}
+                {editingPurchase && editingPurchase.amount_paid > 0 && (
+                    <div style={{ marginTop: '-12px', marginBottom: '12px' }}>
+                        <Text type="secondary" style={{ fontSize: '11px' }}>
+                            Note: Supplier cannot be changed because payments are already recorded.
+                        </Text>
+                    </div>
+                )}
+            </Col>
             <Col span={12}>
                 <Form.Item name="invoice_id" label="Supplier Invoice #" tooltip="Enter the bill number from your supplier. If left empty, a unique ID will be generated.">
                     <Input placeholder="e.g. INV-9988" />
@@ -781,58 +774,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
               );
             }}
           />
-          <Divider />
-          <Collapse 
-            ghost 
-            defaultActiveKey={isCashPurchase ? [] : ['1']} // Cash purchase par band rahega, doosron par khula
-            items={[{
-              key: '1',
-              label: <Text strong style={{ fontSize: '16px' }}>Payment Record {isCashPurchase && <Tag color="green" style={{marginLeft: '10px'}}>Automatic Paid</Tag>}</Text>,
-              children: (
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Form.Item 
-                      name="amount_paid" 
-                      label="Amount Paid Now" 
-                      help={isCashPurchase ? "Locked for Cash Purchase" : `Max allowed: ${formatCurrency(totalAmount, profile?.currency)}`}
-                      rules={[
-                        { required: true, message: 'Please enter amount' },
-                        // === SECURITY FIX: Yeh rule ghalat raqam save nahi hone dega ===
-                        {
-                          validator: (_, value) => {
-                            // Agar Cash Purchase hai to check skip karein (kyunke hum auto-sync kar rahe hain)
-                            if (isCashPurchase) return Promise.resolve();
-                            
-                            if (value > totalAmount) {
-                              return Promise.reject(`Amount cannot be more than ${formatCurrency(totalAmount, profile?.currency)}`);
-                            }
-                            return Promise.resolve();
-                          },
-                        }
-                      ]}
-                    >
-                      <InputNumber 
-                        style={{ width: '100%' }} 
-                        prefix={profile?.currency ? `${profile.currency} ` : ''} 
-                        min={0} 
-                        // max hata diya gaya hai taake auto-correction na ho
-                        disabled={!!editingPurchase || isCashPurchase} 
-                        placeholder="Enter amount paid"
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item name="payment_method" label="Paid From" rules={[{ required: true }]}>
-                      <Radio.Group buttonStyle="solid">
-                        <Radio.Button value="Cash">Cash</Radio.Button>
-                        <Radio.Button value="Bank">Bank / Online</Radio.Button>
-                      </Radio.Group>
-                    </Form.Item>
-                  </Col>
-                </Row>
-              )
-            }]}
-          />
+          {/* Payment Record UI yahan se hata diya gaya hai */}
         </Form>
       </Modal>
       {isItemModalVisible && 

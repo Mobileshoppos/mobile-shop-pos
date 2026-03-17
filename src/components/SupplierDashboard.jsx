@@ -17,7 +17,7 @@ const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 
-const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
+const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
     const { token } = theme.useToken(); // Control Center Connection
     const { activeStaff } = useStaff(); // <--- NAYA IZAFA
     const { profile } = useAuth();
@@ -44,6 +44,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
             const totalRefundsAmount = (refunds || []).reduce((sum, r) => sum + (r.amount || 0), 0);
             
             setCalculatedStats({ ...calculatedSup, total_refunds: totalRefundsAmount });
+            if (onStatsUpdate) onStatsUpdate({ due: calculatedSup.balance_due, credit: calculatedSup.credit_balance });
 
             const combinedData = [
                 ...(purchases || []).map(p => ({
@@ -227,10 +228,6 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
     
     return (
         <div>
-            <Space style={{ marginBottom: 24 }} wrap>
-                <Button type="primary" icon={<DollarCircleOutlined />} onClick={showPaymentModal} disabled={!supplier || supplier.balance_due <= 0}> Record Payment </Button>
-                <Button danger icon={<MinusCircleOutlined />} onClick={showRefundModal} disabled={!supplier || supplier.credit_balance <= 0}> Record Refund </Button>
-            </Space>
 
             <Row gutter={[16, 16]} style={{ marginBottom: '24px', textAlign: 'center' }}>
                 <Col xs={12} sm={4}><Statistic title="Total Business" value={calculatedStats?.total_purchases || 0} formatter={() => formatCurrency(calculatedStats?.total_purchases || 0, profile?.currency)} /></Col>
@@ -275,7 +272,14 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile }) => {
                     )}
                 />
             ) : (
-                <Table columns={ledgerColumns} dataSource={ledgerData} rowKey="key" pagination={{ pageSize: 10 }} size="small"/>
+                <Table 
+                    columns={ledgerColumns} 
+                    dataSource={ledgerData} 
+                    rowKey="key" 
+                    pagination={{ pageSize: 10 }} 
+                    size="small"
+                    scroll={{ x: true }} // 'y' ko hata diya taake poora page content ke saath scroll ho
+                />
             )}
 
             <Modal title={`Record Payment for ${supplier?.name}`} open={isPaymentModalVisible} onCancel={() => setIsPaymentModalVisible(false)} onOk={paymentForm.submit} okText="Save Payment">
@@ -327,6 +331,70 @@ const SupplierDashboard = () => {
     const [showArchived, setShowArchived] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [isViewModalVisible, setIsViewModalVisible] = useState(false);
+    const [activeBalances, setActiveBalances] = useState({ due: 0, credit: 0 });
+    // --- NAYA: Payment & Refund Logic ---
+    const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
+    const [paymentForm] = Form.useForm();
+    const [isRefundModalVisible, setIsRefundModalVisible] = useState(false);
+    const [refundForm] = Form.useForm();
+
+    const showPaymentModal = () => { 
+        paymentForm.setFieldsValue({ 
+            amount: selectedSupplier?.balance_due > 0 ? selectedSupplier.balance_due : undefined, 
+            payment_date: dayjs(), 
+            payment_method: 'Cash', 
+            notes: null 
+        }); 
+        setIsPaymentModalVisible(true); 
+    };
+
+    const handlePaymentSubmit = async (values) => {
+        try {
+            const paymentId = crypto.randomUUID();
+            const paymentData = { 
+                id: paymentId, local_id: paymentId, 
+                supplier_id: selectedSupplier.id, 
+                staff_id: activeStaff?.id,
+                ...values,
+                payment_date: values.payment_date.toISOString()
+            };
+            await DataService.recordBulkSupplierPayment(paymentData);
+            notification.success({ message: 'Success', description: 'Payment recorded!' });
+            setIsPaymentModalVisible(false); 
+            fetchSuppliers(selectedSupplier.id); // Refresh data
+        } catch (error) { 
+            notification.error({ message: 'Error', description: error.message || 'Failed to record payment.' }); 
+        }
+    };
+
+    const showRefundModal = () => { 
+        refundForm.setFieldsValue({ 
+            amount: selectedSupplier?.credit_balance > 0 ? selectedSupplier.credit_balance : undefined, 
+            refund_date: dayjs(), 
+            refund_method: 'Cash', 
+            notes: 'Credit settlement' 
+        }); 
+        setIsRefundModalVisible(true); 
+    };
+
+    const handleRefundSubmit = async (values) => {
+        try {
+            const refundId = crypto.randomUUID();
+            const refundData = { 
+                id: refundId, local_id: refundId, 
+                supplier_id: selectedSupplier.id, 
+                staff_id: activeStaff?.id,
+                ...values,
+                refund_date: values.refund_date.toISOString()
+            };
+            await DataService.recordSupplierRefund(refundData);
+            notification.success({ message: 'Success', description: 'Refund recorded!' });
+            setIsRefundModalVisible(false); 
+            fetchSuppliers(selectedSupplier.id); // Refresh data
+        } catch (error) { 
+            notification.error({ message: 'Error', description: error.message || 'Failed to record refund.' }); 
+        }
+    };
     // --- FOCUS LOGIC (Corrected Position) ---
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -497,7 +565,7 @@ const SupplierDashboard = () => {
             </Content>
         );
         return (
-            <Content style={{ padding: isMobile ? 0 : '0 24px' }}>
+            <Content style={{ padding: isMobile ? 0 : '0 24px', overflowY: 'auto' }} className="custom-scrollbar">
                 <Card>
                     {isMobile && (
                         <Button
@@ -513,13 +581,33 @@ const SupplierDashboard = () => {
                         <div style={{ flex: 1, minWidth: '250px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                 <Title level={isMobile ? 3 : 2} style={{ margin: 0 }}>{selectedSupplier.name}</Title>
-                                <Button 
-                                    type="text"
-                                    icon={<EyeOutlined style={{ fontSize: '22px', color: '#b8b9baff' }} />} 
-                                    onClick={() => setIsViewModalVisible(true)}
-                                    title="View Full Details"
-                                    style={{ padding: 0, height: 'auto' }}
-                                />
+                                <Space size="middle" style={{ marginLeft: '12px' }}>
+                                    <Button 
+                                        type="text"
+                                        icon={<EyeOutlined style={{ fontSize: '20px', color: '#b8b9baff' }} />} 
+                                        onClick={() => setIsViewModalVisible(true)}
+                                        title="View Full Details"
+                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    />
+                                    <Button 
+                                        type="text"
+                                        icon={<DollarCircleOutlined style={{ fontSize: '20px', color: token.colorSuccess }} />} 
+                                        onClick={showPaymentModal}
+                                        // AB YEH LEDGER KE ASLI BALANCE KO DEKHEGA
+                                        disabled={!selectedSupplier || activeBalances.due <= 0}
+                                        title="Record Payment"
+                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    />
+                                    <Button 
+                                        type="text"
+                                        icon={<MinusCircleOutlined style={{ fontSize: '20px', color: token.colorError }} />} 
+                                        onClick={showRefundModal}
+                                        // AB YEH LEDGER KE ASLI CREDIT KO DEKHEGA
+                                        disabled={!selectedSupplier || activeBalances.credit <= 0}
+                                        title="Record Refund"
+                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    />
+                                </Space>
                             </div>
                             <Text type="secondary">{selectedSupplier.contact_person} | {selectedSupplier.phone}</Text><br/>
                             <Text type="secondary">{selectedSupplier.address}</Text>
@@ -568,7 +656,12 @@ const SupplierDashboard = () => {
                         </Space>
                     </Flex>
                     <div style={{ marginTop: '32px' }}>
-                        <SupplierLedger supplier={selectedSupplier} onRefresh={() => fetchSuppliers(selectedSupplier.id)} isMobile={isMobile} />
+                        <SupplierLedger 
+    supplier={selectedSupplier} 
+    onRefresh={() => fetchSuppliers(selectedSupplier.id)} 
+    isMobile={isMobile} 
+    onStatsUpdate={(stats) => setActiveBalances(stats)} 
+/>
                     </div>
                 </Card>
             </Content>
@@ -619,17 +712,6 @@ const SupplierDashboard = () => {
                 </div>
             )}
             
-            <Row gutter={[12, 12]} style={{ marginBottom: '16px' }}>
-                <Col xs={12} sm={8}>
-                    <Card size="small"><Statistic title="Suppliers" value={suppliers.length} valueStyle={{ fontSize: '20px' }} /></Card>
-                </Col>
-                <Col xs={12} sm={8}>
-                     <Card size="small"><Statistic title="Outstanding" value={totalBalanceDue} valueStyle={{ color: totalBalanceDue > 0 ? token.colorError : token.colorSuccess, fontSize: '20px' }} formatter={() => formatCurrency(totalBalanceDue, profile?.currency)} /></Card>
-                </Col>
-                <Col xs={24} sm={8}>
-                     <Card size="small"><Statistic title="Total Refunds" value={totalGlobalRefunds} valueStyle={{ color: token.colorWarning, fontSize: '20px' }} formatter={() => formatCurrency(totalGlobalRefunds, profile?.currency)} /></Card>
-                </Col>
-            </Row>
 
             {isMobile ? (
                 // --- MOBILE LAYOUT (UPDATED) ---
@@ -637,6 +719,12 @@ const SupplierDashboard = () => {
                     renderSupplierDetails()
                 ) : (
                     <Card>
+                        {/* Compact Stats for Mobile */}
+                        <Row gutter={[8, 8]} style={{ marginBottom: '16px', textAlign: 'center', background: token.colorFillAlter, padding: '12px 4px', borderRadius: token.borderRadiusLG }}>
+                            <Col span={8}><Statistic title={<Text style={{fontSize: '11px'}}>Suppliers</Text>} value={suppliers.length} valueStyle={{ fontSize: '15px' }} /></Col>
+                            <Col span={8}><Statistic title={<Text style={{fontSize: '11px'}}>Outstanding</Text>} value={totalBalanceDue} valueStyle={{ fontSize: '15px', color: totalBalanceDue > 0 ? token.colorError : token.colorSuccess }} formatter={() => formatCurrency(totalBalanceDue, profile?.currency)} /></Col>
+                            <Col span={8}><Statistic title={<Text style={{fontSize: '11px'}}>Refunds</Text>} value={totalGlobalRefunds} valueStyle={{ fontSize: '15px', color: token.colorWarning }} formatter={() => formatCurrency(totalGlobalRefunds, profile?.currency)} /></Col>
+                        </Row>
                         <div style={{ marginBottom: '16px' }}>
                             {(() => {
                                 const limits = getPlanLimits(profile?.subscription_tier);
@@ -695,9 +783,9 @@ const SupplierDashboard = () => {
                                             <Text strong style={{ color: 'inherit' }}>{s.name}</Text>
                                             <Text 
                                                 strong 
-                                                style={{ fontSize: '13px', color: s.balance_due > 0 ? token.colorError : token.colorSuccess }}
+                                                style={{ fontSize: '13px', color: (s.balance_due - s.credit_balance) > 0 ? token.colorError : (s.balance_due - s.credit_balance) < 0 ? token.colorSuccess : token.colorTextSecondary }}
                                             >
-                                                {formatCurrency(s.balance_due, profile?.currency)}
+                                                {formatCurrency(Math.abs(s.balance_due - s.credit_balance), profile?.currency)}
                                             </Text>
                                         </div>
                                     </List.Item>
@@ -708,9 +796,16 @@ const SupplierDashboard = () => {
                 )
             ) : (
                 // --- DESKTOP LAYOUT ---
-                // Background ko 'transparent' kar diya taake colors kharab na hon
                 <Layout style={{ background: 'transparent', borderRadius: token.borderRadiusLG, overflow: 'hidden', height: 'calc(100vh - 140px)' }}>
                     <Sider width={320} style={{ background: token.colorBgContainer, borderRight: `1px solid ${token.colorBorderSecondary}` }}>
+                        {/* Compact Stats for Desktop Sidebar */}
+                        <div style={{ padding: '16px 12px', background: token.colorFillAlter, borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+                            <Row gutter={8} style={{ textAlign: 'center' }}>
+                                <Col span={8}><Statistic title={<Text style={{fontSize: '10px'}}>SUPPLIERS</Text>} value={suppliers.length} valueStyle={{ fontSize: '14px', fontWeight: 'bold' }} /></Col>
+                                <Col span={8}><Statistic title={<Text style={{fontSize: '10px'}}>OUTSTANDING</Text>} value={totalBalanceDue} valueStyle={{ fontSize: '14px', fontWeight: 'bold', color: totalBalanceDue > 0 ? token.colorError : token.colorSuccess }} formatter={() => formatCurrency(totalBalanceDue, profile?.currency)} /></Col>
+                                <Col span={8}><Statistic title={<Text style={{fontSize: '10px'}}>REFUNDS</Text>} value={totalGlobalRefunds} valueStyle={{ fontSize: '14px', fontWeight: 'bold', color: token.colorWarning }} formatter={() => formatCurrency(totalGlobalRefunds, profile?.currency)} /></Col>
+                            </Row>
+                        </div>
                         <div style={{ padding: '12px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
                             {(() => {
                                 const limits = getPlanLimits(profile?.subscription_tier);
@@ -784,9 +879,9 @@ const SupplierDashboard = () => {
                                                     <div style={{ textAlign: 'right' }}>
                                                         <Text 
                                                             strong 
-                                                            style={{ fontSize: '12px', color: record.balance_due > 0 ? token.colorError : token.colorSuccess }}
+                                                            style={{ fontSize: '12px', color: (record.balance_due - record.credit_balance) > 0 ? token.colorError : (record.balance_due - record.credit_balance) < 0 ? token.colorSuccess : token.colorTextSecondary }}
                                                         >
-                                                            {formatCurrency(record.balance_due, profile?.currency)}
+                                                            {formatCurrency(Math.abs(record.balance_due - record.credit_balance), profile?.currency)}
                                                         </Text>
                                                     </div>
                                                 </div>
@@ -956,6 +1051,29 @@ const SupplierDashboard = () => {
                         </Col>
                     </Row>
                 </div>
+            </Modal>
+            {/* --- PAYMENT MODAL --- */}
+            <Modal title={`Record Payment for ${selectedSupplier?.name}`} open={isPaymentModalVisible} onCancel={() => setIsPaymentModalVisible(false)} onOk={paymentForm.submit} okText="Save Payment">
+                <Form form={paymentForm} layout="vertical" onFinish={handlePaymentSubmit} style={{marginTop: 24}}>
+                    <Form.Item name="amount" label="Payment Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} /></Form.Item>
+                    <Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
+                    <Form.Item name="payment_method" label="Payment Method" rules={[{ required: true }]}>
+                        <Select><Select.Option value="Cash">Cash</Select.Option><Select.Option value="Bank Transfer">Bank Transfer</Select.Option></Select>
+                    </Form.Item>
+                    <Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item>
+                </Form>
+            </Modal>
+
+            {/* --- REFUND MODAL --- */}
+            <Modal title={`Record Refund from ${selectedSupplier?.name}`} open={isRefundModalVisible} onCancel={() => setIsRefundModalVisible(false)} onOk={refundForm.submit} okText="Save Refund">
+                <Form form={refundForm} layout="vertical" onFinish={handleRefundSubmit} style={{marginTop: 24}}>
+                    <Form.Item name="amount" label="Refund Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} max={selectedSupplier?.credit_balance} /></Form.Item>
+                    <Form.Item name="refund_date" label="Refund Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
+                    <Form.Item name="refund_method" label="Refund Method" rules={[{ required: true }]}>
+                        <Select><Select.Option value="Cash">Cash</Select.Option><Select.Option value="Bank Transfer">Bank Transfer</Select.Option></Select>
+                    </Form.Item>
+                    <Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item>
+                </Form>
             </Modal>
         </Layout>
         </>

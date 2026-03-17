@@ -527,16 +527,35 @@ const DataService = {
   
   async getSuppliers(showArchivedOnly = false) {
     const allSuppliers = await db.suppliers.toArray();
-    // Filter: Agar showArchivedOnly true hai to is_active === false wale dikhao
-    const suppliers = allSuppliers.filter(s => {
+    
+    // Har supplier ka asli balance ledger se nikaalna
+    const suppliersWithCalculatedBalance = await Promise.all(allSuppliers.map(async (s) => {
+        const purchases = await db.purchases.where('supplier_id').equals(s.id).toArray();
+        const payments = await db.supplier_payments.where('supplier_id').equals(s.id).toArray();
+        const refunds = await db.supplier_refunds.where('supplier_id').equals(s.id).toArray();
+
+        const totalBusiness = purchases.reduce((sum, p) => sum + (p.total_amount || 0), 0);
+        const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const totalRefunds = refunds.reduce((sum, r) => sum + (r.amount || 0), 0);
+
+        const netPaid = totalPaid - totalRefunds;
+        const diff = totalBusiness - netPaid;
+
+        return {
+            ...s,
+            balance_due: diff > 0 ? diff : 0,
+            credit_balance: diff < 0 ? Math.abs(diff) : 0
+        };
+    }));
+
+    const suppliers = suppliersWithCalculatedBalance.filter(s => {
       if (showArchivedOnly) {
-        // Sirf wo dikhao jin ka is_active saaf tor par 'false' ho
         return s.is_active === false;
       } else {
-        // Wo dikhao jo 'false' nahi hain (yani true hain ya jin ka abhi set nahi hua)
         return s.is_active !== false;
       }
     });
+
     return suppliers.sort((a, b) => a.name.localeCompare(b.name));
   },
 
@@ -1165,8 +1184,19 @@ async addCustomer(customerData) {
     // 5. Supplier Balance Update
     const supplier = await db.suppliers.get(supplier_id);
     if (supplier) {
-        const updatedSupplierBalance = (supplier.balance_due || 0) - oldTotal + newTotal;
-        await db.suppliers.update(supplier_id, { balance_due: updatedSupplierBalance });
+        let updatedBalance = (supplier.balance_due || 0) - oldTotal + newTotal;
+        let updatedCredit = supplier.credit_balance || 0;
+        
+        // Agar balance negative ho jaye, to usay credit (advance) mein shift karein
+        if (updatedBalance < 0) {
+            updatedCredit += Math.abs(updatedBalance);
+            updatedBalance = 0;
+        }
+        
+        await db.suppliers.update(supplier_id, { 
+            balance_due: updatedBalance,
+            credit_balance: updatedCredit
+        });
     }
 
     // 6. Sync Queue
@@ -1365,9 +1395,25 @@ async addCustomer(customerData) {
     // 2. Local Supplier ka Credit Balance update karein
     const supplier = await db.suppliers.get(finalRefundData.supplier_id);
     if (supplier) {
-        const newCredit = (supplier.credit_balance || 0) - Number(finalRefundData.amount);
+        let refundAmt = Number(finalRefundData.amount);
+        let newCredit = (supplier.credit_balance || 0);
+        let newBalance = (supplier.balance_due || 0);
+
+        // Pehle Credit balance se raqam nikaalein
+        if (newCredit > 0) {
+            const takeFromCredit = Math.min(newCredit, refundAmt);
+            newCredit -= takeFromCredit;
+            refundAmt -= takeFromCredit;
+        }
+
+        // Agar ab bhi refund bacha hai aur koi negative balance (noise) hai, to usay saaf karein
+        if (refundAmt > 0 && newBalance < 0) {
+            newBalance = Math.min(0, newBalance + refundAmt);
+        }
+
         await db.suppliers.update(finalRefundData.supplier_id, {
-            credit_balance: Math.max(0, newCredit)
+            credit_balance: Math.max(0, newCredit),
+            balance_due: newBalance
         });
     }
 

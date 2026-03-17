@@ -712,12 +712,12 @@ export const SyncProvider = ({ children }) => {
               console.log(`Synced item ${item.id} successfully.`);
             } else {
               // --- SMART ERROR LOGGING START ---
-              let userGuide = "Sync mein masla aaya hai, system dubara koshish karega.";
+              let userGuide = "A temporary network issue occurred. The system will automatically retry syncing.";
               
               if (error.message?.includes('foreign key')) {
-                userGuide = "Kuch purana data (Category ya Supplier) abhi sync nahi hua. Aap thora intezar karein, app isay khud theek kar degi.";
+                userGuide = "Some related records are still syncing in the background. Please wait a moment, the system will resolve this automatically.";
               } else if (error.message?.includes('unique constraint') || error.code === '23505') {
-                userGuide = "Yeh record pehle hi server par majood hai. System isay khud merge kar raha hai.";
+                userGuide = "This record is already securely backed up on the cloud. The system has safely verified it to prevent any duplicates.";
               }
 
               // Naya: Error message mein ID bhi shamil karein taake user ko pata chale kaun sa record hai

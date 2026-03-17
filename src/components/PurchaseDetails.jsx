@@ -225,7 +225,12 @@ const showEditModal = () => {
         <Statistic title="Amount Paid" value={purchase.amount_paid} valueStyle={{ color: token.colorSuccess }} formatter={() => formatCurrency(purchase.amount_paid, profile?.currency)} />
     </Col>
     <Col span={isMobile ? 24 : 6}>
-        <Statistic title="Balance Due" value={purchase.balance_due} valueStyle={{ color: token.colorError }} formatter={() => formatCurrency(purchase.balance_due, profile?.currency)} />
+        <Statistic 
+            title="Balance Due" 
+            value={Math.max(0, purchase.balance_due)} 
+            valueStyle={{ color: purchase.balance_due > 0 ? token.colorError : token.colorSuccess }} 
+            formatter={() => formatCurrency(Math.max(0, purchase.balance_due), profile?.currency)} 
+        />
     </Col>
 </Row>
                 {purchase.notes && ( <div style={{ marginTop: '24px', padding: '12px', background: token.colorFillTertiary, borderRadius: '6px' }}><Text strong>Notes:</Text><br /><Text type="secondary">{purchase.notes}</Text></div> )}

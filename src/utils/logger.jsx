@@ -39,15 +39,15 @@ const Logger = {
 
       if (userGuide) {
         notification[level === 'error' ? 'error' : 'info']({
-          message: level === 'error' ? 'Zaroori Ittala' : 'App Guide',
+          message: 'System Notice', // Global professional title
           description: userGuide,
           duration: 10,
-          // Naya: Refresh button
-          btn: level === 'error' ? (
-            <Button type="primary" size="small" onClick={() => window.location.reload()}>
+          // Modern way: 'actions' expects an array []
+          actions: level === 'error' ? [
+            <Button key="refresh" type="primary" size="small" onClick={() => window.location.reload()}>
               Refresh App
             </Button>
-          ) : null,
+          ] : [],
         });
       }
 
