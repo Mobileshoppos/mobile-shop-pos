@@ -41,6 +41,7 @@ import About from './pages/About';
 import { useStaff } from './context/StaffContext';
 import LockScreen from './components/LockScreen';
 import { setLoggerNotification } from './utils/logger';
+import { useRegisterSW } from 'virtual:pwa-register/react'; // NAYA IZAFA: PWA Update ke liye
 
 // NAYA SECURITY GUARD: Sirf Owner ko aane dega
 const OwnerOnly = ({ children }) => {
@@ -164,6 +165,40 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
     // Logger ko batana ke ab se theme wala notification use karein
     setLoggerNotification(notification);
   }, [notification]);
+
+  // --- NAYA IZAFA: PWA Update Notification Logic (START) ---
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW({
+    onRegistered(r) {
+      console.log('SW Registered:', r);
+    },
+    onRegisterError(error) {
+      console.error('SW Registration Error:', error);
+    },
+  });
+
+  useEffect(() => {
+    if (needRefresh) {
+      notification.info({
+        message: 'Update Available!',
+        description: 'A new version of SadaPOS is ready. Please update to get the latest features.',
+        duration: 0, // 0 ka matlab hai yeh khud band nahi hoga jab tak user click na kare
+        placement: 'topRight',
+        btn: (
+          <button
+            style={{ background: '#1677ff', color: 'white', border: 'none', padding: '6px 16px', borderRadius: '4px', cursor: 'pointer' }}
+            onClick={() => updateServiceWorker(true)}
+          >
+            Update Now
+          </button>
+        ),
+        onClose: () => setNeedRefresh(false),
+      });
+    }
+  },[needRefresh, notification, updateServiceWorker, setNeedRefresh]);
+  // --- NAYA IZAFA: PWA Update Notification Logic (END) ---
 
   // Agar user login nahi hai, to use sirf Auth aur Password Update page tak rasai dein
   if (!session || isPasswordRecovery) {
