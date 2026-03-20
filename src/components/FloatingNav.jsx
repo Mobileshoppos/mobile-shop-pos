@@ -5,7 +5,7 @@ import {
   SafetyCertificateOutlined, TagsOutlined, FileTextOutlined,
   UserSwitchOutlined, ShopOutlined, HistoryOutlined,
   DollarCircleOutlined, PieChartOutlined, ToolOutlined,
-  SettingOutlined, AlertOutlined
+  SettingOutlined, AlertOutlined, SwapOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
@@ -31,6 +31,7 @@ const FloatingNav = () => {
     '/categories': { title: 'Categories', icon: <TagsOutlined />, color: token.colorPrimary },
     '/purchases': { title: 'Purchases', icon: <FileTextOutlined />, color: token.colorInfo },
     '/customers': { title: 'Customers', icon: <UserSwitchOutlined />, color: token.colorPrimary },
+    '/customers?openReturn=true': { title: 'Return Items', icon: <SwapOutlined />, color: token.colorWarning },
     '/suppliers': { title: 'Suppliers', icon: <ShopOutlined />, color: token.colorWarning },
     '/sales-history': { title: 'Sales History', icon: <HistoryOutlined />, color: token.colorPrimary },
     '/expenses': { title: 'Expenses', icon: <DollarCircleOutlined />, color: token.colorError },

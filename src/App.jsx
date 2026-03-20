@@ -226,7 +226,11 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
           </PermissionGuard>
         } />
         <Route path="pos" element={<POS />} />
-        <Route path="reports" element={<Reports />} />
+        <Route path="reports" element={
+  <PermissionGuard permission="can_access_detailed_reports">
+    <Reports />
+  </PermissionGuard>
+} />
         <Route path="customers" element={
           <PermissionGuard permission="can_manage_people">
             <Customers />

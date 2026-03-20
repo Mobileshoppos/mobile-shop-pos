@@ -3,7 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   HomeOutlined, ShoppingCartOutlined, DatabaseOutlined, 
   HistoryOutlined, MenuOutlined, SettingOutlined,
-  PieChartOutlined, TeamOutlined, SafetyCertificateOutlined
+  PieChartOutlined, TeamOutlined, SafetyCertificateOutlined,
+  SwapOutlined
 } from '@ant-design/icons';
 import { theme } from 'antd';
 import { useAuth } from '../context/AuthContext';
@@ -15,6 +16,7 @@ const iconMap = {
   '/sales-history': <HistoryOutlined />,
   '/reports': <PieChartOutlined />,
   '/customers': <TeamOutlined />,
+  '/customers?openReturn=true': <SwapOutlined />, // Naya Icon
   '/warranty': <SafetyCertificateOutlined />,
   '/settings': <SettingOutlined />,
 };

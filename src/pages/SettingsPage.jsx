@@ -78,6 +78,7 @@ const SettingsPage = () => {
     { label: 'Sales History', value: '/sales-history' },
     { label: 'Reports', value: '/reports' },
     { label: 'Customers', value: '/customers' },
+    { label: 'Return Items', value: '/customers?openReturn=true' }, // Naya Shortcut
     { label: 'Warranty', value: '/warranty' },
     { label: 'Settings', value: '/settings' },
   ];

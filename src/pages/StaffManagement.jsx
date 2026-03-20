@@ -15,17 +15,18 @@ const { Sider, Content } = Layout; // <--- YEH LINE BOHOT ZAROORI HAI
 const { Title, Text } = Typography;
 
 const permissionOptions = [
-  // --- Left Column (5 Items) ---
-  { label: 'View Reports & Stats', value: 'can_view_reports' },
+  // --- Left Column (6 Items) ---
+  { label: 'View Dashboard Stats', value: 'can_view_reports' },
+  { label: 'Access Detailed Reports', value: 'can_access_detailed_reports' },
   { label: 'View Sales History', value: 'can_view_sales_history' },
   { label: 'Manage Categories', value: 'can_manage_categories' },
   { label: 'Manage Purchases', value: 'can_manage_purchases' },
   { label: 'Manage Suppliers', value: 'can_manage_suppliers' },
 
   // --- Right Column (5 Items) ---
-  { label: 'Manage Expenses', value: 'can_manage_expenses' },           // <--- NAYA
-  { label: 'Manage Exp. Categories', value: 'can_manage_expense_categories' }, // <--- NAYA
-  { label: 'Manage Shop Profile', value: 'can_manage_profile' },        // <--- NAYA
+  { label: 'Manage Expenses', value: 'can_manage_expenses' },
+  { label: 'Manage Exp. Categories', value: 'can_manage_expense_categories' },
+  { label: 'Manage Shop Profile', value: 'can_manage_profile' },
   { label: 'Edit/Delete Inventory', value: 'can_edit_inventory' },
   { label: 'Manage Customers', value: 'can_manage_people' }
 ];

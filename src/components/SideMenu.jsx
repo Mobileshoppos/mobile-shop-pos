@@ -109,7 +109,7 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
   const { token } = theme.useToken();
   const location = useLocation();
   const { profile } = useAuth();
-  const { activeStaff, lockApp } = useStaff(); // lockApp add kiya 
+  const { activeStaff, lockApp, can } = useStaff(); // can function shamil kiya 
   
   // State: Kaunsa menu khula hai, shuru mein khali rakha hai (sab band)
   const [openKeys, setOpenKeys] = useState([]);
@@ -134,21 +134,40 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
     await supabase.auth.signOut();
   };
 
-  // 1. Pehle menu items ko filter karein
-  const filteredMenuItems = menuItems.map(item => {
-    // Agar Settings Group hai, to uske bacchon (children) ko filter karein
-    if (item.key === 'settings_group') {
-      return {
-        ...item,
-        children: item.children.filter(child => {
-          // Agar Staff login hai, to Staff Management chupao
-          if (child.key === '/staff' && activeStaff) return false;
-          return true;
-        })
-      };
-    }
-    return item;
-  });
+  // 1. Pehle menu items ko filter karein (Smart Permission Filter)
+  const filteredMenuItems = menuItems
+    .filter(item => {
+      // Top-level items check
+      if (item.key === '/reports' && !can('can_access_detailed_reports')) return false;
+      return true;
+    })
+    .map(item => {
+      if (item.children) {
+        return {
+          ...item,
+          children: item.children.filter(child => {
+            // Har child button ki permission check karein
+            if (child.key === '/categories' && !can('can_manage_categories')) return false;
+            if (child.key === '/purchases' && !can('can_manage_purchases')) return false;
+            if (child.key === '/customers' && !can('can_manage_people')) return false;
+            if (child.key === '/suppliers' && !can('can_manage_suppliers')) return false;
+            if (child.key === '/sales-history' && !can('can_view_sales_history')) return false;
+            if (child.key === '/expenses' && !can('can_manage_expenses')) return false;
+            if (child.key === '/expense-categories' && !can('can_manage_expense_categories')) return false;
+            if (child.key === '/damaged-stock' && !can('can_edit_inventory')) return false;
+            if (child.key === '/profile' && !can('can_manage_profile')) return false;
+
+            // Owner-only pages (Staff ke liye bilkul hide)
+            if (activeStaff && ['/staff', '/settings', '/subscription'].includes(child.key)) return false;
+
+            return true;
+          })
+        };
+      }
+      return item;
+    })
+    // Agar kisi Group (e.g. Finance) ke saare buttons hide ho jayein, to Group ko bhi hide kardo
+    .filter(item => !item.children || item.children.length > 0);
   // Note: Humne Warranty wala check hata diya hai taake wo hamesha nazar aaye
   // aur user jab click kare to usay "Upgrade Plan" ka message mile.
 
@@ -205,9 +224,9 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
-    // Yahan humne solid color aur fading line ko aapas mein jorr diya hai
-    background: `linear-gradient(to bottom, ${token.colorBorder} 80%, transparent 100%) no-repeat right / 1px 100%, ${token.colorSiderBg}`,
-    borderRight: 'none', // Purani line ko mukammal khatam kar diya
+    // Primary color glow ke saath fading line
+    background: `linear-gradient(to bottom, ${token.colorPrimary}33 80%, transparent 100%) no-repeat right / 1px 100%, ${token.colorSiderBg}`,
+    borderRight: 'none',
     ...(isMobile && {
         position: 'fixed',
         height: '100vh',
@@ -235,7 +254,7 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
                 justifyContent: collapsed ? 'center' : 'flex-start',
                 cursor: 'pointer',
                 background: 'transparent',
-                borderBottom: `1px solid ${token.colorBorder}`, // Yeh line header ki line se mil jayegi
+                borderBottom: `1px solid ${token.colorPrimary}33`, // Glow effect wali line
                 marginBottom: '8px'
             }}>
                 {/* Logo Icon */}
@@ -255,7 +274,7 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
                         color: token.colorTextHeading,
                         letterSpacing: '-0.5px'
                     }}>
-                        Sada<span style={{ color: token.colorPrimary }}>POS</span>
+                        Sada<span style={{ color: token.colorPrimary }}> POS</span>
                     </span>
                 )}
             </div>
@@ -264,6 +283,8 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
               theme={{
                 components: {
                   Menu: {
+                    iconSize: 14,                       // Icons chote karne ke liye (Naya)
+                    itemHeight: 32,                     // Menu items ki height kam karne ke liye (Naya)
                     itemBg: 'transparent',              // Background transparent taake Sider ka rang nazar aaye
                     itemColor: token.colorMenuText,     // Text color
                     itemSelectedBg: token.colorMenuSelectedBg,   // Selected Background

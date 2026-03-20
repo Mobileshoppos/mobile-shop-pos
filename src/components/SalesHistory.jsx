@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Table, Typography, Tag, App, Button, Tooltip, Space, theme } from 'antd';
+import React, { useState, useEffect, useRef } from 'react';
+import { Card, Table, Typography, Tag, App, Button, Tooltip, Space, theme, Input, DatePicker, Select } from 'antd';
 import { PrinterOutlined, ReloadOutlined, HistoryOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
@@ -17,23 +17,65 @@ const SalesHistory = () => {
   const { profile } = useAuth();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { message } = App.useApp();
+  const searchInputRef = useRef(null);
+
+  // Auto-focus logic for Desktop
+  useEffect(() => {
+    if (!isMobile && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isMobile]);
   const { processSyncQueue } = useSync();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPrinting, setIsPrinting] = useState(null);
+  const [searchText, setSearchText] = useState('');
+  const [dateRange, setDateRange] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [staffFilter, setStaffFilter] = useState('all');
+  const [staffList, setStaffList] = useState([]);
 
   useEffect(() => {
     const fetchSalesHistory = async () => {
       try {
         setLoading(true);
 
-        // 1. SAFE FETCH: Saara data le aao (Index issue se bachne ke liye)
+        // 1. SAFE FETCH: Saara data aur customers le aao
         const allRawSales = await db.sales.toArray();
+        const allCustomersForFilter = await db.customers.toArray();
 
-        // 2. JS SORT: Memory mein sort aur limit karein (Guaranteed Data)
-        const localSales = allRawSales
+        // 2. FINAL PROFESSIONAL FILTER LOGIC
+        let filteredSales = allRawSales.filter(s => {
+          // A. Search Text Filter
+          const customer = allCustomersForFilter.find(c => c.id === s.customer_id);
+          const customerName = customer ? customer.name.toLowerCase() : 'walk-in customer';
+          const invoiceId = (s.invoice_id || '').toLowerCase();
+          const matchesSearch = !searchText || 
+            invoiceId.includes(searchText.toLowerCase()) || 
+            customerName.includes(searchText.toLowerCase());
+
+          // B. Date Range Filter
+          let matchesDate = true;
+          if (dateRange && dateRange[0] && dateRange[1]) {
+            const saleDate = new Date(s.created_at || s.sale_date);
+            const startDate = dateRange[0].startOf('day').toDate();
+            const endDate = dateRange[1].endOf('day').toDate();
+            matchesDate = saleDate >= startDate && saleDate <= endDate;
+          }
+
+          // C. Status Filter
+          const matchesStatus = statusFilter === 'all' || s.payment_status === statusFilter;
+
+          // D. Staff Filter
+          const matchesStaff = staffFilter === 'all' || s.staff_id === staffFilter;
+
+          return matchesSearch && matchesDate && matchesStatus && matchesStaff;
+        });
+
+        // 3. JS SORT: Filtered data ko sort aur limit karein
+        const localSales = filteredSales
             .sort((a, b) => new Date(b.created_at || b.sale_date) - new Date(a.created_at || a.sale_date))
-            .slice(0, 50); // Sirf top 50 uthayen
+            .slice(0, 50);
         
         // 3. Sync Queue layein
         const queueItems = await db.sync_queue.where('table_name').equals('sales').toArray();
@@ -47,6 +89,7 @@ const SalesHistory = () => {
             db.sale_items.where('sale_id').anyOf(saleIds).toArray(),
             db.staff_members.toArray() // <--- NAYA IZAFA (AUDIT TRAIL)
         ]);
+        setStaffList(allStaff);
 
         // 5. MAPPING (Data Jorna)
         const customerMap = {};
@@ -103,7 +146,7 @@ const SalesHistory = () => {
     };
 
     fetchSalesHistory();
-  }, [message]);
+  }, [message, searchText, dateRange, statusFilter, staffFilter]);
 
   const handleReprint = async (saleId) => {
     setIsPrinting(saleId); 
@@ -364,7 +407,56 @@ const SalesHistory = () => {
         </Title>
       )}
       <Card>
-        {/* TABLE COMPONENT KO IS SE BADAL DEIN */}
+        <Space wrap style={{ marginBottom: '24px', width: '100%', justifyContent: 'space-between' }}>
+          <Space wrap>
+            <Input.Search
+              ref={searchInputRef}
+              placeholder="Invoice # or Customer..."
+              allowClear
+              value={searchText}
+              onSearch={value => setSearchText(value)}
+              onChange={e => setSearchText(e.target.value)}
+              style={{ width: 200 }}
+            />
+            <DatePicker.RangePicker 
+              value={dateRange}
+              onChange={(values) => setDateRange(values)}
+              style={{ width: 260 }}
+            />
+            <Select 
+              value={statusFilter}
+              style={{ width: 130 }} 
+              onChange={value => setStatusFilter(value)}
+              options={[
+                { value: 'all', label: 'All Status' },
+                { value: 'Paid', label: 'Paid' },
+                { value: 'Unpaid', label: 'Unpaid' },
+              ]}
+            />
+            <Select 
+              value={staffFilter}
+              style={{ width: 150 }} 
+              onChange={value => setStaffFilter(value)}
+              placeholder="Filter by Staff"
+              options={[
+                { value: 'all', label: 'All Staff' },
+                ...staffList.map(staff => ({ value: staff.id, label: staff.name }))
+              ]}
+            />
+          </Space>
+          <Button 
+            icon={<ReloadOutlined />} 
+            onClick={() => {
+              setSearchText('');
+              setDateRange(null);
+              setStatusFilter('all');
+              setStaffFilter('all');
+              // window.location.reload() ki zaroorat nahi, states khud reset ho jayengi
+            }}
+          >
+            Reset
+          </Button>
+        </Space>
         <Table
           columns={columns}
           dataSource={sales}

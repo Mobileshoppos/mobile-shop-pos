@@ -1482,6 +1482,10 @@ async addCustomer(customerData) {
 
   // 3. Profit & Loss Summary (Sab se ahem function)
   async getProfitLossSummary(startDateStr, endDateStr) {
+    // --- PLAN GUARD: Free users ko dummy data do (Marketing) ---
+    const settings = await db.user_settings.toCollection().first();
+    if (!settings || settings.subscription_tier === 'free') return { totalRevenue: 155000, totalRefunds: 5000, totalCost: 95000, damagedLoss: 2000, grossProfit: 55000, totalExpenses: 15000, netProfit: 40000 };
+    // --------------------------------------------
     const start = new Date(startDateStr).getTime();
     // End date ko us din ke bilkul aakhir (23:59:59) tak set kiya taake aaj ka data mis na ho
     const end = new Date(endDateStr).setHours(23, 59, 59, 999);
@@ -1594,6 +1598,10 @@ async addCustomer(customerData) {
 
   // --- NAYA IZAFA: Reports Overview ke liye Data ---
   async getReportsOverview(startDateStr, endDateStr) {
+    // --- PLAN GUARD: Free users ko dummy data do (Marketing) ---
+    const settings = await db.user_settings.toCollection().first();
+    if (!settings || settings.subscription_tier === 'free') return { totalRevenue: 155000, totalRefunds: 5000, totalCost: 95000, damagedLoss: 2000, grossProfit: 55000, totalExpenses: 15000, netProfit: 40000, totalReceivables: 85000, totalPayables: 42000, totalInventoryValue: 1250000 };
+    // --------------------------------------------
     // 1. Profit & Loss ka data purane function se lein
     const plSummary = await this.getProfitLossSummary(startDateStr, endDateStr);
 
@@ -1629,6 +1637,13 @@ async addCustomer(customerData) {
 
   // --- FINAL FIX: Synchronized Sales & Revenue Report (No Reference Errors) ---
   async getSalesAndRevenueReport(startDateStr, endDateStr) {
+    // --- PLAN GUARD: Free users ko dummy data do (Marketing) ---
+    const settings = await db.user_settings.toCollection().first();
+    if (!settings || settings.subscription_tier === 'free') {
+      const dummyTrend = Array.from({length: 15}, (_, i) => ({ date: `2024-01-${i+1}`, amount: Math.floor(Math.random() * 5000) + 2000, profit: Math.floor(Math.random() * 1000) + 500 }));
+      return { categoryBreakdown: [{category: 'Smartphones', revenue: 85000, profit: 12000}, {category: 'Accessories', revenue: 25000, profit: 8000}], cashSales: 70000, bankSales: 40000, totalTaxCollected: 11000, totalTaxRefunded: 500, netTax: 10500, staffPerformance: [{name: 'Salesman A', total_sales: 50000, items_sold: 20}, {name: 'Salesman B', total_sales: 35000, items_sold: 15}], topProductsByQty: [], topProductsByRev: [], topProductsByProfit: [], salesTrend: dummyTrend };
+    }
+    // --------------------------------------------
     const start = new Date(startDateStr).getTime();
     const end = new Date(endDateStr).getTime() + (24 * 60 * 60 * 1000) - 1;
 
@@ -1824,6 +1839,13 @@ async addCustomer(customerData) {
 
   // --- FINAL FIX: Professional Profit & Loss Report (No Reference Errors) ---
   async getDetailedProfitLossReport(startDateStr, endDateStr) {
+    // --- PLAN GUARD: Free users ko dummy data do (Marketing) ---
+    const settings = await db.user_settings.toCollection().first();
+    if (!settings || settings.subscription_tier === 'free') {
+      const dummyProfitTrend = Array.from({length: 10}, (_, i) => ({ date: `${i+1} Mar`, profit: Math.floor(Math.random() * 2000) + 1000, expense: Math.floor(Math.random() * 500) + 200 }));
+      return { totalRevenue: 155000, totalRefunds: 5000, totalCost: 95000, damagedLoss: 2000, grossProfit: 55000, totalExpenses: 15000, netProfit: 40000, profitTrend: dummyProfitTrend, expenseBreakdown: [{category: 'Rent', amount: 8000}, {category: 'Electricity', amount: 3000}], profitMargin: 25.8 };
+    }
+    // --------------------------------------------
     const start = new Date(startDateStr);
     const end = new Date(endDateStr);
     const startTime = start.getTime();
@@ -1914,6 +1936,10 @@ async addCustomer(customerData) {
 
   // --- UPDATED: Professional Inventory & Assets Report (With Potential Profit & Brand Logic) ---
   async getInventoryReport() {
+    // --- PLAN GUARD: Free users ko dummy data do (Marketing) ---
+    const settings = await db.user_settings.toCollection().first();
+    if (!settings || settings.subscription_tier === 'free') return { totalUnits: 450, totalAssetValue: 1250000, totalPotentialProfit: 250000, totalDamagedLoss: 4500, categoryValuation: [{name: 'Android', value: 800000, qty: 30}, {name: 'iPhone', value: 400000, qty: 10}], brandValuation: [{name: 'Samsung', value: 500000}, {name: 'Apple', value: 400000}], lowStockItems: [], outOfStockItems: [], slowMovingItems: [] };
+    // --------------------------------------------
     const products = await db.products.toArray();
     const categories = await db.categories.toArray();
     const inventory = await db.inventory.where('status').anyOf('Available', 'available').toArray();
@@ -2012,6 +2038,10 @@ async addCustomer(customerData) {
 
   // --- FINAL FIX: Professional Ledgers Report (Balanced Aging & Stats) ---
   async getLedgerReport() {
+    // --- PLAN GUARD: Free users ko dummy data do (Marketing) ---
+    const settings = await db.user_settings.toCollection().first();
+    if (!settings || settings.subscription_tier === 'free') return { totalCustomerReceivable: 85000, totalSupplierPayable: 42000, totalCustomerCredits: 5000, staffReceivable: 2000, staffPayable: 15000, grandTotalReceivable: 87000, grandTotalPayable: 62000, netPosition: 25000, customerAging: { current: 50000, mid: 25000, old: 10000 }, supplierAging: { current: 30000, mid: 10000, old: 2000 }, topDebtors: [{name: 'Dummy Customer', balance: 15000}], topCreditCustomers: [], topCreditors: [], topSupplierCredits: [], staffBalances: [] };
+    // --------------------------------------------
     const now = dayjs();
     
     // 1. Customers & Actual Balances

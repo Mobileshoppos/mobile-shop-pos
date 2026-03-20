@@ -25,7 +25,10 @@ import {
   SyncOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
+import { useStaff } from '../context/StaffContext';
+import { useTheme } from '../context/ThemeContext'; // <--- NAYA IZAFA
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import dayjs from 'dayjs';
 import { useSync } from '../context/SyncContext';
 import { db } from '../db';
 import { getPlanLimits } from '../config/subscriptionPlans';
@@ -45,7 +48,15 @@ const titleContainerStyle = {
 // Hum ne yahan 'collapsed' aur 'setCollapsed' receive kiya hai App.jsx se
 const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
   const { profile, isPro, stockCount, lowStockCount } = useAuth();
+  const { activeStaff } = useStaff();
+  const { isDarkMode } = useTheme(); // <--- NAYA IZAFA
   const { pendingCount, stuckCount, retryAll, isSyncing, syncAllData, processSyncQueue } = useSync();
+  // --- LIVE CLOCK LOGIC ---
+  const [currentTime, setCurrentTime] = React.useState(dayjs());
+  React.useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(dayjs()), 60000); // Har 1 minute baad update
+    return () => clearInterval(timer);
+  }, []);
   const [isSyncModalOpen, setIsSyncModalOpen] = React.useState(false);
 
   // NAYA: Manual Sync Function (Upload & Download)
@@ -92,13 +103,14 @@ const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
 return (
     <>
       <Header style={{ 
-  padding: '0 28px', 
+  padding: '0 24px', 
   background: token.colorHeaderBg, 
-  height: '64px', // Height barha di
-  lineHeight: '64px', // Line height barha di
+  height: '64px', 
+  lineHeight: '64px', 
   marginTop: 0, 
-  borderBottom: `1px solid ${token.colorBorder}`,
-  marginBottom: '10px'
+  borderBottom: `1px solid ${token.colorPrimary}33`,
+  boxShadow: `0 2px 8px ${token.colorPrimary}15`,
+  marginBottom: '8px'
 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '100%' }}>
           
@@ -140,7 +152,7 @@ return (
                   <div 
                     onClick={stuckCount > 0 ? showSyncCenter : null}
                     style={{
-                      width: '14px', height: '14px', borderRadius: '50%',
+                      width: '10px', height: '10px', borderRadius: '50%',
                       background: stuckCount > 0 ? token.colorError : token.colorFillSecondary, 
                       boxShadow: stuckCount > 0 ? `0 0 8px ${token.colorError}` : 'none',
                       cursor: stuckCount > 0 ? 'pointer' : 'default',
@@ -199,92 +211,92 @@ return (
               {!isMobile && (
                 <>
                   {location.pathname === '/pos' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <ShoppingCartOutlined style={{ marginRight: '8px' }} /> Point of Sale
                      </span>
                   )}
                   {location.pathname === '/' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <HomeOutlined style={{ marginRight: '8px' }} /> Dashboard
                      </span>
                   )}
                   {location.pathname === '/inventory' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <DatabaseOutlined style={{ marginRight: '8px' }} /> Inventory
                      </span>
                   )}
                   {location.pathname === '/warranty' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <SafetyCertificateOutlined style={{ marginRight: '8px' }} /> Warranty & Claims
                      </span>
                   )}
                   {location.pathname === '/categories' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <TagsOutlined style={{ marginRight: '8px' }} /> Categories & Attributes
                      </span>
                   )}
                   {location.pathname === '/purchases' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <FileTextOutlined style={{ marginRight: '8px' }} /> Purchase History
                      </span>
                   )}
                   {location.pathname === '/customers' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <UserSwitchOutlined style={{ marginRight: '8px' }} /> Customer Management
                      </span>
                   )}
                   {location.pathname === '/suppliers' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <ShopOutlined style={{ marginRight: '8px' }} /> Suppliers Dashboard
                      </span>
                   )}
                   {location.pathname === '/sales-history' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <HistoryOutlined style={{ marginRight: '8px' }} /> Sales History
                      </span>
                   )}
                   {location.pathname === '/expenses' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <DollarCircleOutlined style={{ marginRight: '8px' }} /> Manage Expenses
                      </span>
                   )}
                   {location.pathname === '/expense-categories' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <FileProtectOutlined style={{ marginRight: '8px' }} /> Expense Categories
                      </span>
                   )}
                   {location.pathname === '/damaged-stock' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <AlertOutlined style={{ marginRight: '8px' }} /> Damaged Stock
                      </span>
                   )}
                   {location.pathname === '/profile' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <ProfileOutlined style={{ marginRight: '8px' }} /> Profile
                      </span>
                   )}
                   {location.pathname === '/subscription' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <CreditCardOutlined style={{ marginRight: '8px' }} /> Manage Your Subscription
                      </span>
                   )}
                   {location.pathname === '/settings' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <ToolOutlined style={{ marginRight: '8px' }} /> App Settings
                      </span>
                   )}
                   {location.pathname === '/staff' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <TeamOutlined style={{ marginRight: '8px' }} /> Staff Management
                      </span>
                   )}
                   {location.pathname.startsWith('/purchases/') && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <FileTextOutlined style={{ marginRight: '8px' }} /> Purchase Details
                      </span>
                   )}
                   {location.pathname === '/reports' && (
-                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <PieChartOutlined style={{ marginRight: '8px' }} /> Reports
                      </span>
                   )}
@@ -292,34 +304,83 @@ return (
               )}
           </div>
 
-          {/* Right Side: Icons & Subscription Button */}
-          <Space align="center" size="small">
-            {(() => {
-              // Control Center se limit mangwayein
-              const limits = getPlanLimits(profile?.subscription_tier);
-              const maxItems = limits.max_items;
-              const isUnlimited = maxItems > 10000; // Agar limit bohot zyada hai to unlimited samjhein
-              
-              // Warning logic
-              const isNearLimit = !isUnlimited && stockCount >= (maxItems * 0.9); // 90% bhar gaya
-              const isFull = !isUnlimited && stockCount >= maxItems;
+          {/* Right Side: Clock + Staff + Subscription */}
+          {/* Right Side: Integrated Status Pill (Desktop Only) */}
+          <Space align="center" size="middle">
+            
+            {!isMobile && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '24px', // Gap thora barha diya taake baghair box ke saaf nazar aaye
+                background: 'transparent', // Background khatam
+                padding: '0', // Padding khatam
+                border: 'none', // Outline/Border khatam
+                height: '50px'
+              }}>
+                
+                {/* 1. Integrated Stock Status (Conditional) */}
+                {(() => {
+                  const tier = profile?.subscription_tier?.toLowerCase() || 'free';
+                  const limits = getPlanLimits(tier);
+                  const showBadge = limits.always_show_badge || stockCount >= (limits.max_items * (limits.badge_threshold || 0));
+                  
+                  if (!showBadge) return null;
 
-              return (
-                <Tooltip title={isUnlimited ? "Pro Plan Active" : `Plan Limit: ${maxItems} Items`} placement="bottom">
-                  <Button 
-                    type={isUnlimited ? 'primary' : 'default'} 
-                    ghost={isUnlimited}
-                    icon={isUnlimited ? <CrownOutlined /> : null}
-                    onClick={() => navigate('/subscription')}
-                    style={isNearLimit && !isFull ? { borderColor: token.colorWarning, color: token.colorWarning } : {}}
-                    danger={isFull}
-                    size="small"
-                  >
-                    {isUnlimited ? 'PRO' : `Stock: ${stockCount}/${maxItems}`}
-                  </Button>
-                </Tooltip>
-              );
-            })()}
+                  const maxItems = limits.max_items;
+                  const isUnlimited = maxItems > 10000;
+                  const isFull = !isUnlimited && stockCount >= maxItems;
+                  const isNearLimit = !isUnlimited && stockCount >= (maxItems * 0.9);
+
+                  return (
+                    <div 
+                      onClick={() => navigate('/subscription')}
+                      style={{ 
+                        textAlign: 'right', 
+                        paddingRight: '0', 
+                        lineHeight: '1.2',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Text strong style={{ 
+                        display: 'block', 
+                        fontSize: '13px', 
+                        color: isFull ? token.colorError : (isNearLimit ? token.colorWarning : token.colorPrimary) 
+                      }}>
+                        {isUnlimited ? 'PRO ACTIVE' : `STOCK: ${stockCount}/${maxItems}`}
+                      </Text>
+                      <Text type="secondary" style={{ fontSize: '10px', letterSpacing: '0.5px' }}>
+                        {isFull ? 'LIMIT REACHED' : 'PLAN STATUS'}
+                      </Text>
+                    </div>
+                  );
+                })()}
+
+                {/* 2. Live Digital Clock */}
+                <div style={{ textAlign: 'right', paddingRight: '0', lineHeight: '1.2' }}>
+                  <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorPrimary }}>{currentTime.format('hh:mm A')}</Text>
+                  <Text type="secondary" style={{ fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>{currentTime.format('ddd, DD MMM')}</Text>
+                </div>
+
+                {/* 3. Staff / User Info */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', lineHeight: '1.2' }}>
+                  <div style={{ textAlign: 'left' }}>
+                    <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorTextHeading }}>{activeStaff ? activeStaff.name : (profile?.name || 'Owner')}</Text>
+                    <Tag color={activeStaff ? "blue" : "gold"} style={{ fontSize: '10px', margin: 0, padding: '0 4px', lineHeight: '1.4', borderRadius: '4px', border: 'none' }}>
+                      {activeStaff ? activeStaff.role?.toUpperCase() : 'ADMIN'}
+                    </Tag>
+                  </div>
+                  <div style={{ 
+                    width: '36px', height: '36px', borderRadius: '10px',
+                    background: 'transparent', color: token.colorPrimary,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px',
+                    border: `1px solid ${token.colorPrimary}33`
+                  }}>
+                    <UserSwitchOutlined />
+                  </div>
+                </div>
+              </div>
+            )}
           </Space>
         </div>
       </Header>
