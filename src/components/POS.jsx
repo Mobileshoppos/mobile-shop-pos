@@ -935,8 +935,8 @@ const POS = () => {
         </Title>
       )}
       <Row gutter={16}>
-        <Col xs={24} md={11}>
-          <Card styles={{ body: { padding: '12px' } }}>
+        <Col xs={24} md={14}>
+          <Card variant="borderless" style={{ background: 'transparent', boxShadow: 'none' }} styles={{ body: { padding: isMobile ? '8px 0' : '0 12px 0 0', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 110px)' } }}>
             {/* === ROW 1: SEARCH, CATEGORY, BUTTONS === */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
               
@@ -1041,7 +1041,7 @@ const POS = () => {
               loading={loading}
               rowKey="id"
               style={{ 
-                height: '60vh', 
+                flex: 1, 
                 overflowY: 'auto', 
                 overflowX: 'hidden', 
                 paddingLeft: '0px',  // Left side se padding
@@ -1058,26 +1058,28 @@ const POS = () => {
                     }}
                     styles={{ body: { padding: '12px' } }}
                   >
-                    {/* === HEADER: Name, Category, Price === */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ flex: 1, paddingRight: '4px' }}>
-                        <Text strong style={{ fontSize: '18px', display: 'block', marginBottom: '4px', lineHeight: 1.2 }}>
+                    {/* === HEADER: Name, Category, Price (SINGLE ROW) === */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                      
+                      {/* Left Side: Name, Category, Brand */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', flex: 1 }}>
+                        <Text strong style={{ fontSize: '16px', lineHeight: 1 }}>
                           {product.name}
                         </Text>
-                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                           <Tag style={{ margin: 0, fontSize: '12px', padding: '0 4px' }}>{product.category_name}</Tag>
-                           {product.brand && <Text type="secondary" style={{ fontSize: '13px' }}>{product.brand}</Text>}
-                        </div>
+                        <Tag style={{ margin: 0, fontSize: '11px', padding: '0 4px' }}>{product.category_name}</Tag>
+                        {product.brand && <Text type="secondary" style={{ fontSize: '12px' }}>{product.brand}</Text>}
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <Text strong style={{ fontSize: '16px', color: token.colorSuccess, display: 'block' }}>
+                      
+                      {/* Right Side: Price, Total Stock */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <Text strong style={{ fontSize: '15px', color: token.colorSuccess }}>
                           {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
                         </Text>
-                        {/* Main Stock Badge */}
-                        <Tag color={product.quantity > 0 ? "processing" : "error"} style={{ margin: '4px 0 0 0', fontSize: '17px', fontWeight: 'bold' }}>
+                        <Tag color={product.quantity > 0 ? "processing" : "error"} style={{ margin: 0, fontSize: '14px', fontWeight: 'bold' }}>
                            Total: {product.quantity}
                         </Tag>
                       </div>
+
                     </div>
 
                     <Divider style={{ margin: '8px 0', borderColor: token.colorBorderSecondary }} />
@@ -1174,15 +1176,24 @@ const POS = () => {
             />
           </Card>
         </Col>
-        <Col xs={24} md={13}>
-          <Card styles={{ body: { padding: '12px' } }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <Title level={4} style={{ margin: 0 }}>Current Bill</Title>
-              {cart.length > 0 && (<Button danger type="text" icon={<DeleteOutlined />} onClick={handleResetCart}>Reset Cart</Button>)}
-            </div>
-            <Form.Item label="Customer" style={{ marginBottom: '8px' }}>
-              <Space.Compact style={{ width: '100%' }}>
-                <Select showSearch placeholder="Select a customer (optional)" style={{ width: '100%' }} value={selectedCustomer} onChange={(value) => setSelectedCustomer(value)} filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())} options={customers.map(customer => ({ value: customer.id, label: `${customer.name} - ${customer.phone_number}` }))} allowClear />
+        <Col xs={24} md={10}>
+          <Card variant="borderless" style={{ background: 'transparent', boxShadow: 'none' }} styles={{ body: { padding: isMobile ? '16px 0 0 0' : '0 0 0 12px', borderLeft: isMobile ? 'none' : `1px solid ${token.colorBorderSecondary}`, borderTop: isMobile ? `1px solid ${token.colorBorderSecondary}` : 'none', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 110px)' } }}>
+            {/* --- TOP ROW: Current Bill, Customer Select & Reset --- */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <Text strong style={{ fontSize: '15px', whiteSpace: 'nowrap' }}>Current Bill</Text>
+              
+              <Space.Compact style={{ flex: 1 }}>
+                <Select 
+                  showSearch 
+                  variant="borderless"
+                  placeholder="Select customer..." 
+                  style={{ width: '100%', background: token.colorFillAlter, borderRadius: '6px 0 0 6px' }} 
+                  value={selectedCustomer} 
+                  onChange={(value) => setSelectedCustomer(value)} 
+                  filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())} 
+                  options={customers.map(customer => ({ value: customer.id, label: `${customer.name} - ${customer.phone_number}` }))} 
+                  allowClear 
+                />
                 {(() => {
                   const limits = getPlanLimits(profile?.subscription_tier);
                   const isFeatureLocked = !limits.allow_customer_management;
@@ -1191,9 +1202,10 @@ const POS = () => {
                   const isLocked = isFeatureLocked || isLimitReached;
 
                   return (
-                    <Tooltip title={isLocked ? (isFeatureLocked ? "Upgrade to add new customers" : "Customer limit reached") : ""}>
+                    <Tooltip title={isLocked ? (isFeatureLocked ? "Upgrade to add new customers" : "Customer limit reached") : "Add New Customer"}>
                       <Button 
                         icon={<UserAddOutlined />} 
+                        type="text"
                         onClick={() => {
                           if (isLocked) {
                               modal.info({
@@ -1220,175 +1232,295 @@ const POS = () => {
                               setIsAddCustomerModalOpen(true);
                           }
                         }}
-                        disabled={isLocked} // Button ko disable bhi karna hai
-                        style={{ opacity: isLocked ? 0.7 : 1 }}
+                        disabled={isLocked}
+                        style={{ opacity: isLocked ? 0.7 : 1, background: token.colorFillAlter, borderRadius: '0 6px 6px 0' }}
                       />
                     </Tooltip>
                   );
                 })()}
               </Space.Compact>
-            </Form.Item>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px', flexWrap: 'wrap' }}>
-              {/* 1. Payment Method (Paid / Pay Later) */}
-              <Radio.Group onChange={(e) => setPaymentMethod(e.target.value)} value={paymentMethod}>
-                <Radio value={'Paid'}>Paid</Radio>
-                <Radio value={'Unpaid'} disabled={!selectedCustomer || isWalkIn}>Pay Later (Credit)</Radio>
-              </Radio.Group>
 
-              {/* 2. Amount Paid Input (Sirf Pay Later par nazar aayega) */}
+              {cart.length > 0 && (
+                <Tooltip title="Reset Bill">
+                  <Button danger type="text" icon={<DeleteOutlined />} onClick={handleResetCart} style={{ padding: '0 8px' }} />
+                </Tooltip>
+              )}
+            </div>
+            {/* Payment Methods ko video design ke mutabiq neechay Totals ke paas muntaqil kar diya gaya hai */}
+            {cart.length === 0 ? <Empty description="Cart is empty" style={{ margin: '40px 0' }} /> : 
+              <List 
+                dataSource={cart} 
+                renderItem={(item, index) => { 
+                  const productInStock = allProducts.find(p => p.id === item.product_id); 
+                  return (
+                    <List.Item style={{ padding: 0, borderBottom: 'none', marginBottom: '6px' }}> 
+                      
+                      {/* --- COMPACT VIDEO STYLE CARD --- */}
+                      <div style={{ 
+                        width: '100%', 
+                        background: token.colorFillQuaternary, 
+                        borderRadius: '8px',                   
+                        padding: '8px 10px' /* <-- Yahan padding kam ki gayi hai */
+                      }}>
+                        
+                        {/* --- TOP ROW: Name, Unit Price, x1, Total Price & Delete --- */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+                          <div style={{ flex: 1, paddingRight: '8px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            
+                            {/* Index Number Circle */}
+                            <div style={{ backgroundColor: token.colorTextSecondary, color: token.colorBgLayout, borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 'bold', flexShrink: 0 }}>
+                              {index + 1}
+                            </div>
+
+                            {/* Item Name */}
+                            <Text strong style={{ fontSize: '16px', lineHeight: 1.2 }}>
+                              {productInStock ? productInStock.name : 'Unknown Product'}
+                            </Text>
+
+                            {/* Unit Price (Moved to 1st Row) */}
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              {profile?.allow_cart_price_change !== false ? (
+                                <InputNumber size="small" variant="borderless" style={{ width: '85px', background: token.colorBgContainer, borderRadius: '4px' }} prefix={profile?.currency ? `${profile.currency} ` : ''} value={item.sale_price} onChange={(value) => handleCartItemUpdate(item.variant_id, 'sale_price', value || 0)} min={0} />
+                              ) : (
+                                <Text type="secondary" style={{ fontSize: '13px' }}>{formatCurrency(item.sale_price, profile?.currency)}</Text>
+                              )}
+                            </div>
+
+                            {/* Quantity Multiplier (x1) */}
+                            {!(item.category_is_imei_based || item.imei) && (
+                               <span style={{ color: token.colorTextSecondary, fontWeight: 'normal' }}>x{item.quantity}</span>
+                            )}
+                          </div>
+                          
+                          {/* Total Price & Delete Button (Moved to 1st Row) */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                            <Text strong style={{ fontSize: '17px' }}>
+                              {formatCurrency(item.sale_price * item.quantity, profile?.currency)}
+                            </Text>
+                            <Button type="text" danger icon={<DeleteOutlined />} size="small" onClick={() => handleFullRemoveFromCart(item.variant_id)} style={{ height: '26px', width: '26px' }} />
+                          </div>
+                        </div>
+                        
+                        {/* --- BOTTOM ROW: Attributes, IMEI, Warranty & Qty Control --- */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          
+                          {/* Attributes, IMEI, Warranty */}
+                          <div style={{ flex: 1, paddingRight: '8px' }}>
+                            <Space wrap size={[0, 4]}>
+                              {(() => {
+                                const attrValues =[];
+                                if (item.item_attributes) {
+                                  Object.entries(item.item_attributes).forEach(([key, value]) => {
+                                    if (value && !key.toLowerCase().includes('imei') && !key.toLowerCase().includes('serial')) {
+                                      attrValues.push(value);
+                                    }
+                                  });
+                                }
+                                return attrValues.length > 0 ? (
+                                  <Text type="secondary" style={{ fontSize: '14px', marginRight: '4px' }}>{attrValues.join(', ')}</Text>
+                                ) : null;
+                              })()}
+                              {item.imei && <Tag color="default" key="imei" style={{ margin: 0, fontSize: '11px', border: 'none', background: token.colorFillTertiary, padding: '0 4px' }}>{item.imei}</Tag>}
+                              
+                              {profile?.warranty_system_enabled !== false && item.warranty_days > 0 && (
+                                (() => {
+                                  const expiry = new Date(item.created_at);
+                                  expiry.setDate(expiry.getDate() + item.warranty_days);
+                                  const isExpired = new Date() > expiry;
+                                  return (
+                                    <Space size={4} style={{ marginLeft: '4px' }}>
+                                      <Tooltip title={`${isExpired ? "Supplier Warranty Expired" : "Supplier Warranty Active"} (Till: ${dayjs(expiry).format('DD-MMM-YYYY')})`}>
+                                        <span style={{ cursor: 'pointer' }}><Badge status={isExpired ? "error" : "success"} /></span>
+                                      </Tooltip>
+                                      <Tooltip title="No Warranty">
+                                        <Checkbox checked={item.no_warranty} onChange={(e) => handleCartItemUpdate(item.variant_id, 'no_warranty', e.target.checked)} style={{ marginLeft: '4px' }} />
+                                      </Tooltip>
+                                    </Space>
+                                  );
+                                })()
+                              )}
+                            </Space>
+                          </div>
+                          
+                          {/* Qty (+ / - Buttons) (Moved to 2nd Row) */}
+                          <div>
+                            {!(item.category_is_imei_based || item.imei) && (
+                              <div style={{ display: 'flex', alignItems: 'center', background: token.colorBgContainer, borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }}>
+                                <div 
+                                  onClick={() => handleCartItemUpdate(item.variant_id, 'quantity', Math.max(1, item.quantity - 1))} 
+                                  style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '16px', color: item.quantity <= 1 ? token.colorTextDisabled : token.colorText }}
+                                >
+                                  -
+                                </div>
+                                <div style={{ minWidth: '28px', padding: '0 4px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', borderLeft: `1px solid ${token.colorBorderSecondary}`, borderRight: `1px solid ${token.colorBorderSecondary}`, height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {item.quantity}
+                                </div>
+                                <div 
+                                  onClick={() => {
+                                    const maxQty = allProducts.find(p => p.id === item.product_id)?.quantity || item.quantity;
+                                    if(item.quantity < maxQty) handleCartItemUpdate(item.variant_id, 'quantity', item.quantity + 1);
+                                  }} 
+                                  style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '16px', color: item.quantity >= (allProducts.find(p => p.id === item.product_id)?.quantity || item.quantity) ? token.colorTextDisabled : token.colorText }}
+                                >
+                                  +
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                        </div>
+                      </div>
+                    </List.Item>
+                  ); 
+                }} 
+                style={{ flex: 1, overflowY: 'auto', marginBottom: '12px', paddingRight: '4px' }} 
+                className="hide-scrollbar"
+              />
+            }
+            {/* --- COMPACT SUBTOTAL & DISCOUNT SECTION --- */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px', marginTop: 'auto' }}>
+              
+              <Row justify="space-between" align="middle">
+                <Text type="secondary" style={{ fontSize: '13px' }}>Subtotal</Text>
+                <Text strong style={{ fontSize: '13px' }}>{formatCurrency(subtotal, profile?.currency)}</Text>
+              </Row>
+
+              {profile?.pos_discount_enabled !== false && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: '13px' }}>Discount</Text>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <InputNumber 
+                      variant="borderless" 
+                      size="small" 
+                      style={{ width: '80px', background: token.colorFillAlter, borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }} 
+                      placeholder="0" 
+                      value={discount} 
+                      onChange={(val) => setDiscount(val || 0)} 
+                      min={0} 
+                    />
+                    <Radio.Group 
+                      size="small" 
+                      value={discountType} 
+                      onChange={(e) => setDiscountType(e.target.value)}
+                      buttonStyle="solid"
+                    >
+                      <Radio.Button value="Amount" style={{ padding: '0 10px', borderRadius: '4px 0 0 4px' }}>{profile?.currency || '$'}</Radio.Button>
+                      <Radio.Button value="Percentage" style={{ padding: '0 10px', borderRadius: '0 4px 4px 0' }}>%</Radio.Button>
+                    </Radio.Group>
+                  </div>
+                </div>
+              )}
+              
+              {profile?.pos_discount_enabled !== false && discountAmount > 0 && (
+                <Row justify="space-between" align="middle">
+                  <Text type="secondary" style={{ fontSize: '13px' }}>Discount Amount</Text>
+                  <Text style={{ color: token.colorError, fontSize: '13px' }}>- {formatCurrency(discountAmount, profile?.currency)}</Text>
+                </Row>
+              )}
+              
+              {profile?.tax_enabled && profile?.tax_rate > 0 && (
+                <Row justify="space-between">
+                  <Text type="secondary" style={{ fontSize: '13px' }}>{profile.tax_name} ({profile.tax_rate}%)</Text>
+                  <Text style={{ color: token.colorWarning, fontSize: '13px' }}>+ {formatCurrency(taxAmount, profile?.currency)}</Text>
+                </Row>
+              )}
+            </div>
+            {/* Divider hata diya gaya hai taake look aur clean ho */}
+            
+            {/* --- NEW VIDEO-STYLE TOTALS --- */}
+            <div style={{ marginBottom: '8px' }}>
+              <Row justify="space-between" align="middle" style={{ marginBottom: '8px' }}>
+                 <Text style={{ fontSize: '18px', fontWeight: 500 }}>Total</Text>
+                 <Text style={{ fontSize: '24px', fontWeight: 'bold' }}>{formatCurrency(grandTotal, profile?.currency)}</Text>
+              </Row>
+            </div>
+
+            {/* --- NEW VIDEO-STYLE PAYMENT & CHECKOUT ROW --- */}
+            <div style={{ marginBottom: '0px' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                
+                {/* 1. Cash Button */}
+                <Card 
+                  hoverable 
+                  onClick={() => { setPaymentMethod('Paid'); setCashOrBank('Cash'); }}
+                  style={{ 
+                    flex: 1, 
+                    height: '38px',
+                    borderColor: paymentMethod === 'Paid' && cashOrBank === 'Cash' ? token.colorPrimary : token.colorBorder,
+                    background: paymentMethod === 'Paid' && cashOrBank === 'Cash' ? token.controlItemBgActive : 'transparent'
+                  }}
+                  styles={{ body: { padding: '0', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' } }}
+                >
+                  <div title="Cash" style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <WalletOutlined style={{ fontSize: '18px', color: paymentMethod === 'Paid' && cashOrBank === 'Cash' ? token.colorPrimary : token.colorTextSecondary }} />
+                  </div>
+                </Card>
+
+                {/* 2. Bank/Card Button */}
+                <Card 
+                  hoverable 
+                  onClick={() => { setPaymentMethod('Paid'); setCashOrBank('Bank'); }}
+                  style={{ 
+                    flex: 1, 
+                    height: '38px',
+                    borderColor: paymentMethod === 'Paid' && cashOrBank === 'Bank' ? token.colorPrimary : token.colorBorder,
+                    background: paymentMethod === 'Paid' && cashOrBank === 'Bank' ? token.controlItemBgActive : 'transparent'
+                  }}
+                  styles={{ body: { padding: '0', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' } }}
+                >
+                  <div title="Card / Bank" style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <BankOutlined style={{ fontSize: '18px', color: paymentMethod === 'Paid' && cashOrBank === 'Bank' ? token.colorPrimary : token.colorTextSecondary }} />
+                  </div>
+                </Card>
+
+                {/* 3. Pay Later (Credit) Button */}
+                <Card 
+                  hoverable 
+                  onClick={() => { if(selectedCustomer && !isWalkIn) setPaymentMethod('Unpaid'); }}
+                  style={{ 
+                    flex: 1, 
+                    height: '38px',
+                    opacity: (!selectedCustomer || isWalkIn) ? 0.5 : 1,
+                    cursor: (!selectedCustomer || isWalkIn) ? 'not-allowed' : 'pointer',
+                    borderColor: paymentMethod === 'Unpaid' ? token.colorPrimary : token.colorBorder,
+                    background: paymentMethod === 'Unpaid' ? token.controlItemBgActive : 'transparent'
+                  }}
+                  styles={{ body: { padding: '0', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' } }}
+                >
+                  <div title="Pay Later" style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <UserAddOutlined style={{ fontSize: '18px', color: paymentMethod === 'Unpaid' ? token.colorPrimary : token.colorTextSecondary }} />
+                  </div>
+                </Card>
+
+                {/* 4. Complete Sale Button */}
+                <Button 
+                  type="primary" 
+                  disabled={cart.length === 0 || isSubmitting} 
+                  loading={isSubmitting} 
+                  onClick={handleCompleteSale}
+                  style={{ flex: 2.5, height: '38px', fontSize: '16px', fontWeight: 'bold', borderRadius: '8px', padding: '0 4px', whiteSpace: 'normal', lineHeight: 1.2 }}
+                >
+                  Complete Sale
+                </Button>
+
+              </div>
+
+              {/* Amount Paid Input (Sirf Pay Later par nazar aayega) */}
               {paymentMethod === 'Unpaid' && selectedCustomer && (
-                <Space>
-                  <Text strong>Paid Now:</Text>
+                <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: token.colorFillAlter, padding: '12px', borderRadius: '8px' }}>
+                  <Text strong>Paid Now (Advance):</Text>
                   <InputNumber 
-                    size="small"
-                    style={{ width: '110px' }} 
+                    size="large"
+                    style={{ width: '140px' }} 
                     prefix={profile?.currency ? `${profile.currency} ` : ''} 
                     min={0} 
                     max={grandTotal} 
                     value={amountPaid} 
                     onChange={(value) => setAmountPaid(value || 0)} 
                   />
-                </Space>
+                </div>
               )}
-
-              {/* 3. Cash/Bank Icons (Ab usi row mein end par hain) */}
-              <Radio.Group onChange={(e) => setCashOrBank(e.target.value)} value={cashOrBank} buttonStyle="solid">
-                <Tooltip title="Cash">
-                  <Radio.Button value="Cash">
-                    <WalletOutlined />
-                  </Radio.Button>
-                </Tooltip>
-                <Tooltip title="Bank / Online Transfer">
-                  <Radio.Button value="Bank">
-                    <BankOutlined />
-                  </Radio.Button>
-                </Tooltip>
-              </Radio.Group>
             </div>
-            {cart.length === 0 ? <Empty description="Cart is empty" /> : 
-              <List 
-                dataSource={cart} 
-                renderItem={(item) => { 
-                  const productInStock = allProducts.find(p => p.id === item.product_id); 
-                  return (
-                    <List.Item style={{ paddingInline: 0, paddingBlock: '4px' }}> 
-                      <div style={{ width: '100%' }}>
-                        <Row justify="space-between" align="top">
-                          <Col flex="auto">
-                            {/* === BUG FIX START === */}
-                            {/* item.product_name ke bajaye productInStock se naam hasil kiya gaya hai */}
-                            <Text strong>{productInStock ? productInStock.name : 'Unknown Product'}</Text>
-                            {/* === BUG FIX END === */}
-                            
-                            <div style={{ marginTop: '4px' }}>
-                              <Space wrap size={[0, 4]}>
-                                {/* General attributes (comma separated) */}
-                                {(() => {
-                                  const attrValues =[];
-                                  if (item.item_attributes) {
-                                    Object.entries(item.item_attributes).forEach(([key, value]) => {
-                                      if (value && !key.toLowerCase().includes('imei') && !key.toLowerCase().includes('serial')) {
-                                        attrValues.push(value);
-                                      }
-                                    });
-                                  }
-                                  return attrValues.length > 0 ? (
-                                    <Text type="secondary" style={{ fontSize: '14px', marginRight: '4px' }}>{attrValues.join(', ')}</Text>
-                                  ) : null;
-                                })()}
-                                {/* IMEI/Serial ke liye alag se Tag (sirf value dikhayein) */}
-                                {item.imei && <Tag color="purple" key="imei" style={{ margin: 0 }}>{item.imei}</Tag>}
-                                
-                                {/* Global Switch Check */}
-                            {profile?.warranty_system_enabled !== false && item.warranty_days > 0 && (
-                                  (() => {
-                                    const expiry = new Date(item.created_at);
-                                    expiry.setDate(expiry.getDate() + item.warranty_days);
-                                    const isExpired = new Date() > expiry;
-                                    return (
-                                      <Space size={8} style={{ marginLeft: '8px' }}>
-                                        <Tooltip title={`${isExpired ? "Supplier Warranty Expired" : "Supplier Warranty Active"} (Till: ${dayjs(expiry).format('DD-MMM-YYYY')})`}>
-                                          <span style={{ cursor: 'pointer' }}>
-                                            <Badge status={isExpired ? "error" : "success"} />
-                                          </span>
-                                        </Tooltip>
-                                        
-                                        {/* Individual Override Checkbox */}
-                                        <Checkbox 
-                                          checked={item.no_warranty} 
-                                          onChange={(e) => handleCartItemUpdate(item.variant_id, 'no_warranty', e.target.checked)}
-                                        >
-                                          <Text type="secondary" style={{fontSize: '10px'}}>No Warranty</Text>
-                                        </Checkbox>
-                                      </Space>
-                                    );
-                                  })()
-                                )}
-                              </Space>
-                            </div>
-                          </Col>
-                          <Col><Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleFullRemoveFromCart(item.variant_id)} /></Col>
-                        </Row>
-                        
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-                          {profile?.allow_cart_price_change !== false ? (
-                            <InputNumber size="small" style={{ flex: 1 }} prefix={profile?.currency ? `${profile.currency} ` : ''} value={item.sale_price} 
-                              onChange={(value) => handleCartItemUpdate(item.variant_id, 'sale_price', value || 0)} 
-                              min={0} 
-                            />
-                          ) : (
-                            <div style={{ flex: 1 }}>
-                              <Text type="secondary" style={{ marginRight: '8px' }}>Price:</Text>
-                              <Text strong>{formatCurrency(item.sale_price, profile?.currency)}</Text>
-                            </div>
-                          )}
-                          
-                          {!(item.category_is_imei_based || item.imei) && (
-                            <>
-                              <InputNumber 
-                                size="small" 
-                                style={{ width: '60px' }}
-                                value={item.quantity} 
-                                onChange={(value) => handleCartItemUpdate(item.variant_id, 'quantity', value || 1)} 
-                                min={1} 
-                                max={allProducts.find(p => p.id === item.product_id)?.quantity || item.quantity} 
-                              />
-                              <Text strong style={{ flex: 1, textAlign: 'right', minWidth: '80px' }}>
-                                {formatCurrency(item.sale_price * item.quantity, profile?.currency)}
-                              </Text>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </List.Item>
-                  ); 
-                }} 
-                style={{ maxHeight: '30vh', overflowY: 'auto', marginBottom: '8px' }} 
-              />
-            }
-            <Divider />
-            {profile?.pos_discount_enabled !== false && (
-            <Row gutter={16} style={{ marginBottom: '8px' }}>
-              <Col span={14}><InputNumber style={{ width: '100%' }} placeholder="Total Bill Discount" value={discount} onChange={(val) => setDiscount(val || 0)} min={0} /></Col>
-              <Col span={10}><Radio.Group value={discountType} onChange={(e) => setDiscountType(e.target.value)}><Radio.Button value="Amount">{profile?.currency || 'Rs.'}</Radio.Button><Radio.Button value="Percentage">%</Radio.Button></Radio.Group></Col>
-            </Row>
-            )}
-            <Row justify="space-between"><Text>Subtotal</Text><Text>{formatCurrency(subtotal, profile?.currency)}</Text></Row>
-            {profile?.pos_discount_enabled !== false && (
-            <Row justify="space-between"><Text>Discount</Text><Text style={{ color: token.colorError }}>- {formatCurrency(discountAmount, profile?.currency)}</Text></Row>
-            )}
-            {/* --- NAYA IZAFA: Tax UI --- */}
-            {profile?.tax_enabled && profile?.tax_rate > 0 && (
-            <Row justify="space-between">
-              <Text>{profile.tax_name} ({profile.tax_rate}%)</Text>
-              <Text style={{ color: token.colorWarning }}>+ {formatCurrency(taxAmount, profile?.currency)}</Text>
-            </Row>
-            )}
-            <Divider style={{ margin: '8px 0' }}/>
-            <Row justify="space-between" align="middle">
-              <Col><Statistic title={<Title level={5} style={{ margin: 0 }}>Grand Total</Title>} value={grandTotal} precision={2} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Col>
-              <Col><Button type="primary" size="large" disabled={cart.length === 0 || isSubmitting} loading={isSubmitting} onClick={handleCompleteSale}>Complete Sale</Button></Col>
-            </Row>
           </Card>
         </Col>
       </Row>

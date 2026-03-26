@@ -128,27 +128,25 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
               style={{ border: `1px solid ${token.colorBorder}`, backgroundColor: token.colorBgContainer, height: '100%' }}
               styles={{ body: { padding: '16px' } }}
             >
-              {/* === HEADER AREA === */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1, paddingRight: '8px' }}>
-                  {/* PRODUCT NAME - FONT SIZE INCREASED TO 20px */}
-                  <Text strong style={{ fontSize: '20px', display: 'block', marginBottom: '6px' }}>{product.name}</Text>
-                  
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                     {/* CATEGORY TAG - STANDARD STYLE */}
-                     <Tag color="cyan" style={{ margin: 0, fontSize: '12px', padding: '4px 8px' }}>
-                        {product.category_name}
-                     </Tag>
-                     {/* BRAND NAME - FONT INCREASED */}
-                     {product.brand && <Text type="secondary" style={{ fontSize: '14px' }}>{product.brand}</Text>}
-                  </div>
+              {/* === HEADER AREA (SINGLE ROW) === */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                
+                {/* Left Side: Name, Category, Brand */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', flex: 1 }}>
+                  <Text strong style={{ fontSize: '18px', lineHeight: 1 }}>
+                    {product.name}
+                  </Text>
+                  <Tag color="cyan" style={{ margin: 0, fontSize: '11px', padding: '2px 6px' }}>
+                    {product.category_name}
+                  </Tag>
+                  {product.brand && <Text type="secondary" style={{ fontSize: '13px' }}>{product.brand}</Text>}
                 </div>
 
                 {/* --- RIGHT SIDE (Price + Menu) --- */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   
                   {/* Price Range */}
-                  <Text strong style={{ fontSize: '18px', color: token.colorSuccess, whiteSpace: 'nowrap' }}>
+                  <Text strong style={{ fontSize: '17px', color: token.colorSuccess, whiteSpace: 'nowrap' }}>
                     {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
                   </Text>
                   

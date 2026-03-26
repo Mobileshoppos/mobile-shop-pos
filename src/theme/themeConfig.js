@@ -2,10 +2,10 @@
 
 export const themeConfig = {
   token: {
-    fontFamily: "'Poppins', 'Montserrat', sans-serif",
-    borderRadiusLG: 12,
-    // YAHAN POORI APP KA FONT SIZE CONTROL HOGA
-    fontSize: 15,
+    // Inter dashboard ke liye behtareen hai, Roboto Google Ads wala touch dega
+    fontFamily: "'Inter', 'Roboto', -apple-system, sans-serif",
+    borderRadiusLG: 8, // Google Ads mein corners thore kam rounded hote hain (12 se 8 behtar hai)
+    fontSize: 14, // Google Ads thora chota aur compact text istemal karta hai
   },
   components: {
     // Note: Layout aur Menu ki settings yahan se hata di gayi hain

@@ -3098,35 +3098,39 @@ async addCustomer(customerData) {
 
   // 7. Damaged Stock Report mangwana
   async getDamagedStockReport() {
-    // Yehi woh line thi jo Dexie ko ghalat ID bhej rahi thi.
-    // Hum sirf filter kar rahe hain, is liye yeh code theek hai.
     const damagedItems = await db.inventory.filter(i => (i.damaged_qty || 0) > 0).toArray();
     
-    // Pehle hi saare products aur suppliers fetch kar lete hain
+    // Pehle hi saare products, suppliers aur PURCHASES fetch kar lete hain
     const productIds = damagedItems.map(i => i.product_id).filter(id => id);
     const supplierIds = damagedItems.map(i => i.supplier_id).filter(id => id);
+    const purchaseIds = damagedItems.map(i => i.purchase_id).filter(id => id); // <--- NAYA
     
     // Batch fetching logic (UUIDs ke saath)
-    const [allProducts, allSuppliers] = await Promise.all([
+    const[allProducts, allSuppliers, allPurchases] = await Promise.all([
         db.products.where('id').anyOf(productIds).toArray(),
-        db.suppliers.where('id').anyOf(supplierIds).toArray()
+        db.suppliers.where('id').anyOf(supplierIds).toArray(),
+        db.purchases.where('id').anyOf(purchaseIds).toArray() // <--- NAYA
     ]);
 
     const productMap = {};
     allProducts.forEach(p => productMap[p.id] = p);
     const supplierMap = {};
     allSuppliers.forEach(s => supplierMap[s.id] = s);
+    const purchaseMap = {}; // <--- NAYA
+    allPurchases.forEach(p => purchaseMap[p.id] = p);
 
     const report = damagedItems.map((item) => {
       const product = productMap[item.product_id];
       const supplier = supplierMap[item.supplier_id];
+      const purchase = purchaseMap[item.purchase_id]; // <--- NAYA
       
       return {
         ...item,
         product_name: product?.name || 'Unknown',
         brand: product?.brand || '',
         supplier_name: supplier?.name || 'N/A',
-        invoice_id: item.purchase_id, // Purchase ID bhi ab UUID hai
+        // Yahan UUID ki bajaye asal Invoice ID set kar rahe hain
+        invoice_id: purchase ? (purchase.invoice_id || purchase.id.slice(0,8)) : item.purchase_id,
         total_loss: (item.damaged_qty || 0) * (item.purchase_price || 0)
       };
     });

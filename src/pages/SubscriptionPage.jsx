@@ -301,7 +301,7 @@ const SubscriptionPage = () => {
             icon={<WhatsAppOutlined />}
             description={
               <Text>
-                WhatsApp the screenshot to: <br/>
+                WhatsApp the payment screenshot to: <br/>
                 <a href="https://wa.me/923262324446" target="_blank" rel="noreferrer">
                   <strong>+92 326 2324446</strong>
                 </a>
@@ -311,7 +311,7 @@ const SubscriptionPage = () => {
           <Steps.Step 
             title="Activation" 
             icon={<RocketOutlined />}
-            description="Your plan will be active within 1-2 hours." 
+            description="Your plan will be active within few minutes." 
           />
         </Steps>
       </Modal>
