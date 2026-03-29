@@ -138,8 +138,8 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
         // --- CHECK KHATAM ---
 
         finalItemsData = finalImeis.map(imei => ({
-            // Agar edit kar rahe hain to purani ID sath rakhein (Server Safety)
-            id: initialValues?.id || null, 
+            // Agar edit kar rahe hain to purani ID, warna NAYI ID
+            id: initialValues?.id || crypto.randomUUID(), 
             status: initialValues?.status || 'Available',
             temp_id: crypto.randomUUID(),
             product_id: product.id,
@@ -196,7 +196,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
         // --- CHECK KHATAM ---
 
         finalItemsData = [{
-            id: initialValues?.id || null,
+            id: initialValues?.id || crypto.randomUUID(),
             status: initialValues?.status || 'Available',
             temp_id: crypto.randomUUID(),
             product_id: product.id,
@@ -434,6 +434,12 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
               }
               setSuppliers(allSuppliers);
               setProducts(productsData || []);
+
+              // NAYA IZAFA: Agar bahar se items bheje gaye hain (e.g. from Draft), to load karein
+              if (editingItems && editingItems.length > 0) {
+                  setPurchaseItems(editingItems);
+              }
+
               if (cashSupplier) {
                 setTimeout(() => { form.setFieldsValue({ supplier_id: cashSupplier.id }); }, 100);
               }
@@ -650,9 +656,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
             <Space direction="vertical" size={0}>
                 <Text>{renderItemName(record)}</Text>
                 
-                {/* Case 1: Agar Item BIK CHUKA hai */}
-                {/* Bulk Status Info */}
-                {(record.sold_qty > 0 || record.returned_qty > 0) && (
+                {/* Case 1: Agar Item BIK CHUKA hai (Sirf Edit mode mein dikhao) */}
+                {editingPurchase && (record.sold_qty > 0 || record.returned_qty > 0) && (
                     <Text type="warning" style={{ fontSize: '12px', display: 'block' }}>
                         {`(${record.sold_qty || 0} Sold, ${record.returned_qty || 0} Returned)`}
                     </Text>

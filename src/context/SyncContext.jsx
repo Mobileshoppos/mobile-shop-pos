@@ -207,6 +207,10 @@ export const SyncProvider = ({ children }) => {
       const { data: claims } = await supabase.from('warranty_claims').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('warranty_claims', claims, pendingIds);
 
+      // 9. Held Bills (Drafts)
+      const { data: heldBills } = await supabase.from('held_bills').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('held_bills', heldBills, pendingIds);
+
       const { data: ledger } = await supabase.from('staff_ledger').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('staff_ledger', ledger, pendingIds);
 
@@ -687,6 +691,16 @@ export const SyncProvider = ({ children }) => {
                 error = supError;
             }
 
+            // --- Held Bills Sync ---
+            else if (item.table_name === 'held_bills' && item.action === 'create') {
+                const { error: supError } = await supabase.from('held_bills').upsert([item.data]);
+                error = supError;
+            }
+            else if (item.table_name === 'held_bills' && item.action === 'delete') {
+                const { error: supError } = await supabase.from('held_bills').delete().eq('id', item.data.id);
+                error = supError;
+            }
+
             else if (item.table_name === 'system_logs' && item.action === 'create') {
                 const { error: supError } = await supabase.from('system_logs').insert([item.data]);
                 error = supError;
@@ -725,10 +739,13 @@ export const SyncProvider = ({ children }) => {
               Logger.error('sync', `Sync failed for ${item.table_name} (ID: ${recordId})`, error, userGuide);
               // --- SMART ERROR LOGGING END ---
 
+              // NAYA IZAFA: Stock Conflict ko pehchan'na
+              const isStockConflict = error.message?.includes('check_stock_not_negative');
+              
               await db.sync_queue.update(item.id, { 
-                status: 'error', 
-                last_error: error.message || 'Unknown error',
-                retry_count: (item.retry_count || 0) + 1 // Ek ginti barha dein
+                status: isStockConflict ? 'conflict' : 'error', // Agar stock ka masla hai to 'conflict' likho
+                last_error: isStockConflict ? 'Out of Stock: Item was sold on another counter.' : (error.message || 'Unknown error'),
+                retry_count: isStockConflict ? 3 : (item.retry_count || 0) + 1 // Conflict ko foran 'stuck' kar dein taake owner hal kare
               });
             }
           } catch (err) {

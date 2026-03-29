@@ -99,6 +99,17 @@ export const StaffProvider = ({ children }) => {
     }
   };
 
+  // NAYA: Sirf Master PIN verify karne ke liye (Baghair logout kiye)
+  const verifyMasterPin = (pin) => {
+    const masterPin = localStorage.getItem('device_master_pin');
+    if (!masterPin) return false;
+
+    if (masterPin.startsWith('$2')) {
+      return bcrypt.compareSync(pin, masterPin);
+    }
+    return pin === masterPin;
+  };
+
   // App ko Lock karna
   const lockApp = () => {
     // Check: Kya Master PIN set hai?
@@ -122,7 +133,7 @@ export const StaffProvider = ({ children }) => {
   };
 
   return (
-    <StaffContext.Provider value={{ activeStaff, isAppLocked, loginStaff, lockApp, unlockAsOwner, can }}>
+    <StaffContext.Provider value={{ activeStaff, isAppLocked, loginStaff, lockApp, unlockAsOwner, verifyMasterPin, can }}>
       {children}
     </StaffContext.Provider>
   );

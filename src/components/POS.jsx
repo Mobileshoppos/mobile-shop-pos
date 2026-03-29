@@ -2,13 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip, Badge, Tag, Checkbox, theme
 } from 'antd';
-import { ShoppingCartOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined, WalletOutlined, BankOutlined } from '@ant-design/icons';
+import { ShoppingCartOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined, WalletOutlined, BankOutlined, ClockCircleOutlined, PauseCircleOutlined, LockOutlined, PrinterOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
 import { printThermalReceipt } from '../utils/thermalPrinter';
 import SelectVariantModal from './SelectVariantModal';
+import DraftBillsModal from '../components/DraftBillsModal';
+import AddPurchaseForm from '../components/AddPurchaseForm';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
 import dayjs from 'dayjs';
@@ -67,7 +69,7 @@ const POS = () => {
   const [advancedFilters, setAdvancedFilters] = useState([]);
   const { message, modal } = App.useApp();
   const { user, profile, refetchStockCount } = useAuth();
-  const { activeStaff } = useStaff(); // <--- NAYA IZAFA (AUDIT TRAIL)
+  const { activeStaff, verifyMasterPin } = useStaff();
   const { processSyncQueue } = useSync();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -82,14 +84,59 @@ const POS = () => {
   const [addForm] = Form.useForm();
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState('Amount');
+  const [isMasterPinModalVisible, setIsMasterPinModalVisible] = useState(false);
+  const [pendingDiscountValue, setPendingDiscountValue] = useState(0);
+  const [masterPinInput, setMasterPinInput] = useState('');
+  const [lastSaleData, setLastSaleData] = useState(null);
   const searchInputRef = useRef(null);
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
   const [productForVariantSelection, setProductForVariantSelection] = useState(null);
+  const [isDraftModalOpen, setIsDraftModalOpen] = useState(false); 
+  const [heldCount, setHeldCount] = useState(0);
+  const [isPurchaseModalVisible, setIsPurchaseModalVisible] = useState(false);
+  const [draftPurchaseItems, setDraftPurchaseItems] = useState([]);
+
+  // Counter ko update karne wala function
+  const refreshHeldCount = async () => {
+    const bills = await DataService.getHeldBills();
+    setHeldCount(bills.length);
+  };
+
+  // Page khulte hi ginti (count) aur adhoora cart (persistence) load karein
+  useEffect(() => {
+    refreshHeldCount();
+
+    const loadActiveCart = async () => {
+      const savedCart = await DataService.getActiveCart();
+      if (savedCart && savedCart.cart.length > 0) {
+        setCart(savedCart.cart);
+        setSelectedCustomer(savedCart.selectedCustomer);
+        setDiscount(savedCart.discount);
+        setDiscountType(savedCart.discountType);
+        message.info("Your previous unsaved bill has been restored.");
+      }
+    };
+    loadActiveCart();
+  }, []);
   const [allProducts, setAllProducts] = useState([]);
   const [displayedProducts, setDisplayedProducts] = useState([]);
   const [popularCategories, setPopularCategories] = useState([]);
   const [activeCategoryId, setActiveCategoryId] = useState(null);
+  // --- NAYA IZAFA: Auto-Save Cart Persistence ---
+  useEffect(() => {
+    if (cart.length > 0) {
+      DataService.saveActiveCart({
+        cart,
+        selectedCustomer,
+        discount,
+        discountType
+      });
+    } else {
+      // Agar cart khali ho jaye to record mita dein
+      DataService.clearActiveCart();
+    }
+  }, [cart, selectedCustomer, discount, discountType]);
   const [topSellingProducts, setTopSellingProducts] = useState([]);
   // --- NAYA: SILENT REFRESH LISTENER (Sahi Jagah) ---
   useEffect(() => {
@@ -805,6 +852,8 @@ const POS = () => {
              } else {
                 generateSaleReceipt(receiptData, profile?.currency);
              }
+             // Naya Izafa: Aakhri sale ka data yaad rakhein (Moved inside the bracket)
+             setLastSaleData(receiptData);
         }
 
         // Reset
@@ -814,6 +863,7 @@ const POS = () => {
         setAmountPaid(0);
         setDiscount(0);
         setDiscountType('Amount');
+        await DataService.clearActiveCart(); // Persistence saaf karein
         
         const { productsData } = await DataService.getInventoryData();
         setAllProducts(productsData);
@@ -903,7 +953,118 @@ const POS = () => {
     setCart(cart.filter(item => item.variant_id !== variantId));
   };
 
-  const handleResetCart = () => { modal.confirm({ title: 'Reset Bill?', content: 'Are you sure you want to remove all items from the current bill?', okText: 'Yes, Reset', cancelText: 'No', onOk: () => { setCart([]); setDiscount(0); setAmountPaid(0); setSelectedCustomer(null); message.success('Bill has been reset.'); } }); };
+  const handleResetCart = () => { modal.confirm({ title: 'Reset Bill?', content: 'Are you sure you want to remove all items from the current bill?', okText: 'Yes, Reset', cancelText: 'No', onOk: async () => { setCart([]); setDiscount(0); setAmountPaid(0); setSelectedCustomer(null); await DataService.clearActiveCart(); message.success('Bill has been reset.'); } }); };
+
+  const onDiscountChange = (value) => {
+    const limit = profile?.staff_discount_limit || 10;
+    
+    // Agar Owner hai (activeStaff null hai), to koi limit nahi
+    if (!activeStaff) {
+      setDiscount(value || 0);
+      return;
+    }
+
+    // Calculation: % mein kitna discount ban raha hai?
+    let discountPercent = 0;
+    if (discountType === 'Percentage') {
+      discountPercent = value;
+    } else {
+      discountPercent = subtotal > 0 ? ((value || 0) / subtotal) * 100 : 0;
+    }
+
+    // Check: Kya limit cross ho rahi hai?
+    if (discountPercent > limit) {
+      setPendingDiscountValue(value || 0);
+      setIsMasterPinModalVisible(true); // PIN Modal khol dein
+    } else {
+      setDiscount(value || 0);
+    }
+  };
+
+  const handleMasterPinVerify = () => {
+    if (verifyMasterPin(masterPinInput)) {
+      setDiscount(pendingDiscountValue);
+      setIsMasterPinModalVisible(false);
+      setMasterPinInput('');
+      message.success("Discount approved by Admin.");
+    } else {
+      message.error("Invalid Master PIN!");
+      setMasterPinInput('');
+    }
+  };
+
+  const handleReprintLastReceipt = () => {
+    if (!lastSaleData) return;
+    if (profile?.receipt_format === 'thermal') {
+      printThermalReceipt(lastSaleData, profile?.currency);
+    } else {
+      generateSaleReceipt(lastSaleData, profile?.currency);
+    }
+    message.success("Reprinting last receipt...");
+  };
+
+  const handleHoldBill = async () => {
+    if (cart.length === 0) return;
+    try {
+      const customerName = selectedCustomer ? customers.find(c => c.id === selectedCustomer)?.name : 'Walk-in Customer';
+      await DataService.holdBill({ 
+        cart, 
+        customer_id: selectedCustomer, 
+        discount, 
+        discountType, 
+        user_id: user.id,
+        staff_id: activeStaff?.id || null, // Naya Izafa: Staff ID bheji
+        note: `Draft for ${customerName}` 
+      });
+      setCart([]); setDiscount(0); setSelectedCustomer(null);
+      await DataService.clearActiveCart(); // Hold hone par persistence saaf karein
+      refreshHeldCount(); // Counter update karein
+      message.success("Bill saved as draft!");
+    } catch (error) { message.error("Failed to hold: " + error.message); }
+  };
+
+  const handleResumeFromDraft = async (heldBill, type) => {
+    if (type === 'sale') {
+      if (cart.length > 0) { message.warning("Please clear current cart first."); return; }
+      setCart(heldBill.cart);
+      setSelectedCustomer(heldBill.customer_id);
+      setDiscount(heldBill.discount || 0);
+      setDiscountType(heldBill.discount_type || 'Amount');
+      message.success("Draft resumed for Sale!");
+    } else {
+      // Purchase Logic: Items ko bilkul NAYA bana kar bhejein (Safai)
+      const formattedForPurchase = heldBill.cart.map(item => ({
+        product_id: item.product_id,
+        name: item.product_name,
+        temp_id: crypto.randomUUID(), 
+        quantity: item.quantity,
+        purchase_price: item.purchase_price || 0,
+        sale_price: item.sale_price || 0,
+        item_attributes: item.item_attributes,
+        imei: item.imei,
+        warranty_days: item.warranty_days || 0,
+        id: crypto.randomUUID(), // NAYI ID: Ab yeh khali nahi jayega
+        status: 'Available',
+        sold_qty: 0,
+        returned_qty: 0,
+        damaged_qty: 0
+      }));
+      
+      // NAYA: Draft ID ko state mein save karein taake baad mein delete ho sakay
+      setDraftPurchaseItems(formattedForPurchase);
+      setIsPurchaseModalVisible(true);
+      
+      // Draft ko yahan delete karne ke bajaye, sirf band karein
+      // Hum isay 'onPurchaseCreated' par delete karenge (Neeche wala step dekhein)
+      window.currentDraftId = heldBill.id; 
+      setIsDraftModalOpen(false);
+      return; 
+    }
+    
+    await DataService.deleteHeldBill(heldBill.id);
+    setIsDraftModalOpen(false);
+    refreshHeldCount();
+  };
 
   return (
     <div style={{ padding: isMobile ? '4px 0' : '8px 0' }}>
@@ -1240,11 +1401,33 @@ const POS = () => {
                 })()}
               </Space.Compact>
 
-              {cart.length > 0 && (
-                <Tooltip title="Reset Bill">
-                  <Button danger type="text" icon={<DeleteOutlined />} onClick={handleResetCart} style={{ padding: '0 8px' }} />
-                </Tooltip>
-              )}
+              {/* 1. Quick Reprint (Always visible if data exists and enabled) */}
+            {profile?.reprint_button_enabled !== false && lastSaleData && (
+              <Tooltip title="Reprint Last Receipt">
+                <Button type="text" icon={<PrinterOutlined style={{ color: token.colorInfo }} />} onClick={handleReprintLastReceipt} style={{ padding: '0 8px' }} />
+              </Tooltip>
+            )}
+
+            {/* 2. Hold Bill (Only if cart has items) */}
+            {cart.length > 0 && (
+              <Tooltip title="Hold Bill / Quotation">
+                <Button type="text" icon={<PauseCircleOutlined style={{ color: token.colorWarning }} />} onClick={handleHoldBill} style={{ padding: '0 8px' }} />
+              </Tooltip>
+            )}
+
+            {/* 3. View Drafts (Always visible) */}
+            <Tooltip title="View Drafts">
+              <Badge count={heldCount} size="small" offset={[-5, 5]}>
+                <Button type="text" icon={<ClockCircleOutlined />} onClick={() => setIsDraftModalOpen(true)} style={{ padding: '0 8px' }} />
+              </Badge>
+            </Tooltip>
+
+            {/* 4. Reset Bill (Only if cart has items) */}
+            {cart.length > 0 && (
+              <Tooltip title="Reset Bill">
+                <Button danger type="text" icon={<DeleteOutlined />} onClick={handleResetCart} style={{ padding: '0 8px' }} />
+              </Tooltip>
+            )}
             </div>
             {/* Payment Methods ko video design ke mutabiq neechay Totals ke paas muntaqil kar diya gaya hai */}
             {cart.length === 0 ? <Empty description="Cart is empty" style={{ margin: '40px 0' }} /> : 
@@ -1274,7 +1457,7 @@ const POS = () => {
 
                             {/* Item Name */}
                             <Text strong style={{ fontSize: '16px', lineHeight: 1.2 }}>
-                              {productInStock ? productInStock.name : 'Unknown Product'}
+                              {productInStock ? productInStock.name : (item.product_name || item.name || 'Loading...')}
                             </Text>
 
                             {/* Unit Price (Moved to 1st Row) */}
@@ -1352,9 +1535,25 @@ const POS = () => {
                                 >
                                   -
                                 </div>
-                                <div style={{ minWidth: '28px', padding: '0 4px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', borderLeft: `1px solid ${token.colorBorderSecondary}`, borderRight: `1px solid ${token.colorBorderSecondary}`, height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  {item.quantity}
-                                </div>
+                                <InputNumber
+  min={1}
+  variant="borderless"
+  controls={false} // Default up/down arrows hata diye
+  value={item.quantity}
+  onChange={(val) => handleCartItemUpdate(item.variant_id, 'quantity', val || 1)}
+  onFocus={(e) => e.target.select()} // Click karte hi text select ho jaye taake foran type ho sakay
+  style={{ 
+    width: '45px', 
+    textAlign: 'center', 
+    fontWeight: 'bold', 
+    height: '26px', 
+    borderLeft: `1px solid ${token.colorBorderSecondary}`, 
+    borderRight: `1px solid ${token.colorBorderSecondary}`,
+    borderRadius: 0,
+    display: 'flex',
+    alignItems: 'center'
+  }}
+/>
                                 <div 
                                   onClick={() => {
                                     const maxQty = allProducts.find(p => p.id === item.product_id)?.quantity || item.quantity;
@@ -1390,14 +1589,14 @@ const POS = () => {
                   <Text type="secondary" style={{ fontSize: '13px' }}>Discount</Text>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     <InputNumber 
-                      variant="borderless" 
-                      size="small" 
-                      style={{ width: '80px', background: token.colorFillAlter, borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }} 
-                      placeholder="0" 
-                      value={discount} 
-                      onChange={(val) => setDiscount(val || 0)} 
-                      min={0} 
-                    />
+  variant="borderless" 
+  size="small" 
+  style={{ width: '80px', background: token.colorFillAlter, borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }} 
+  placeholder="0" 
+  value={discount} 
+  onChange={onDiscountChange} // Naya function
+  min={0} 
+/>
                     <Radio.Group 
                       size="small" 
                       value={discountType} 
@@ -1583,6 +1782,61 @@ const POS = () => {
   </Form>
 </Modal>
       {isVariantModalOpen && <SelectVariantModal visible={isVariantModalOpen} onCancel={() => setIsVariantModalOpen(false)} onOk={handleVariantsSelected} product={productForVariantSelection} cart={cart} />}
+      
+      <DraftBillsModal 
+        visible={isDraftModalOpen} 
+        onCancel={() => setIsDraftModalOpen(false)} 
+        // Yahan 'type' ka izafa kiya taake function ko pata chale Sale hai ya Purchase
+        onResume={(bill, type) => { handleResumeFromDraft(bill, type); refreshHeldCount(); }}
+        onRefresh={refreshHeldCount} // Yeh naya prop hai
+        profile={profile}
+        customers={customers}
+        allProducts={allProducts}
+      />
+
+      {/* NAYA IZAFA: Purchase Form Modal */}
+      <AddPurchaseForm 
+        visible={isPurchaseModalVisible}
+        onCancel={() => setIsPurchaseModalVisible(false)}
+        onPurchaseCreated={async () => {
+          setIsPurchaseModalVisible(false);
+          setDraftPurchaseItems([]);
+          
+          // NAYA: Agar yeh kisi draft se aaya tha, to ab delete karein
+          if (window.currentDraftId) {
+            await DataService.deleteHeldBill(window.currentDraftId);
+            window.currentDraftId = null;
+            refreshHeldCount();
+          }
+          
+          refetchStockCount();
+        }}
+        editingItems={draftPurchaseItems} // Draft wale items yahan pass ho jayenge
+      />
+
+      {/* --- ADMIN PIN MODAL FOR DISCOUNT OVERRIDE --- */}
+      <Modal
+        title="Admin Approval Required"
+        open={isMasterPinModalVisible}
+        onOk={handleMasterPinVerify}
+        onCancel={() => { setIsMasterPinModalVisible(false); setMasterPinInput(''); }}
+        okText="Approve"
+        centered
+        width={300}
+      >
+        <div style={{ textAlign: 'center' }}>
+          <LockOutlined style={{ fontSize: '32px', color: token.colorWarning, marginBottom: '16px' }} />
+          <p>Discount exceeds staff limit. Please enter <b>Master PIN</b> to authorize.</p>
+          <Input.Password 
+            placeholder="Enter Master PIN" 
+            value={masterPinInput}
+            onChange={e => setMasterPinInput(e.target.value.replace(/[^0-9]/g, ''))}
+            onPressEnter={handleMasterPinVerify}
+            autoFocus
+          />
+        </div>
+      </Modal>
+
     </div>
   );
 };

@@ -48,7 +48,7 @@ const SettingsPage = () => {
   }, [searchParams]);
   
   const [selectedCurrency, setSelectedCurrency] = useState('PKR');
-  const [themeMode, setThemeMode] = useState('light');
+  const [themeMode, setThemeMode] = useState('dark');
   const [isSaving, setIsSaving] = useState(false);
   const [receiptFormat, setReceiptFormat] = useState('pdf');
   // --- NAYA IZAFA: Tax States ---
@@ -61,6 +61,10 @@ const SettingsPage = () => {
   
   // Nayi State for Warranty Policy
   const [warrantyPolicy, setWarrantyPolicy] = useState(DEFAULT_POLICY);
+  const [quotationPolicy, setQuotationPolicy] = useState('');
+  const [quotationValidityDays, setQuotationValidityDays] = useState(3);
+  const [staffDiscountLimit, setStaffDiscountLimit] = useState(10);
+  const [reprintButtonEnabled, setReprintButtonEnabled] = useState(false);
   const [qrCodeEnabled, setQrCodeEnabled] = useState(true);
   const [warrantySystemEnabled, setWarrantySystemEnabled] = useState(true);
   const[posDiscountEnabled, setPosDiscountEnabled] = useState(true);
@@ -126,6 +130,13 @@ const SettingsPage = () => {
       } else {
           setWarrantyPolicy(DEFAULT_POLICY);
       }
+
+      if (profile.quotation_policy) {
+          setQuotationPolicy(profile.quotation_policy);
+      if (profile.quotation_validity_days) setQuotationValidityDays(profile.quotation_validity_days);
+      if (profile.staff_discount_limit !== undefined) setStaffDiscountLimit(profile.staff_discount_limit);
+      if (profile.reprint_button_enabled !== undefined) setReprintButtonEnabled(profile.reprint_button_enabled);
+      }
     }
   }, [profile]);
 
@@ -147,6 +158,10 @@ const SettingsPage = () => {
       low_stock_alerts_enabled: lowStockAlerts,
       low_stock_threshold: lowStockThreshold,
       warranty_policy: warrantyPolicy,
+      quotation_policy: quotationPolicy,
+      quotation_validity_days: quotationValidityDays,
+      staff_discount_limit: staffDiscountLimit,
+      reprint_button_enabled: reprintButtonEnabled,
       qr_code_enabled: qrCodeEnabled,
       warranty_system_enabled: warrantySystemEnabled,
       pos_discount_enabled: posDiscountEnabled,
@@ -328,13 +343,44 @@ const SettingsPage = () => {
                     </Col>
                     <Col xs={24} sm={18}><Switch checked={warrantySystemEnabled} onChange={setWarrantySystemEnabled} disabled={isWarrantyLocked} /></Col>
                   </Row>
+                  <Row align="middle" gutter={[16, 16]}>
+                    <Col xs={24} sm={6}>
+                      <Text strong>Enable Quick Reprint</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>Show a button to reprint the last receipt on POS.</Text>
+                    </Col>
+                    <Col xs={24} sm={18}>
+                      <Switch checked={reprintButtonEnabled} onChange={setReprintButtonEnabled} />
+                    </Col>
+                  </Row>
+                  <Divider />
                   <Divider />
                   <Row align="middle" gutter={[16, 16]}>
                     <Col xs={24} sm={6}>
                       <Text strong>Enable POS Discount</Text>
-                      <Text type="secondary" style={{ display: 'block' }}>Show or hide the discount field on the POS screen.</Text>
-                     </Col>
-                  <Col xs={24} sm={18}><Switch checked={posDiscountEnabled} onChange={setPosDiscountEnabled} disabled={isAdvancedLocked} /></Col>
+                      <Text type="secondary" style={{ display: 'block' }}>Show discount field and set staff limit.</Text>
+                    </Col>
+                    <Col xs={24} sm={18}>
+                      <Space wrap>
+                        <Switch 
+                          checked={posDiscountEnabled} 
+                          onChange={setPosDiscountEnabled} 
+                          disabled={isAdvancedLocked} 
+                        />
+                        {posDiscountEnabled && (
+                          <Tooltip title="Maximum discount a staff can give without Master PIN">
+                            <InputNumber 
+                              min={0} 
+                              max={100} 
+                              value={staffDiscountLimit} 
+                              onChange={setStaffDiscountLimit} 
+                              addonAfter="%" 
+                              placeholder="Staff Limit"
+                              style={{ width: 140 }}
+                            />
+                          </Tooltip>
+                        )}
+                      </Space>
+                    </Col>
                   </Row>
                   <Divider />
                   {/* --- NAYA IZAFA: Tax Configuration UI --- */}
@@ -390,6 +436,38 @@ const SettingsPage = () => {
                     </Col>
                   <Col xs={24} sm={18}>
                     <TextArea rows={4} value={warrantyPolicy} onChange={(e) => setWarrantyPolicy(e.target.value)} placeholder="Enter your warranty terms here..." />
+                    </Col>
+                  </Row>
+                  <Divider />
+                  <Row align="middle" gutter={[16, 16]}>
+                    <Col xs={24} sm={6}>
+                      <Text strong>Quotation Validity (Days)</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>How many days the estimate is valid.</Text>
+                    </Col>
+                    <Col xs={24} sm={18}>
+                      <InputNumber 
+                        min={1} 
+                        max={30} 
+                        value={quotationValidityDays} 
+                        onChange={setQuotationValidityDays} 
+                        addonAfter="Days"
+                        style={{ width: isMobile ? '100%' : '150px' }}
+                      />
+                    </Col>
+                  </Row>
+                  <Divider />
+                  <Row align="top" gutter={[16, 16]}>
+                    <Col xs={24} sm={6}>
+                      <Text strong>Quotation / Estimate Policy</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>This note will appear on your estimated bills.</Text>
+                    </Col>
+                    <Col xs={24} sm={18}>
+                      <TextArea 
+                        rows={4} 
+                        value={quotationPolicy} 
+                        onChange={(e) => setQuotationPolicy(e.target.value)} 
+                        placeholder="e.g. 1. Valid for 3 days. 2. Prices subject to market change." 
+                      />
                     </Col>
                   </Row>
                 </div>
@@ -652,6 +730,10 @@ const SettingsPage = () => {
                 lowStockAlerts === profile.low_stock_alerts_enabled &&
                 lowStockThreshold === profile.low_stock_threshold &&
                 warrantyPolicy === profile.warranty_policy && 
+                quotationPolicy === profile.quotation_policy &&
+                quotationValidityDays === profile.quotation_validity_days &&
+                staffDiscountLimit === profile.staff_discount_limit &&
+                reprintButtonEnabled === profile.reprint_button_enabled &&
                 qrCodeEnabled === profile.qr_code_enabled &&
                 warrantySystemEnabled === profile.warranty_system_enabled &&
                 posDiscountEnabled === profile.pos_discount_enabled &&

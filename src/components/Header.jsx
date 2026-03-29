@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layout, Tag, theme, Tooltip, Button, Badge, Space, Modal, List, Typography } from 'antd';
+import { Layout, Tag, theme, Tooltip, Button, Badge, Space, Modal, List, Typography, App, Form, Select, InputNumber, Alert } from 'antd';
 import { 
   ShopOutlined, 
   CrownOutlined, 
@@ -30,6 +30,7 @@ import { useTheme } from '../context/ThemeContext'; // <--- NAYA IZAFA
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { useSync } from '../context/SyncContext';
+import DataService from '../DataService';
 import { db } from '../db';
 import { getPlanLimits } from '../config/subscriptionPlans';
 
@@ -48,9 +49,10 @@ const titleContainerStyle = {
 // Hum ne yahan 'collapsed' aur 'setCollapsed' receive kiya hai App.jsx se
 const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
   const { profile, isPro, stockCount, lowStockCount } = useAuth();
-  const { activeStaff } = useStaff();
-  const { isDarkMode } = useTheme(); // <--- NAYA IZAFA
+  const { activeStaff, can } = useStaff(); // <--- Yahan 'can' shamil kiya
+  const { isDarkMode } = useTheme();
   const { pendingCount, stuckCount, retryAll, isSyncing, syncAllData, processSyncQueue } = useSync();
+  const { message, modal } = App.useApp(); // <--- YEH NAYI LINE HAI
   // --- LIVE CLOCK LOGIC ---
   const [currentTime, setCurrentTime] = React.useState(dayjs());
   React.useEffect(() => {
@@ -66,8 +68,88 @@ const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
       await syncAllData();      // 2. Phir server se naya data download karein
     }
   };
+
+  // NAYA: Stuck item ko queue se nikalne ka function
+  const handleDiscardItem = async (syncItemId) => {
+    modal.confirm({
+      title: 'Discard this item?',
+      content: 'Warning: This will permanently delete this record from your local device to fix the sync conflict. Use this only if the item was already sold or entered by mistake.',
+      okText: 'Yes, Delete Locally',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          // 1. Pehle Queue se item nikalain
+          const syncItem = await db.sync_queue.get(syncItemId);
+          
+          if (syncItem && syncItem.table_name === 'sales') {
+            const saleId = syncItem.data.sale.id;
+            
+            // 2. Local Database se Sale aur uske Items mita dein (Dashboard theek karne ke liye)
+            await db.sales.delete(saleId);
+            if (db.sale_items) {
+              await db.sale_items.where('sale_id').equals(saleId).delete();
+            }
+            console.log("Local Ghost Sale deleted successfully.");
+          }
+
+          // 3. Aakhir mein Sync Queue se record saaf karein
+          await db.sync_queue.delete(syncItemId);
+          
+          message.success("Ghost record removed. Dashboard will update shortly.");
+          
+          // UI Refresh
+          const items = await db.sync_queue.filter(item => (item.retry_count || 0) >= 3).toArray();
+          setStuckItems(items);
+          
+          // Dashboard ko foran update karne ka signal
+          window.dispatchEvent(new CustomEvent('local-db-updated'));
+
+        } catch (err) {
+          message.error("Failed to discard: " + err.message);
+        }
+      }
+    });
+  };
+
+  // NAYA: Conflict hal karne ka modal kholna
+  const showResolveModal = async (item) => {
+    setResolvingItem(item);
+    setIsResolveModalOpen(true);
+    // Suppliers load karein
+    const data = await DataService.getSuppliers();
+    setSuppliers(data);
+    // Default values set karein
+    resolveForm.setFieldsValue({ 
+      purchase_price: item.data?.items?.[0]?.purchase_price || 0 
+    });
+  };
+
+  const handleResolveSubmit = async (values) => {
+    try {
+      await DataService.resolveSaleConflict(
+        resolvingItem.id,
+        values.supplier_id,
+        values.purchase_price,
+        profile.user_id,
+        activeStaff?.id
+      );
+      message.success("Missing purchase added! Sale will sync shortly.");
+      setIsResolveModalOpen(false);
+      setIsSyncModalOpen(false); // Sync center band karein taake refresh ho
+      processSyncQueue(); // Dobara sync shuru karein
+    } catch (err) {
+      message.error("Resolution failed: " + err.message);
+    }
+  };
+
   const isSyncMenuOpen = isSyncModalOpen;
   const [stuckItems, setStuckItems] = React.useState([]);
+  
+  // --- NAYA IZAFA: Conflict Resolution States ---
+  const [isResolveModalOpen, setIsResolveModalOpen] = React.useState(false);
+  const [resolvingItem, setResolvingItem] = React.useState(null);
+  const [suppliers, setSuppliers] = React.useState([]);
+  const [resolveForm] = Form.useForm();
 
   // Naya Logic: Jaise hi stuckCount badle, list khud refresh ho jaye
   React.useEffect(() => {
@@ -401,7 +483,19 @@ return (
           itemLayout="horizontal"
           dataSource={stuckItems}
           renderItem={(item) => (
-            <List.Item>
+            <List.Item
+              // Naya Izafa: Har stuck item ke saath Discard ka button
+              actions={[
+                // Resolve: Sirf unhein dikhao jinhein Purchases manage karne ki ijazat hai
+                item.table_name === 'sales' && can('can_manage_purchases') && (
+                  <Button key="resolve" type="link" onClick={() => showResolveModal(item)}>Resolve</Button>
+                ),
+                // Discard: Sirf unhein dikhao jinhein Inventory edit/delete karne ki ijazat hai
+                can('can_edit_inventory') && (
+                  <Button key="discard" type="link" danger onClick={() => handleDiscardItem(item.id)}>Discard</Button>
+                )
+              ]}
+            >
               <List.Item.Meta
   title={
     <Space direction="vertical" size={0}>
@@ -425,6 +519,38 @@ return (
             </List.Item>
           )}
         />
+      </Modal>
+
+      {/* --- CONFLICT RESOLUTION MODAL --- */}
+      <Modal
+        title="Resolve Sync Conflict: Missing Stock"
+        open={isResolveModalOpen}
+        onCancel={() => setIsResolveModalOpen(false)}
+        onOk={() => resolveForm.submit()}
+        okText="Add Purchase & Sync"
+      >
+        <Alert 
+          message="Stock Missing" 
+          description="This sale failed because the item was not in stock. To fix this, please record a quick purchase entry below."
+          type="warning" 
+          showIcon 
+          style={{ marginBottom: '20px' }}
+        />
+        <Form form={resolveForm} layout="vertical" onFinish={handleResolveSubmit}>
+          <Form.Item name="supplier_id" label="Select Supplier" rules={[{ required: true }]}>
+            <Select placeholder="Choose the supplier for this item">
+              {suppliers.map(s => <Select.Option key={s.id} value={s.id}>{s.name}</Select.Option>)}
+            </Select>
+          </Form.Item>
+          <Form.Item name="purchase_price" label="Unit Purchase Price" rules={[{ required: true }]}>
+            <InputNumber 
+              style={{ width: '100%' }} 
+              prefix={profile?.currency} 
+              min={0} 
+              placeholder="Enter cost price per unit"
+            />
+          </Form.Item>
+        </Form>
       </Modal>
     </>
   );

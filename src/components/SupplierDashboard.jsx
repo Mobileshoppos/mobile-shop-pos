@@ -195,7 +195,18 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
     };
 
     const ledgerColumns = [
-        { title: 'Date', dataIndex: 'date', key: 'date', render: (d) => new Date(d).toLocaleDateString() },
+        { 
+    title: 'Date', 
+    key: 'date', 
+    render: (_, record) => (
+        <>
+            <div>{new Date(record.date).toLocaleDateString()}</div>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+                {new Date(record.created_at || record.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+        </>
+    ) 
+},
         { 
           title: 'Staff', 
           key: 'staff', 
@@ -252,7 +263,10 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
                                         <div style={{ marginTop: '4px' }}>
                                             <Text>{item.link ? <Link to={item.link}>{item.details}</Link> : item.details}</Text>
                                         </div>
-                                        <Text type="secondary" style={{ fontSize: '12px' }}>{new Date(item.date).toLocaleDateString()}</Text>
+                                        <Text type="secondary" style={{ fontSize: '12px' }}>
+    {new Date(item.date).toLocaleDateString()} {' '}
+    {new Date(item.created_at || item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+</Text>
                                     </Col>
                                     <Col style={{ textAlign: 'right' }}>
     {item.debit > 0 && (

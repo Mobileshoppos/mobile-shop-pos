@@ -1144,12 +1144,17 @@ async addCustomer(customerData) {
             });
         } else {
             // Naya item create
+            const newItemId = item.id || crypto.randomUUID();
             itemsToCreate.push({
-                id: crypto.randomUUID(),
-                local_id: crypto.randomUUID(),
+                id: newItemId,
+                local_id: item.local_id || newItemId,
                 purchase_id: purchaseId,
                 product_id: item.product_id,
-                quantity: 1,
+                quantity: Number(item.quantity) || 1,
+                available_qty: Number(item.quantity) || 1,
+                sold_qty: 0,
+                returned_qty: 0,
+                damaged_qty: 0,
                 purchase_price: item.purchase_price,
                 sale_price: item.sale_price,
                 imei: item.imei,
@@ -1158,6 +1163,9 @@ async addCustomer(customerData) {
                 status: 'Available',
                 supplier_id: supplier_id
             });
+            // Sync queue ke liye ID update kar dein taake mismatch na ho
+            item.id = newItemId;
+            item.local_id = item.local_id || newItemId;
         }
     }
 
@@ -3506,6 +3514,183 @@ async addCustomer(customerData) {
         // NAYA: Balance adjust karein
         await this.recalculateStaffBalance(entry.staff_id);
     }
+
+    return true;
+  },
+
+  // --- HELD BILLS FUNCTIONS (Hold / Resume Bill Ke Liye Naya Izafa) ---
+
+  // 1. Bill ko hold par daalna
+  async holdBill(billData) {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    // Naya: Quotation ID generate karein (e.g. A1234)
+    const { generateInvoiceId } = await import('./utils/idGenerator');
+    const shortId = await generateInvoiceId();
+    const quotationId = shortId; // Yahan se "Q-" hata diya gaya
+
+    const newHeldBill = {
+      id: id,
+      quotation_id: quotationId,
+      user_id: billData.user_id, 
+      staff_id: billData.staff_id,
+      created_at: now,
+      updated_at: now, // Naya Izafa
+      cart: billData.cart,
+      customer_id: billData.customer_id,
+      discount: billData.discount,
+      discount_type: billData.discountType, // Yahan underscore (_) lagaya
+      note: billData.note || 'Held Bill'
+    };
+    await db.held_bills.add(newHeldBill);
+    
+    // Sync Queue mein daalein taake Cloud par jaye
+    await db.sync_queue.add({
+      table_name: 'held_bills',
+      action: 'create',
+      data: newHeldBill
+    });
+    
+    return id;
+  },
+
+  // 2. Rokay gaye bills ki list mangwana
+  async getHeldBills() {
+    const bills = await db.held_bills.toArray();
+    // Naye rokay gaye bills upar nazar aayenge
+    return bills.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  },
+
+  // 3. Rokay gaye bill ko delete karna (jab resume ho jaye ya cancel karna ho)
+  async deleteHeldBill(id) {
+    // Pehle local se delete karein
+    await db.held_bills.delete(id);
+    
+    // Ab Sync Queue mein daalein taake Cloud (Supabase) se bhi delete ho jaye
+    await db.sync_queue.add({
+      table_name: 'held_bills',
+      action: 'delete',
+      data: { id } // Sirf ID bhejna kafi hai delete ke liye
+    });
+    
+    return true;
+  },
+
+  // --- ACTIVE CART PERSISTENCE (Auto-save on Refresh) ---
+
+  // 1. Cart ko save karna
+  async saveActiveCart(cartData) {
+    // Hum hamesha 'current' ID istemal karenge taake purana data overwrite ho jaye
+    await db.active_cart.put({
+      id: 'current',
+      ...cartData,
+      updated_at: new Date().toISOString()
+    });
+  },
+
+  // 2. Save hua cart wapis nikalna
+  async getActiveCart() {
+    return await db.active_cart.get('current');
+  },
+
+  // 3. Cart saaf karna (Sale khatam hone par)
+  async clearActiveCart() {
+    await db.active_cart.delete('current');
+  },
+
+  // --- CONFLICT RESOLUTION: Missing Stock Entry ---
+  // Yeh function phansi hui sale ko theek karne ke liye missing purchase banayega
+  async resolveSaleConflict(syncItemId, supplierId, purchasePrice, userId, staffId) {
+    // 1. Sync Queue se phansi hui sale nikalain
+    const syncItem = await db.sync_queue.get(syncItemId);
+    if (!syncItem || !syncItem.data.items) throw new Error("Sale data not found in queue.");
+
+    const saleRecord = syncItem.data.sale;
+    const saleItems = [...syncItem.data.items];
+    const inventoryUpdates = [...syncItem.data.inventory_ids];
+    
+    const purchaseId = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    // 2. Nayi Inventory aur Mapping tayyar karein
+    const newInventoryItems = [];
+    
+    // Hum har item ke liye aik bilkul NAYI ID banayenge taake Server par takrao (conflict) na ho
+    for (let i = 0; i < saleItems.length; i++) {
+        const oldInvId = saleItems[i].inventory_id;
+        const newInvId = crypto.randomUUID(); // Fresh ID for server
+
+        // Naya Inventory Record
+        newInventoryItems.push({
+            id: newInvId,
+            local_id: crypto.randomUUID(),
+            product_id: saleItems[i].product_id,
+            purchase_id: purchaseId,
+            supplier_id: supplierId,
+            purchase_price: purchasePrice,
+            sale_price: saleItems[i].price_at_sale,
+            quantity: saleItems[i].quantity,
+            available_qty: saleItems[i].quantity,
+            status: 'Available',
+            user_id: userId,
+            staff_id: staffId,
+            created_at: now,
+            updated_at: now
+        });
+
+        // 3. Stuck Sale ko update karein (Mapping)
+        // Sale ko batayein ke ab tum ne purani ID nahi, yeh NAYI ID use karni hai
+        saleItems[i].inventory_id = newInvId;
+        
+        // Inventory updates array mein bhi ID badlein
+        const updateIdx = inventoryUpdates.findIndex(u => u.id === oldInvId);
+        if (updateIdx > -1) {
+            inventoryUpdates[updateIdx].id = newInvId;
+        }
+        
+        // Local database (sale_items table) mein bhi update karein taake record sahi rahe
+        await db.sale_items.update(saleItems[i].id, { inventory_id: newInvId });
+    }
+
+    const purchaseData = {
+      id: purchaseId,
+      local_id: purchaseId,
+      invoice_id: `FIX-${Math.floor(1000 + Math.random() * 9000)}`,
+      supplier_id: supplierId,
+      purchase_date: now,
+      total_amount: purchasePrice * saleItems.length,
+      amount_paid: purchasePrice * saleItems.length,
+      balance_due: 0,
+      status: 'paid',
+      user_id: userId,
+      staff_id: staffId,
+      notes: "Conflict Resolution: Missing stock added manually.",
+      updated_at: now
+    };
+
+    // 4. Local DB mein save karein
+    await db.purchases.put(purchaseData);
+    await db.inventory.bulkPut(newInventoryItems);
+
+    // 5. Sync Queue mein Purchase shamil karein
+    await db.sync_queue.add({
+      table_name: 'purchases',
+      action: 'create_full_purchase',
+      data: { purchase: purchaseData, items: newInventoryItems }
+    });
+
+    // 6. Stuck Sale ka data Queue mein update karein (Nayi IDs ke saath)
+    await db.sync_queue.update(syncItemId, {
+      status: 'pending',
+      retry_count: 0,
+      last_error: null,
+      data: {
+          ...syncItem.data,
+          items: saleItems,
+          inventory_ids: inventoryUpdates
+      }
+    });
 
     return true;
   },

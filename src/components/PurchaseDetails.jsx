@@ -206,7 +206,9 @@ const showEditModal = () => {
         <Title level={2} style={{ margin: 0 }}>
             <FileTextOutlined /> Purchase #{purchase.invoice_id || purchase.id.slice(0, 8)}
         </Title>
-        <Text type="secondary">Date: {new Date(purchase.purchase_date).toLocaleString()}</Text>
+        <Text type="secondary">
+    Date: {new Date(purchase.purchase_date).toLocaleDateString()} {new Date(purchase.updated_at || purchase.purchase_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+</Text>
     </Col>
     <Col>
         <Tag color={getStatusColor(purchase.status)} style={{ fontSize: '14px', padding: '6px 12px' }}>
