@@ -324,7 +324,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
 const SupplierDashboard = () => {
     const navigate = useNavigate(); // Naya Hook
     const { token } = theme.useToken();
-    const { activeStaff } = useStaff(); // <--- NAYA IZAFA
+    const { activeStaff, activeSession, defaultCounterId } = useStaff(); // <--- NAYA IZAFA
     const { isDarkMode } = useTheme();
     const searchInputRef = useRef(null);
     const supplierNameInputRef = useRef(null);
@@ -369,6 +369,9 @@ const SupplierDashboard = () => {
                 id: paymentId, local_id: paymentId, 
                 supplier_id: selectedSupplier.id, 
                 staff_id: activeStaff?.id,
+                // NAYA IZAFA: Agar staff hai to uska counter, warna Owner ka default counter
+                register_id: activeSession ? activeSession.register_id : defaultCounterId,
+                session_id: activeSession ? activeSession.id : null,
                 ...values,
                 payment_date: values.payment_date.toISOString()
             };
@@ -398,6 +401,9 @@ const SupplierDashboard = () => {
                 id: refundId, local_id: refundId, 
                 supplier_id: selectedSupplier.id, 
                 staff_id: activeStaff?.id,
+                // NAYA IZAFA: Agar staff hai to uska counter, warna Owner ka default counter
+                register_id: activeSession ? activeSession.register_id : defaultCounterId,
+                session_id: activeSession ? activeSession.id : null,
                 ...values,
                 refund_date: values.refund_date.toISOString()
             };

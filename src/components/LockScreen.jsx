@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Input, Button, Typography, Card, App, theme } from 'antd';
-import { LockOutlined, SafetyOutlined } from '@ant-design/icons';
+import { Input, Button, Typography, Card, App, theme, Select, InputNumber, Tag } from 'antd';
+import { LockOutlined, SafetyOutlined, ShopOutlined } from '@ant-design/icons';
+import DataService from '../DataService';
 import { useStaff } from '../context/StaffContext';
+import { formatCurrency } from '../utils/currencyFormatter';
 import bcrypt from 'bcryptjs';
 import { db } from '../db';
 import { useAuth } from '../context/AuthContext'; // Naya Import
@@ -10,21 +12,32 @@ const { Title, Text } = Typography;
 
 const LockScreen = () => {
   const [pin, setPin] = useState('');
-  const[localError, setLocalError] = useState(''); // NAYA: Screen par error dikhane ke liye
+  const [localError, setLocalError] = useState('');
+  // --- REGISTER OPENING STATES ---
+  const [showRegisterSelect, setShowRegisterSelect] = useState(false);
+  const [registers, setRegisters] = useState([]);
+  const[selectedRegId, setSelectedRegId] = useState(null);
+  // NAYA IZAFA: Paired Device States
+  const[pairedRegId, setPairedRegId] = useState(localStorage.getItem('paired_register_id'));
+  const[pairedRegName, setPairedRegName] = useState('');
+  const [openingBalance, setOpeningBalance] = useState(0);
+  const [expectedOpening, setExpectedOpening] = useState(0); // NAYA IZAFA
+  const [openingNotes, setOpeningNotes] = useState(''); // NAYA IZAFA
+  const [tempStaff, setTempStaff] = useState(null);
+  const { activeSession, setActiveSession, setIsAppLocked } = useStaff();
   const { loginStaff, unlockAsOwner } = useStaff();
   const { message } = App.useApp();
-  const { user } = useAuth(); // User ki maloomat nikaali
+  const { user, profile } = useAuth(); // User aur Profile dono ki maloomat nikaali
   const { token } = theme.useToken(); // Theme colors nikaalne ke liye
 
   const handleAction = async () => {
-    setLocalError(''); // Pehle purana error saaf karein
+    setLocalError('');
     
     if (!pin) {
       setLocalError("Please enter a PIN");
       return;
     }
 
-    // 1. Pehle check karein ke kya App Locked hai? (Unified Lock)
     const lockUntil = localStorage.getItem('app_lock_until');
     if (lockUntil && Date.now() < parseInt(lockUntil)) {
       const remainingMinutes = Math.ceil((parseInt(lockUntil) - Date.now()) / 60000);
@@ -33,39 +46,110 @@ const LockScreen = () => {
       return;
     }
 
-    // 2. Koshish karein (Pehle Staff, Phir Owner) - Khamoshi se
     let isSuccess = false;
 
     // Pehle Staff Login Try karein
     const staffResult = await loginStaff(pin);
+    
     if (staffResult.success) {
-      isSuccess = true;
+      if (activeSession) {
+        setIsAppLocked(false);
+        localStorage.setItem('is_app_locked', 'false');
+        isSuccess = true;
+      } else {
+        const regs = await DataService.getRegisters();
+        const countersOnly = regs.filter(r => r.type === 'counter');
+        setRegisters(countersOnly);
+        setTempStaff(staffResult.success);
+        
+        // NAYA IZAFA: Device Pairing Logic (Staff ke liye)
+        const pairedId = localStorage.getItem('paired_register_id');
+        if (pairedId) {
+            const pairedCounter = countersOnly.find(c => c.id === pairedId);
+            if (pairedCounter) {
+                setSelectedRegId(pairedId);
+                setPairedRegName(pairedCounter.name);
+                
+                const lastSession = await db.register_sessions
+                  .where('register_id').equals(pairedId)
+                  .filter(s => s.closed_at != null)
+                  .reverse()
+                  .sortBy('closed_at');
+                
+                if (lastSession && lastSession.length > 0) {
+                  setOpeningBalance(lastSession[0].actual_closing || 0);
+                  setExpectedOpening(lastSession[0].actual_closing || 0);
+                } else {
+                  setOpeningBalance(0);
+                  setExpectedOpening(0);
+                }
+                setOpeningNotes('');
+            }
+        }
+        
+        setShowRegisterSelect(true);
+        return; 
+      }
     } 
-    // Agar Staff fail hua, to Owner Try karein
     else {
+      // Agar Staff fail hua, to Owner Try karein
       const ownerSuccess = unlockAsOwner(pin);
       if (ownerSuccess) {
-        isSuccess = true;
+        if (activeSession) {
+          // Agar Owner ki shift pehle se open hai, to direct unlock karein
+          setIsAppLocked(false);
+          localStorage.setItem('is_app_locked', 'false');
+          isSuccess = true;
+        } else {
+          // Agar shift open nahi hai, to Counter Select karwayein
+          const regs = await DataService.getRegisters();
+          const countersOnly = regs.filter(r => r.type === 'counter');
+          setRegisters(countersOnly);
+          setTempStaff(null); // Owner ke liye staff null hoga
+          
+          // NAYA IZAFA: Device Pairing Logic (Owner ke liye)
+          const pairedId = localStorage.getItem('paired_register_id');
+          if (pairedId) {
+              const pairedCounter = countersOnly.find(c => c.id === pairedId);
+              if (pairedCounter) {
+                  setSelectedRegId(pairedId);
+                  setPairedRegName(pairedCounter.name);
+                  
+                  const lastSession = await db.register_sessions
+                    .where('register_id').equals(pairedId)
+                    .filter(s => s.closed_at != null)
+                    .reverse()
+                    .sortBy('closed_at');
+                  
+                  if (lastSession && lastSession.length > 0) {
+                    setOpeningBalance(lastSession[0].actual_closing || 0);
+                    setExpectedOpening(lastSession[0].actual_closing || 0);
+                  } else {
+                    setOpeningBalance(0);
+                    setExpectedOpening(0);
+                  }
+                  setOpeningNotes('');
+              }
+          }
+
+          setShowRegisterSelect(true);
+          return; 
+        }
       }
     }
 
-    // 3. Nateeja (Result)
     if (isSuccess) {
-      // Agar kamyab ho gaye to purani ghalat koshishein bhool jayen
       localStorage.removeItem('failed_attempts');
       localStorage.removeItem('app_lock_until');
       setLocalError('');
     } else {
-      // Agar nakaam hue to ginti barhayen (Chahe Staff ho ya Owner)
       let attempts = parseInt(localStorage.getItem('failed_attempts') || '0') + 1;
       localStorage.setItem('failed_attempts', attempts.toString());
 
-      // Agar 5 bar ghalat hua to 5 minute ke liye lock
       if (attempts >= 5) {
-        const unlockTime = Date.now() + 5 * 60 * 1000; // 5 Minutes Lock
+        const unlockTime = Date.now() + 5 * 60 * 1000;
         localStorage.setItem('app_lock_until', unlockTime.toString());
         
-        // --- SILENT ALARM (SYSTEM LOGS) ---
         const logData = {
             id: crypto.randomUUID(),
             user_id: user?.id, 
@@ -90,11 +174,44 @@ const LockScreen = () => {
         }
         setLocalError("Too many failed attempts. Terminal locked for 5 minutes.");
       } else {
-        // Generic Error Message (Taake length ka pata na chale)
         setLocalError("Invalid PIN");
       }
     }
     setPin('');
+  };
+
+  const handleOpenRegister = async () => {
+    if (!selectedRegId) { message.error("Please select a counter"); return; }
+    
+    // NAYA IZAFA: Agar farq hai to note likhna laazmi hai
+    if (openingBalance !== expectedOpening && !openingNotes.trim()) {
+      message.error("Please provide a reason for the cash difference.");
+      return;
+    }
+    
+    try {
+      const sessionData = {
+        register_id: selectedRegId,
+        staff_id: tempStaff?.id,
+        user_id: user?.id,
+        opening_balance: openingBalance,
+        // NAYA IZAFA: Notes save karna
+        notes: openingBalance !== expectedOpening ? `[Opening Anomaly] Expected: ${expectedOpening}, Actual: ${openingBalance}. Reason: ${openingNotes}` : ''
+      };
+      
+      const newSession = await DataService.openRegisterSession(sessionData);
+      setActiveSession(newSession);
+      localStorage.setItem('active_register_session', JSON.stringify(newSession));
+      
+      message.success("Register opened successfully!");
+      setShowRegisterSelect(false);
+      
+      // REGISTER OPEN HONE PAR APP UNLOCK KAREIN
+      setIsAppLocked(false);
+      localStorage.setItem('is_app_locked', 'false');
+    } catch (err) {
+      message.error("Failed to open register");
+    }
   };
 
   return (
@@ -117,53 +234,153 @@ const LockScreen = () => {
         border: `1px solid ${token.colorBorderSecondary}`
       }}>
         
-        <LockOutlined style={{ fontSize: 48, color: token.colorPrimary, marginBottom: 16 }} />
+        {!showRegisterSelect ? (
+          <>
+            <LockOutlined style={{ fontSize: 48, color: token.colorPrimary, marginBottom: 16 }} />
+            <Title level={3} style={{ color: token.colorTextHeading }}>Terminal Locked</Title>
+            <Text style={{ display: 'block', marginBottom: localError ? 12 : 24, color: token.colorTextSecondary }}>
+              Enter your PIN to unlock
+            </Text>
 
-        <Title level={3} style={{ color: token.colorTextHeading }}>
-          Terminal Locked
-        </Title>
+            {localError && (
+              <div style={{ 
+                color: token.colorError, backgroundColor: token.colorErrorBg, padding: '8px 12px', 
+                borderRadius: '6px', marginBottom: '16px', fontSize: '13px', 
+                border: `1px solid ${token.colorErrorBorder}`, textAlign: 'left'
+              }}>
+                {localError}
+              </div>
+            )}
 
-        <Text style={{ display: 'block', marginBottom: localError ? 12 : 24, color: token.colorTextSecondary }}>
-          Enter your PIN to unlock
-        </Text>
+            <Input.Password
+              size="large"
+              placeholder="Enter PIN"
+              maxLength={10}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ''))}
+              onPressEnter={handleAction}
+              style={{ textAlign: 'center', fontSize: 24, letterSpacing: 8, marginBottom: 16, backgroundColor: token.colorBgContainer, color: token.colorText }}
+              autoFocus
+            />
+            <Button type="primary" size="large" block onClick={handleAction}>Unlock</Button>
+          </>
+        ) : (
+          <>
+            <ShopOutlined style={{ fontSize: 48, color: token.colorPrimary, marginBottom: 16 }} />
+            <Title level={3} style={{ color: token.colorTextHeading }}>Open Register</Title>
+            <Text style={{ display: 'block', marginBottom: 24, color: token.colorTextSecondary }}>
+              Welcome {tempStaff ? tempStaff.name : 'Owner'}! {pairedRegId ? 'Confirm opening cash to start shift.' : 'Select counter to start shift.'}
+            </Text>
 
-        {/* Theme-based Error Box */}
-        {localError && (
-          <div style={{ 
-            color: token.colorError, 
-            backgroundColor: token.colorErrorBg, 
-            padding: '8px 12px', 
-            borderRadius: '6px', 
-            marginBottom: '16px', 
-            fontSize: '13px', 
-            border: `1px solid ${token.colorErrorBorder}`,
-            textAlign: 'left'
-          }}>
-            {localError}
-          </div>
+            <div style={{ textAlign: 'left', marginBottom: '16px' }}>
+              {/* NAYA FIX: Sirf tab paired dikhayein jab waqayi ID maujood ho */}
+              {pairedRegId && pairedRegName ? (
+                <div style={{ padding: '12px', background: token.colorFillAlter, borderRadius: '8px', border: `1px solid ${token.colorPrimary}55` }}>
+                  <Text type="secondary" style={{ fontSize: '12px', display: 'block' }}>Paired Device (This PC):</Text>
+                  <Text strong style={{ fontSize: '18px', color: token.colorPrimary }}>{pairedRegName}</Text>
+                  <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginTop: '4px' }}>
+                    *This PC is permanently paired to this counter.
+                  </Text>
+                </div>
+              ) : (
+                <>
+                  <Text strong>Select Counter</Text>
+                  <Select
+                    showSearch
+                    placeholder="Choose Counter"
+                    style={{ width: '100%', marginTop: '8px' }}
+                    onChange={async (val) => {
+                  setSelectedRegId(val);
+                  
+                  // 1. Counter ka status check karein
+                  const counter = registers.find(r => r.id === val);
+                  let expectedAmount = 0;
+
+                  if (counter && counter.status === 'open') {
+                    // Agar counter pehle se open hai (Ghost), to Live Balance nikalain
+                    expectedAmount = await DataService.getRegisterCurrentCash(val);
+                  } else {
+                    // Agar closed hai, to aakhri closing nikalain
+                    const lastSession = await db.register_sessions
+                      .where('register_id').equals(val)
+                      .filter(s => s.closed_at != null)
+                      .reverse()
+                      .sortBy('closed_at');
+                    
+                    if (lastSession && lastSession.length > 0) {
+                      expectedAmount = lastSession[0].actual_closing || 0;
+                    }
+                  }
+                  
+                  setExpectedOpening(expectedAmount);
+                  setOpeningBalance(expectedAmount); // Input mein auto-fill kar dein
+                  setOpeningNotes('');
+                }}
+                    getPopupContainer={triggerNode => triggerNode.parentNode}
+                    optionFilterProp="label"
+                options={registers.map(r => ({ 
+                  // Agar counter open hai to sath mein (In Use) likh dein
+                  label: r.status === 'open' ? `${r.name} (In Use / Resume)` : r.name, 
+                  value: r.id, 
+                  // NAYA FIX: Staff ko bhi allow kar rahe hain, koi counter disabled nahi hoga
+                  disabled: false 
+                }))}
+              />
+              {registers.some(r => r.status === 'open') && (
+                <div style={{ marginTop: '8px', padding: '8px', background: token.colorWarningBg, borderRadius: '4px', border: `1px solid ${token.colorWarningBorder}` }}>
+                  <Text type="warning" style={{ fontSize: '11px', display: 'block', lineHeight: '1.4' }}>
+                    <strong>Notice:</strong> If a counter shows "In Use", you can still select it to <strong>Resume</strong> your shift if the browser was closed or refreshed.
+                  </Text>
+                </div>
+              )}
+                  <Text type="warning" style={{ fontSize: '11px', display: 'block', marginTop: '8px' }}>
+                    Tip: Go to Settings to "Pair" this PC to a counter permanently.
+                  </Text>
+                </>
+              )}
+            </div>
+
+            <div style={{ textAlign: 'left', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <Text strong>Opening Float (Starting Cash)</Text>
+                {selectedRegId && (
+                  <Tag color="blue" style={{ margin: 0 }}>
+                    Expected: {formatCurrency(expectedOpening, profile?.currency)}
+                  </Tag>
+                )}
+              </div>
+              <InputNumber
+                min={0}
+                style={{ width: '100%', marginTop: '8px' }}
+                value={openingBalance}
+                onChange={val => setOpeningBalance(val)}
+                placeholder="Enter amount in drawer"
+              />
+              
+              {/* NAYA IZAFA: Agar expected aur actual mein farq ho to Notes poochein */}
+              {openingBalance !== expectedOpening && (
+                <div style={{ marginTop: '12px', padding: '10px', background: token.colorErrorBg, borderRadius: '6px', border: `1px solid ${token.colorErrorBorder}` }}>
+                  <Text type="danger" style={{ fontSize: '12px', display: 'block', marginBottom: '4px' }}>
+                    Expected Cash was {expectedOpening}. Please explain the difference:
+                  </Text>
+                  <Input.TextArea
+                    placeholder="Why is the cash different from last closing?"
+                    value={openingNotes}
+                    onChange={e => setOpeningNotes(e.target.value)}
+                    rows={2}
+                  />
+                </div>
+              )}
+            </div>
+
+            <Button type="primary" size="large" block onClick={handleOpenRegister}>
+              {registers.find(r => r.id === selectedRegId)?.status === 'open' ? 'Resume Shift' : 'Start Shift'}
+            </Button>
+            <Button type="link" onClick={() => setShowRegisterSelect(false)} style={{ marginTop: '8px' }}>
+              Cancel / Back
+            </Button>
+          </>
         )}
-
-        <Input.Password
-          size="large"
-          placeholder="Enter PIN"
-          maxLength={10}
-          value={pin}
-          onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ''))}
-          onPressEnter={handleAction}
-          style={{ 
-            textAlign: 'center', 
-            fontSize: 24, 
-            letterSpacing: 8, 
-            marginBottom: 16,
-            backgroundColor: token.colorBgContainer,
-            color: token.colorText
-          }}
-          autoFocus
-        />
-
-        <Button type="primary" size="large" block onClick={handleAction}>
-          Unlock
-        </Button>
       </Card>
     </div>
   );

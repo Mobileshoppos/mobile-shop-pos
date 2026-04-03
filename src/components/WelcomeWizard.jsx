@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Modal, Form, Input, Select, Button, Typography, Space, App } from 'antd';
-import { ShopOutlined, GlobalOutlined, PhoneOutlined, HomeOutlined } from '@ant-design/icons';
+import { ShopOutlined, GlobalOutlined, PhoneOutlined, HomeOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
+import bcrypt from 'bcryptjs';
 
 const { Title, Text } = Typography;
 
@@ -17,14 +18,21 @@ const WelcomeWizard = () => {
   const handleSave = async (values) => {
     setLoading(true);
     try {
+      // PIN ko encrypt (hash) karein
+      const hashedPin = bcrypt.hashSync(values.master_pin, 10);
+      
+      // LocalStorage mein bhi save karein taake lock screen foran kaam kare
+      localStorage.setItem('device_master_pin', hashedPin);
+
       const updates = {
         ...values,
+        master_pin: hashedPin, // Hashed PIN save ho raha hai
         is_setup_completed: true,
         updated_at: new Date().toISOString(),
       };
       const { success, error } = await updateProfile(updates);
       if (success) {
-        message.success('Welcome! Your shop is ready.');
+        message.success('Welcome! Your shop is ready. Please open a shift to start selling.');
       } else {
         throw error;
       }
@@ -89,6 +97,22 @@ const WelcomeWizard = () => {
             <Select.Option value="AED">AED - UAE Dirham</Select.Option>
             <Select.Option value="SAR">SAR - Saudi Riyal</Select.Option>
           </Select>
+        </Form.Item>
+
+        <Form.Item 
+          name="master_pin" 
+          label="Create Master PIN (6 Digits)" 
+          rules={[
+            { required: true, message: 'Please create a 6-digit security PIN' },
+            { pattern: /^\d{6}$/, message: 'PIN must be exactly 6 digits' }
+          ]}
+          tooltip="This PIN will be used to unlock your terminal and approve discounts."
+        >
+          <Input.Password 
+            prefix={<LockOutlined />} 
+            placeholder="e.g. 123456" 
+            maxLength={6} 
+          />
         </Form.Item>
 
         <Space direction="vertical" style={{ width: '100%', marginTop: 16 }}>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table, Radio, Modal, Form, InputNumber, Input, App, Tooltip, Tabs, theme, DatePicker } from 'antd';
+import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table, Radio, Modal, Form, InputNumber, Input, App, Tooltip, Tabs, theme, DatePicker, Alert, Select } from 'antd';
 import dayjs from 'dayjs';
 import {
   HomeOutlined,
@@ -39,7 +39,7 @@ const { Title, Text } = Typography;
 
 const Dashboard = () => {
   const { isDarkMode } = useTheme();
-  const { can, activeStaff } = useStaff();
+  const { can, activeStaff, activeSession, lockApp } = useStaff(); // <--- lockApp shamil kiya
   const { user, profile } = useAuth(); // User aur Profile dono shamil kar liye
   const limits = getPlanLimits(profile?.subscription_tier);
   const isMonthLocked = !limits.allow_monthly_reports;
@@ -70,8 +70,20 @@ const Dashboard = () => {
   const refQuickActions = useRef(null);
   const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
   const [isAdjustmentSubmitting, setIsAdjustmentSubmitting] = useState(false);
+  // NAYA IZAFA: Adjustment Modal ke liye Balance state
+  const [adjModalBalance, setAdjModalBalance] = useState(0);
   const [isClosingSubmitting, setIsClosingSubmitting] = useState(false);
   const [adjustmentForm] = Form.useForm();
+  // --- COUNTERS STATE FOR ADJUSTMENT ---
+  const [allCounters, setAllCounters] = useState([]);
+
+  useEffect(() => {
+    const loadCounters = async () => {
+      const regs = await DataService.getRegisters();
+      setAllCounters(regs.filter(r => r.type === 'counter'));
+    };
+    loadCounters();
+  }, []);
   const tourSteps = [
     {
       title: 'Sales Overview',
@@ -95,25 +107,8 @@ const Dashboard = () => {
     },
   ];
 
-  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-  const [historyData, setHistoryData] = useState([]);
-
   const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
   const [closingForm] = Form.useForm();
-
-  const [closingHistoryData, setClosingHistoryData] = useState([]);
-
-  const handleOpenHistory = async () => {
-    // Dono tables se data uthayein
-    const adjustments = await db.cash_adjustments.orderBy('created_at').reverse().toArray();
-    const closings = await db.daily_closings.orderBy('created_at').reverse().toArray();
-    const staff = await DataService.getStaffMembers(); // <--- NAYA IZAFA
-    
-    setStaffMembers(staff); // <--- NAYA IZAFA
-    setHistoryData(adjustments);
-    setClosingHistoryData(closings);
-    setIsHistoryModalOpen(true);
-  };
 
   // Cash Adjustment Save karne ka function
   const handleAdjustmentSubmit = async (values) => {
@@ -125,7 +120,9 @@ const Dashboard = () => {
         user_id: user?.id, 
         amount: values.amount,
         type: values.type,
-        staff_id: activeStaff?.id, // <--- NAYA IZAFA
+        staff_id: activeStaff?.id,
+        register_id: values.register_id || activeSession?.register_id || null, 
+        session_id: activeSession?.id || null,           
         payment_method: values.payment_method,
         transfer_to: values.type === 'Transfer' ? values.transfer_to : null,
         notes: values.notes || '',
@@ -142,7 +139,7 @@ const Dashboard = () => {
         data: adjustmentData
       });
 
-      message.success('Galla adjusted successfully!');
+      message.success('Cash adjusted successfully!');
       setIsAdjustmentModalOpen(false);
       adjustmentForm.resetFields();
       
@@ -156,48 +153,9 @@ const Dashboard = () => {
     }
   };
 
-  // Day-End Closing Save karne ka function
-  const handleClosingSubmit = async (values) => {
-    try {
-      setIsClosingSubmitting(true);
-      const expected = stats?.cashInHand || 0;
-      const actual = values.actual_cash;
-      const diff = Math.round((actual - expected) * 100) / 100;
+  // Vault transfer logic removed
 
-      const closingData = {
-        id: crypto.randomUUID(),
-        local_id: crypto.randomUUID(),
-        user_id: user?.id,
-        closing_date: new Date().toISOString().split('T')[0], // Aaj ki date
-        staff_id: activeStaff?.id, // <--- NAYA IZAFA
-        expected_cash: expected,
-        actual_cash: actual,
-        difference: diff,
-        notes: values.notes || '',
-        created_at: new Date().toISOString()
-      };
-
-      // 1. Local DB mein save karein
-      await db.daily_closings.add(closingData);
-
-      // 2. Sync Queue mein dalein
-      await db.sync_queue.add({
-        table_name: 'daily_closings',
-        action: 'create',
-        data: closingData
-      });
-
-      message.success('Galla closed and recorded successfully!');
-      setIsClosingModalOpen(false);
-      closingForm.resetFields();
-      loadDashboard();
-
-    } catch (error) {
-      message.error('Closing failed: ' + error.message);
-      } finally {
-      setIsClosingSubmitting(false);
-    }
-  };
+  // Old Day-End Closing function removed
   
   const navigate = useNavigate();
 
@@ -345,6 +303,35 @@ const Dashboard = () => {
   return (
     <div style={{ padding: isMobile ? '12px 4px' : '4px' }}>
       <PageTour pageKey="dashboard" steps={tourSteps} />
+
+      {/* NAYA IZAFA: Register Closed Alert */}
+      {!activeSession && (
+        <Alert
+          message={<Text strong style={{ fontSize: '16px' }}>Register is currently CLOSED</Text>}
+          description="You must open a shift (Start Shift) before you can make sales, record expenses or receive payments."
+          type="warning"
+          showIcon
+          icon={<LockOutlined style={{ fontSize: '20px' }} />}
+          style={{ marginBottom: '20px', borderRadius: '8px', border: `1px solid ${token.colorWarningOutline}` }}
+          action={
+            <Button 
+              type="primary" 
+              icon={profile?.master_pin ? <PlusOutlined /> : <LockOutlined />} 
+              onClick={() => {
+                if (profile?.master_pin) {
+                  lockApp();
+                } else {
+                  message.info("Please set your Master PIN first.");
+                  navigate('/settings?tab=5'); // Security tab par le jaye
+                }
+              }}
+              style={{ background: token.colorWarning, borderColor: token.colorWarning }}
+            >
+              {profile?.master_pin ? "Open Register Now" : "Setup Master PIN"}
+            </Button>
+          }
+        />
+      )}
       
       {/* HEADER WITH FILTERS */}
       <div style={{ display: 'flex', justifyContent: isMobile ? 'space-between' : 'flex-end', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
@@ -504,50 +491,60 @@ const Dashboard = () => {
           </Card>
         </Col>
 
-        {/* Card: Cash in Hand (Galla) - Fixed Alignment */}
+        {/* Card: Cash Drawer / Cash in Hand */}
         <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
           <Card ref={refCash} style={{ ...cardStyle, backgroundColor: isDarkMode ? '#0F7A82' : '#088395' }}>
-            {/* Floating Buttons - Ab yeh alignment kharab nahi karenge */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Statistic
-              title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Cash in Hand</span>}
+              title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Cash in Hand (Total)</span>}
               value={stats?.cashInHand || 0}
               prefix={<WalletOutlined />}
               valueStyle={{ color: 'white', fontWeight: 'bold', fontSize: '21px' }}
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
               <Space size="small">
-                <Tooltip title="Cash History">
-                  <Button 
-                    type="text" 
-                    size="small"
-                    icon={<HistoryOutlined style={{ color: 'white', fontSize: '18px' }} />} 
-                    onClick={handleOpenHistory} 
-                  />
-                </Tooltip>
                 <Tooltip title="Cash Adjustment (In/Out)">
                   <Button 
                     type="text" 
                     size="small"
                     icon={<TransactionOutlined style={{ color: 'white', fontSize: '18px' }} />} 
-                    onClick={() => setIsAdjustmentModalOpen(true)} 
+                    onClick={async () => {
+                      // Pehle counter ID nikalain (Paired ya Session wali)
+                      const regId = activeSession?.register_id || localStorage.getItem('paired_register_id');
+                      if (regId) {
+                        const bal = await DataService.getRegisterCurrentCash(regId);
+                        setAdjModalBalance(bal);
+                      }
+                      setIsAdjustmentModalOpen(true);
+                    }} 
                   />
                 </Tooltip>
+                {/* Transfer to Vault button removed */}
               </Space>
             </div>
             <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
                 <span>Bank Balance:</span>
                 <span>{formatCurrency(stats?.bankBalance || 0, profile?.currency)}</span>
             </div>
-            {/* Standard Ant Design Button */}
-            <Button 
-              block 
-              icon={<CheckCircleOutlined />}
-              style={{ marginTop: 12 }}
-              onClick={() => setIsClosingModalOpen(true)}
-            >
-              Day-End Closing
-            </Button>
+            
+            {/* --- NAYA IZAFA: Counters Breakdown --- */}
+            {stats?.countersBreakdown?.length > 0 && (
+              <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px dashed rgba(255,255,255,0.2)' }}>
+                <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    All Counters Cash
+                </div>
+                <div className="hide-scrollbar" style={{ maxHeight: '60px', overflowY: 'auto' }}>
+                  {stats.countersBreakdown.map((counter, idx) => (
+                    <div key={idx} style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.9)', marginTop: 2 }}>
+                      <span>{counter.name}:</span>
+                      <span style={{ fontWeight: 'bold' }}>{formatCurrency(counter.cash, profile?.currency)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Day-End Closing Button Removed */}
           </Card>
         </Col>
 
@@ -851,227 +848,129 @@ const Dashboard = () => {
         )}
       </Row>
       {/* CASH ADJUSTMENT MODAL */}
+      {/* CASH ADJUSTMENT MODAL (Professional Version) */}
       <Modal
-        title="Cash Adjustment"
+        title={
+          <Space>
+            <TransactionOutlined style={{ color: token.colorPrimary }} />
+            <span>Cash Adjustment & Transfer</span>
+          </Space>
+        }
         open={isAdjustmentModalOpen}
-        onCancel={() => setIsAdjustmentModalOpen(false)}
+        onCancel={() => { setIsAdjustmentModalOpen(false); adjustmentForm.resetFields(); }}
         onOk={() => adjustmentForm.submit()}
-        okText="Save Adjustment"
+        okText="Save Entry"
         confirmLoading={isAdjustmentSubmitting}
+        width={450}
       >
         <Form 
-  form={adjustmentForm} 
-  layout="vertical" 
-  onFinish={handleAdjustmentSubmit} 
-  initialValues={{ type: 'In', payment_method: 'Cash' }}
-  onValuesChange={(changedValues, allValues) => {
-    // Agar "Where" badla jaye aur Type "Transfer" ho
-    if (changedValues.payment_method && allValues.type === 'Transfer') {
-      const newTransferTo = changedValues.payment_method === 'Cash' ? 'Bank' : 'Cash';
-      adjustmentForm.setFieldsValue({ transfer_to: newTransferTo });
-    }
-    // Agar Type "Transfer" par switch kiya jaye
-    if (changedValues.type === 'Transfer') {
-      const newTransferTo = allValues.payment_method === 'Cash' ? 'Bank' : 'Cash';
-      adjustmentForm.setFieldsValue({ transfer_to: newTransferTo });
-    }
-  }}
->
-          <Form.Item name="type" label="Adjustment Type" rules={[{ required: true }]}>
-            <Radio.Group buttonStyle="solid">
-              <Radio.Button value="In">Cash In</Radio.Button>
-              <Radio.Button value="Out">Cash Out</Radio.Button>
-              <Radio.Button value="Transfer">Transfer</Radio.Button>
+          form={adjustmentForm} 
+          layout="vertical" 
+          onFinish={handleAdjustmentSubmit} 
+          initialValues={{ 
+            type: 'In', 
+            payment_method: 'Cash',
+            register_id: activeSession?.register_id || localStorage.getItem('paired_register_id') || undefined 
+          }}
+          style={{ marginTop: '16px' }}
+        >
+          {/* 1. Counter Display & Balance (Locked for Security) */}
+          <div style={{ 
+            background: isDarkMode ? 'rgba(255,255,255,0.05)' : '#f5f5f5', 
+            padding: '12px', 
+            borderRadius: '8px', 
+            marginBottom: '20px',
+            border: `1px solid ${token.colorBorderSecondary}`
+          }}>
+            <Row justify="space-between" align="middle">
+              <Col>
+                <Text type="secondary" style={{ fontSize: '12px' }}>Current Counter:</Text>
+                <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                  {allCounters.find(c => c.id === (activeSession?.register_id || localStorage.getItem('paired_register_id')))?.name || 'Unknown Counter'}
+                </div>
+              </Col>
+              <Col style={{ textAlign: 'right' }}>
+                <Text type="secondary" style={{ fontSize: '12px' }}>Available Cash:</Text>
+                <div style={{ fontWeight: 'bold', fontSize: '16px', color: token.colorSuccess }}>
+                  {formatCurrency(adjModalBalance, profile?.currency)}
+                </div>
+              </Col>
+            </Row>
+          </div>
+
+          {/* Hidden field to keep register_id in form values */}
+          <Form.Item name="register_id" hidden><Input /></Form.Item>
+
+          <Form.Item name="type" label={<Text strong>What do you want to do?</Text>} rules={[{ required: true }]}>
+            <Radio.Group buttonStyle="solid" style={{ width: '100%', display: 'flex' }}>
+              <Radio.Button value="In" style={{ flex: 1, textAlign: 'center' }}>Cash In</Radio.Button>
+              <Radio.Button value="Out" style={{ flex: 1, textAlign: 'center' }}>Cash Out</Radio.Button>
+              <Radio.Button value="Transfer" style={{ flex: 1, textAlign: 'center' }}>Transfer</Radio.Button>
             </Radio.Group>
           </Form.Item>
 
-          <Form.Item name="payment_method" label="Where?" rules={[{ required: true }]}>
-            <Radio.Group buttonStyle="solid">
-              <Radio.Button value="Cash">Cash</Radio.Button>
-              <Radio.Button value="Bank">Bank / Online</Radio.Button>
-            </Radio.Group>
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="amount" label={<Text strong>Amount</Text>} rules={[
+                { required: true, message: 'Enter amount' },
+                // Safety Check: Cash out balance se zyada na ho
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (getFieldValue('type') !== 'In' && value > adjModalBalance && getFieldValue('payment_method') === 'Cash') {
+                      return Promise.reject(new Error('Insufficient cash!'));
+                    }
+                    return Promise.resolve();
+                  },
+                }),
+              ]}>
+                <InputNumber style={{ width: '100%' }} prefix={profile?.currency} min={1} placeholder="0.00" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="payment_method" label={<Text strong>Source</Text>} rules={[{ required: true }]}>
+                <Select>
+                  <Select.Option value="Cash">Physical Cash</Select.Option>
+                  <Select.Option value="Bank">Bank / Online</Select.Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
 
-          {/* Agar Transfer select ho to poocho kahan bhejna hai */}
-          <Form.Item shouldUpdate={(prev, curr) => prev.type !== curr.type || prev.payment_method !== curr.payment_method} noStyle>
+          {/* Dynamic Transfer Destination */}
+          <Form.Item shouldUpdate={(prev, curr) => prev.type !== curr.type} noStyle>
             {({ getFieldValue }) => 
               getFieldValue('type') === 'Transfer' ? (
-                <Form.Item name="transfer_to" label="Transfer To" rules={[{ required: true }]}>
-                  <Radio.Group buttonStyle="solid">
-                    <Radio.Button value={getFieldValue('payment_method') === 'Cash' ? 'Bank' : 'Cash'}>
-                      {getFieldValue('payment_method') === 'Cash' ? 'Bank' : 'Cash'}
-                    </Radio.Button>
-                  </Radio.Group>
+                <Form.Item name="transfer_to" label={<Text strong>Transfer Destination</Text>} rules={[{ required: true, message: 'Select where to send' }]}>
+                  <Select placeholder="Where are the funds going?">
+                    <Select.OptGroup label="Internal">
+                      <Select.Option value="Bank">Bank Account</Select.Option>
+                      <Select.Option value="Cash">Main Cashier (Vault)</Select.Option>
+                    </Select.OptGroup>
+                    <Select.OptGroup label="Other Counters">
+                      {allCounters.filter(c => c.id !== (activeSession?.register_id || localStorage.getItem('paired_register_id'))).map(c => (
+                        <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
+                      ))}
+                    </Select.OptGroup>
+                  </Select>
                 </Form.Item>
               ) : null
             }
           </Form.Item>
 
-          <Form.Item name="amount" label="Amount" rules={[{ required: true }]}>
-            <InputNumber style={{ width: '100%' }} prefix={profile?.currency} min={1} />
+          <Form.Item name="notes" label={<Text strong>Reason / Category</Text>} rules={[{ required: true, message: 'Please provide a reason' }]}>
+            <Select 
+              showSearch 
+              placeholder="Select or type a reason" 
+              onSearch={(val) => adjustmentForm.setFieldsValue({ notes: val })}
+            >
+              <Select.Option value="Petty Cash / Expense">Petty Cash / Expense</Select.Option>
+              <Select.Option value="Cash Float / Change">Cash Float / Change</Select.Option>
+              <Select.Option value="Owner Withdrawal">Owner Withdrawal</Select.Option>
+              <Select.Option value="Capital Investment">Capital Investment</Select.Option>
+              <Select.Option value="Bank Deposit">Bank Deposit</Select.Option>
+              <Select.Option value="Correction (Error Fix)">Correction (Error Fix)</Select.Option>
+            </Select>
           </Form.Item>
-
-          <Form.Item name="notes" label="Notes (e.g. Opening Balance)">
-            <Input.TextArea placeholder="Why are you adjusting cash?" />
-          </Form.Item>
-        </Form>
-      </Modal>
-      {/* UPGRADED HISTORY MODAL (FIXED DEPRECATION WARNING) */}
-      <Modal
-        title="Cash & Closing Reports"
-        open={isHistoryModalOpen}
-        onCancel={() => setIsHistoryModalOpen(false)}
-        footer={null}
-        width={850}
-      >
-        <Tabs 
-          defaultActiveKey="1" 
-          items={[
-            {
-              key: '1',
-              label: 'Cash Adjustments (In/Out)',
-              children: (
-                <Table
-                  dataSource={historyData}
-                  rowKey="id"
-                  pagination={{ pageSize: 5 }}
-                  size="small"
-                  columns={[
-                    { title: 'Date', dataIndex: 'created_at', render: (date) => new Date(date).toLocaleString() },
-                    { title: 'Type', dataIndex: 'type', render: (type) => <Tag color={type === 'In' ? 'green' : type === 'Out' ? 'red' : 'blue'}>{type.toUpperCase()}</Tag> },
-                    { title: 'Method', dataIndex: 'payment_method', render: (m) => <Tag>{m}</Tag> },
-                    { title: 'Amount', dataIndex: 'amount', align: 'right', render: (val) => <Text strong>{formatCurrency(val, profile?.currency)}</Text> },
-                    { 
-                      title: 'Staff', 
-                      key: 'staff', 
-                      render: (_, record) => staffMembers.find(s => s.id === record.staff_id)?.name || 'Owner' 
-                    },
-                    { title: 'Notes', dataIndex: 'notes', ellipsis: true }
-                  ]}
-                />
-              ),
-            },
-            {
-              key: '2',
-              label: 'Daily Closing Reports',
-              children: (
-                <Table
-                  dataSource={closingHistoryData}
-                  rowKey="id"
-                  pagination={{ pageSize: 5 }}
-                  size="small"
-                  columns={[
-                    { title: 'Date', dataIndex: 'closing_date', render: (date) => new Date(date).toLocaleDateString() },
-                    { title: 'Expected', dataIndex: 'expected_cash', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
-                    { title: 'Actual', dataIndex: 'actual_cash', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
-                    { 
-                      title: 'Staff', 
-                      key: 'staff', 
-                      render: (_, record) => staffMembers.find(s => s.id === record.staff_id)?.name || 'Owner' 
-                    },
-                    { 
-                      title: 'Difference', 
-                      dataIndex: 'difference', 
-                      align: 'right', 
-                      render: (diff) => (
-                        <Text strong style={{ color: diff === 0 ? '#52c41a' : '#f5222d' }}>
-                          {formatCurrency(diff, profile?.currency)}
-                        </Text>
-                      ) 
-                    },
-                    { title: 'Remarks', dataIndex: 'notes', render: (text) => <Text type="secondary" style={{ fontStyle: 'italic' }}>{text || 'No notes'}</Text> }
-                  ]}
-                />
-              ),
-            },
-          ]}
-        />
-      </Modal>
-      {/* DAY-END CLOSING MODAL */}
-      <Modal
-        title="Daily Cash Closing"
-        open={isClosingModalOpen}
-        onCancel={() => setIsClosingModalOpen(false)}
-        onOk={() => closingForm.submit()}
-        okText="Confirm & Close Register"
-        confirmLoading={isClosingSubmitting}
-        width={500}
-      >
-        <div style={{ textAlign: 'center', marginBottom: '20px', padding: '15px', background: isDarkMode ? '#1f1f1f' : '#f5f5f5', borderRadius: '8px' }}>
-          <Text type="secondary">Expected Cash in Drawer:</Text>
-          <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
-            {formatCurrency(stats?.cashInHand || 0, profile?.currency)}
-          </Title>
-        </div>
-
-        <Form form={closingForm} layout="vertical" onFinish={handleClosingSubmit}>
-          <Form.Item 
-            name="actual_cash" 
-            label="Actual Cash Counted:" 
-            rules={[{ required: true, message: 'Please enter actual cash amount' }]}
-          >
-            <InputNumber 
-              style={{ width: '100%' }} 
-              size="large"
-              prefix={profile?.currency} 
-              placeholder="Enter counted cash"
-            />
-          </Form.Item>
-
-          {/* Live Difference Display */}
-          <Form.Item shouldUpdate={(prev, curr) => prev.actual_cash !== curr.actual_cash} noStyle>
-            {({ getFieldValue }) => {
-              const actual = getFieldValue('actual_cash') || 0;
-              const expected = stats?.cashInHand || 0;
-              const diff = Math.round((actual - expected) * 100) / 100;
-              
-              if (actual === 0) return null;
-
-              return (
-                <div style={{ 
-                  marginBottom: '20px', 
-                  padding: '10px', 
-                  borderRadius: '5px', 
-                  backgroundColor: diff === 0 ? token.colorSuccessBg : token.colorErrorBg, 
-                  border: `1px solid ${diff === 0 ? token.colorSuccessBorder : token.colorErrorBorder}` 
-                }}>
-                  <Text strong style={{ color: diff >= 0 ? token.colorSuccess : token.colorError }}>
-                    Difference: {formatCurrency(diff, profile?.currency)}
-                  </Text>
-                  <br />
-                  <Text size="small" type="secondary">
-                    {diff === 0 ? "Perfect! Cash matches the record." : diff > 0 ? "Cash is over (Surplus)." : "Cash is short (Deficit)!"}
-                  </Text>
-                </div>
-              );
-            }}
-          </Form.Item>
-
-          <Form.Item 
-  noStyle
-  shouldUpdate={(prev, curr) => prev.actual_cash !== curr.actual_cash}
->
-  {({ getFieldValue }) => {
-    const actual = getFieldValue('actual_cash') || 0;
-    const expected = stats?.cashInHand || 0;
-    const isDifferent = actual !== expected && actual !== 0;
-    return (
-      <Form.Item 
-        name="notes" 
-        label="Remarks / Notes:" 
-        rules={[{ 
-          required: isDifferent, 
-          message: 'Please explain the reason for the cash difference.' 
-        }]}
-      >
-        <Input.TextArea 
-          placeholder={isDifferent ? "Explain why there is a difference..." : "Optional notes..."} 
-        />
-      </Form.Item>
-    );
-
-  }}
-</Form.Item>
         </Form>
       </Modal>
     </div>

@@ -67,6 +67,18 @@ const PermissionGuard = ({ permission, children }) => {
   return <Navigate to="/" replace />;
 };
 
+// NAYA SESSION GUARD: Check karega ke shift khuli hai ya nahi
+const SessionGuard = ({ children }) => {
+  const { activeSession } = useStaff();
+  const location = useLocation();
+
+  // Agar shift band hai, to user ko POS/Expenses se wapis Dashboard bhej do
+  if (!activeSession) {
+    return <Navigate to="/" state={{ from: location, needsSession: true }} replace />;
+  }
+  return children;
+};
+
 const { Content } = Layout;
 
 const MainLayout = ({ isDarkMode, toggleTheme }) => {
@@ -157,34 +169,30 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
   );
 };
 
+// ... (Imports wahi rahenge jo aap ke paas hain)
+
 const AppRoutes = ({ isDarkMode, toggleTheme }) => {
   const { session, isPasswordRecovery } = useAuth();
-  const { notification } = AntApp.useApp(); // Ant Design ka theme-aware notification tool
+  const { notification } = AntApp.useApp();
 
   useEffect(() => {
-    // Logger ko batana ke ab se theme wala notification use karein
     setLoggerNotification(notification);
   }, [notification]);
 
-  // --- NAYA IZAFA: PWA Update Notification Logic (START) ---
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
-    onRegistered(r) {
-      console.log('SW Registered:', r);
-    },
-    onRegisterError(error) {
-      console.error('SW Registration Error:', error);
-    },
+    onRegistered(r) { console.log('SW Registered:', r); },
+    onRegisterError(error) { console.error('SW Registration Error:', error); },
   });
 
   useEffect(() => {
     if (needRefresh) {
       notification.info({
         message: 'Update Available!',
-        description: 'A new version of SadaPOS is ready. Please update to get the latest features.',
-        duration: 0, // 0 ka matlab hai yeh khud band nahi hoga jab tak user click na kare
+        description: 'A new version of SadaPOS is ready.',
+        duration: 0,
         placement: 'topRight',
         btn: (
           <button
@@ -197,94 +205,109 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         onClose: () => setNeedRefresh(false),
       });
     }
-  },[needRefresh, notification, updateServiceWorker, setNeedRefresh]);
-  // --- NAYA IZAFA: PWA Update Notification Logic (END) ---
+  }, [needRefresh, notification, updateServiceWorker, setNeedRefresh]);
 
-  // Agar user login nahi hai, to use sirf Auth aur Password Update page tak rasai dein
   if (!session || isPasswordRecovery) {
     return (
       <Routes>
         <Route path="/update-password" element={<UpdatePasswordPage />} />
-        {/* Agar user /update-password ke alawa kisi aur page par jane ki koshish kare, to use AuthPage par bhej dein */}
         <Route path="*" element={<AuthPage />} />
       </Routes>
     );
   }
 
-  // Agar user login hai, to use poori application dikhayein
   return (
     <Routes>
-      {/* Hum ne /update-password route yahan bhi shamil kiya hai taake agar session ban'ne mein thori der ho to bhi page sahi kaam kare */}
       <Route path="/update-password" element={<UpdatePasswordPage />} />
       <Route path="/" element={<MainLayout isDarkMode={isDarkMode} toggleTheme={toggleTheme} />}>
+        
+        {/* 1. Open Pages (No Guard) */}
         <Route index element={<Dashboard />} />
+        <Route path="about" element={<About />} />
         <Route path="inventory" element={<Inventory />} />
         <Route path="warranty" element={<WarrantyClaims />} />
-        <Route path="/damaged-stock" element={
-          <PermissionGuard permission="can_edit_inventory">
-            <DamagedStock />
+        
+        {/* 2. Reports (Sirf Permission Guard - No Session Needed) */}
+        <Route path="reports" element={
+          <PermissionGuard permission="can_access_detailed_reports">
+            <Reports />
           </PermissionGuard>
         } />
-        <Route path="pos" element={<POS />} />
-        <Route path="reports" element={
-  <PermissionGuard permission="can_access_detailed_reports">
-    <Reports />
-  </PermissionGuard>
-} />
+
+        {/* 3. POS & Expenses (Session Guard + Permission Guard) */}
+        <Route path="pos" element={<SessionGuard><POS /></SessionGuard>} />
+        
+        <Route path="expenses" element={
+          <SessionGuard>
+            <PermissionGuard permission="can_manage_expenses">
+              <Expenses />
+            </PermissionGuard>
+          </SessionGuard>
+        } />
+
+        <Route path="expense-categories" element={
+          <PermissionGuard permission="can_manage_expense_categories">
+            <ExpenseCategories />
+          </PermissionGuard>
+        } />
+
+        {/* 4. People & Business Management */}
         <Route path="customers" element={
           <PermissionGuard permission="can_manage_people">
             <Customers />
           </PermissionGuard>
         } />
+        
         <Route path="suppliers" element={
           <PermissionGuard permission="can_manage_suppliers">
             <SupplierDashboard />
           </PermissionGuard>
         } />
+
         <Route path="purchases" element={
           <PermissionGuard permission="can_manage_purchases">
             <Purchases />
           </PermissionGuard>
         } />
+        
         <Route path="purchases/:id" element={
           <PermissionGuard permission="can_manage_purchases">
             <PurchaseDetails />
           </PermissionGuard>
         } />
+
         <Route path="categories" element={
           <PermissionGuard permission="can_manage_categories">
             <Categories />
           </PermissionGuard>
         } />
-        {/* IN PAGES PAR SECURITY GUARD LAGA DIYA */}
-        <Route path="profile" element={
-          <PermissionGuard permission="can_manage_profile">
-            <Profile />
+
+        <Route path="damaged-stock" element={
+          <PermissionGuard permission="can_edit_inventory">
+            <DamagedStock />
           </PermissionGuard>
         } />
-        <Route path="expenses" element={
-         <PermissionGuard permission="can_manage_expenses">
-            <Expenses />
-          </PermissionGuard>
-        } />
-        <Route path="expense-categories" element={
-         <PermissionGuard permission="can_manage_expense_categories">
-            <ExpenseCategories />
-          </PermissionGuard>
-        } />
+
         <Route path="sales-history" element={
           <PermissionGuard permission="can_view_sales_history">
             <SalesHistory />
           </PermissionGuard>
         } />
-        {/* IN PAGES PAR SECURITY GUARD LAGA DIYA */}
+
+        <Route path="profile" element={
+          <PermissionGuard permission="can_manage_profile">
+            <Profile />
+          </PermissionGuard>
+        } />
+
+        {/* 5. Owner Only Pages */}
         <Route path="settings" element={<OwnerOnly><SettingsPage /></OwnerOnly>} />
         <Route path="staff" element={<OwnerOnly><StaffManagement /></OwnerOnly>} />
         <Route path="subscription" element={<OwnerOnly><SubscriptionPage /></OwnerOnly>} />
+        <Route path="logs" element={<OwnerOnly><SystemLogs /></OwnerOnly>} />
+
+        {/* 6. Fallback */}
         <Route path="*" element={<Navigate to="/" />} />
-        {/* LOGS BHI SIRF OWNER DEKH SAKTA HAI */}
-        <Route path="/logs" element={<OwnerOnly><SystemLogs /></OwnerOnly>} />
-        <Route path="about" element={<About />} />
       </Route>
     </Routes>
   );

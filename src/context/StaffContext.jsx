@@ -10,19 +10,37 @@ const StaffContext = createContext();
 
 export const StaffProvider = ({ children }) => {
   const [activeStaff, setActiveStaff] = useState(null);
-  // NAYA: App ko initialize hi locked halat mein karein agar flag set hai (No Flicker Fix)
   const [isAppLocked, setIsAppLocked] = useState(localStorage.getItem('is_app_locked') === 'true');
+  const [activeSession, setActiveSession] = useState(null); 
+  const [defaultCounterId, setDefaultCounterId] = useState(null); // NAYA IZAFA: Owner ke liye default counter
   const { message } = App.useApp();
   const { profile } = useAuth(); // Plan check karne ke liye profile nikala
   // useApp wali line yahan se hata di gayi hai
 
   useEffect(() => {
-    // Page refresh hone par check karein ke kya app lock thi ya staff login tha?
     const savedStaff = localStorage.getItem('active_staff_session');
     if (savedStaff) setActiveStaff(JSON.parse(savedStaff));
 
     const locked = localStorage.getItem('is_app_locked');
     if (locked === 'true') setIsAppLocked(true);
+
+    const savedSession = localStorage.getItem('active_register_session');
+    if (savedSession) setActiveSession(JSON.parse(savedSession));
+
+    // NAYA IZAFA: App load hote hi sab se purana (Default) counter dhoondh lo
+    const loadDefaultCounter = async () => {
+      try {
+        const regs = await db.registers.toArray();
+        if (regs.length > 0) {
+          // Banne ki tarikh se sort karein
+          regs.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+          setDefaultCounterId(regs[0].id); // Sab se pehla counter
+        }
+      } catch (err) {
+        console.error("Failed to load default counter", err);
+      }
+    };
+    loadDefaultCounter();
   }, []);
 
   // Staff Login
@@ -54,11 +72,11 @@ export const StaffProvider = ({ children }) => {
         // --- SMART GATEKEEPER LOGIC END ---
 
         setActiveStaff(staff);
-        setIsAppLocked(false);
+        // setIsAppLocked(false); // <-- Register open hone tak lock rahega
         localStorage.setItem('active_staff_session', JSON.stringify(staff));
-        localStorage.setItem('is_app_locked', 'false');
+        // localStorage.setItem('is_app_locked', 'false'); // <-- Abhi unlock nahi karna
         message.success(`Welcome, ${staff.name}!`);
-        return { success: true };
+        return { success: staff }; // <-- Staff object wapis bhejein
       } else {
         return { success: false, errorMsg: 'Invalid PIN Code' };
       }
@@ -87,10 +105,10 @@ export const StaffProvider = ({ children }) => {
 
     if (isMatch) {
         setActiveStaff(null);
-        setIsAppLocked(false);
+        // setIsAppLocked(false); <-- Hata diya taake direct unlock na ho, balke Register screen aaye
         localStorage.removeItem('active_staff_session');
-        localStorage.setItem('is_app_locked', 'false');
-        message.success('Unlocked as Owner');
+        // localStorage.setItem('is_app_locked', 'false'); <-- Hata diya
+        message.success('Owner PIN Verified');
         return true;
     } else {
         // Security by obscurity: Generic error
@@ -133,7 +151,7 @@ export const StaffProvider = ({ children }) => {
   };
 
   return (
-    <StaffContext.Provider value={{ activeStaff, isAppLocked, loginStaff, lockApp, unlockAsOwner, verifyMasterPin, can }}>
+    <StaffContext.Provider value={{ activeStaff, isAppLocked, setIsAppLocked, loginStaff, lockApp, unlockAsOwner, verifyMasterPin, can, activeSession, setActiveSession, defaultCounterId }}>
       {children}
     </StaffContext.Provider>
   );

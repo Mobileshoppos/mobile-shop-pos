@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Tabs, Card, Row, Col, Statistic, Spin, DatePicker, Space, theme, Table, Progress, Divider, Tag, Empty, Button, Dropdown, Menu, Radio, Badge, Tooltip, App } from 'antd';
+import { Typography, Tabs, Card, Row, Col, Statistic, Spin, DatePicker, Space, theme, Table, Progress, Divider, Tag, Empty, Button, Dropdown, Menu, Radio, Badge, Tooltip, App, Select } from 'antd';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import DataService from '../DataService';
+import { db } from '../db';
 import dayjs from 'dayjs';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getPlanLimits } from '../config/subscriptionPlans'; // Naya Import
@@ -53,7 +55,9 @@ import {
   DownOutlined,
   LockOutlined,
   PieChartOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  ShopOutlined,
+  UserOutlined
 } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 
@@ -67,6 +71,7 @@ const Reports = () => {
   const { token } = theme.useToken();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { profile } = useAuth();
+  const { isDarkMode } = useTheme();
   
   // --- SUBSCRIPTION CHECK ---
   const limits = getPlanLimits(profile?.subscription_tier);
@@ -92,7 +97,13 @@ const Reports = () => {
   const [profitLossData, setProfitLossData] = useState(null); // NAYI STATE: P&L Data ke liye
   const [inventoryData, setInventoryData] = useState(null); // NAYI STATE: Inventory Data
   const [ledgerData, setLedgerData] = useState(null); // NAYI STATE: Ledger Data
-  const [auditData, setAuditData] = useState(null); // NAYI STATE: Audit Data
+  const [auditData, setAuditData] = useState(null);
+  // --- VAULT LEDGER STATES (NAYA IZAFA) ---
+  const [allRegisters, setAllRegisters] = useState([]);
+  const [selectedRegForLedger, setSelectedRegForLedger] = useState(null);
+  const [registerLedgerData, setRegisterLedgerData] = useState([]);
+  const [activeSessionsData, setActiveSessionsData] = useState([]); 
+  const [currentCounterCash, setCurrentCounterCash] = useState(0); // NAYA IZAFA
   const [staffList, setStaffList] = useState([]); // NAYI STATE: Staff Names ke liye
   const [dateRange, setDateRange] = useState([dayjs().startOf('month'), dayjs().endOf('month')]);
 const [timeRange, setTimeRange] = useState('month'); 
@@ -471,6 +482,28 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           setAuditData(data);
           setStaffList(staff); // Naya: Staff list save karein
         }
+        else if (activeTab === 'vault_flow') {
+          const regs = await DataService.getRegisters();
+          setAllRegisters(regs);
+          
+          // NAYA IZAFA: Staff aur Active Sessions mangwayein taake cards par naam likh sakein
+          const staff = await DataService.getStaffMembers();
+          setStaffList(staff);
+          const sessions = await db.register_sessions.filter(s => !s.closed_at).toArray();
+          setActiveSessionsData(sessions);
+
+          if (regs.length > 0 && !selectedRegForLedger) {
+            setSelectedRegForLedger(regs[0].id);
+          }
+          if (selectedRegForLedger) {
+            const ledger = await DataService.getRegisterLedger(selectedRegForLedger);
+            setRegisterLedgerData(ledger);
+
+            // NAYA IZAFA: Sahi Cash Calculate Karna (Real-world logic via Master Function)
+            const trueCash = await DataService.getRegisterCurrentCash(selectedRegForLedger);
+            setCurrentCounterCash(trueCash);
+          }
+        }
       } catch (error) {
         console.error("Failed to fetch report data:", error);
       } finally {
@@ -479,7 +512,11 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
     };
 
     fetchReportData();
-  }, [dateRange, activeTab]);
+
+    // NAYA IZAFA: Background mein data download hone par Reports page ko Live Refresh karna
+    window.addEventListener('local-db-updated', fetchReportData);
+    return () => window.removeEventListener('local-db-updated', fetchReportData);
+  }, [dateRange, activeTab, selectedRegForLedger]);
 
   // --- OVERVIEW TAB UI ---
   const renderOverviewTab = () => {
@@ -1508,7 +1545,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 pagination={{ pageSize: 6 }}
                 size="small"
                 columns={[
-                  { title: 'Date', dataIndex: 'closing_date', key: 'date', render: d => dayjs(d).format('DD MMM') },
+                  { title: 'Date', dataIndex: 'closed_at', key: 'date', render: d => dayjs(d).format('DD MMM, hh:mm A') },
                   { 
                     title: 'Staff', 
                     key: 'staff', 
@@ -1517,8 +1554,8 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                       return <Text strong>{staff ? staff.name : 'Owner / Admin'}</Text>;
                     } 
                   },
-                  { title: 'Expected', dataIndex: 'expected_cash', align: 'right', render: v => formatCurrency(v, profile?.currency) },
-                  { title: 'Actual', dataIndex: 'actual_cash', align: 'right', render: v => formatCurrency(v, profile?.currency) },
+                  { title: 'Expected', dataIndex: 'expected_closing', align: 'right', render: v => formatCurrency(v, profile?.currency) },
+                  { title: 'Actual', dataIndex: 'actual_closing', align: 'right', render: v => formatCurrency(v, profile?.currency) },
                   { title: 'Diff', dataIndex: 'difference', align: 'right', render: v => (
                     <Text strong style={{ color: v < 0 ? token.colorError : token.colorSuccess }}>
                       {v > 0 ? '+' : ''}{formatCurrency(v, profile?.currency)}
@@ -1530,6 +1567,115 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             </Card>
           </Col>
         </Row>
+      </div>
+    );
+  };
+
+  // --- NAYA IZAFA: VAULT & CASH FLOW TAB UI ---
+  const renderVaultFlowTab = () => {
+    return (
+      <div style={{ marginTop: '16px' }}>
+        <Card style={cardStyle}>
+          <div style={{ marginBottom: '20px' }}>
+            <Text strong style={{ display: 'block', marginBottom: '12px' }}>Select Counter to View Ledger:</Text>
+            
+            {/* NAYA IZAFA: Dropdown ki jagah Selectable Cards */}
+            <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }} className="hide-scrollbar">
+              {allRegisters.map(reg => {
+                const isSelected = selectedRegForLedger === reg.id;
+                const activeSession = activeSessionsData.find(s => s.register_id === reg.id);
+                const staffName = activeSession ? (staffList.find(s => s.id === activeSession.staff_id)?.name || 'Owner') : 'Empty';
+                
+                return (
+                  <div 
+                    key={reg.id}
+                    onClick={() => setSelectedRegForLedger(reg.id)}
+                    style={{
+                      minWidth: '200px',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      border: `2px solid ${isSelected ? token.colorPrimary : token.colorBorderSecondary}`,
+                      background: isSelected ? (isDarkMode ? token.colorPrimary + '22' : token.colorPrimary + '11') : 'transparent',
+                      transition: 'all 0.2s ease',
+                      position: 'relative'
+                    }}
+                  >
+                    {/* Status Dot */}
+                    <div style={{ 
+                      position: 'absolute', top: '12px', right: '12px', width: '10px', height: '10px', borderRadius: '50%',
+                      background: reg.status === 'open' ? token.colorSuccess : token.colorTextDisabled
+                    }} />
+                    
+                    <Text strong style={{ fontSize: '15px', display: 'block', marginBottom: '4px' }}>{reg.name}</Text>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <UserOutlined style={{ color: token.colorTextSecondary, fontSize: '12px' }} />
+                      <Text type="secondary" style={{ fontSize: '12px' }}>
+                        {reg.status === 'open' ? `In Use: ${staffName}` : 'Closed'}
+                      </Text>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* NAYA: Current Balance Summary Card */}
+          <Row gutter={16} style={{ marginBottom: '20px' }}>
+            <Col span={24}>
+              <div style={{ 
+                background: isDarkMode ? 'rgba(24, 144, 255, 0.1)' : '#e6f7ff', 
+                padding: '15px', 
+                borderRadius: '8px', 
+                border: `1px solid ${token.colorPrimary}66`,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div>
+                  <Text type="secondary">Current Estimated Cash in this Counter:</Text>
+                  <Title level={4} style={{ margin: 0, color: token.colorPrimary }}>
+                    {formatCurrency(currentCounterCash, profile?.currency)}
+                  </Title>
+                </div>
+                <BankOutlined style={{ fontSize: '32px', opacity: 0.3 }} />
+              </div>
+            </Col>
+          </Row>
+
+          <Table 
+            dataSource={registerLedgerData}
+            rowKey="id"
+            columns={[
+              { title: 'Date & Time', dataIndex: 'date', render: d => dayjs(d).format('DD MMM YYYY, hh:mm A') },
+              { title: 'Source', dataIndex: 'source' },
+              { title: 'Description', dataIndex: 'notes' },
+              { 
+                title: 'Type', 
+                dataIndex: 'type', 
+                render: t => {
+                  if (t === 'Credit (In)') return <Tag color="green">{t}</Tag>;
+                  if (t === 'Debit (Out)') return <Tag color="volcano">{t}</Tag>;
+                  return <Tag color="blue">{t}</Tag>; // Info ke liye Blue
+                }
+              },
+              { 
+                title: 'Amount', 
+                dataIndex: 'amount', 
+                align: 'right', 
+                render: (v, rec) => {
+                  if (rec.type === 'Info') return <Text type="secondary">{formatCurrency(v, profile?.currency)}</Text>;
+                  const isCredit = rec.type === 'Credit (In)';
+                  return (
+                    <Text strong style={{ color: isCredit ? token.colorSuccess : token.colorError }}>
+                      {isCredit ? '+' : '-'} {formatCurrency(v, profile?.currency)}
+                    </Text>
+                  );
+                } 
+              }
+            ]}
+          />
+        </Card>
       </div>
     );
   };
@@ -1559,6 +1705,11 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
       key: 'audit',
       label: <span><SafetyCertificateOutlined /> Cash & Audit</span>,
       children: renderAuditTab(),
+    },
+    {
+      key: 'vault_flow',
+      label: <span><ShopOutlined /> Counter Ledgers</span>,
+      children: renderVaultFlowTab(),
     },
   ];
 

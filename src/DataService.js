@@ -911,6 +911,8 @@ async addCustomer(customerData) {
       id: saleId,
       user_id: salePayload.user_id,
       staff_id: salePayload.staff_id,
+      register_id: salePayload.register_id,
+      session_id: salePayload.session_id,
       customer_id: salePayload.customer_id,
       subtotal: salePayload.subtotal,
       discount: salePayload.discount,
@@ -982,6 +984,9 @@ async addCustomer(customerData) {
         ...paymentData,
         id: paymentId,
         local_id: paymentId,
+        // Multi-Counter Binding (NAYA)
+        register_id: paymentData.register_id || (localStorage.getItem('active_register_session') ? JSON.parse(localStorage.getItem('active_register_session')).register_id : null),
+        session_id: paymentData.session_id || (localStorage.getItem('active_register_session') ? JSON.parse(localStorage.getItem('active_register_session')).id : null),
         created_at: paymentData.created_at || new Date().toISOString()
     };
 
@@ -1229,7 +1234,14 @@ async addCustomer(customerData) {
     // 1. Ek aarzi (temporary) ID banayein
     const localId = crypto.randomUUID();
     paymentData.local_id = localId;
-    const paymentWithId = { ...paymentData, id: localId, local_id: localId };
+    const paymentWithId = { 
+        ...paymentData, 
+        id: localId, 
+        local_id: localId,
+        // Multi-Counter Binding (NAYA)
+        register_id: paymentData.register_id || (localStorage.getItem('active_register_session') ? JSON.parse(localStorage.getItem('active_register_session')).register_id : null),
+        session_id: paymentData.session_id || (localStorage.getItem('active_register_session') ? JSON.parse(localStorage.getItem('active_register_session')).id : null)
+    };
 
     // 2. Local DB mein save karein (Taake Ledger mein foran nazar aaye)
     if (db.supplier_payments) {
@@ -1391,6 +1403,9 @@ async addCustomer(customerData) {
         ...refundData, 
         id: refundId, 
         local_id: refundId,
+        // Multi-Counter Binding (NAYA)
+        register_id: refundData.register_id || (localStorage.getItem('active_register_session') ? JSON.parse(localStorage.getItem('active_register_session')).register_id : null),
+        session_id: refundData.session_id || (localStorage.getItem('active_register_session') ? JSON.parse(localStorage.getItem('active_register_session')).id : null),
         created_at: refundData.created_at || new Date().toISOString(),
         updated_at: new Date().toISOString()
     };
@@ -2192,9 +2207,9 @@ async addCustomer(customerData) {
       return d >= startTime && d <= endTime;
     });
 
-    const closings = await db.daily_closings.toArray();
+    const closings = await db.register_sessions.filter(s => s.closed_at != null).toArray();
     const filteredClosings = closings.filter(c => {
-      const d = new Date(c.created_at || c.closing_date).getTime();
+      const d = new Date(c.closed_at).getTime();
       return d >= startTime && d <= endTime;
     });
 
@@ -2226,7 +2241,7 @@ async addCustomer(customerData) {
       else totalSurplus += diff;
 
       dailyDiffTrend.push({
-        date: dayjs(c.closing_date).format('DD MMM'),
+        date: dayjs(c.closed_at).format('DD MMM'),
         difference: diff
       });
     });
@@ -2247,7 +2262,7 @@ async addCustomer(customerData) {
       adjustmentBreakdown,
       dailyDiffTrend: dailyDiffTrend.sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix()),
       staffTransactions: filteredStaffLedger.sort((a, b) => new Date(b.entry_date) - new Date(a.entry_date)).slice(0, 15),
-      recentClosings: filteredClosings.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 10)
+      recentClosings: filteredClosings.sort((a, b) => new Date(b.closed_at) - new Date(a.closed_at)).slice(0, 10)
     };
   },
 
@@ -2340,6 +2355,13 @@ async addCustomer(customerData) {
     if (!expenseData.id) expenseData.id = crypto.randomUUID();
     expenseData.local_id = expenseData.id;
     
+    // Multi-Counter Binding (NAYA)
+    if (!expenseData.register_id && localStorage.getItem('active_register_session')) {
+      const session = JSON.parse(localStorage.getItem('active_register_session'));
+      expenseData.register_id = session.register_id;
+      expenseData.session_id = session.id;
+    }
+
     // Local Save
     await db.expenses.add(expenseData);
     
@@ -2766,6 +2788,8 @@ async addCustomer(customerData) {
 
     const netCost = totalCostOfSold - totalCostOfReturns;
     const grossProfitCurrent = netSalesCurrent - netCost;
+    
+    // Sahi Logic: Net Sales mein se return pehle hi minus hai, is liye yahan dobara minus nahi karna
     const netProfitCurrent = grossProfitCurrent - totalExpensesCurrent;
 
     // --- CASH IN HAND & BANK BALANCE CALCULATION ---
@@ -2872,11 +2896,26 @@ async addCustomer(customerData) {
         });
         // Note: Sorting ab hum Dashboard.jsx mein filter ke mutabiq karenge
 
+    // --- NAYA IZAFA: Counters Breakdown (All Counters) ---
+    const allRegs = await db.registers.toArray();
+    const countersBreakdown = [];
+    
+    for (const reg of allRegs) {
+        // Naya Master Function jo open/close dono ka sahi hisaab rakhta hai
+        const currentCash = await this.getRegisterCurrentCash(reg.id);
+        countersBreakdown.push({ name: reg.name, cash: currentCash });
+    }
+
+    // --- NAYA IZAFA: Cash in Hand ko Counters ke sath sync karna ---
+    // Ab dukan ka total cash wahi hoga jo tamam counters ke pass mila kar hai
+    const totalCashInCounters = countersBreakdown.reduce((sum, c) => sum + (c.cash || 0), 0);
+
     return {
         totalSales: netSalesCurrent,
+        countersBreakdown, 
         totalReturnFees: totalReturnFeesCurrent,
         salesGrowth,
-        cashInHand,
+        cashInHand: totalCashInCounters, // <--- Purani logic ki jagah counters ka sum use kiya
         bankBalance,
         totalExpenses: totalExpensesCurrent,
         expensesGrowth,
@@ -3693,6 +3732,310 @@ async addCustomer(customerData) {
     });
 
     return true;
+  },
+
+  // --- MULTI-COUNTER FUNCTIONS (NAYA IZAFA) ---
+  
+  // 1. Saare counters (Registers) ki list mangwana
+  async getRegisters() {
+    return await db.registers.toArray();
+  },
+
+  // 2. Register/Counter kholna (Session shuru karna)
+  async openRegisterSession(sessionData) {
+    // --- NAYA IZAFA: Ghost Session Auto-Heal ---
+    // Agar pehle se koi session open reh gaya tha (e.g. cache clear hone ki wajah se), to usay auto-close karein
+    const ghostSessions = await db.register_sessions
+        .filter(s => s.register_id === sessionData.register_id && !s.closed_at)
+        .toArray();
+    
+    for (const ghost of ghostSessions) {
+        await db.register_sessions.update(ghost.id, {
+            closed_at: new Date().toISOString(),
+            notes: (ghost.notes ? ghost.notes + ' | ' : '') + '[Auto-closed ghost session]'
+        });
+    }
+    // -------------------------------------------
+
+    const id = crypto.randomUUID();
+    const session = {
+      id: id,
+      ...sessionData,
+      opened_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // Local DB mein session save karein
+    await db.register_sessions.add(session);
+    
+    // Register ka status 'open' kar dein
+    await db.registers.update(sessionData.register_id, { status: 'open' });
+
+    // Sync Queue mein dalein taake cloud par jaye
+    await db.sync_queue.add({ table_name: 'register_sessions', action: 'create', data: session });
+    await db.sync_queue.add({ table_name: 'registers', action: 'update', data: { id: sessionData.register_id, status: 'open' } });
+    
+    return session;
+  },
+
+  // 2.5 Session ka Expected Balance nikalna (NAYA)
+  async getSessionExpectedBalance(sessionId) {
+    const session = await db.register_sessions.get(sessionId);
+    if (!session) return 0;
+
+    const opening = Number(session.opening_balance) || 0;
+    const regId = session.register_id;
+
+    // A. Cash Sales (Is session ki) - Bulletproof approach using register_id
+    const sales = await db.sales.where('register_id').equals(regId).toArray();
+    const cashSales = sales.filter(s => s.session_id === sessionId && s.payment_method === 'Cash').reduce((sum, s) => sum + (Number(s.amount_paid_at_sale) || 0), 0);
+
+    // B. Cash Customer Payments (Wusooli)
+    const payments = await db.customer_payments.where('register_id').equals(regId).toArray();
+    const cashReceived = payments.filter(p => p.session_id === sessionId && p.payment_method === 'Cash').reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+
+    // C. Cash Expenses (Kharchay)
+    const expenses = await db.expenses.where('register_id').equals(regId).toArray();
+    const cashSpent = expenses.filter(e => e.session_id === sessionId && e.payment_method === 'Cash').reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+    // D. Cash Adjustments (In/Out/Transfers) - NAYA IMPROVED MATH
+    // Hum wo saari adjustments nikalenge jo ya to is counter se hui hain, ya is counter ki taraf aayi hain
+    const allAdjustments = await db.cash_adjustments.toArray();
+    
+    // 1. Cash IN: Normal "In" + Wo Transfers jo is counter ki taraf aaye (transfer_to)
+    const adjIn = allAdjustments.filter(a => 
+      a.session_id === sessionId && a.payment_method === 'Cash' && 
+      (a.type === 'In' || (a.type === 'Transfer' && a.transfer_to === regId))
+    ).reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+
+    // 2. Cash OUT: Normal "Out" + Wo Transfers jo is counter se bahar gaye (register_id)
+    const adjOut = allAdjustments.filter(a => 
+      a.session_id === sessionId && a.payment_method === 'Cash' && 
+      (a.type === 'Out' || (a.type === 'Transfer' && a.register_id === regId))
+    ).reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+
+    // E. Supplier Payments (Cash)
+    const supPayments = await db.supplier_payments.where('register_id').equals(regId).toArray();
+    const supCashPaid = supPayments.filter(p => p.session_id === sessionId && p.payment_method === 'Cash').reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+    // F. Credit Payouts (Cash) - NAYA IZAFA
+    const payouts = await db.credit_payouts.where('register_id').equals(regId).toArray();
+    const cashPayouts = payouts.filter(p => p.session_id === sessionId && p.payment_method === 'Cash').reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+
+    // G. Supplier Refunds (Cash) - NAYA IZAFA
+    const supRefunds = await db.supplier_refunds.where('register_id').equals(regId).toArray();
+    const supCashRefunds = supRefunds.filter(r => r.session_id === sessionId && r.payment_method === 'Cash').reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+
+    // Final Calculation (Plus supCashRefunds)
+    const expected = (opening + cashSales + cashReceived + adjIn + supCashRefunds) - (cashSpent + adjOut + supCashPaid + cashPayouts);
+    return Math.round(expected * 100) / 100;
+  },
+
+  // NAYA IZAFA: Counter ka Asli Cash nikalna (Chahe open ho ya closed)
+  async getRegisterCurrentCash(registerId) {
+    // 1. Agar counter khula hai, to seedha session wala hisaab lagao
+    const sessions = await db.register_sessions.where('register_id').equals(registerId).toArray();
+    
+    // NAYA IZAFA: Hamesha sab se latest (nayi) session ko pehle check karein
+    sessions.sort((a, b) => new Date(b.opened_at || 0) - new Date(a.opened_at || 0));
+    const openSession = sessions.find(s => !s.closed_at);
+    
+    if (openSession) {
+        return await this.getSessionExpectedBalance(openSession.id);
+    }
+
+    // 2. Agar counter band hai, to uski Aakhri Closing dhoondo
+    const lastSession = await db.register_sessions
+        .where('register_id').equals(registerId)
+        .filter(s => s.closed_at != null)
+        .reverse()
+        .sortBy('closed_at');
+
+    let baseCash = 0;
+    let timeFilter = new Date(0).toISOString(); // Shuruat se
+
+    if (lastSession && lastSession.length > 0) {
+        baseCash = lastSession[0].actual_closing || 0;
+        timeFilter = lastSession[0].closed_at; // Aakhri closing ka waqt
+    }
+
+    // 3. Aakhri closing ke BAAD hone wali tamam transactions (Owner actions)
+    const sales = await db.sales.where('register_id').equals(registerId).toArray();
+    const recentSales = sales.filter(s => s.payment_method === 'Cash' && s.created_at > timeFilter).reduce((sum, s) => sum + (Number(s.amount_paid_at_sale) || 0), 0);
+
+    const payments = await db.customer_payments.where('register_id').equals(registerId).toArray();
+    const recentPayments = payments.filter(p => p.payment_method === 'Cash' && p.created_at > timeFilter).reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+
+    const supPayments = await db.supplier_payments.where('register_id').equals(registerId).toArray();
+    const recentSupPayments = supPayments.filter(p => p.payment_method === 'Cash' && p.created_at > timeFilter).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+    const expenses = await db.expenses.where('register_id').equals(registerId).toArray();
+    const recentExpenses = expenses.filter(e => e.payment_method === 'Cash' && e.created_at > timeFilter).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+    const allAdjs = await db.cash_adjustments.toArray();
+    
+    // Transfer logic shamil ki gayi
+    const recentAdjIn = allAdjs.filter(a => 
+      a.payment_method === 'Cash' && a.created_at > timeFilter &&
+      ( (a.register_id === registerId && a.type === 'In') || (a.transfer_to === registerId && a.type === 'Transfer') )
+    ).reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+
+    const recentAdjOut = allAdjs.filter(a => 
+      a.payment_method === 'Cash' && a.created_at > timeFilter &&
+      ( (a.register_id === registerId && (a.type === 'Out' || a.type === 'Transfer')) )
+    ).reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+
+    // 4. Final Hisaab
+    const currentCash = baseCash + recentSales + recentPayments + recentAdjIn - recentSupPayments - recentExpenses - recentAdjOut;
+    return Math.round(currentCash * 100) / 100;
+  },
+
+  // 3. Register/Counter band karna (Shift khatam karna)
+  async closeRegisterSession(sessionId, closingData) {
+    // 1. Session DB se nikalain
+    const session = await db.register_sessions.get(sessionId);
+
+    // 2. Purane notes (Opening Anomaly) ko mehfooz rakhna
+    const combinedNotes = session.notes 
+      ? `${session.notes} | [Closing Note] ${closingData.notes || 'None'}` 
+      : closingData.notes;
+
+    const updates = {
+      ...closingData,
+      notes: combinedNotes, // Updated notes
+      closed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // 3. Session update karein
+    await db.register_sessions.update(sessionId, updates);
+    
+    // 4. Register ka status wapis 'closed' kar dein (Ab dobara fetch karne ki zaroorat nahi)
+    if (session && session.register_id) {
+      await db.registers.update(session.register_id, { status: 'closed' });
+      await db.sync_queue.add({ table_name: 'registers', action: 'update', data: { id: session.register_id, status: 'closed' } });
+    }
+
+    // 5. Sync Queue update
+    await db.sync_queue.add({ table_name: 'register_sessions', action: 'update', data: { id: sessionId, ...updates } });
+    
+    return true;
+  },
+
+  // Vault transfer logic removed
+
+  // 5. Kisi makhsoos Register ka Ledger nikalna (NAYA IZAFA)
+  async getRegisterLedger(registerId) {
+    // A. Is register se honay wali saari adjustments (In/Out/Transfers)
+    const adjustments = await db.cash_adjustments
+      .filter(a => a.register_id === registerId || a.transfer_to === registerId)
+      .toArray();
+
+    // B. Is register se juray saare payments/expenses (Agar counter hai)
+    const sales = await db.sales.where('register_id').equals(registerId).toArray();
+    const expenses = await db.expenses.where('register_id').equals(registerId).toArray();
+    const payments = await db.customer_payments.where('register_id').equals(registerId).toArray();
+    const supPayments = await db.supplier_payments.where('register_id').equals(registerId).toArray();
+    const payouts = await db.credit_payouts.where('register_id').equals(registerId).toArray(); 
+    const supRefunds = await db.supplier_refunds.where('register_id').equals(registerId).toArray(); // NAYA IZAFA
+
+    // In sab ko aik list mein jorna aur format karna
+    let ledger = [];
+
+    adjustments.forEach(a => {
+      ledger.push({
+        id: a.id,
+        date: a.created_at,
+        type: a.register_id === registerId ? 'Debit (Out)' : 'Credit (In)',
+        amount: a.amount,
+        notes: a.notes,
+        source: 'Manual Adjustment / Transfer'
+      });
+    });
+
+    sales.forEach(s => {
+      if (s.payment_method === 'Cash') {
+        ledger.push({ id: s.id, date: s.created_at, type: 'Credit (In)', amount: s.amount_paid_at_sale, notes: `Sale #${s.invoice_id || s.id.slice(0,8)}`, source: 'Sales' });
+      }
+    });
+
+    payments.forEach(p => {
+      if (p.payment_method === 'Cash') {
+        ledger.push({ id: p.id, date: p.created_at, type: 'Credit (In)', amount: p.amount_paid, notes: 'Customer Payment Received', source: 'Collection' });
+      }
+    });
+
+    supPayments.forEach(sp => {
+      if (sp.payment_method === 'Cash') {
+        ledger.push({ id: sp.id, date: sp.created_at, type: 'Debit (Out)', amount: sp.amount, notes: 'Paid to Supplier', source: 'Supplier Payment' });
+      }
+    });
+
+    expenses.forEach(e => {
+      if (e.payment_method === 'Cash') {
+        ledger.push({ id: e.id, date: e.created_at, type: 'Debit (Out)', amount: e.amount, notes: e.title, source: 'Expense' });
+      }
+    });
+
+    // NAYA IZAFA: Customer Payouts (Refunds) ko ledger mein shamil karna
+    payouts.forEach(p => {
+      if (p.payment_method === 'Cash') {
+        ledger.push({ id: p.id, date: p.created_at, type: 'Debit (Out)', amount: p.amount_paid, notes: p.remarks || 'Customer Credit Payout', source: 'Credit Settlement' });
+      }
+    });
+
+    // NAYA IZAFA: Supplier Refunds ko ledger mein shamil karna
+    supRefunds.forEach(r => {
+      if (r.payment_method === 'Cash') {
+        ledger.push({ id: r.id, date: r.created_at, type: 'Credit (In)', amount: r.amount, notes: r.notes || 'Refund from Supplier', source: 'Supplier Refund' });
+      }
+    });
+
+    // NAYA IZAFA: Shift Opening aur Closing ka Audit Trail
+    const sessions = await db.register_sessions.where('register_id').equals(registerId).toArray();
+    sessions.forEach(s => {
+      // Notes ko alag alag karna (Opening vs Closing) taake clear nazar aaye
+      let openNoteText = `Shift Opened. Declared Cash: ${s.opening_balance || 0}`;
+      let closeNoteText = `Shift Closed. Expected: ${s.expected_closing}, Actual: ${s.actual_closing}. Diff: ${s.difference}`;
+      
+      if (s.notes) {
+        if (s.notes.includes('[Opening Anomaly]')) {
+          openNoteText = s.notes.split(' | [Closing Note]')[0]; // Sirf opening wala hissa
+        }
+        if (s.notes.includes('[Closing Note]')) {
+          closeNoteText += ` - Remarks: ${s.notes.split('[Closing Note] ')[1]}`;
+        } else if (!s.notes.includes('[Opening Anomaly]')) {
+          // Agar sirf closing note tha
+          closeNoteText += ` - Remarks: ${s.notes}`;
+        }
+      }
+
+      // 1. Shift Open Record
+      ledger.push({
+        id: s.id + '_open',
+        date: s.opened_at,
+        type: 'Info',
+        amount: s.opening_balance || 0,
+        notes: openNoteText,
+        source: 'System (Shift Open)'
+      });
+
+      // 2. Shift Close Record (Agar close ho chuki hai)
+      if (s.closed_at) {
+        ledger.push({
+          id: s.id + '_close',
+          date: s.closed_at,
+          type: s.difference < 0 ? 'Debit (Out)' : (s.difference > 0 ? 'Credit (In)' : 'Info'),
+          amount: Math.abs(s.difference || 0),
+          notes: closeNoteText,
+          source: 'System (Shift Close)'
+        });
+      }
+    });
+
+    // Tarikh ke hisab se sort karein
+    return ledger.sort((a, b) => new Date(b.date) - new Date(a.date));
   },
 
 };

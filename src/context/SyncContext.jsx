@@ -136,6 +136,13 @@ export const SyncProvider = ({ children }) => {
       const { data: categories } = await supabase.from('categories').select('*').or(`user_id.eq.${user.id},user_id.is.null`).gt('updated_at', lastSyncTime);
       await smartPut('categories', categories, pendingIds);
 
+      // 1.1 Registers (Multi-Counter) - NAYA IZAFA
+      const { data: registers } = await supabase.from('registers').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('registers', registers, pendingIds);
+
+      const { data: registerSessions } = await supabase.from('register_sessions').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('register_sessions', registerSessions, pendingIds);
+
       // 2. Products
       const { data: products } = await supabase.from('products').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('products', products, pendingIds);
@@ -459,13 +466,15 @@ export const SyncProvider = ({ children }) => {
             // --- Supplier Bulk Payment Sync (UUID Simplified) ---
             else if (item.action === 'create_bulk_payment') {
                 const { error: supError } = await supabase.rpc('record_bulk_supplier_payment', {
-                    p_local_id: item.data.id, // Ab 'id' hi local_id hai
+                    p_local_id: item.data.id, 
                     p_supplier_id: item.data.supplier_id,
                     p_amount: item.data.amount,
                     p_payment_method: item.data.payment_method,
                     p_payment_date: item.data.payment_date,
                     p_notes: item.data.notes,
-                    p_staff_id: item.data.staff_id // <--- NAYA IZAFA
+                    p_staff_id: item.data.staff_id,
+                    p_register_id: item.data.register_id, // <--- NAYA IZAFA (MULTI-COUNTER)
+                    p_session_id: item.data.session_id    // <--- NAYA IZAFA (MULTI-COUNTER)
                 });
                 error = supError;
             }
@@ -511,7 +520,9 @@ export const SyncProvider = ({ children }) => {
                     p_refund_date: item.data.refund_date || item.data.payment_date,
                     p_method: item.data.payment_method || item.data.refund_method || 'Cash',
                     p_notes: item.data.notes,
-                    p_staff_id: item.data.staff_id // <--- NAYA IZAFA
+                    p_staff_id: item.data.staff_id,
+                    p_register_id: item.data.register_id, // <--- NAYA IZAFA (MULTI-COUNTER)
+                    p_session_id: item.data.session_id    // <--- NAYA IZAFA (MULTI-COUNTER)
                 });
                 error = supError;
             }
@@ -519,14 +530,16 @@ export const SyncProvider = ({ children }) => {
             // --- Purchase Payment Sync (UUID Simplified) ---
             else if (item.action === 'create_purchase_payment') {
                 const { error: supError } = await supabase.rpc('record_purchase_payment', {
-                    p_local_id: item.data.local_id || item.data.id, // Dono check karein
+                    p_local_id: item.data.local_id || item.data.id, 
                     p_supplier_id: item.data.supplier_id,
                     p_purchase_id: item.data.purchase_id,
                     p_amount: item.data.amount,
                     p_payment_method: item.data.payment_method,
                     p_payment_date: item.data.payment_date,
                     p_notes: item.data.notes,
-                    p_staff_id: item.data.staff_id // <--- NAYA IZAFA
+                    p_staff_id: item.data.staff_id,
+                    p_register_id: item.data.register_id, // <--- NAYA IZAFA (MULTI-COUNTER)
+                    p_session_id: item.data.session_id    // <--- NAYA IZAFA (MULTI-COUNTER)
                 });
                 error = supError;
             }
@@ -612,6 +625,26 @@ export const SyncProvider = ({ children }) => {
                     .from('expenses')
                     .delete()
                     .eq('id', item.data.id);
+                error = supError;
+            }
+
+            // --- Multi-Counter Sync (NAYA IZAFA) ---
+            else if (item.table_name === 'register_sessions' && item.action === 'create') {
+                const { error: supError } = await supabase.from('register_sessions').upsert([item.data]);
+                error = supError;
+            }
+            else if (item.table_name === 'register_sessions' && item.action === 'update') {
+                const { id, ...updates } = item.data;
+                const { error: supError } = await supabase.from('register_sessions').update(updates).eq('id', id);
+                error = supError;
+            }
+            else if (item.table_name === 'registers' && item.action === 'update') {
+                const { id, ...updates } = item.data;
+                const { error: supError } = await supabase.from('registers').update(updates).eq('id', id);
+                error = supError;
+            }
+            else if (item.table_name === 'registers' && item.action === 'create') {
+                const { error: supError } = await supabase.from('registers').upsert([item.data]);
                 error = supError;
             }
 

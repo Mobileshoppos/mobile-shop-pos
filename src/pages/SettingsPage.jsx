@@ -2,12 +2,14 @@ import React from 'react';
 import { useSearchParams } from 'react-router-dom'; 
 import { useState, useEffect } from 'react';
 // Sirf 'Alert' ka izafa kiya hai
-import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio, Switch, Input, Tooltip, theme, Alert, Space } from 'antd';
-import { ToolOutlined, LockOutlined, CopyOutlined } from '@ant-design/icons';
+import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio, Switch, Input, Tooltip, theme, Alert, Space, Modal } from 'antd';
+import { ToolOutlined, LockOutlined, CopyOutlined, ShopOutlined, PlusOutlined, DeleteOutlined, EditOutlined, BankOutlined } from '@ant-design/icons';
 import bcrypt from 'bcryptjs';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getPlanLimits } from '../config/subscriptionPlans';
+import DataService from '../DataService';
+import { db } from '../db';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { 
     themeConfig as initialThemeConfig, 
@@ -39,13 +41,109 @@ const SettingsPage = () => {
   // Master PIN States
   const [newMasterPin, setNewMasterPin] = useState('');
   const [confirmMasterPin, setConfirmMasterPin] = useState('');
-  const [terminalToken, setTerminalToken] = useState(''); // Naya Token Store karne ke liye
+  // --- MULTI-COUNTER STATES (NAYA IZAFA) ---
+  const [registers, setRegisters] = useState([]);
+  const [terminalToken, setTerminalToken] = useState(''); // Yeh line wapis add karein
+  const [isRegisterModalVisible, setIsRegisterModalVisible] = useState(false);
+  const [editingRegister, setEditingRegister] = useState(null);
+  const [regForm] = Input.useForm ? [null] : [null]; // Placeholder for safety
+  // Form handle karne ke liye simple states
+  const [regName, setRegName] = useState('');
+  const [regType, setRegType] = useState('counter');
+  // NAYA IZAFA: Device Pairing States
+  const[pairedRegisterId, setPairedRegisterId] = useState(localStorage.getItem('paired_register_id'));
 
-  // Naya: Jab URL badle to tab bhi badal jaye
+  const handlePairDevice = (id) => {
+    localStorage.setItem('paired_register_id', id);
+    setPairedRegisterId(id);
+    message.success("This PC is now permanently paired to this counter!");
+  };
+
+  const handleUnpairDevice = () => {
+    localStorage.removeItem('paired_register_id');
+    setPairedRegisterId(null);
+    message.success("PC unpaired successfully.");
+  };
+
+  const loadRegisters = async () => {
+    const data = await DataService.getRegisters();
+    
+    // NAYA IZAFA: Counters ko unke banne ki tarikh se sort karein
+    // Jo sab se pehle bana tha (Default), wo hamesha List mein No. 1 par aayega
+    const sortedData = data.sort((a, b) => {
+        const dateA = new Date(a.created_at || a.updated_at || 0);
+        const dateB = new Date(b.created_at || b.updated_at || 0);
+        return dateA - dateB;
+    });
+    
+    setRegisters(sortedData);
+  };
+
+  useEffect(() => {
+    loadRegisters();
+    // NAYA IZAFA: Agar kisi aur tab/window mein counter open/close ho to yahan live update ho jaye
+    window.addEventListener('local-db-updated', loadRegisters);
+    return () => window.removeEventListener('local-db-updated', loadRegisters);
+  }, []);
+
+  const handleAddRegister = async () => {
+    if (!regName) { message.error("Please enter a name"); return; }
+    
+    const newReg = {
+      id: editingRegister ? editingRegister.id : crypto.randomUUID(),
+      user_id: user.id,
+      name: regName,
+      type: regType,
+      status: editingRegister ? editingRegister.status : 'closed',
+      created_at: editingRegister ? editingRegister.created_at : new Date().toISOString(), // NAYA IZAFA
+      updated_at: new Date().toISOString()
+    };
+
+    if (editingRegister) {
+      await db.registers.update(editingRegister.id, newReg);
+      await db.sync_queue.add({ table_name: 'registers', action: 'update', data: newReg });
+      message.success("Register updated");
+    } else {
+      await db.registers.add(newReg);
+      await db.sync_queue.add({ table_name: 'registers', action: 'create', data: newReg });
+      message.success("New Counter created");
+    }
+
+    setRegName('');
+    setRegType('counter');
+    setEditingRegister(null);
+    setIsRegisterModalVisible(false);
+    loadRegisters();
+  };
+
+  const deleteRegister = async (id) => {
+    // 1. Check if it has sessions (For Counters)
+    const sessions = await db.register_sessions.where('register_id').equals(id).count();
+    if (sessions > 0) {
+      message.error("Cannot delete. This counter has history/sessions.");
+      return;
+    }
+
+    // 2. Check if it has cash adjustments/transfers (For Vaults & Counters)
+    const adjustments = await db.cash_adjustments.filter(a => a.register_id === id || a.transfer_to === id).count();
+    if (adjustments > 0) {
+      message.error("Cannot delete. This node has cash transfer history.");
+      return;
+    }
+
+    await db.registers.delete(id);
+    await db.sync_queue.add({ table_name: 'registers', action: 'delete', data: { id } });
+    message.success("Node deleted successfully");
+    loadRegisters();
+  };
+
+  // Naya: Jab URL badle to tab bhi badal jaye (Loop Fix)
   useEffect(() => {
     const tabFromUrl = searchParams.get('tab');
-    if (tabFromUrl) setActiveTab(tabFromUrl);
-  }, [searchParams]);
+    if (tabFromUrl && tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [searchParams, activeTab]);
   
   const [selectedCurrency, setSelectedCurrency] = useState('PKR');
   const [themeMode, setThemeMode] = useState('dark');
@@ -708,6 +806,93 @@ const SettingsPage = () => {
                       </Row>
                     </>
                   )}
+                </div>
+              ),
+            },
+            {
+              key: '6',
+              label: 'Registers & Nodes',
+              icon: <ShopOutlined />,
+              children: (
+                <div style={{ padding: '16px 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <div>
+                      <Title level={4} style={{ margin: 0, fontSize: '16px' }}>Shop Counters</Title>
+                      <Text type="secondary">Define your physical shop counters for sales.</Text>
+                    </div>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingRegister(null); setRegName(''); setRegType('counter'); setIsRegisterModalVisible(true); }}>
+                      Add Node
+                    </Button>
+                  </div>
+
+                  <Row gutter={[16, 16]}>
+                    {registers.map((reg, index) => (
+                      <Col xs={24} sm={12} md={8} key={reg.id}>
+                        <Card size="small" actions={
+                          index === 0 // NAYA IZAFA: Jo list mein pehle number par hai (Oldest), usay delete nahi kiya ja sakta
+                          ?[
+                              <EditOutlined key="edit" onClick={() => { setEditingRegister(reg); setRegName(reg.name); setRegType(reg.type); setIsRegisterModalVisible(true); }} />
+                            ]
+                          :[
+                              <EditOutlined key="edit" onClick={() => { setEditingRegister(reg); setRegName(reg.name); setRegType(reg.type); setIsRegisterModalVisible(true); }} />,
+                              <Popconfirm title="Delete this counter?" onConfirm={() => deleteRegister(reg.id)}>
+                                <DeleteOutlined key="delete" style={{ color: token.colorError }} />
+                              </Popconfirm>
+                            ]
+                        }>
+                          <Card.Meta 
+                            avatar={<ShopOutlined style={{ fontSize: '24px', color: token.colorPrimary }} />}
+                            title={reg.name}
+                            description={"Sales Counter"}
+                          />
+                          <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <Text type="secondary">Status: </Text>
+                              <Text strong style={{ color: reg.status === 'open' ? token.colorSuccess : token.colorTextDescription }}>
+                                {reg.status.toUpperCase()}
+                              </Text>
+                            </div>
+                            
+                            {/* NAYA IZAFA: Device Pairing Button */}
+                            {pairedRegisterId === reg.id ? (
+                              <Button size="small" danger onClick={handleUnpairDevice}>
+                                Unpair PC
+                              </Button>
+                            ) : (
+                              <Button size="small" type="primary" ghost onClick={() => handlePairDevice(reg.id)}>
+                                Pair this PC
+                              </Button>
+                            )}
+                          </div>
+                          {pairedRegisterId === reg.id && (
+                            <div style={{ marginTop: '8px', background: token.colorSuccess + '22', padding: '4px 8px', borderRadius: '4px', textAlign: 'center' }}>
+                              <Text type="success" style={{ fontSize: '11px', fontWeight: 'bold' }}>✓ THIS PC IS PAIRED HERE</Text>
+                            </div>
+                          )}
+                        </Card>
+                      </Col>
+                    ))}
+                    {registers.length === 0 && (
+                      <Col span={24}>
+                        <Alert message="No Counters Defined" description="Please add at least one 'Counter' to start making sales." type="warning" showIcon />
+                      </Col>
+                    )}
+                  </Row>
+
+                  {/* Add/Edit Modal */}
+                  <Modal
+                    title={editingRegister ? "Edit Counter" : "Add New Counter"}
+                    open={isRegisterModalVisible}
+                    onCancel={() => setIsRegisterModalVisible(false)}
+                    onOk={handleAddRegister}
+                  >
+                    <div style={{ marginTop: '16px' }}>
+                      <Text strong>Node Name</Text>
+                      <Input placeholder="e.g. Front Counter" value={regName} onChange={e => setRegName(e.target.value)} style={{ marginTop: '8px', marginBottom: '16px' }} />
+                      
+                      {/* Node Type ki zaroorat nahi rahi kyunke ab sirf Counter banega */}
+                    </div>
+                  </Modal>
                 </div>
               ),
             },

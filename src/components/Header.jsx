@@ -31,6 +31,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { useSync } from '../context/SyncContext';
 import DataService from '../DataService';
+import RegisterClosingModal from './RegisterClosingModal';
 import { db } from '../db';
 import { getPlanLimits } from '../config/subscriptionPlans';
 
@@ -49,7 +50,7 @@ const titleContainerStyle = {
 // Hum ne yahan 'collapsed' aur 'setCollapsed' receive kiya hai App.jsx se
 const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
   const { profile, isPro, stockCount, lowStockCount } = useAuth();
-  const { activeStaff, can } = useStaff(); // <--- Yahan 'can' shamil kiya
+  const { activeStaff, can, activeSession, lockApp } = useStaff();
   const { isDarkMode } = useTheme();
   const { pendingCount, stuckCount, retryAll, isSyncing, syncAllData, processSyncQueue } = useSync();
   const { message, modal } = App.useApp(); // <--- YEH NAYI LINE HAI
@@ -150,6 +151,7 @@ const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
   const [resolvingItem, setResolvingItem] = React.useState(null);
   const [suppliers, setSuppliers] = React.useState([]);
   const [resolveForm] = Form.useForm();
+  const [isClosingModalVisible, setIsClosingModalVisible] = React.useState(false);
 
   // Naya Logic: Jaise hi stuckCount badle, list khud refresh ho jaye
   React.useEffect(() => {
@@ -444,23 +446,46 @@ return (
                   <Text type="secondary" style={{ fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>{currentTime.format('ddd, DD MMM')}</Text>
                 </div>
 
-                {/* 3. Staff / User Info */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', lineHeight: '1.2' }}>
-                  <div style={{ textAlign: 'left' }}>
-                    <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorTextHeading }}>{activeStaff ? activeStaff.name : (profile?.name || 'Owner')}</Text>
-                    <Tag color={activeStaff ? "blue" : "gold"} style={{ fontSize: '10px', margin: 0, padding: '0 4px', lineHeight: '1.4', borderRadius: '4px', border: 'none' }}>
-                      {activeStaff ? activeStaff.role?.toUpperCase() : 'ADMIN'}
-                    </Tag>
+                {/* 3. Staff / User Info (Clickable for Closing) */}
+                <Tooltip title={activeSession ? "Click to Exit Shift / Close Register" : (activeStaff ? "No Active Session" : "Owner Menu")}>
+                  <div 
+                    onClick={() => {
+                      if (activeSession) {
+                        setIsClosingModalVisible(true);
+                      } else if (!activeStaff) {
+                        // Agar Owner hai to seedha lock kar sakta hai
+                        modal.confirm({
+                          title: 'Lock Terminal?',
+                          content: 'This will take you back to the PIN screen.',
+                          onOk: () => lockApp()
+                        });
+                      }
+                    }}
+                    style={{ 
+                      display: 'flex', alignItems: 'center', gap: '12px', lineHeight: '1.2', 
+                      cursor: (activeSession || !activeStaff) ? 'pointer' : 'default',
+                      padding: '4px 8px', borderRadius: '8px',
+                      transition: 'background 0.3s'
+                    }}
+                    onMouseEnter={(e) => (activeSession || !activeStaff) && (e.currentTarget.style.background = token.colorFillTertiary)}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{ textAlign: 'left' }}>
+                      <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorTextHeading }}>{activeStaff ? activeStaff.name : (profile?.name || 'Owner')}</Text>
+                      <Tag color={activeStaff ? (activeSession ? "green" : "blue") : "gold"} style={{ fontSize: '10px', margin: 0, padding: '0 4px', lineHeight: '1.4', borderRadius: '4px', border: 'none' }}>
+                        {activeStaff ? (activeSession ? "SHIFT ACTIVE" : activeStaff.role?.toUpperCase()) : 'ADMIN'}
+                      </Tag>
+                    </div>
+                    <div style={{ 
+                      width: '36px', height: '36px', borderRadius: '10px',
+                      background: 'transparent', color: token.colorPrimary,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px',
+                      border: `1px solid ${token.colorPrimary}33`
+                    }}>
+                      <UserSwitchOutlined />
+                    </div>
                   </div>
-                  <div style={{ 
-                    width: '36px', height: '36px', borderRadius: '10px',
-                    background: 'transparent', color: token.colorPrimary,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px',
-                    border: `1px solid ${token.colorPrimary}33`
-                  }}>
-                    <UserSwitchOutlined />
-                  </div>
-                </div>
+                </Tooltip>
               </div>
             )}
           </Space>
@@ -552,6 +577,10 @@ return (
           </Form.Item>
         </Form>
       </Modal>
+      <RegisterClosingModal 
+        visible={isClosingModalVisible} 
+        onCancel={() => setIsClosingModalVisible(false)} 
+      />
     </>
   );
 };

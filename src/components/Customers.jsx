@@ -39,7 +39,7 @@ const Customers = () => {
 
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { user, profile } = useAuth();
-  const { activeStaff } = useStaff(); // <--- NAYA IZAFA
+  const { activeStaff, activeSession } = useStaff(); // <--- activeSession yahan shamil kar diya
   const { processSyncQueue } = useSync();
   
   const [customers, setCustomers] = useState([]);
@@ -222,7 +222,9 @@ const Customers = () => {
           customer_id: selectedCustomer.id, 
           amount_paid: values.amount, 
           payment_method: cashOrBank,
-          staff_id: activeStaff?.id, // <--- NAYA IZAFA
+          staff_id: activeStaff?.id,
+          register_id: activeSession?.register_id || null, // NAYA IZAFA
+          session_id: activeSession?.id || null,           // NAYA IZAFA
           user_id: user.id,
           created_at: new Date().toISOString()
       };
@@ -504,6 +506,8 @@ const handleCloseInvoiceSearchModal = () => {
           return_fee: returnFee,
           reason: values.reason,
           user_id: user.id,
+          register_id: activeSession?.register_id || null, // NAYA IZAFA
+          session_id: activeSession?.id || null,           // NAYA IZAFA
           created_at: new Date().toISOString()
       };
 
@@ -526,7 +530,8 @@ const handleCloseInvoiceSearchModal = () => {
         amount_paid: -totalRefundAmount, // Negative amount for credit
         user_id: user.id,
         staff_id: activeStaff?.id, // <--- NAYA IZAFA
-        remarks: `Refund for Invoice #${selectedSale.id}`,
+        register_id: activeSession?.register_id || null, // NAYA IZAFA
+        session_id: activeSession?.id || null,           // NAYA IZAFA
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -571,6 +576,8 @@ const handleCloseInvoiceSearchModal = () => {
               payment_method: 'Cash',
               remarks: `Auto-Refund for Return #${returnId}`,
               user_id: user.id,
+              register_id: activeSession?.register_id || null, // NAYA IZAFA
+              session_id: activeSession?.id || null,           // NAYA IZAFA
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             };

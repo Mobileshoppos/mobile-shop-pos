@@ -69,7 +69,7 @@ const POS = () => {
   const [advancedFilters, setAdvancedFilters] = useState([]);
   const { message, modal } = App.useApp();
   const { user, profile, refetchStockCount } = useAuth();
-  const { activeStaff, verifyMasterPin } = useStaff();
+  const { activeStaff, verifyMasterPin, activeSession } = useStaff();
   const { processSyncQueue } = useSync();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -622,7 +622,9 @@ const POS = () => {
               amount_paid_at_sale: paymentMethod === 'Paid' ? grandTotal : amountPaid, 
               payment_status: (paymentMethod === 'Unpaid' && (grandTotal - amountPaid > 0)) ? 'Unpaid' : 'Paid', 
               user_id: user.id,
-              staff_id: activeStaff?.id || null, // <--- NAYA IZAFA (AUDIT TRAIL)
+              staff_id: activeStaff?.id || null,
+              register_id: activeSession?.register_id || null, // NAYA
+              session_id: activeSession?.id || null,           // NAYA
               created_at: saleDate
           };
 
@@ -1013,7 +1015,8 @@ const POS = () => {
         discount, 
         discountType, 
         user_id: user.id,
-        staff_id: activeStaff?.id || null, // Naya Izafa: Staff ID bheji
+        staff_id: activeStaff?.id || null,
+        register_id: activeSession?.register_id || null, // NAYA
         note: `Draft for ${customerName}` 
       });
       setCart([]); setDiscount(0); setSelectedCustomer(null);
