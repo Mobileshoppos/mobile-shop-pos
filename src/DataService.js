@@ -3804,10 +3804,14 @@ async addCustomer(customerData) {
     const allAdjustments = await db.cash_adjustments.toArray();
     
     // 1. Cash IN: Normal "In" + Wo Transfers jo is counter ki taraf aaye (transfer_to)
-    const adjIn = allAdjustments.filter(a => 
-      a.session_id === sessionId && a.payment_method === 'Cash' && 
-      (a.type === 'In' || (a.type === 'Transfer' && a.transfer_to === regId))
-    ).reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+    const adjIn = allAdjustments.filter(a => {
+      if (a.payment_method !== 'Cash') return false;
+      // Agar isi session ka normal "In" hai
+      if (a.type === 'In' && a.session_id === sessionId) return true;
+      // Agar kisi aur ne is counter ko transfer kiya hai (is session ke khulne ke baad)
+      if (a.type === 'Transfer' && a.transfer_to === regId && new Date(a.created_at) >= new Date(session.opened_at)) return true;
+      return false;
+    }).reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
 
     // 2. Cash OUT: Normal "Out" + Wo Transfers jo is counter se bahar gaye (register_id)
     const adjOut = allAdjustments.filter(a => 
