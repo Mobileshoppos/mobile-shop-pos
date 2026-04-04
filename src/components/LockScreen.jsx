@@ -366,9 +366,27 @@ const LockScreen = () => {
             <Button type="primary" size="large" block onClick={handleOpenRegister}>
               {registers.find(r => r.id === selectedRegId)?.status === 'open' ? 'Resume Shift' : 'Start Shift'}
             </Button>
-            <Button type="link" onClick={() => setShowRegisterSelect(false)} style={{ marginTop: '8px' }}>
-              Cancel / Back
-            </Button>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px' }}>
+              <Button type="text" onClick={() => setShowRegisterSelect(false)} style={{ color: token.colorTextSecondary, padding: 0 }}>
+                &larr; Back to PIN
+              </Button>
+              
+              {/* NAYA IZAFA: Owner ke liye bina shift khole app mein jane ka option */}
+              {!tempStaff && (
+                <Button 
+                  type="link" 
+                  onClick={() => {
+                    setIsAppLocked(false);
+                    localStorage.setItem('is_app_locked', 'false');
+                    setShowRegisterSelect(false);
+                  }} 
+                  style={{ padding: 0, fontWeight: 'bold' }}
+                >
+                  Skip & Enter App &rarr;
+                </Button>
+              )}
+            </div>
           </>
         )}
       </Card>

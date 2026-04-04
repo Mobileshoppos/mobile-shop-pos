@@ -828,13 +828,27 @@ const handleCloseInvoiceSearchModal = () => {
           
           {/* --- NAYA CONDITIONAL LOGIC --- */}
           {record.balance > 0 ? (
-            <Button icon={<DollarCircleOutlined />} onClick={() => showPaymentModal(record)}>
-              Payment receive
-            </Button>
+            <Tooltip title={!activeSession ? "Please open a register shift to process cash transactions." : ""}>
+              <Button 
+                icon={<DollarCircleOutlined />} 
+                onClick={() => showPaymentModal(record)}
+                disabled={!activeSession}
+              >
+                Payment receive
+              </Button>
+            </Tooltip>
           ) : record.balance < 0 ? (
-            <Button type="primary" ghost icon={<DollarCircleOutlined />} onClick={() => showPayoutModal(record)}>
-              Settle Credit
-            </Button>
+            <Tooltip title={!activeSession ? "Please open a register shift to process cash transactions." : ""}>
+              <Button 
+                type="primary" 
+                ghost 
+                icon={<DollarCircleOutlined />} 
+                onClick={() => showPayoutModal(record)}
+                disabled={!activeSession}
+              >
+                Settle Credit
+              </Button>
+            </Tooltip>
           ) : null}
 
           <Dropdown 
@@ -1006,7 +1020,17 @@ const handleCloseInvoiceSearchModal = () => {
           </Descriptions>
           <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px'}}>
             <Title level={5} style={{ margin: 0 }}>Items in this Invoice</Title>
-            <Button icon={<SwapOutlined />} type="primary" ghost onClick={() => openReturnModal(record.details)}>Return Items</Button>
+            <Tooltip title={!activeSession ? "Please open a register shift to process returns." : ""}>
+              <Button 
+                icon={<SwapOutlined />} 
+                type="primary" 
+                ghost 
+                onClick={() => openReturnModal(record.details)}
+                disabled={!activeSession}
+              >
+                Return Items
+              </Button>
+            </Tooltip>
           </div>
           <>
             <Table columns={saleItemCols} dataSource={groupedDataSource} pagination={false} rowKey={(item) => `${item.product_id}-${item.price_at_sale}`} style={{marginTop: '8px'}} />
@@ -1216,13 +1240,21 @@ const handleCloseInvoiceSearchModal = () => {
                   <Button icon={<EyeOutlined />} onClick={() => handleViewLedger(customer)} style={{ flex: 1 }}>Ledger</Button>
                   
                   {customer.balance > 0 ? (
-                    <Button icon={<DollarCircleOutlined />} onClick={() => showPaymentModal(customer)} style={{ flex: 1 }}>
-                      Payment receive
-                    </Button>
+                    <Tooltip title={!activeSession ? "Please open a register shift to process cash transactions." : ""}>
+                      <span style={{ flex: 1, display: 'flex' }}>
+                        <Button icon={<DollarCircleOutlined />} onClick={() => showPaymentModal(customer)} style={{ width: '100%' }} disabled={!activeSession}>
+                          Payment receive
+                        </Button>
+                      </span>
+                    </Tooltip>
                   ) : customer.balance < 0 ? (
-                    <Button type="primary" ghost icon={<DollarCircleOutlined />} onClick={() => showPayoutModal(customer)} style={{ flex: 1 }}>
-                      Settle Credit
-                    </Button>
+                    <Tooltip title={!activeSession ? "Please open a register shift to process cash transactions." : ""}>
+                      <span style={{ flex: 1, display: 'flex' }}>
+                        <Button type="primary" ghost icon={<DollarCircleOutlined />} onClick={() => showPayoutModal(customer)} style={{ width: '100%' }} disabled={!activeSession}>
+                          Settle Credit
+                        </Button>
+                      </span>
+                    </Tooltip>
                   ) : null}
 
                   <Dropdown 
@@ -1615,25 +1647,27 @@ const handleCloseInvoiceSearchModal = () => {
             <Button onClick={() => setSearchedSale(null)}>
                 Search Again
             </Button>
-            <Button 
-    type="primary" 
-    icon={<SwapOutlined />}
-    // Button ko sirf tab enable karein jab sale mein items hon
-    disabled={!searchedSale.sale_items || searchedSale.sale_items.length === 0}
-    onClick={() => {
-        // Step 1: Search ke popup ko band karein
-        handleCloseInvoiceSearchModal();
+            <Tooltip title={!activeSession ? "Please open a register shift to process returns." : ""}>
+              <Button 
+                  type="primary" 
+                  icon={<SwapOutlined />}
+                  // Button ko sirf tab enable karein jab sale mein items hon aur shift open ho
+                  disabled={!searchedSale.sale_items || searchedSale.sale_items.length === 0 || !activeSession}
+                  onClick={() => {
+                      // Step 1: Search ke popup ko band karein
+                      handleCloseInvoiceSearchModal();
 
-        // Step 2: Customer ki maloomat set karein (return modal ke liye zaroori hai)
-        // Hum searchedSale se customer ka data istemal kar rahe hain
-        setSelectedCustomer(searchedSale.customer);
+                      // Step 2: Customer ki maloomat set karein (return modal ke liye zaroori hai)
+                      // Hum searchedSale se customer ka data istemal kar rahe hain
+                      setSelectedCustomer(searchedSale.customer);
 
-        // Step 3: Aapke mojooda return function ko sale ki details ke sath call karein
-        openReturnModal(searchedSale);
-    }}
->
-    Proceed to Return
-</Button>
+                      // Step 3: Aapke mojooda return function ko sale ki details ke sath call karein
+                      openReturnModal(searchedSale);
+                  }}
+              >
+                  Proceed to Return
+              </Button>
+            </Tooltip>
         </Space>
       </div>
     )}

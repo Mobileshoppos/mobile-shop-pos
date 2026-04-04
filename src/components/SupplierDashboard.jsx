@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List, Dropdown, Tabs, Descriptions, Divider, Switch } from 'antd';
+import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List, Dropdown, Tabs, Descriptions, Divider, Switch, Tooltip } from 'antd';
 import { ShopOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, EyeOutlined, LockOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
@@ -609,24 +609,26 @@ const SupplierDashboard = () => {
                                         title="View Full Details"
                                         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                     />
-                                    <Button 
-                                        type="text"
-                                        icon={<DollarCircleOutlined style={{ fontSize: '20px', color: token.colorSuccess }} />} 
-                                        onClick={showPaymentModal}
-                                        // AB YEH LEDGER KE ASLI BALANCE KO DEKHEGA
-                                        disabled={!selectedSupplier || activeBalances.due <= 0}
-                                        title="Record Payment"
-                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    />
-                                    <Button 
-                                        type="text"
-                                        icon={<MinusCircleOutlined style={{ fontSize: '20px', color: token.colorError }} />} 
-                                        onClick={showRefundModal}
-                                        // AB YEH LEDGER KE ASLI CREDIT KO DEKHEGA
-                                        disabled={!selectedSupplier || activeBalances.credit <= 0}
-                                        title="Record Refund"
-                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    />
+                                    <Tooltip title={!activeSession ? "Please open a register shift to process payments." : ""}>
+                                        <Button 
+                                            type="text"
+                                            icon={<DollarCircleOutlined style={{ fontSize: '20px', color: token.colorSuccess }} />} 
+                                            onClick={showPaymentModal}
+                                            disabled={!selectedSupplier || activeBalances.due <= 0 || !activeSession}
+                                            title="Record Payment"
+                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                        />
+                                    </Tooltip>
+                                    <Tooltip title={!activeSession ? "Please open a register shift to process refunds." : ""}>
+                                        <Button 
+                                            type="text"
+                                            icon={<MinusCircleOutlined style={{ fontSize: '20px', color: token.colorError }} />} 
+                                            onClick={showRefundModal}
+                                            disabled={!selectedSupplier || activeBalances.credit <= 0 || !activeSession}
+                                            title="Record Refund"
+                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                        />
+                                    </Tooltip>
                                 </Space>
                             </div>
                             <Text type="secondary">{selectedSupplier.contact_person} | {selectedSupplier.phone}</Text><br/>

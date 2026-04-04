@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input, Space, Popconfirm, Radio, Checkbox, theme } from 'antd';
+import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input, Space, Popconfirm, Radio, Checkbox, theme, Tooltip } from 'antd';
 import { FileTextOutlined, ArrowLeftOutlined, DollarCircleOutlined, EditOutlined, RollbackOutlined, DeleteOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
@@ -238,15 +238,19 @@ const showEditModal = () => {
 </Row>
                 {purchase.notes && ( <div style={{ marginTop: '24px', padding: '12px', background: token.colorFillTertiary, borderRadius: '6px' }}><Text strong>Notes:</Text><br /><Text type="secondary">{purchase.notes}</Text></div> )}
                 <div style={{ marginTop: '24px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '8px' }}>
-    <Button type="primary" block={isMobile} icon={<DollarCircleOutlined />} onClick={showPaymentModal} disabled={purchase.balance_due <= 0}>
-        Record a Payment
-    </Button>
+    <Tooltip title={!activeSession ? "Please open a register shift to process cash payments." : ""}>
+        <Button type="primary" block={isMobile} icon={<DollarCircleOutlined />} onClick={showPaymentModal} disabled={purchase.balance_due <= 0 || !activeSession}>
+            Record a Payment
+        </Button>
+    </Tooltip>
     <Button block={isMobile} icon={<EditOutlined />} onClick={showEditModal}>
-    Edit Purchase
-</Button>
-    <Button danger block={isMobile} icon={<RollbackOutlined />} onClick={showReturnModal}>
-        Return Items
+        Edit Purchase
     </Button>
+    <Tooltip title={!activeSession ? "Please open a register shift to process returns." : ""}>
+        <Button danger block={isMobile} icon={<RollbackOutlined />} onClick={showReturnModal} disabled={!activeSession}>
+            Return Items
+        </Button>
+    </Tooltip>
 </div>
             </Card>
             

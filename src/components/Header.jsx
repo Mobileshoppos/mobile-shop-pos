@@ -22,7 +22,8 @@ import {
   ToolOutlined,
   PieChartOutlined,
   TeamOutlined,
-  SyncOutlined
+  SyncOutlined,
+  LockOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { useStaff } from '../context/StaffContext';
@@ -439,11 +440,29 @@ return (
                     );
                   })()}
 
-                  {/* 2. Live Digital Clock - Desktop Only */}
-                  <div style={{ textAlign: 'right', paddingRight: '0', lineHeight: '1.2' }}>
-                    <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorPrimary }}>{currentTime.format('hh:mm A')}</Text>
-                    <Text type="secondary" style={{ fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>{currentTime.format('ddd, DD MMM')}</Text>
-                  </div>
+                  {/* 2. Register Status + Live Digital Clock - Desktop Only */}
+                  {!isMobile && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      {/* Register Status Tag (Sirf tab dikhega jab shift CLOSED ho) */}
+                      {!activeSession && (
+                        <Tooltip title="Register is CLOSED - Click to Open">
+                          <Tag 
+                            color="error" 
+                            onClick={() => lockApp()}
+                            style={{ cursor: 'pointer', padding: '4px 12px', borderRadius: '4px', fontWeight: 'bold', fontSize: '14px', border: 'none', display: 'flex', alignItems: 'center' }}
+                          >
+                            <LockOutlined style={{ marginRight: '6px', fontSize: '18px' }} /> Register is currently CLOSED
+                          </Tag>
+                        </Tooltip>
+                      )}
+
+                      {/* Clock */}
+                      <div style={{ textAlign: 'right', lineHeight: '1.2' }}>
+                        <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorPrimary }}>{currentTime.format('hh:mm A')}</Text>
+                        <Text type="secondary" style={{ fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>{currentTime.format('ddd, DD MMM')}</Text>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 

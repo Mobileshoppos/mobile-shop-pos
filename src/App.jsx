@@ -235,14 +235,12 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         } />
 
         {/* 3. POS & Expenses (Session Guard + Permission Guard) */}
-        <Route path="pos" element={<SessionGuard><POS /></SessionGuard>} />
+        <Route path="pos" element={<POS />} />
         
         <Route path="expenses" element={
-          <SessionGuard>
-            <PermissionGuard permission="can_manage_expenses">
-              <Expenses />
-            </PermissionGuard>
-          </SessionGuard>
+          <PermissionGuard permission="can_manage_expenses">
+            <Expenses />
+          </PermissionGuard>
         } />
 
         <Route path="expense-categories" element={

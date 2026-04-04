@@ -1695,15 +1695,17 @@ const POS = () => {
                 </Card>
 
                 {/* 4. Complete Sale Button */}
-                <Button 
-                  type="primary" 
-                  disabled={cart.length === 0 || isSubmitting} 
-                  loading={isSubmitting} 
-                  onClick={handleCompleteSale}
-                  style={{ flex: 2.5, height: '38px', fontSize: '16px', fontWeight: 'bold', borderRadius: '8px', padding: '0 4px', whiteSpace: 'normal', lineHeight: 1.2 }}
-                >
-                  Complete Sale
-                </Button>
+                <Tooltip title={!activeSession ? "Please open a register shift to complete sales." : ""}>
+                  <Button 
+                    type="primary" 
+                    disabled={cart.length === 0 || isSubmitting || !activeSession} 
+                    loading={isSubmitting} 
+                    onClick={handleCompleteSale}
+                    style={{ flex: 2.5, height: '38px', fontSize: '16px', fontWeight: 'bold', borderRadius: '8px', padding: '0 4px', whiteSpace: 'normal', lineHeight: 1.2 }}
+                  >
+                    Complete Sale
+                  </Button>
+                </Tooltip>
 
               </div>
 

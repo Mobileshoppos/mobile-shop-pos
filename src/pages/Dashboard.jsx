@@ -303,35 +303,6 @@ const Dashboard = () => {
   return (
     <div style={{ padding: isMobile ? '12px 4px' : '4px' }}>
       <PageTour pageKey="dashboard" steps={tourSteps} />
-
-      {/* NAYA IZAFA: Register Closed Alert */}
-      {!activeSession && (
-        <Alert
-          message={<Text strong style={{ fontSize: '16px' }}>Register is currently CLOSED</Text>}
-          description="You must open a shift (Start Shift) before you can make sales, record expenses or receive payments."
-          type="warning"
-          showIcon
-          icon={<LockOutlined style={{ fontSize: '20px' }} />}
-          style={{ marginBottom: '20px', borderRadius: '8px', border: `1px solid ${token.colorWarningOutline}` }}
-          action={
-            <Button 
-              type="primary" 
-              icon={profile?.master_pin ? <PlusOutlined /> : <LockOutlined />} 
-              onClick={() => {
-                if (profile?.master_pin) {
-                  lockApp();
-                } else {
-                  message.info("Please set your Master PIN first.");
-                  navigate('/settings?tab=5'); // Security tab par le jaye
-                }
-              }}
-              style={{ background: token.colorWarning, borderColor: token.colorWarning }}
-            >
-              {profile?.master_pin ? "Open Register Now" : "Setup Master PIN"}
-            </Button>
-          }
-        />
-      )}
       
       {/* HEADER WITH FILTERS */}
       <div style={{ display: 'flex', justifyContent: isMobile ? 'space-between' : 'flex-end', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
@@ -503,13 +474,13 @@ const Dashboard = () => {
               formatter={(val) => formatCurrency(val, profile?.currency)}
             />
               <Space size="small">
-                <Tooltip title="Cash Adjustment (In/Out)">
+                <Tooltip title={!activeSession ? "Please open a register shift to adjust cash." : "Cash Adjustment (In/Out)"}>
                   <Button 
                     type="text" 
                     size="small"
+                    disabled={!activeSession}
                     icon={<TransactionOutlined style={{ color: 'white', fontSize: '18px' }} />} 
                     onClick={async () => {
-                      // Pehle counter ID nikalain (Paired ya Session wali)
                       const regId = activeSession?.register_id || localStorage.getItem('paired_register_id');
                       if (regId) {
                         const bal = await DataService.getRegisterCurrentCash(regId);

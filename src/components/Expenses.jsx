@@ -34,7 +34,7 @@ const Expenses = () => {
   const { message } = AntApp.useApp();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { user, profile } = useAuth();
-  const { activeStaff } = useStaff(); // <--- NAYA IZAFA
+  const { activeStaff, activeSession } = useStaff(); // <--- NAYA IZAFA
   const [expenses, setExpenses] = useState([]);
   const [categories, setCategories] = useState([]);
   const [staffMembers, setStaffMembers] = useState([]); // <--- NAYA IZAFA
@@ -216,19 +216,27 @@ const Expenses = () => {
           <Space>
             {!isVoided && (
               <>
-                <Button size="small" icon={<EditOutlined />} onClick={() => showModal(record)} />
-                <Popconfirm 
-                  title="VOID this transaction?" 
-                  description="This will set amount to 0 and keep the record for audit."
-                  onConfirm={() => handleVoid(record)} 
-                  okText="Yes, Void it" 
-                  cancelText="No"
-                  okButtonProps={{ danger: true }}
-                >
-                  <Tooltip title="Void / Cancel">
-                    <Button size="small" danger icon={<CloseCircleOutlined />} />
+                <Tooltip title={!activeSession ? "Shift closed" : ""}>
+                  <Button size="small" icon={<EditOutlined />} onClick={() => showModal(record)} disabled={!activeSession} />
+                </Tooltip>
+                {activeSession ? (
+                  <Popconfirm 
+                    title="VOID this transaction?" 
+                    description="This will set amount to 0 and keep the record for audit."
+                    onConfirm={() => handleVoid(record)} 
+                    okText="Yes, Void it" 
+                    cancelText="No"
+                    okButtonProps={{ danger: true }}
+                  >
+                    <Tooltip title="Void / Cancel">
+                      <Button size="small" danger icon={<CloseCircleOutlined />} />
+                    </Tooltip>
+                  </Popconfirm>
+                ) : (
+                  <Tooltip title="Shift closed">
+                    <Button size="small" danger icon={<CloseCircleOutlined />} disabled />
                   </Tooltip>
-                </Popconfirm>
+                )}
               </>
             )}
             {isVoided && <Tag color="default">VOIDED</Tag>}
@@ -241,10 +249,12 @@ const Expenses = () => {
   return (
     <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: isMobile ? 'space-between' : 'flex-end', marginBottom: '16px', gap: '16px' }}>
-        <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()} style={{ width: isMobile ? '100%' : 'auto' }}>
-    Add New Expense
-  </Button>
-</div>
+        <Tooltip title={!activeSession ? "Please open a register shift to add expenses." : ""}>
+          <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()} style={{ width: isMobile ? '100%' : 'auto' }} disabled={!activeSession}>
+            Add New Expense
+          </Button>
+        </Tooltip>
+      </div>
       {isMobile && (
         <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
           <DollarCircleOutlined /> Manage Expenses
