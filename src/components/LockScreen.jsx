@@ -296,20 +296,10 @@ const LockScreen = () => {
                   const counter = registers.find(r => r.id === val);
                   let expectedAmount = 0;
 
-                  if (counter && counter.status === 'open') {
-                    // Agar counter pehle se open hai (Ghost), to Live Balance nikalain
+                  // NAYA FIX: Counter chahe 'open' ho ya 'closed', humesha Asli Live Balance nikalain
+                  // Taake transfer ki hui raqam (maslan 100 Rs) foran nazar aa jaye
+                  if (counter) {
                     expectedAmount = await DataService.getRegisterCurrentCash(val);
-                  } else {
-                    // Agar closed hai, to aakhri closing nikalain
-                    const lastSession = await db.register_sessions
-                      .where('register_id').equals(val)
-                      .filter(s => s.closed_at != null)
-                      .reverse()
-                      .sortBy('closed_at');
-                    
-                    if (lastSession && lastSession.length > 0) {
-                      expectedAmount = lastSession[0].actual_closing || 0;
-                    }
                   }
                   
                   setExpectedOpening(expectedAmount);
