@@ -389,105 +389,117 @@ return (
           </div>
 
           {/* Right Side: Clock + Staff + Subscription */}
-          {/* Right Side: Integrated Status Pill (Desktop Only) */}
           <Space align="center" size="middle">
-            
-            {!isMobile && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '24px', // Gap thora barha diya taake baghair box ke saaf nazar aaye
-                background: 'transparent', // Background khatam
-                padding: '0', // Padding khatam
-                border: 'none', // Outline/Border khatam
-                height: '50px'
-              }}>
-                
-                {/* 1. Integrated Stock Status (Conditional) */}
-                {(() => {
-                  const tier = profile?.subscription_tier?.toLowerCase() || 'free';
-                  const limits = getPlanLimits(tier);
-                  const showBadge = limits.always_show_badge || stockCount >= (limits.max_items * (limits.badge_threshold || 0));
-                  
-                  if (!showBadge) return null;
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: isMobile ? '8px' : '24px', // Mobile par gap kam kar diya
+              background: 'transparent', 
+              padding: '0', 
+              border: 'none', 
+              height: '50px'
+            }}>
+              
+              {!isMobile && (
+                <>
+                  {/* 1. Integrated Stock Status (Conditional) - Desktop Only */}
+                  {(() => {
+                    const tier = profile?.subscription_tier?.toLowerCase() || 'free';
+                    const limits = getPlanLimits(tier);
+                    const showBadge = limits.always_show_badge || stockCount >= (limits.max_items * (limits.badge_threshold || 0));
+                    
+                    if (!showBadge) return null;
 
-                  const maxItems = limits.max_items;
-                  const isUnlimited = maxItems > 10000;
-                  const isFull = !isUnlimited && stockCount >= maxItems;
-                  const isNearLimit = !isUnlimited && stockCount >= (maxItems * 0.9);
+                    const maxItems = limits.max_items;
+                    const isUnlimited = maxItems > 10000;
+                    const isFull = !isUnlimited && stockCount >= maxItems;
+                    const isNearLimit = !isUnlimited && stockCount >= (maxItems * 0.9);
 
-                  return (
-                    <div 
-                      onClick={() => navigate('/subscription')}
-                      style={{ 
-                        textAlign: 'right', 
-                        paddingRight: '0', 
-                        lineHeight: '1.2',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <Text strong style={{ 
-                        display: 'block', 
-                        fontSize: '13px', 
-                        color: isFull ? token.colorError : (isNearLimit ? token.colorWarning : token.colorPrimary) 
-                      }}>
-                        {isUnlimited ? 'PRO ACTIVE' : `STOCK: ${stockCount}/${maxItems}`}
-                      </Text>
-                      <Text type="secondary" style={{ fontSize: '10px', letterSpacing: '0.5px' }}>
-                        {isFull ? 'LIMIT REACHED' : 'PLAN STATUS'}
-                      </Text>
-                    </div>
-                  );
-                })()}
+                    return (
+                      <div 
+                        onClick={() => navigate('/subscription')}
+                        style={{ 
+                          textAlign: 'right', 
+                          paddingRight: '0', 
+                          lineHeight: '1.2',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Text strong style={{ 
+                          display: 'block', 
+                          fontSize: '13px', 
+                          color: isFull ? token.colorError : (isNearLimit ? token.colorWarning : token.colorPrimary) 
+                        }}>
+                          {isUnlimited ? 'PRO ACTIVE' : `STOCK: ${stockCount}/${maxItems}`}
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: '10px', letterSpacing: '0.5px' }}>
+                          {isFull ? 'LIMIT REACHED' : 'PLAN STATUS'}
+                        </Text>
+                      </div>
+                    );
+                  })()}
 
-                {/* 2. Live Digital Clock */}
-                <div style={{ textAlign: 'right', paddingRight: '0', lineHeight: '1.2' }}>
-                  <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorPrimary }}>{currentTime.format('hh:mm A')}</Text>
-                  <Text type="secondary" style={{ fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>{currentTime.format('ddd, DD MMM')}</Text>
-                </div>
+                  {/* 2. Live Digital Clock - Desktop Only */}
+                  <div style={{ textAlign: 'right', paddingRight: '0', lineHeight: '1.2' }}>
+                    <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorPrimary }}>{currentTime.format('hh:mm A')}</Text>
+                    <Text type="secondary" style={{ fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>{currentTime.format('ddd, DD MMM')}</Text>
+                  </div>
+                </>
+              )}
 
-                {/* 3. Staff / User Info (Clickable for Closing) */}
-                <Tooltip title={activeSession ? "Click to Exit Shift / Close Register" : (activeStaff ? "No Active Session" : "Owner Menu")}>
-                  <div 
-                    onClick={() => {
-                      if (activeSession) {
-                        setIsClosingModalVisible(true);
-                      } else if (!activeStaff) {
-                        // Agar Owner hai to seedha lock kar sakta hai
-                        modal.confirm({
-                          title: 'Lock Terminal?',
-                          content: 'This will take you back to the PIN screen.',
-                          onOk: () => lockApp()
-                        });
-                      }
-                    }}
-                    style={{ 
-                      display: 'flex', alignItems: 'center', gap: '12px', lineHeight: '1.2', 
-                      cursor: (activeSession || !activeStaff) ? 'pointer' : 'default',
-                      padding: '4px 8px', borderRadius: '8px',
-                      transition: 'background 0.3s'
-                    }}
-                    onMouseEnter={(e) => (activeSession || !activeStaff) && (e.currentTarget.style.background = token.colorFillTertiary)}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
+              {/* 3. Staff / User Info (Clickable for Closing) - VISIBLE ON MOBILE TOO */}
+              <Tooltip title={activeSession ? "Click to Exit Shift / Close Register" : (activeStaff ? "No Active Session" : "Owner Menu")}>
+                <div 
+                  onClick={() => {
+                    if (activeSession) {
+                      setIsClosingModalVisible(true);
+                    } else if (!activeStaff) {
+                      // Agar Owner hai to seedha lock kar sakta hai
+                      modal.confirm({
+                        title: 'Lock Terminal?',
+                        content: 'This will take you back to the PIN screen.',
+                        onOk: () => lockApp()
+                      });
+                    }
+                  }}
+                  style={{ 
+                    display: 'flex', alignItems: 'center', gap: '12px', lineHeight: '1.2', 
+                    cursor: (activeSession || !activeStaff) ? 'pointer' : 'default',
+                    padding: isMobile ? '0' : '4px 8px', borderRadius: '8px',
+                    transition: 'background 0.3s'
+                  }}
+                  onMouseEnter={(e) => (activeSession || !activeStaff) && (e.currentTarget.style.background = token.colorFillTertiary)}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  {/* Naam aur Tag sirf Desktop par dikhega */}
+                  {!isMobile && (
                     <div style={{ textAlign: 'left' }}>
                       <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorTextHeading }}>{activeStaff ? activeStaff.name : (profile?.name || 'Owner')}</Text>
                       <Tag color={activeStaff ? (activeSession ? "green" : "blue") : "gold"} style={{ fontSize: '10px', margin: 0, padding: '0 4px', lineHeight: '1.4', borderRadius: '4px', border: 'none' }}>
                         {activeStaff ? (activeSession ? "SHIFT ACTIVE" : activeStaff.role?.toUpperCase()) : 'ADMIN'}
                       </Tag>
                     </div>
-                    <div style={{ 
-                      width: '36px', height: '36px', borderRadius: '10px',
-                      background: 'transparent', color: token.colorPrimary,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px',
-                      border: `1px solid ${token.colorPrimary}33`
-                    }}>
-                      <UserSwitchOutlined />
-                    </div>
+                  )}
+                  {/* Icon hamesha dikhega */}
+                  <div style={{ 
+                    position: 'relative',
+                    width: '36px', height: '36px', borderRadius: '10px',
+                    background: 'transparent', color: token.colorPrimary,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px',
+                    border: `1px solid ${token.colorPrimary}33`
+                  }}>
+                    <UserSwitchOutlined />
+                    {/* Mobile par shift active hone ki nishani (Green Dot) */}
+                    {isMobile && activeSession && (
+                      <div style={{
+                        position: 'absolute', top: -2, right: -2, width: 10, height: 10, 
+                        backgroundColor: token.colorSuccess, borderRadius: '50%', border: `2px solid ${token.colorBgContainer}`
+                      }} />
+                    )}
                   </div>
-                </Tooltip>
-              </div>
-            )}
+                </div>
+              </Tooltip>
+            </div>
           </Space>
         </div>
       </Header>

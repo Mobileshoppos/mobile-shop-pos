@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout, Modal, Space, Divider, Checkbox, theme } from 'antd';
+import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout, Modal, Space, Divider, Checkbox, theme, ConfigProvider } from 'antd';
 import { LockOutlined, MailOutlined, AppstoreOutlined, KeyOutlined } from '@ant-design/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { darkThemeTokens } from '../theme/themeConfig';
 
 const { Title } = Typography;
 const { Content } = Layout;
@@ -194,14 +195,15 @@ const AuthPage = () => {
   );
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Content style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: isMobile ? '12px 8px' : '20px' }}>
-        {/* --- TABDEELI: Card se saari hardcoded styles hata di hain --- */}
-        <Card style={{ width: 400, maxWidth: '100%' }}>
-          {/* --- TABDEELI: Title se hardcoded color hata diya hai --- */}
-          <Title level={3} style={{ textAlign: 'center' }}>
-            <AppstoreOutlined style={{ marginRight: '8px', color: token.colorPrimary }} /> SadaPos
-          </Title>
+    <ConfigProvider theme={{ algorithm: theme.darkAlgorithm, token: darkThemeTokens }}>
+      <Layout style={{ minHeight: '100vh', background: darkThemeTokens.colorBgLayout }}>
+        <Content style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: isMobile ? '12px 8px' : '20px' }}>
+          {/* --- TABDEELI: Card se saari hardcoded styles hata di hain --- */}
+          <Card style={{ width: 400, maxWidth: '100%', background: darkThemeTokens.colorBgContainer, borderColor: darkThemeTokens.colorBorderSecondary }}>
+            {/* --- TABDEELI: Title se hardcoded color hata diya hai --- */}
+            <Title level={3} style={{ textAlign: 'center', color: darkThemeTokens.colorTextHeading }}>
+              <AppstoreOutlined style={{ marginRight: '8px', color: darkThemeTokens.colorPrimary }} /> SadaPos
+            </Title>
           <Tabs 
             defaultActiveKey="1" 
             centered
@@ -298,6 +300,7 @@ const AuthPage = () => {
         </Modal>
       </Content>
     </Layout>
+    </ConfigProvider>
   );
 };
 
