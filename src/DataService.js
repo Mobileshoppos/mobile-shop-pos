@@ -3800,24 +3800,37 @@ async addCustomer(customerData) {
     const cashSpent = expenses.filter(e => e.session_id === sessionId && e.payment_method === 'Cash').reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
     // D. Cash Adjustments (In/Out/Transfers) - NAYA IMPROVED MATH
-    // Hum wo saari adjustments nikalenge jo ya to is counter se hui hain, ya is counter ki taraf aayi hain
     const allAdjustments = await db.cash_adjustments.toArray();
     
+    // Helper: Check karega ke kya adjustment is shift ke waqt ke darmiyan hui hai
+    const isWithinSession = (dateStr) => {
+        const t = new Date(dateStr).getTime();
+        const start = new Date(session.opened_at).getTime();
+        const end = session.closed_at ? new Date(session.closed_at).getTime() : Infinity;
+        return t >= start && t <= end;
+    };
+
     // 1. Cash IN: Normal "In" + Wo Transfers jo is counter ki taraf aaye (transfer_to)
     const adjIn = allAdjustments.filter(a => {
       if (a.payment_method !== 'Cash') return false;
-      // Agar isi session ka normal "In" hai
       if (a.type === 'In' && a.session_id === sessionId) return true;
-      // Agar kisi aur ne is counter ko transfer kiya hai (is session ke khulne ke baad)
-      if (a.type === 'Transfer' && a.transfer_to === regId && new Date(a.created_at) >= new Date(session.opened_at)) return true;
+      
+      const isForThisCounter = (a.type === 'In' && a.register_id === regId) || (a.type === 'Transfer' && a.transfer_to === regId);
+      if (isForThisCounter && isWithinSession(a.created_at)) return true;
+      
       return false;
     }).reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
 
     // 2. Cash OUT: Normal "Out" + Wo Transfers jo is counter se bahar gaye (register_id)
-    const adjOut = allAdjustments.filter(a => 
-      a.session_id === sessionId && a.payment_method === 'Cash' && 
-      (a.type === 'Out' || (a.type === 'Transfer' && a.register_id === regId))
-    ).reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+    const adjOut = allAdjustments.filter(a => {
+      if (a.payment_method !== 'Cash') return false;
+      if (a.type === 'Out' && a.session_id === sessionId) return true;
+      
+      const isFromThisCounter = (a.type === 'Out' || a.type === 'Transfer') && a.register_id === regId;
+      if (isFromThisCounter && isWithinSession(a.created_at)) return true;
+      
+      return false;
+    }).reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
 
     // E. Supplier Payments (Cash)
     const supPayments = await db.supplier_payments.where('register_id').equals(regId).toArray();
