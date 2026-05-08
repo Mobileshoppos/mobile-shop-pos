@@ -596,6 +596,7 @@ const POS = () => {
         
         try {
           setIsSubmitting(true);
+          
           // --- CLEAN UUID LOGIC ---
           let finalCustomerId = selectedCustomer;
           if (!finalCustomerId) {
@@ -604,6 +605,72 @@ const POS = () => {
           }
           
           const saleId = crypto.randomUUID();
+
+          // --- NAYA IZAFA: FBR Edge Function Call ---
+          let fbrInvoiceNumber = null;
+          if (profile?.fbr_integration_enabled) {
+              if (!navigator.onLine) {
+                  message.error("FBR Integration is ON. Internet connection is required to complete this sale.");
+                  setIsSubmitting(false);
+                  return;
+              }
+              
+              message.loading({ content: 'Reporting to FBR...', key: 'fbr_sync' });
+              
+              try {
+                  const fbrCustomer = customers.find(c => c.id === finalCustomerId) || {};
+                  
+                  // Supabase Edge Function ko data bhejna
+                  const { data, error } = await supabase.functions.invoke('fbr-integration', {
+                      body: {
+                          pos_id: profile?.fbr_pos_id,
+                          ntn: profile?.fbr_ntn,
+                          sale_data: {
+                              saleId: saleId,
+                              invoiceDate: new Date().toISOString().split('T')[0], // NAYA IZAFA: FBR ko Date chahiye YYYY-MM-DD format mein
+                              sellerProvince: profile?.province || 'Sindh', // NAYA IZAFA: Dukandar ka Sooba
+                              buyerRegistrationType: fbrCustomer.tax_id ? 'Registered' : 'Unregistered', // NAYA IZAFA: Khareedar ka status
+                              customerNtn: fbrCustomer.tax_id || '',
+                              customerName: fbrCustomer.name || 'Walk-in Customer',
+                              customerPhone: fbrCustomer.phone_number || '',
+                              customerAddress: fbrCustomer.address || 'Walk-in', // NAYA IZAFA: Khareedar ka pata
+                              grandTotal: grandTotal,
+                              subtotal: subtotal,
+                              taxAmount: taxAmount,
+                              discount: discountAmount,
+                              payment_method: paymentMethod === 'Paid' ? cashOrBank : 'Cash',
+                              taxRate: profile?.tax_rate || 0,
+                              items: cart.map(item => {
+                                  // NAYA IZAFA: Cart item se asal product dhoondna taake HS Code aur UOM mil sakay
+                                  const parentProduct = allProducts.find(p => p.id === item.product_id);
+                                  return {
+                                      product_id: item.product_id,
+                                      name: item.product_name || item.name,
+                                      quantity: item.quantity || 1,
+                                      price_at_sale: item.sale_price,
+                                      hsCode: parentProduct?.hs_code || '', // Agar HS Code nahi hai, to khali bhej do taake FBR proper error de
+                                      uoM: parentProduct?.uom || 'Numbers, pieces, units' // NAYA IZAFA: FBR UOM
+                                  };
+                              })
+                          }
+                      }
+                  });
+
+                  if (error) throw error;
+                  if (!data.success) throw new Error(data.error || "Unknown FBR Error");
+
+                  // Edge function se aane wala FBR Invoice Number
+                  fbrInvoiceNumber = data.fbr_invoice_number;
+                  message.success({ content: 'Reported to FBR successfully!', key: 'fbr_sync', duration: 2 });
+                  
+              } catch (fbrError) {
+                  console.error("FBR Call Failed:", fbrError);
+                  message.error({ content: 'FBR Reporting Failed: ' + fbrError.message, key: 'fbr_sync', duration: 3 });
+                  setIsSubmitting(false);
+                  return; // Sale rok dein agar FBR fail ho jaye
+              }
+          }
+          // ------------------------------------------------------
           // Naya ID generate karein (e.g. A-1234)
           const shortInvoiceId = await generateInvoiceId(); 
           const saleDate = new Date().toISOString();
@@ -625,7 +692,11 @@ const POS = () => {
               staff_id: activeStaff?.id || null,
               register_id: activeSession?.register_id || null, // NAYA
               session_id: activeSession?.id || null,           // NAYA
-              created_at: saleDate
+              created_at: saleDate,
+              // --- NAYA IZAFA: FBR Data ---
+              fbr_invoice_number: fbrInvoiceNumber,
+              fbr_fee_applied: profile?.fbr_integration_enabled ? (profile?.fbr_fee || 1) : 0
+              // ----------------------------
           };
 
           const inventoryIdsToUpdate = [];
@@ -842,6 +913,9 @@ const POS = () => {
                  taxAmount: saleDataForReceipt.tax_amount,
                  taxName: profile?.tax_name || 'Tax',
                  taxRate: saleDataForReceipt.tax_rate_applied,
+                 // --- NAYA IZAFA: FBR Receipt Data ---
+                 fbrInvoiceNumber: saleDataForReceipt.fbr_invoice_number,
+                 fbrFeeApplied: saleDataForReceipt.fbr_fee_applied,
                  // --------------------------------------------
                  footerMessage: profile?.warranty_policy,
                  showQrCode: profile?.qr_code_enabled ?? true
@@ -892,7 +966,14 @@ const POS = () => {
   if (profile?.tax_enabled && profile?.tax_rate > 0) {
       taxAmount = (totalAfterDiscount * profile.tax_rate) / 100;
   }
-  const grandTotal = totalAfterDiscount + taxAmount;
+  
+  // --- NAYA IZAFA: FBR Fee Calculation ---
+  let fbrFeeAmount = 0;
+  if (profile?.fbr_integration_enabled) {
+      fbrFeeAmount = profile?.fbr_fee || 1;
+  }
+  
+  const grandTotal = totalAfterDiscount + taxAmount + fbrFeeAmount;
   // -----------------------------------
 
   // NAYA handleAddCustomer (Offline-First)
@@ -1626,6 +1707,15 @@ const POS = () => {
                   <Text style={{ color: token.colorWarning, fontSize: '13px' }}>+ {formatCurrency(taxAmount, profile?.currency)}</Text>
                 </Row>
               )}
+              
+              {/* --- NAYA IZAFA: FBR Fee UI --- */}
+              {profile?.fbr_integration_enabled && (
+                <Row justify="space-between">
+                  <Text type="secondary" style={{ fontSize: '13px' }}>POS Service Fee (FBR)</Text>
+                  <Text style={{ color: token.colorWarning, fontSize: '13px' }}>+ {formatCurrency(profile?.fbr_fee || 1, profile?.currency)}</Text>
+                </Row>
+              )}
+              {/* ------------------------------ */}
             </div>
             {/* Divider hata diya gaya hai taake look aur clean ho */}
             
@@ -1757,8 +1847,25 @@ const POS = () => {
         </Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item name="tax_id" label="Tax ID / VAT #" tooltip="Required for Business (B2B) invoices">
-          <Input placeholder="e.g. TRN-123456" />
+        <Form.Item 
+          name="tax_id" 
+          label={profile?.fbr_integration_enabled ? "NTN / CNIC (FBR)" : "Tax ID / VAT #"} 
+          tooltip={profile?.fbr_integration_enabled ? "FBR requires exact 7 digit NTN or 13 digit CNIC without dashes." : "Required for Business (B2B) invoices"}
+          rules={profile?.fbr_integration_enabled ?[
+            { 
+              pattern: /^(\d{7}|\d{13})$/, 
+              message: 'Must be exactly 7 (NTN) or 13 (CNIC) digits' 
+            }
+          ] :[]}
+        >
+          <Input 
+            placeholder={profile?.fbr_integration_enabled ? "e.g. 1234567 or 4220112345671" : "e.g. TRN-123456"} 
+            onChange={(e) => {
+              if (profile?.fbr_integration_enabled) {
+                addForm.setFieldsValue({ tax_id: e.target.value.replace(/[\s-]/g, '') });
+              }
+            }}
+          />
         </Form.Item>
       </Col>
     </Row>

@@ -496,13 +496,80 @@ const handleCloseInvoiceSearchModal = () => {
       
       // 1. Return Record Banayein
       const returnId = crypto.randomUUID();
+
+      // --- NAYA IZAFA: FBR Debit Note (Return) Call ---
+      let fbrDebitNoteNumber = null;
+      if (profile?.fbr_integration_enabled) {
+          if (!navigator.onLine) {
+              message.error("FBR Integration is ON. Internet connection is required to process returns.");
+              setIsReturnSubmitting(false);
+              return;
+          }
+          if (!selectedSale.fbr_invoice_number) {
+              message.error("Original sale was not reported to FBR. You cannot return it via FBR system.");
+              setIsReturnSubmitting(false);
+              return;
+          }
+
+          message.loading({ content: 'Reporting Return to FBR...', key: 'fbr_sync' });
+          
+          try {
+              const { data, error } = await supabase.functions.invoke('fbr-integration', {
+                  body: {
+                      pos_id: profile?.fbr_pos_id,
+                      ntn: profile?.fbr_ntn,
+                      sale_data: {
+                          saleId: returnId,
+                          invoiceType: "Debit Note", // FBR ko batana ke yeh wapsi hai
+                          invoiceRefNo: selectedSale.fbr_invoice_number, // Purani sale ka FBR number
+                          invoiceDate: new Date().toISOString().split('T')[0],
+                          sellerProvince: profile?.province || 'Sindh',
+                          buyerRegistrationType: selectedCustomer?.tax_id ? 'Registered' : 'Unregistered',
+                          customerNtn: selectedCustomer?.tax_id || '',
+                          customerName: selectedCustomer?.name || 'Walk-in Customer',
+                          customerPhone: selectedCustomer?.phone_number || '',
+                          customerAddress: selectedCustomer?.address || 'Walk-in',
+                          grandTotal: totalRefundAmount,
+                          subtotal: totalRefundAmount - taxRefundable,
+                          taxAmount: taxRefundable,
+                          discount: 0,
+                          payment_method: refundCashNow ? 'Cash' : 'Credit',
+                          taxRate: selectedSale?.tax_rate_applied || 0,
+                          items: selectedReturnItems.map(item => ({
+                              product_id: item.product_id,
+                              name: item.product_name,
+                              quantity: item.return_qty || 1,
+                              price_at_sale: item.price_at_sale,
+                              hsCode: item.hsCode || "", // Agar HS Code nahi hai, to khali bhej do
+                              uoM: item.uoM || "Numbers, pieces, units"
+                          }))
+                      }
+                  }
+              });
+
+              if (error) throw error;
+              if (!data.success) throw new Error(data.error || "Unknown FBR Error");
+
+              fbrDebitNoteNumber = data.fbr_invoice_number; // Naya Debit Note Number
+              message.success({ content: 'Return reported to FBR successfully!', key: 'fbr_sync', duration: 2 });
+              
+          } catch (fbrError) {
+              console.error("FBR Call Failed:", fbrError);
+              message.error({ content: 'FBR Reporting Failed: ' + fbrError.message, key: 'fbr_sync', duration: 3 });
+              setIsReturnSubmitting(false);
+              return; 
+          }
+      }
+      // ------------------------------------------------
+
       const returnRecord = {
           id: returnId,
           local_id: returnId,
           sale_id: selectedSale.id,
           customer_id: selectedSale.customer_id,
           total_refund_amount: refundCashNow ? maxCashRefundable : totalRefundAmount,
-          tax_refunded: taxRefundable, // <--- NAYA IZAFA (TAX)
+          tax_refunded: taxRefundable, 
+          fbr_invoice_number: fbrDebitNoteNumber || selectedSale.fbr_invoice_number || null, // <--- UPDATE
           return_fee: returnFee,
           reason: values.reason,
           user_id: user.id,
@@ -1318,8 +1385,26 @@ const handleCloseInvoiceSearchModal = () => {
       </Form.Item>
     </Col>
     <Col span={12}>
-      <Form.Item name="tax_id" label="Tax ID / VAT #" tooltip="Required for Business (B2B) invoices">
-        <Input placeholder="e.g. TRN-123456" />
+      <Form.Item 
+        name="tax_id" 
+        label={profile?.fbr_integration_enabled ? "NTN / CNIC (FBR)" : "Tax ID / VAT #"} 
+        tooltip={profile?.fbr_integration_enabled ? "FBR requires exact 7 digit NTN or 13 digit CNIC without dashes." : "Required for Business (B2B) invoices"}
+        rules={profile?.fbr_integration_enabled ?[
+          { 
+            pattern: /^(\d{7}|\d{13})$/, 
+            message: 'Must be exactly 7 (NTN) or 13 (CNIC) digits' 
+          }
+        ] :[]}
+      >
+        <Input 
+          placeholder={profile?.fbr_integration_enabled ? "e.g. 1234567 or 4220112345671" : "e.g. TRN-123456"} 
+          onChange={(e) => {
+            // Agar FBR ON hai, to type karte waqt khud hi dashes (-) aur spaces hata do
+            if (profile?.fbr_integration_enabled) {
+              addForm.setFieldsValue({ tax_id: e.target.value.replace(/[\s-]/g, '') });
+            }
+          }}
+        />
       </Form.Item>
     </Col>
   </Row>

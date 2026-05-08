@@ -21,7 +21,8 @@ export const generateSaleReceipt = async (saleDetails, currency = 'PKR') => {
   const {
     shopName, shopAddress, shopPhone, saleId, invoice_id, saleDate, customerName,
     items, subtotal, discount, grandTotal, amountPaid, paymentStatus,
-    footerMessage, showQrCode, taxAmount, taxName, taxRate // <--- NAYA IZAFA
+    footerMessage, showQrCode, taxAmount, taxName, taxRate, // <--- NAYA IZAFA
+    fbrInvoiceNumber, fbrFeeApplied // <--- NAYA IZAFA (FBR)
   } = saleDetails;
 
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -31,7 +32,9 @@ export const generateSaleReceipt = async (saleDetails, currency = 'PKR') => {
   let qrCodeDataUrl = '';
   if (showQrCode) {
       try {
-          qrCodeDataUrl = await QRCode.toDataURL(`INV:${saleId}`, { width: 100 });
+          // Agar FBR ID hai to QR mein wo jaye, warna normal Sale ID
+          const qrText = fbrInvoiceNumber ? fbrInvoiceNumber : `INV:${saleId}`;
+          qrCodeDataUrl = await QRCode.toDataURL(qrText, { width: 100 });
       } catch (err) {
           console.error("QR Generation failed", err);
       }
@@ -84,7 +87,18 @@ export const generateSaleReceipt = async (saleDetails, currency = 'PKR') => {
   // Agar invoice_id (A-1234) hai to wo dikhao, warna saleId (UUID)
   const displayId = invoice_id || saleId;
   doc.text(`Invoice #: ${safeString(displayId)}`, textRightMargin, startY + 6, { align: 'right' });
-  doc.text(`Date: ${new Date(saleDate).toLocaleString()}`, textRightMargin, startY + 11, { align: 'right' });
+  
+  // --- NAYA IZAFA: FBR Invoice Number Print Karna ---
+  let nextY = startY + 11;
+  if (fbrInvoiceNumber) {
+      doc.setFont('helvetica', 'bold');
+      doc.text(`FBR Inv #: ${fbrInvoiceNumber}`, textRightMargin, nextY, { align: 'right' });
+      doc.setFont('helvetica', 'normal');
+      nextY += 5;
+  }
+  // --------------------------------------------------
+  
+  doc.text(`Date: ${new Date(saleDate).toLocaleString()}`, textRightMargin, nextY, { align: 'right' });
 
   // --- 3. ITEMS TABLE ---
   const bodyItems = Array.isArray(items) ? items : [];
@@ -142,6 +156,13 @@ export const generateSaleReceipt = async (saleDetails, currency = 'PKR') => {
       printTotalRow(`${taxName || 'Tax'} (${taxRate}%):`, `+${formatCurrency(taxAmount || 0, currency)}`, currentY);
   }
   // ---------------------------
+
+  // --- NAYA IZAFA: FBR Fee Row ---
+  if (fbrFeeApplied > 0) {
+      currentY += 6;
+      printTotalRow(`POS Service Fee:`, `+${formatCurrency(fbrFeeApplied || 0, currency)}`, currentY);
+  }
+  // -------------------------------
 
   doc.setDrawColor(0, 0, 0);
   doc.line(rightMargin - 80, currentY + 3, rightMargin, currentY + 3);

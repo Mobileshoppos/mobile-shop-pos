@@ -228,6 +228,9 @@ const SalesHistory = () => {
           taxAmount: sale.tax_amount || 0,
           taxName: profile?.tax_name || 'Tax',
           taxRate: sale.tax_rate_applied || 0,
+          // --- NAYA IZAFA: FBR Receipt Data ---
+          fbrInvoiceNumber: sale.fbr_invoice_number,
+          fbrFeeApplied: sale.fbr_fee_applied,
           // ----------------------------------
 
           grandTotal: sale.total_amount,

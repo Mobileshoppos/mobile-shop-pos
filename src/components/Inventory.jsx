@@ -367,7 +367,9 @@ const Inventory = () => {
           name: product.name,
           brand: product.brand,
           category_id: product.category_id,
-          default_warranty_days: product.default_warranty_days // Nayi line
+          default_warranty_days: product.default_warranty_days, // Nayi line
+          hs_code: product.hs_code, // NAYA IZAFA: FBR
+          uom: product.uom // NAYA IZAFA: FBR
       });
       setIsProductEditModalOpen(true);
   };
@@ -379,7 +381,9 @@ const Inventory = () => {
           const updates = {
               name: values.name,
               brand: values.brand,
-              default_warranty_days: values.default_warranty_days
+              default_warranty_days: values.default_warranty_days,
+              hs_code: values.hs_code, // NAYA IZAFA: FBR
+              uom: values.uom // NAYA IZAFA: FBR
           };
 
           // Professional Way: DataService ka function use karein jo local DB + Sync Queue dono handle karta hai
@@ -664,7 +668,9 @@ const Inventory = () => {
           barcode: product.barcode,
           purchase_price: product.purchase_price,
           sale_price: product.sale_price,
-          default_warranty_days: product.default_warranty_days
+          default_warranty_days: product.default_warranty_days,
+          hs_code: product.hs_code, // NAYA IZAFA: FBR
+          uom: product.uom // NAYA IZAFA: FBR
       });
       setIsProductModalOpen(true);
   };
@@ -1158,6 +1164,42 @@ const Inventory = () => {
           </Form.Item>
           <Form.Item name="category_id" label="Category" rules={[{ required: true }]}><Select placeholder="Select...">{categories.map(c => (<Option key={c.id} value={c.id}>{c.name}</Option>))}</Select></Form.Item>
           <Form.Item name="brand" label="Brand" rules={[{ required: true }]}><Input /></Form.Item>
+          
+          {profile?.fbr_integration_enabled && (
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item 
+                  name="hs_code" 
+                  label="HS Code (FBR)" 
+                  tooltip="Must be exactly 4 digits, a dot, and 4 digits (e.g., 8517.1219)"
+                  rules={[
+                    { required: true, message: 'HS Code is required for FBR' },
+                    { pattern: /^\d{4}\.\d{4}$/, message: 'Format must be XXXX.XXXX (e.g. 0101.2100)' }
+                  ]}
+                  help={<a href="https://www.fbr.gov.pk/customs-tariff/131175" target="_blank" rel="noopener noreferrer">Find your HS Code here</a>}
+                >
+                  <Input placeholder="0000.0000" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item 
+                  name="uom" 
+                  label="Unit of Measure (FBR)"
+                  rules={[{ required: true, message: 'UOM is required for FBR' }]}
+                >
+                  <Select placeholder="Select UOM">
+                    <Option value="Numbers, pieces, units">Numbers, pieces, units</Option>
+                    <Option value="KG">KG</Option>
+                    <Option value="MT">MT (Metric Ton)</Option>
+                    <Option value="SqY">SqY (Square Yard)</Option>
+                    <Option value="Liters">Liters</Option>
+                    <Option value="Meters">Meters</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+          )}
+
           <Row gutter={16}>
             <Col span={12}>
                 <Form.Item name="purchase_price" label="Default Purchase Price">
@@ -1220,6 +1262,42 @@ const Inventory = () => {
         <Form form={productEditForm} layout="vertical" onFinish={handleProductModelUpdate}>
           <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="brand" label="Brand"><Input /></Form.Item>
+          
+          {profile?.fbr_integration_enabled && (
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item 
+                  name="hs_code" 
+                  label="HS Code (FBR)"
+                  tooltip="Must be exactly 4 digits, a dot, and 4 digits (e.g., 8517.1219)"
+                  rules={[
+                    { required: true, message: 'HS Code is required for FBR' },
+                    { pattern: /^\d{4}\.\d{4}$/, message: 'Format must be XXXX.XXXX (e.g. 0101.2100)' }
+                  ]}
+                  help={<a href="https://www.fbr.gov.pk/customs-tariff/131175" target="_blank" rel="noopener noreferrer">Find your HS Code here</a>}
+                >
+                  <Input placeholder="0000.0000" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item 
+                  name="uom" 
+                  label="Unit of Measure (FBR)"
+                  rules={[{ required: true, message: 'UOM is required for FBR' }]}
+                >
+                  <Select placeholder="Select UOM">
+                    <Option value="Numbers, pieces, units">Numbers, pieces, units</Option>
+                    <Option value="KG">KG</Option>
+                    <Option value="MT">MT (Metric Ton)</Option>
+                    <Option value="SqY">SqY (Square Yard)</Option>
+                    <Option value="Liters">Liters</Option>
+                    <Option value="Meters">Meters</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+          )}
+
           {profile?.warranty_system_enabled !== false && (
               <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)">
                 <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />

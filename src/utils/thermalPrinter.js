@@ -8,7 +8,8 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
     const {
         shopName, shopAddress, shopPhone, saleId, invoice_id, saleDate, customerName,
         items, subtotal, discount, grandTotal, amountPaid, footerMessage, showQrCode,
-        taxAmount, taxName, taxRate // <--- NAYA IZAFA
+        taxAmount, taxName, taxRate, // <--- NAYA IZAFA
+        fbrInvoiceNumber, fbrFeeApplied // <--- NAYA IZAFA (FBR)
     } = saleDetails;
 
     const formatNumber = (num) => Number(num).toFixed(2);
@@ -18,7 +19,8 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
     let qrCodeImgTag = '';
     if (showQrCode) {
         try {
-            const qrDataUrl = await QRCode.toDataURL(`INV:${saleId}`, { width: 80, margin: 0 });
+            const qrText = fbrInvoiceNumber ? fbrInvoiceNumber : `INV:${saleId}`;
+            const qrDataUrl = await QRCode.toDataURL(qrText, { width: 80, margin: 0 });
             qrCodeImgTag = `<img src="${qrDataUrl}" style="display: block; margin: 0 auto 10px auto; width: 80px; height: 80px;" />`;
         } catch (err) {
             console.error("QR Generation failed", err);
@@ -46,6 +48,12 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
                     <span>Receipt #:</span>
                     <span>${invoice_id || saleId}</span>
                 </div>
+                ${fbrInvoiceNumber ? `
+                <div style="display: flex; justify-content: space-between; font-weight: bold;">
+                    <span>FBR Inv #:</span>
+                    <span>${fbrInvoiceNumber}</span>
+                </div>
+                ` : ''}
                 <div style="display: flex; justify-content: space-between;">
                     <span>Date:</span>
                     <span>${new Date(saleDate).toLocaleString()}</span>
@@ -122,6 +130,14 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
                 <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
                     <span>${taxName || 'Tax'} (${taxRate}%):</span>
                     <span>+${formatMoney(taxAmount)}</span>
+                </div>
+                ` : ''}
+                
+                <!-- NAYA IZAFA: FBR Fee Row -->
+                ${fbrFeeApplied > 0 ? `
+                <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                    <span>POS Service Fee:</span>
+                    <span>+${formatMoney(fbrFeeApplied)}</span>
                 </div>
                 ` : ''}
                 

@@ -149,8 +149,14 @@ const SettingsPage = () => {
   const [themeMode, setThemeMode] = useState('dark');
   const [isSaving, setIsSaving] = useState(false);
   const [receiptFormat, setReceiptFormat] = useState('pdf');
+  // --- NAYA IZAFA: FBR States ---
+  const [fbrIntegrationEnabled, setFbrIntegrationEnabled] = useState(false);
+  const [fbrPosId, setFbrPosId] = useState('');
+  const [fbrNtn, setFbrNtn] = useState('');
+  const [fbrFee, setFbrFee] = useState(1);
+  const [province, setProvince] = useState('Sindh'); // NAYA IZAFA: FBR Province
   // --- NAYA IZAFA: Tax States ---
-  const[taxEnabled, setTaxEnabled] = useState(false);
+  const [taxEnabled, setTaxEnabled] = useState(false);
   const [taxName, setTaxName] = useState('GST');
   const [taxRate, setTaxRate] = useState(0);
   // ------------------------------
@@ -165,7 +171,7 @@ const SettingsPage = () => {
   const [reprintButtonEnabled, setReprintButtonEnabled] = useState(false);
   const [qrCodeEnabled, setQrCodeEnabled] = useState(true);
   const [warrantySystemEnabled, setWarrantySystemEnabled] = useState(true);
-  const[posDiscountEnabled, setPosDiscountEnabled] = useState(true);
+  const [posDiscountEnabled, setPosDiscountEnabled] = useState(true);
   const [allowCartPriceChange, setAllowCartPriceChange] = useState(true);
   const [mobileNavEnabled, setMobileNavEnabled] = useState(true);
   const [desktopNavEnabled, setDesktopNavEnabled] = useState(true);
@@ -199,6 +205,12 @@ const SettingsPage = () => {
       if (profile.currency) setSelectedCurrency(profile.currency);
       if (profile.theme_mode) setThemeMode(profile.theme_mode);
       if (profile.receipt_format) setReceiptFormat(profile.receipt_format);
+      // --- NAYA IZAFA: Load FBR Settings ---
+      if (profile.fbr_integration_enabled !== undefined) setFbrIntegrationEnabled(profile.fbr_integration_enabled);
+      if (profile.fbr_pos_id !== undefined) setFbrPosId(profile.fbr_pos_id);
+      if (profile.fbr_ntn !== undefined) setFbrNtn(profile.fbr_ntn);
+      if (profile.fbr_fee !== undefined) setFbrFee(profile.fbr_fee);
+      if (profile.province !== undefined) setProvince(profile.province); // NAYA IZAFA: FBR Province
       // --- NAYA IZAFA: Load Tax Settings ---
       if (profile.tax_enabled !== undefined) setTaxEnabled(profile.tax_enabled);
       if (profile.tax_name !== undefined) setTaxName(profile.tax_name);
@@ -248,6 +260,12 @@ const SettingsPage = () => {
     const updates = {
       currency: selectedCurrency,
       receipt_format: receiptFormat,
+      // --- NAYA IZAFA: Save FBR Settings ---
+      fbr_integration_enabled: fbrIntegrationEnabled,
+      fbr_pos_id: fbrPosId,
+      fbr_ntn: fbrNtn,
+      fbr_fee: fbrFee,
+      province: province, // NAYA IZAFA: FBR Province
       // --- NAYA IZAFA: Save Tax Settings ---
       tax_enabled: taxEnabled,
       tax_name: taxName,
@@ -423,6 +441,36 @@ const SettingsPage = () => {
                         <Radio value={'thermal'}>Thermal Receipt</Radio>
                         <Radio value={'none'}>None (Disable Receipt)</Radio>
                       </Radio.Group>
+                    </Col>
+                  </Row>
+                  <Divider />
+                  {/* --- NAYA IZAFA: FBR Configuration UI --- */}
+                  <Row align="middle" gutter={[16, 16]}>
+                    <Col xs={24} sm={6}>
+                      <Text strong>FBR Integration (POS)</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>Connect your sales with FBR for live reporting.</Text>
+                    </Col>
+                    <Col xs={24} sm={18}>
+                      <Space wrap>
+                        <Switch checked={fbrIntegrationEnabled} onChange={setFbrIntegrationEnabled} disabled={isAdvancedLocked} />
+                        {fbrIntegrationEnabled && (
+                          <>
+                            <Input placeholder="POS ID" value={fbrPosId} onChange={(e) => setFbrPosId(e.target.value)} style={{ width: 120 }} />
+                            <Input placeholder="NTN" value={fbrNtn} onChange={(e) => setFbrNtn(e.target.value)} style={{ width: 150 }} />
+                            <Select value={province} onChange={setProvince} style={{ width: 150 }} placeholder="Province">
+                              <Select.Option value="Sindh">Sindh</Select.Option>
+                              <Select.Option value="Punjab">Punjab</Select.Option>
+                              <Select.Option value="Balochistan">Balochistan</Select.Option>
+                              <Select.Option value="Khyber Pakhtunkhwa">Khyber Pakhtunkhwa</Select.Option>
+                              <Select.Option value="Islamabad">Islamabad</Select.Option>
+                            </Select>
+                            <Tooltip title="FBR POS Service Fee (Rs.)">
+                              <InputNumber placeholder="Fee (Rs)" value={fbrFee} onChange={setFbrFee} min={0} addonBefore="Fee Rs." style={{ width: 130 }} />
+                            </Tooltip>
+                          </>
+                        )}
+                      </Space>
+                      {isAdvancedLocked && <Text type="warning" style={{ display: 'block', fontSize: '12px', marginTop: '4px' }}>FBR Integration is available in Growth/Pro plans.</Text>}
                     </Col>
                   </Row>
                   <Divider />
@@ -912,6 +960,11 @@ const SettingsPage = () => {
               disabled={!profile || (
                 selectedCurrency === profile.currency && 
                 receiptFormat === profile.receipt_format &&
+                fbrIntegrationEnabled === (profile.fbr_integration_enabled ?? false) &&
+                fbrPosId === (profile.fbr_pos_id ?? '') &&
+                fbrNtn === (profile.fbr_ntn ?? '') &&
+                fbrFee === (profile.fbr_fee ?? 1) &&
+                province === (profile.province ?? 'Sindh') &&
                 lowStockAlerts === profile.low_stock_alerts_enabled &&
                 lowStockThreshold === profile.low_stock_threshold &&
                 warrantyPolicy === profile.warranty_policy && 
