@@ -489,6 +489,7 @@ const SettingsPage = () => {
                     </Col>
                     <Col xs={24} sm={18}><Switch checked={warrantySystemEnabled} onChange={setWarrantySystemEnabled} disabled={isWarrantyLocked} /></Col>
                   </Row>
+                  <Divider />
                   <Row align="middle" gutter={[16, 16]}>
                     <Col xs={24} sm={6}>
                       <Text strong>Enable Quick Reprint</Text>
@@ -498,7 +499,6 @@ const SettingsPage = () => {
                       <Switch checked={reprintButtonEnabled} onChange={setReprintButtonEnabled} />
                     </Col>
                   </Row>
-                  <Divider />
                   <Divider />
                   <Row align="middle" gutter={[16, 16]}>
                     <Col xs={24} sm={6}>

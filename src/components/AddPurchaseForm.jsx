@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Collapse, Tag
+  Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Collapse, Tag, Tooltip, Tabs
 } from 'antd';
-import { DeleteOutlined, BarcodeOutlined, EditOutlined } from '@ant-design/icons';
+import { DeleteOutlined, BarcodeOutlined, EditOutlined, UserAddOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -370,6 +370,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isItemModalVisible, setIsItemModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const[isAddSupplierModalOpen, setIsAddSupplierModalOpen] = useState(false);
+  const [supplierForm] = Form.useForm();
   const [selectedProductAttributes, setSelectedProductAttributes] = useState([]);
   const [editingItemIndex, setEditingItemIndex] = useState(null);
   const selectedSupplierId = Form.useWatch('supplier_id', form);
@@ -566,6 +568,43 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
      setPurchaseItems(updatedList);
   };
 
+  // --- NAYA IZAFA: Add New Supplier ---
+  const handleAddSupplier = async (values) => {
+    if (values.phone) {
+      values.phone = values.phone.replace(/[^\d+]/g, '');
+    }
+    try {
+      setIsSubmitting(true);
+      // Duplicate check
+      const duplicate = await DataService.checkDuplicateSupplier(values.phone, values.name);
+      if (duplicate) {
+        if (duplicate.type === 'phone') {
+          supplierForm.setFields([{ name: 'phone', errors: [`Registered to: ${duplicate.name}`] }]);
+        } else {
+          supplierForm.setFields([{ name: 'name', errors: ['Company name already exists!'] }]);
+        }
+        setIsSubmitting(false);
+        return;
+      }
+
+      const newSupplier = await DataService.addSupplier(values);
+      message.success('Supplier added successfully!');
+      setIsAddSupplierModalOpen(false);
+      supplierForm.resetFields();
+      
+      // Dropdown list ko update karein aur naye supplier ko select karein
+      setSuppliers(prev => [...prev, newSupplier].sort((a, b) => a.name.localeCompare(b.name)));
+      form.setFieldsValue({ supplier_id: newSupplier.id });
+      
+      // Sync queue ko background mein chalayein
+      processSyncQueue();
+    } catch (error) {
+      message.error('Error adding supplier: ' + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // --- SAVE LOGIC (UPDATED FOR EDITING) ---
   const handleSavePurchase = async () => {
     try {
@@ -720,15 +759,28 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
         <Form form={form} layout="vertical" style={{ marginTop: '24px' }}>
           <Row gutter={16}>
             <Col span={12}>
-                <Form.Item name="supplier_id" label="Supplier" rules={[{ required: true }]}>
-                    <Select 
-                        placeholder="Select a supplier" 
-                        loading={loading}
-                        // SAFETY LOCK: Agar payment ho chuki hai to supplier badalna mana hai
-                        disabled={editingPurchase && editingPurchase.amount_paid > 0}
-                    >
-                        {(suppliers || []).map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}
-                    </Select>
+                <Form.Item label="Supplier" required>
+                    <Space.Compact style={{ width: '100%' }}>
+                        <Form.Item name="supplier_id" noStyle rules={[{ required: true, message: 'Please select a supplier' }]}>
+                            <Select 
+                                placeholder="Select a supplier" 
+                                loading={loading}
+                                showSearch
+                                filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+                                // SAFETY LOCK: Agar payment ho chuki hai to supplier badalna mana hai
+                                disabled={editingPurchase && editingPurchase.amount_paid > 0}
+                            >
+                                {(suppliers ||[]).map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}
+                            </Select>
+                        </Form.Item>
+                        <Tooltip title="Add New Supplier">
+                            <Button 
+                                icon={<UserAddOutlined />} 
+                                onClick={() => setIsAddSupplierModalOpen(true)}
+                                disabled={editingPurchase && editingPurchase.amount_paid > 0}
+                            />
+                        </Tooltip>
+                    </Space.Compact>
                 </Form.Item>
                 {/* Dukandar ko wazahat dene ke liye niche text */}
                 {editingPurchase && editingPurchase.amount_paid > 0 && (
@@ -794,6 +846,101 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
           initialValues={editingItemIndex !== null ? purchaseItems[editingItemIndex] : (initialData && !editingPurchase ? { ...initialData, quantity: 1 } : null)}
         />
       }
+
+      {/* --- NAYA IZAFA: Add Supplier Modal (Full Tabs Version) --- */}
+      <Modal 
+        title="Add a New Supplier" 
+        open={isAddSupplierModalOpen} 
+        onCancel={() => { setIsAddSupplierModalOpen(false); supplierForm.resetFields(); }} 
+        onOk={() => supplierForm.submit()} 
+        okText="Save Supplier"
+        confirmLoading={isSubmitting}
+        destroyOnHidden
+      >
+        <Form form={supplierForm} layout="vertical" onFinish={handleAddSupplier} style={{ marginTop: 10 }}>
+          <Tabs defaultActiveKey="1" items={[
+            {
+              key: '1',
+              label: 'General',
+              children: (
+                <Row gutter={16}>
+                  <Col span={24}>
+                    <Form.Item name="name" label="Company" rules={[{ required: true, message: 'Please enter name' }]} tooltip="Supplier or Business legal name">
+                      <Input placeholder="e.g. Samsung Global" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item name="contact_person" label="Contact" tooltip="Primary person to contact">
+                      <Input placeholder="John Doe" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item name="tax_id" label="Tax ID" tooltip="VAT, GST, or NTN Number">
+                      <Input placeholder="Tax Registration #" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item name="email" label="Email" rules={[{ type: 'email', message: 'Invalid email format' }]} tooltip="Business email address">
+                      <Input placeholder="supplier@email.com" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item name="phone" label="Phone" rules={[{ required: true, message: 'Please enter phone' }]} tooltip="Mobile or Landline number">
+                      <Input placeholder="+123456789" />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              )
+            },
+            {
+              key: '2',
+              label: 'Location',
+              children: (
+                <Row gutter={16}>
+                  <Col span={24}>
+                    <Form.Item name="address" label="Address" tooltip="Street and area details">
+                      <Input.TextArea rows={2} placeholder="Building, Street..." />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item name="city" label="City" tooltip="City name">
+                      <Input placeholder="New York" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item name="country" label="Country" tooltip="Country name">
+                      <Input placeholder="USA" />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              )
+            },
+            {
+              key: '3',
+              label: 'Banking',
+              children: (
+                <Row gutter={16}>
+                  <Col span={24}>
+                    <Form.Item name="bank_name" label="Bank" tooltip="Supplier's bank name">
+                      <Input placeholder="e.g. HBL, Barclays..." />
+                    </Form.Item>
+                  </Col>
+                  <Col span={24}>
+                    <Form.Item name="bank_account_title" label="A/C Title" tooltip="Account holder name">
+                      <Input placeholder="Account Title" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={24}>
+                    <Form.Item name="bank_account_no" label="A/C or IBAN" tooltip="Bank account number or International IBAN">
+                      <Input placeholder="Account Number / IBAN" />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              )
+            }
+          ]} />
+        </Form>
+      </Modal>
     </>
   );
 };

@@ -2,8 +2,8 @@
 
 export const themeConfig = {
   token: {
-    // Inter dashboard ke liye behtareen hai, Roboto Google Ads wala touch dega
-    fontFamily: "'Inter', 'Roboto', -apple-system, sans-serif",
+    // Jost font jo hamari marketing website par istemal ho raha hai
+    fontFamily: "'Jost', -apple-system, sans-serif",
     borderRadiusLG: 8, // Google Ads mein corners thore kam rounded hote hain (12 se 8 behtar hai)
     fontSize: 14, // Google Ads thora chota aur compact text istemal karta hai
   },

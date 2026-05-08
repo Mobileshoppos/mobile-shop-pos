@@ -1,6 +1,6 @@
 /* Step 1: Google se zaroori fonts import karna */
-/* Google Ads Style Fonts: Inter for Headings, Roboto for Body */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap');
+/* SadaPOS Website Style Font: Jost */
+@import url('https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&display=swap');
 
 /* Baqi app ke liye default styles */
 body {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useSearchParams, useLocation } from 'react-router-dom';
+import { useSearchParams, useLocation, Link } from 'react-router-dom';
 import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme } from 'antd';
 import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined, LockOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
@@ -1162,7 +1162,14 @@ const Inventory = () => {
               placeholder="e.g. Apple 17" 
             />
           </Form.Item>
-          <Form.Item name="category_id" label="Category" rules={[{ required: true }]}><Select placeholder="Select...">{categories.map(c => (<Option key={c.id} value={c.id}>{c.name}</Option>))}</Select></Form.Item>
+          <Form.Item 
+            name="category_id" 
+            label="Category" 
+            rules={[{ required: true }]}
+            extra={<span>Can't find your category? <Link to="/categories">Create a new one here</Link></span>}
+          >
+            <Select placeholder="Select...">{categories.map(c => (<Option key={c.id} value={c.id}>{c.name}</Option>))}</Select>
+          </Form.Item>
           <Form.Item name="brand" label="Brand" rules={[{ required: true }]}><Input /></Form.Item>
           
           {profile?.fbr_integration_enabled && (
