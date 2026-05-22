@@ -31,27 +31,21 @@ const SubscriptionPage = () => {
     { icon: <SafetyCertificateOutlined />, title: "No Setup Charges", desc: "Free onboarding & support" },
   ];
 
-  // --- SIMPLIFIED PLANS ---
-  // --- PLANS CONFIGURATION (Fixed per Instructions) ---
+  // --- PLANS CONFIGURATION (Website Content) ---
   const plans = [
     {
       key: 'free',
       title: 'Free',
       priceMonthly: 0,
       priceYearly: 0,
-      description: 'Perfect for startups and nano-retailers just getting started.',
+      description: 'Perfect for starting out with all basic features.',
       features: [
-        'Offline-First Architecture', // Khaas Feature
-        'Delta Sync Engine',          // Khaas Feature
-        '200 Stock Items (SKUs)',
-        '100 Product Models',
-        '10 Customers Directory',
-        '10 Suppliers Directory',
-        'Basic POS Terminal',
-        'PDF & Thermal Receipts',
-        'Real-time Cloud Backup',
-        'No Setup Charges',           // Khaas Feature
-        'No Hidden Fees'
+        'Limited items',
+        'Limited products models',
+        'Built-in walk-in customer',
+        'Built-in cash supplier',
+        'Customer management',
+        'Price control'
       ],
       buttonText: 'Start for Free',
       isPopular: false
@@ -60,46 +54,40 @@ const SubscriptionPage = () => {
       key: 'growth',
       title: 'Growth',
       priceMonthly: 999,
-      priceYearly: 10799, // 10% Discount
-      description: 'For scaling shops that need advanced inventory and reporting.',
-      previousPlan: 'Free', // Yeh line "Everything in Free..." show karegi
+      priceYearly: 10788, // 10% Discount (899 * 12)
+      description: 'Perfect for growing shops. More items, more staff, more sales.',
       features: [
-        '2,500 Stock Items (SKUs)',
-        '1,000 Product Models',
-        '1,000 Customers Directory',
-        '100 Suppliers Directory',
-        '2 Staff/Salesman Accounts',
-        'Supplier Ledger (Udhaar/Khata)',
-        'Expense Tracking Module',
-        'Profit & Loss Analytics',
-        'Low Stock Alerts',
-        'No Setup Charges'
+        '2,500 stock items',
+        '500 Product models',
+        '1000 Customers',
+        '100 Suppliers',
+        '2 Staff seats',
+        'Warranty system',
+        'Reports & analytics',
+        'Advanced settings'
       ],
       buttonText: 'Upgrade to Growth',
-      isPopular: false, 
+      isPopular: true, // Website ki tarah Growth ko highlight kiya hai
+      highlightColor: '#3ecf8e' // SadaPOS Green Color
     },
     {
       key: 'pro',
       title: 'Pro',
       priceMonthly: 1799,
-      priceYearly: 19429, // 10% Discount
-      description: 'For large-scale enterprises requiring maximum power and control.',
-      previousPlan: 'Growth', // Yeh line "Everything in Growth..." show karegi
+      priceYearly: 19428, // 10% Discount (1619 * 12)
+      description: 'Everything you need for a large business, for high‑volume stores.',
       features: [
-        '50,000 Industrial Stock Items',
-        '5,000 Master Product Models',
-        'Unlimited Customer Profiles',
-        '500 Strategic Suppliers',
-        '5 Concurrent Staff Terminals',
-        'Complete Warranty System (RMA)',
-        'Advanced Business Intelligence',
-        'Priority 24/7 Support',
-        'Data Export & Excel Reports',
-        'No Setup Charges'
+        'Unlimited stock items',
+        'Unlimited product models',
+        'Unlimited customers',
+        'Unlimited suppliers',
+        '5 Staff seats',
+        'Priority support',
+        'Custom reports',
+        'Unlimited everything'
       ],
       buttonText: 'Get Pro Power',
-      isPopular: true, // AAP KI HIDAYAT: Pro Plan ab Most Popular hai
-      highlightColor: '#faad14' // Gold Color
+      isPopular: false
     }
   ];
 
@@ -114,10 +102,10 @@ const SubscriptionPage = () => {
       {/* 1. HEADER SECTION */}
       <div style={{ textAlign: 'center', marginBottom: '50px' }}>
         <Title level={isMobile ? 2 : 1} style={{ marginBottom: '10px' }}>
-          Predictable pricing, designed to scale
+          Affordable, and scalable pricing
         </Title>
         <Paragraph type="secondary" style={{ fontSize: '18px' }}>
-          Start building for free, then scale as your shop grows.
+          Choose the plan that fits your business. Upgrade or downgrade anytime.
         </Paragraph>
 
         {/* 2. CORE FEATURES BANNER (Highlights) */}
@@ -230,13 +218,6 @@ const SubscriptionPage = () => {
                 </Button>
 
                 <Divider />
-
-                {/* "EVERYTHING IN..." LINE (AAP KI HIDAYAT) */}
-                {plan.previousPlan && (
-                  <div style={{ marginBottom: '12px', fontSize: '14px', fontWeight: 600, color: token.colorTextHeading }}>
-                    Everything in {plan.previousPlan} Plan, plus:
-                  </div>
-                )}
 
                 {/* FEATURES LIST */}
                 <List
