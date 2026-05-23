@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout, Modal, Space, Divider, Checkbox, theme, ConfigProvider } from 'antd';
-import { LockOutlined, MailOutlined, AppstoreOutlined, KeyOutlined } from '@ant-design/icons';
+import { LockOutlined, MailOutlined, AppstoreOutlined, KeyOutlined, UserOutlined } from '@ant-design/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { darkThemeTokens } from '../theme/themeConfig';
 
@@ -40,6 +40,11 @@ const AuthPage = () => {
       const { error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
+        options: {
+          data: {
+            full_name: values.fullName // NAYA IZAFA: User ka naam Supabase ko bhejna
+          }
+        }
       });
       if (error) throw error;
       message.success('Signup successful! Please check your email to verify your account, then you can login.');
@@ -166,6 +171,11 @@ const AuthPage = () => {
 
   const signupForm = (
      <Form onFinish={handleSignup} layout="vertical">
+      {/* NAYA IZAFA: Full Name Input */}
+      <Form.Item name="fullName" label="Full Name" rules={[{ required: true, message: 'Please enter your full name!' }]}>
+        <Input prefix={<UserOutlined />} placeholder="e.g. Ali Raza" />
+      </Form.Item>
+      
       <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email', message: 'Please enter a valid email!' }]}>
         <Input prefix={<MailOutlined />} placeholder="your@email.com" />
       </Form.Item>
