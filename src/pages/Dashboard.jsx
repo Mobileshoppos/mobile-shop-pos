@@ -169,11 +169,12 @@ const Dashboard = () => {
   }, [loadDashboard]);
   
   // --- NAYA IZAFA: Auto-Initialize Categories for New Users ---
+  // Ab yeh sirf tab chalega jab setup mukammal ho jaye (Wizard khatam ho jaye)
   useEffect(() => {
-    if (user?.id) {
-      DataService.initializeUserCategories(user.id);
+    if (user?.id && profile?.is_setup_completed) {
+      DataService.initializeUserCategories(user.id, profile?.business_type || 'Mobile Shop');
     }
-  }, [user?.id]);
+  }, [user?.id, profile?.is_setup_completed, profile?.business_type]);
 
   if (loading && !stats) return <div style={{ textAlign: 'center', marginTop: 100 }}><Spin size="large" /></div>;
 

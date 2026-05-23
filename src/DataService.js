@@ -63,6 +63,51 @@ const DEFAULT_CATEGORIES = [
   }
 ];
 
+// --- CROCKERY CATEGORIES BLUEPRINT ---
+const CROCKERY_CATEGORIES = [
+  {
+    name: 'Dinnerware',
+    is_imei_based: false,
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Dinner Set,Plates,Bowls,Mugs & Cups', is_required: true },
+      { attribute_name: 'Material', attribute_type: 'select', options: 'Bone China,Porcelain,Melamine,Ceramic', is_required: false },
+      { attribute_name: 'Piece Count', attribute_type: 'number', options: null, is_required: false }
+    ]
+  },
+  {
+    name: 'Serveware',
+    is_imei_based: false,
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Platters & Trays,Serving Bowls,Hot Pots,Condiment Sets', is_required: true },
+      { attribute_name: 'Material', attribute_type: 'text', options: null, is_required: false }
+    ]
+  },
+  {
+    name: 'Glassware & Drinkware',
+    is_imei_based: false,
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Water Glasses,Jugs,Tea & Coffee,Thermos', is_required: true },
+      { attribute_name: 'Material', attribute_type: 'select', options: 'Crystal,Glass,Plastic', is_required: false }
+    ]
+  },
+  {
+    name: 'Cutlery',
+    is_imei_based: false,
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Cutlery Sets,Specialty Cutlery,Serving Utensils', is_required: true },
+      { attribute_name: 'Material', attribute_type: 'select', options: 'Stainless Steel,Silver,Plastic', is_required: false }
+    ]
+  },
+  {
+    name: 'Cookware & Bakeware',
+    is_imei_based: false,
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Pans,Pots,Baking Dishes', is_required: true },
+      { attribute_name: 'Material', attribute_type: 'select', options: 'Non-stick,Cast Iron,Glass,Steel', is_required: false }
+    ]
+  }
+];
+
 // --- DEFAULT EXPENSE CATEGORIES BLUEPRINT ---
 const DEFAULT_EXPENSE_CATEGORIES = [
   { name: 'Rent or Lease' },
@@ -101,8 +146,7 @@ const checkSubscriptionLimit = async (newItemsCount = 0) => {
 
 const DataService = {
   isInitializing: false,
-  isInitializing: false,
-  async initializeUserCategories(userId) {
+  async initializeUserCategories(userId, businessType = 'Mobile Shop') {
     if (!userId || DataService.isInitializing) return;
     DataService.isInitializing = true; // Lock lag gaya
 
@@ -126,10 +170,13 @@ const DataService = {
         return;
       }
 
-      console.log("Starting safe initialization...");
+      console.log(`Starting safe initialization for ${businessType}...`);
 
       // 2. PRODUCT CATEGORIES SETUP
-      for (const catTemplate of DEFAULT_CATEGORIES) {
+      // Faisla karein ke kaunsi categories banani hain
+      const categoriesToCreate = businessType === 'Crockery' ? CROCKERY_CATEGORIES : DEFAULT_CATEGORIES;
+
+      for (const catTemplate of categoriesToCreate) {
         // [IMPORTANT]: Har category ko add karne se pehle DB mein check karein
         const alreadyExists = await db.categories
           .where('name').equals(catTemplate.name)

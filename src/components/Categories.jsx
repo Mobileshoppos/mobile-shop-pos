@@ -320,7 +320,7 @@ const Categories = () => {
                           onClick={() => {
                             if (isLocked) {
                               modal.confirm({
-                                title: 'Attribute Management Locked',
+                                title: 'Attribute Management',
                                 content: 'Creating custom attributes for categories requires a Growth or Pro plan.',
                                 okText: 'View Plans',
                                 cancelText: 'Close',

@@ -3,6 +3,7 @@ import { Modal, Form, Input, Select, Button, Typography, Space, App } from 'antd
 import { ShopOutlined, GlobalOutlined, PhoneOutlined, HomeOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import bcrypt from 'bcryptjs';
+import DataService from '../DataService'; // <--- NAYA IZAFA
 
 const { Title, Text } = Typography;
 
@@ -10,7 +11,6 @@ const WelcomeWizard = () => {
   const { profile, updateProfile } = useAuth();
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
-  const [skipLoading, setSkipLoading] = useState(false);
 
   // Agar setup pehle hi ho chuka hai ya profile nahi hai, to kuch na dikhayein
   if (!profile || profile.is_setup_completed) return null;
@@ -32,6 +32,8 @@ const WelcomeWizard = () => {
       };
       const { success, error } = await updateProfile(updates);
       if (success) {
+        // NAYA IZAFA: User ke business ke hisaab se categories banayein
+        await DataService.initializeUserCategories(profile.user_id, values.business_type);
         message.success('Welcome! Your shop is ready. Please open a shift to start selling.');
       } else {
         throw error;
@@ -40,22 +42,6 @@ const WelcomeWizard = () => {
       message.error('Failed to save settings: ' + error.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSkip = async () => {
-    setSkipLoading(true);
-    try {
-      const { success, error } = await updateProfile({ is_setup_completed: true });
-      if (success) {
-        message.info('Setup skipped. You can complete it later in Settings.');
-      } else {
-        throw error;
-      }
-    } catch (error) {
-      message.error('Error skipping setup: ' + error.message);
-    } finally {
-      setSkipLoading(false);
     }
   };
 
@@ -73,7 +59,17 @@ const WelcomeWizard = () => {
         <Text type="secondary">Let's quickly set up your basic shop details.</Text>
       </div>
 
-      <Form layout="vertical" onFinish={handleSave} initialValues={{ currency: 'PKR' }}>
+      {/* NAYA IZAFA: initialValues mein business_type shamil kiya */}
+      <Form layout="vertical" onFinish={handleSave} initialValues={{ currency: 'PKR', business_type: 'Mobile Shop' }}>
+        
+        {/* NAYA IZAFA: Business Type ka sawal */}
+        <Form.Item name="business_type" label="Business Type" rules={[{ required: true }]}>
+          <Select prefix={<ShopOutlined />}>
+            <Select.Option value="Mobile Shop">Mobile & Electronics</Select.Option>
+            <Select.Option value="Crockery">Crockery & Glassware</Select.Option>
+          </Select>
+        </Form.Item>
+
         <Form.Item 
           name="shop_name" 
           label="Shop Name" 
@@ -118,9 +114,6 @@ const WelcomeWizard = () => {
         <Space direction="vertical" style={{ width: '100%', marginTop: 16 }}>
           <Button type="primary" htmlType="submit" block size="large" loading={loading}>
             Save & Get Started
-          </Button>
-          <Button type="link" block onClick={handleSkip} loading={skipLoading}>
-            Skip for now
           </Button>
         </Space>
       </Form>
