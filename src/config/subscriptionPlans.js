@@ -18,11 +18,12 @@ export const SUBSCRIPTION_PLANS = {
     name: 'Free Plan',
     // --- Ginti (Limits) ---
     max_items: 200,             // Kul Available Stock (IMEI/Quantity)
-    max_models: 20,            // Kul Product Models (Active + Archive)
-    max_customers: 24,          // Kul Customers (Active + Archive)
-    max_suppliers: 1,          // Kul Suppliers (Active + Archive)
+    max_models: 20,             // Kul Product Models (Active + Archive)
+    max_customers: 1,           // Kul Customers (Active + Archive) (* Supabase mai limit 2 hogi)
+    max_suppliers: 1,           // Kul Suppliers (Active + Archive) (* Supabase mai limit 2 hogi)
     max_staff: 0,               // Sirf Active Staff Seats
     max_total_staff: 500,       // Global Safety Limit (Active + Archive)
+    max_counters: 1,            // Kul Counters (Nodes)
     always_show_badge: true,    // Free plan par hamesha dikhao
 
     // --- Feature Flags ---
@@ -44,10 +45,11 @@ export const SUBSCRIPTION_PLANS = {
     // --- Ginti (Limits) ---
     max_items: 2500,            // Kul Available Stock (Busy Shop ke liye kafi hai)
     max_models: 1000,           // Kul Product Models (Active + Archive)
-    max_customers: 999,        // Kul Customers (Active + Archive)
-    max_suppliers: 99,         // Kul Suppliers (Active + Archive)
+    max_customers: 1000,        // Kul Customers (Active + Archive)
+    max_suppliers: 100,         // Kul Suppliers (Active + Archive)
     max_staff: 2,               // 2 Salesmen allow hain
     max_total_staff: 500,       // Global Safety Limit (Active + Archive)
+    max_counters: 3,            // Kul Counters (Nodes)
     always_show_badge: false,   // Hamesha mat dikhao
     badge_threshold: 0.8,       // Jab 80% quota khatam ho tab dikhao
 
@@ -70,10 +72,11 @@ export const SUBSCRIPTION_PLANS = {
     // --- Ginti (Limits) ---
     max_items: 50000,           // Unlimited jaisa (Large Inventory)
     max_models: 5000,           // Kul Product Models (Active + Archive)
-    max_customers: 4999,        // Kul Customers (Active + Archive)
-    max_suppliers: 499,         // Kul Suppliers (Active + Archive)
+    max_customers: 5000,        // Kul Customers (Active + Archive)
+    max_suppliers: 500,         // Kul Suppliers (Active + Archive)
     max_staff: 5,               // 5 Salesmen allow hain
     max_total_staff: 500,       // Global Safety Limit (Active + Archive)
+    max_counters: 10,           // Kul Counters (Nodes)
     always_show_badge: false,   // Hamesha mat dikhao
     badge_threshold: 0.8,       // Jab 80% quota khatam ho tab dikhao
 

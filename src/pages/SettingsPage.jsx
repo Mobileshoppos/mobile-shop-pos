@@ -470,7 +470,7 @@ const SettingsPage = () => {
                           </>
                         )}
                       </Space>
-                      {isAdvancedLocked && <Text type="warning" style={{ display: 'block', fontSize: '12px', marginTop: '4px' }}>FBR Integration is available in Growth/Pro plans.</Text>}
+                      {isAdvancedLocked && <Text type="warning" style={{ display: 'block', fontSize: '12px', marginTop: '4px' }}>FBR Integration is available as an add-on on demand.</Text>}
                     </Col>
                   </Row>
                   <Divider />
@@ -479,7 +479,10 @@ const SettingsPage = () => {
                       <Text strong>Show QR Code</Text>
                       <Text type="secondary" style={{ display: 'block' }}>Print invoice QR code on receipts.</Text>
                     </Col>
-                    <Col xs={24} sm={18}><Switch checked={qrCodeEnabled} onChange={setQrCodeEnabled} disabled={isAdvancedLocked} /></Col>
+                    <Col xs={24} sm={18}>
+                      <Switch checked={qrCodeEnabled} onChange={setQrCodeEnabled} disabled={isAdvancedLocked} />
+                      {isAdvancedLocked && <Text type="warning" style={{ display: 'block', fontSize: '12px', marginTop: '4px' }}>Available in Growth and Pro plans.</Text>}
+                    </Col>
                   </Row>
                   <Divider />
                   <Row align="middle" gutter={[16, 16]}>
@@ -487,7 +490,10 @@ const SettingsPage = () => {
                       <Text strong>Enable Warranty System</Text>
                       <Text type="secondary" style={{ display: 'block' }}>Turn off to hide all warranty related features.</Text>
                     </Col>
-                    <Col xs={24} sm={18}><Switch checked={warrantySystemEnabled} onChange={setWarrantySystemEnabled} disabled={isWarrantyLocked} /></Col>
+                    <Col xs={24} sm={18}>
+                      <Switch checked={warrantySystemEnabled} onChange={setWarrantySystemEnabled} disabled={isWarrantyLocked} />
+                      {isWarrantyLocked && <Text type="warning" style={{ display: 'block', fontSize: '12px', marginTop: '4px' }}>Available in Growth and Pro plans.</Text>}
+                    </Col>
                   </Row>
                   <Divider />
                   <Row align="middle" gutter={[16, 16]}>
@@ -526,6 +532,7 @@ const SettingsPage = () => {
                           </Tooltip>
                         )}
                       </Space>
+                      {isAdvancedLocked && <Text type="warning" style={{ display: 'block', fontSize: '12px', marginTop: '4px' }}>Available in Growth and Pro plans.</Text>}
                     </Col>
                   </Row>
                   <Divider />
@@ -868,9 +875,21 @@ const SettingsPage = () => {
                       <Title level={4} style={{ margin: 0, fontSize: '16px' }}>Shop Counters</Title>
                       <Text type="secondary">Define your physical shop counters for sales.</Text>
                     </div>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingRegister(null); setRegName(''); setRegType('counter'); setIsRegisterModalVisible(true); }}>
-                      Add Node
-                    </Button>
+                    <div style={{ textAlign: 'right' }}>
+                      <Button 
+                        type="primary" 
+                        icon={registers.length >= (limits.max_counters || 1) ? <LockOutlined /> : <PlusOutlined />} 
+                        disabled={registers.length >= (limits.max_counters || 1)}
+                        onClick={() => { setEditingRegister(null); setRegName(''); setRegType('counter'); setIsRegisterModalVisible(true); }}
+                      >
+                        Add Node
+                      </Button>
+                      {registers.length >= (limits.max_counters || 1) && (
+                        <Text type="warning" style={{ display: 'block', fontSize: '11px', marginTop: '4px' }}>
+                          Limit reached ({limits.max_counters || 1})
+                        </Text>
+                      )}
+                    </div>
                   </div>
 
                   <Row gutter={[16, 16]}>

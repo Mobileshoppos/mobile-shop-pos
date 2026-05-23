@@ -131,7 +131,7 @@ const WarrantyClaims = () => {
                         }}
                     >
                         <SafetyCertificateOutlined style={{ fontSize: 60, color: '#bfbfbf', marginBottom: 20 }} />
-                        <Title level={3}>Warranty System is Locked</Title>
+                        <Title level={3}>Warranty System</Title>
                         <Text type="secondary" style={{ fontSize: 16, display: 'block', marginBottom: 24 }}>
                             Track repairs, manage claims, and print warranty cards with the Pro Plan.
                         </Text>
