@@ -24,10 +24,40 @@ export const StaffProvider = ({ children }) => {
     const locked = localStorage.getItem('is_app_locked');
     if (locked === 'true') setIsAppLocked(true);
 
-    const savedSession = localStorage.getItem('active_register_session');
-    if (savedSession) setActiveSession(JSON.parse(savedSession));
+    // --- NAYA IZAFA: Smart Auto-Load Session Logic ---
+    const autoLoadSession = async () => {
+      // 1. Pehle Local Storage check karein
+      const savedSession = localStorage.getItem('active_register_session');
+      if (savedSession) {
+        setActiveSession(JSON.parse(savedSession));
+        return;
+      }
 
-    // NAYA IZAFA: App load hote hi sab se purana (Default) counter dhoondh lo
+      // 2. Agar Local Storage khali hai (Naya User), to Database mein check karein
+      try {
+        const openSessions = await db.register_sessions
+          .filter(s => !s.closed_at) // Sirf wo jo abhi band nahi hue
+          .toArray();
+
+        if (openSessions.length > 0) {
+          // Agar database mein open shift mil jaye, to usay utha lein
+          openSessions.sort((a, b) => new Date(b.opened_at || 0) - new Date(a.opened_at || 0));
+          const latestOpenSession = openSessions[0];
+          
+          setActiveSession(latestOpenSession);
+          localStorage.setItem('active_register_session', JSON.stringify(latestOpenSession));
+        }
+      } catch (err) {
+        console.error("Failed to auto-load session", err);
+      }
+    };
+
+    autoLoadSession();
+
+    // Jab naya data server se download ho, tab bhi ek dafa check kar lein
+    window.addEventListener('local-db-updated', autoLoadSession);
+
+    // App load hote hi sab se purana (Default) counter dhoondh lo
     const loadDefaultCounter = async () => {
       try {
         const regs = await db.registers.toArray();
@@ -41,6 +71,8 @@ export const StaffProvider = ({ children }) => {
       }
     };
     loadDefaultCounter();
+
+    return () => window.removeEventListener('local-db-updated', autoLoadSession);
   }, []);
 
   // Staff Login

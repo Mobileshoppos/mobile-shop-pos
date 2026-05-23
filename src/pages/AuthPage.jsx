@@ -183,7 +183,7 @@ const AuthPage = () => {
         ]}
       >
         <Checkbox style={{ fontSize: '12px' }}>
-          I agree to SadaPOS <a href="https://www.sadapos.com/p/terms-of-service.html" target="_blank" rel="noopener noreferrer">Terms of Service</a> and <a href="https://www.sadapos.com/p/privacy-policy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+          I agree to SadaPOS <a href="https://www.sadapos.com/terms-of-service" target="_blank" rel="noopener noreferrer">Terms of Service</a> and <a href="https://www.sadapos.com/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
         </Checkbox>
       </Form.Item>
       <Form.Item>
@@ -223,13 +223,13 @@ const AuthPage = () => {
           <Divider style={{ margin: '12px 0' }} />
           <div style={{ textAlign: 'center' }}>
             <Space size="small" split={<Divider type="vertical" />}>
-              <Typography.Link href="https://www.sadapos.com/p/privacy-policy.html" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+              <Typography.Link href="https://www.sadapos.com/privacy-policy" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
                 Privacy
               </Typography.Link>
-              <Typography.Link href="https://www.sadapos.com/p/terms-of-service.html" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+              <Typography.Link href="https://www.sadapos.com/terms-of-service" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
                 Terms
               </Typography.Link>
-              <Typography.Link href="https://www.sadapos.com/p/refunds-policy.html" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+              <Typography.Link href="https://www.sadapos.com/refunds-policy" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
                 Refund
               </Typography.Link>
             </Space>
