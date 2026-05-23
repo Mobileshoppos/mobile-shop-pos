@@ -314,7 +314,7 @@ const StaffManagement = () => {
       <div style={{ padding: '40px 20px', textAlign: 'center' }}>
         <Card style={{ maxWidth: 500, margin: '0 auto', borderRadius: 12 }}>
           <TeamOutlined style={{ fontSize: 60, color: '#bfbfbf', marginBottom: 20 }} />
-          <Title level={3}>Staff Management is Locked</Title>
+          <Title level={3}>Staff Management</Title>
           <Text type="secondary" style={{ fontSize: 16, display: 'block', marginBottom: 24 }}>
             Staff management is a premium feature available in Growth and Pro plans. 
             Upgrade now to add your team members and manage permissions.

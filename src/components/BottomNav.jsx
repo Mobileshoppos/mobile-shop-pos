@@ -8,6 +8,7 @@ import {
 } from '@ant-design/icons';
 import { theme } from 'antd';
 import { useAuth } from '../context/AuthContext';
+import { db } from '../db'; // Naya Izafa
 
 const iconMap = {
   '/': <HomeOutlined />,
@@ -26,7 +27,18 @@ const BottomNav = ({ setCollapsed }) => {
   const location = useLocation();
   const { token } = theme.useToken();
   const { profile } = useAuth();
+  const [productCount, setProductCount] = useState(1);
   
+  useEffect(() => {
+    const checkProducts = async () => {
+      const count = await db.products.count();
+      setProductCount(count);
+    };
+    checkProducts();
+    window.addEventListener('local-db-updated', checkProducts);
+    return () => window.removeEventListener('local-db-updated', checkProducts);
+  }, []);
+
   const [visible, setVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
 
@@ -88,9 +100,14 @@ const BottomNav = ({ setCollapsed }) => {
           onClick={() => navigate(path)}
         >
           <div style={{ 
-            fontSize: '18px', // Icon size mazeed chhota kar diya
+            fontSize: '18px', 
             transform: location.pathname === path ? 'scale(1.15)' : 'scale(1)',
-            transition: 'transform 0.2s'
+            transition: 'transform 0.2s',
+            // Naya: Glow logic (Sirf tab chamke jab user Inventory page par NA ho)
+            padding: '4px',
+            borderRadius: '50%',
+            boxShadow: (path === '/inventory' && productCount === 0 && location.pathname !== '/inventory') ? `0 0 12px ${token.colorPrimary}` : 'none',
+            animation: (path === '/inventory' && productCount === 0 && location.pathname !== '/inventory') ? 'navGlow 1.5s infinite ease-in-out' : 'none'
           }}>
             {iconMap[path] || <HomeOutlined />}
           </div>

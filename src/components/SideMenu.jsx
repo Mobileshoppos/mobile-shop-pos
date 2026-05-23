@@ -31,6 +31,7 @@ import { theme } from 'antd';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useStaff } from '../context/StaffContext';
+import { db } from '../db'; // Naya Izafa
 
 const { Sider } = Layout;
 
@@ -107,6 +108,17 @@ const rootSubmenuKeys = ['products', 'people', 'finance', 'settings_group'];
 
 const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
   const { token } = theme.useToken();
+  const [productCount, setProductCount] = useState(1);
+
+  React.useEffect(() => {
+    const checkProducts = async () => {
+      const count = await db.products.count();
+      setProductCount(count);
+    };
+    checkProducts();
+    window.addEventListener('local-db-updated', checkProducts);
+    return () => window.removeEventListener('local-db-updated', checkProducts);
+  }, []);
   const location = useLocation();
   const { profile } = useAuth();
   const { activeStaff, lockApp, can } = useStaff(); // can function shamil kiya 
@@ -235,7 +247,18 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
   };
 
   return (
-    <Sider 
+    <>
+      {/* Naya: Global Glow Animation */}
+      <style>
+        {`
+          @keyframes navGlow {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); box-shadow: 0 0 20px ${token.colorPrimary}; }
+            100% { opacity: 1; transform: scale(1); }
+          }
+        `}
+      </style>
+      <Sider 
         collapsedWidth={isMobile ? "0" : "64"}
         theme="light"
         collapsible
@@ -312,6 +335,7 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
             </ConfigProvider>
         </div>
       </Sider>
+    </>
   );
 };
 

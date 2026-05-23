@@ -32,7 +32,6 @@ import { useAuth } from '../context/AuthContext';
 import { useStaff } from '../context/StaffContext'; 
 import { formatCurrency } from '../utils/currencyFormatter';
 import { useTheme } from '../context/ThemeContext';
-import PageTour from '../components/PageTour';
 import { useRef } from 'react';
 
 const { Title, Text } = Typography;
@@ -84,28 +83,6 @@ const Dashboard = () => {
     };
     loadCounters();
   }, []);
-  const tourSteps = [
-    {
-      title: 'Sales Overview',
-      description: 'Here you can see your total sales for today, this week, This month or from the selected custom range.',
-      target: () => refSales.current,
-    },
-    {
-      title: 'Galla (Cash in Hand)',
-      description: 'This is the cash in your drawer. You can also cash in / out from here.',
-      target: () => refCash.current,
-    },
-    {
-      title: 'Net Profit',
-      description: 'Your real profit will appear here after all expenses are taken out.',
-      target: () => refProfit.current,
-    },
-    {
-      title: 'Quick Actions',
-      description: 'Use shortcuts to make new sales or add stock, you can also customize shortcuts from app settings',
-      target: () => refQuickActions.current,
-    },
-  ];
 
   const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
   const [closingForm] = Form.useForm();
@@ -302,7 +279,6 @@ const Dashboard = () => {
 
   return (
     <div style={{ padding: isMobile ? '12px 4px' : '4px' }}>
-      <PageTour pageKey="dashboard" steps={tourSteps} />
       
       {/* HEADER WITH FILTERS */}
       <div style={{ display: 'flex', justifyContent: isMobile ? 'space-between' : 'flex-end', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>

@@ -12,14 +12,27 @@ import { useTheme } from '../context/ThemeContext';
 import { theme } from 'antd';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
+import { db } from '../db'; // Naya Izafa
 
 const FloatingNav = () => {
+  const [productCount, setProductCount] = React.useState(1); // Shuru mein 1 rakhein taake glow na ho
   const { token } = theme.useToken(); // Control Center Connection
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [isHovered, setIsHovered] = React.useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { profile } = useAuth();
+
+  // Naya: Check karein ke dukan mein maal hai ya nahi?
+  React.useEffect(() => {
+    const checkProducts = async () => {
+      const count = await db.products.count();
+      setProductCount(count);
+    };
+    checkProducts();
+    window.addEventListener('local-db-updated', checkProducts);
+    return () => window.removeEventListener('local-db-updated', checkProducts);
+  }, []);
 
   // 1. Tamam mumkinah shortcuts ka rasta, unke icons aur colors ka map
   // Ab yeh bahar se andar aa gaya hai taake 'token' ko use kar sake
@@ -96,7 +109,10 @@ const FloatingNav = () => {
                   width: '36px',
                   height: '36px',
                   transition: 'all 0.2s',
-                  backgroundColor: isActive ? config.color : 'transparent'
+                  backgroundColor: isActive ? config.color : 'transparent',
+                  // Naya: Glow logic (Sirf tab chamke jab user Inventory page par NA ho)
+                  boxShadow: (path === '/inventory' && productCount === 0 && location.pathname !== '/inventory') ? `0 0 15px ${token.colorPrimary}` : 'none',
+                  animation: (path === '/inventory' && productCount === 0 && location.pathname !== '/inventory') ? 'navGlow 1.5s infinite ease-in-out' : 'none'
                 }}
               />
             </Tooltip>

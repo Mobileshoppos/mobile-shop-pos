@@ -12,7 +12,6 @@ import { useStaff } from '../context/StaffContext';
 import { db } from '../db';
 import { useTheme } from '../context/ThemeContext';
 import AddPurchaseForm from './AddPurchaseForm';
-import PageTour from '../components/PageTour';
 import { getPlanLimits } from '../config/subscriptionPlans';
 
 const { Title, Text } = Typography;
@@ -874,50 +873,9 @@ const Inventory = () => {
   };
   
   const isSmartPhoneCategorySelected = categories.find(c => c.id === selectedCategoryId)?.name === 'Smart Phones & Tablets';
-  const hasSeenInitialTour = !!profile?.tours_completed?.inventory_empty;
-
-  const tourSteps = [
-    // Step 1: Product Model (Sirf pehli baar)
-    ...(!hasSeenInitialTour ? [{
-      title: 'Product Model Banayein',
-      description: 'First, click here to create a product model (example: Samsung A54). The model is created only once.',
-      target: () => refAddModel.current,
-    }] : []),
-
-    // Step 2: Stock Add (Sirf tab jab product ban jaye)
-    ...(products.length > 0 ? [{
-      title: 'Stock Add Karein',
-      description: 'Congratulations! You have created your first model. Now click here to add stock (number or quantity) for this product.',
-      target: () => refFirstStock.current,
-    }] : []),
-
-    // Baqi Steps: Search, Filters, Archive (Sirf pehli baar)
-    ...(!hasSeenInitialTour ? [
-      {
-        title: 'Smart Search',
-        description: 'Scan / type the name, brand, Serial or IMEI to search for anything in your stock.',
-        target: () => refSearch.current,
-      },
-      {
-        title: 'Advanced Filters',
-        description: 'Click here to view stocks by price range or attributes (Size, Color).',
-        target: () => refFilters.current,
-      },
-      {
-        title: 'Archive (Hidden Items)',
-        description: 'You can view and restore your archived products by clicking here.',
-        target: () => refArchive.current,
-      }
-    ] : []),
-  ].filter(step => step.target()); // Yeh line ghalat steps ko nikaal degi
 
   return (
     <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
-      <PageTour 
-  key={products.length === 0 ? "empty" : "ready"} 
-  pageKey={products.length === 0 ? "inventory_empty" : "inventory_ready"} 
-  steps={tourSteps} 
-/>
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: isMobile ? 'space-between' : 'flex-end', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: isMobile ? '16px' : '0' }}>
         {isMobile && (
         <Title level={2} style={{ margin: 0, marginLeft: '8px', fontSize: '23px' }}>
@@ -956,6 +914,9 @@ const Inventory = () => {
             style={{ 
               width: '100%', 
               marginTop: '10px',
+              // Naya: Glow logic agar koi product na ho
+              boxShadow: (!isLimitReached && products.length === 0) ? `0 0 15px ${token.colorPrimary}` : 'none',
+              animation: (!isLimitReached && products.length === 0) ? 'navGlow 1.5s infinite ease-in-out' : 'none',
               ...(isLimitReached ? { 
                   color: token.colorTextDisabled, 
                   backgroundColor: token.colorFillTertiary, 
@@ -1069,11 +1030,16 @@ const Inventory = () => {
                        setIsProductModalOpen(true);
                      }
                    }}
-                   style={isLimitReached ? { 
-                       color: token.colorTextDisabled, 
-                       backgroundColor: token.colorFillTertiary, 
-                       borderColor: token.colorBorder 
-                   } : {}}
+                   style={{
+                       // Naya: Glow logic agar koi product na ho
+                       boxShadow: (!isLimitReached && products.length === 0) ? `0 0 15px ${token.colorPrimary}` : 'none',
+                       animation: (!isLimitReached && products.length === 0) ? 'navGlow 1.5s infinite ease-in-out' : 'none',
+                       ...(isLimitReached ? { 
+                           color: token.colorTextDisabled, 
+                           backgroundColor: token.colorFillTertiary, 
+                           borderColor: token.colorBorder 
+                       } : {})
+                   }}
                  >
                    New Product Model
                  </Button>

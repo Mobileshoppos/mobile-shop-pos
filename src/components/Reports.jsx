@@ -1747,7 +1747,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             }}
           >
             <PieChartOutlined style={{ fontSize: 60, color: '#bfbfbf', marginBottom: 20 }} />
-            <Title level={3}>Business Intelligence is Locked</Title>
+            <Title level={3}>Business Intelligence</Title>
             <Text type="secondary" style={{ fontSize: 16, display: 'block', marginBottom: 24 }}>
               Unlock advanced sales trends, profit analytics, inventory valuation, and automated tax reports with the Growth or Pro Plans.
             </Text>
