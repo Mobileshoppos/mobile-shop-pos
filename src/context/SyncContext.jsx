@@ -307,6 +307,15 @@ export const SyncProvider = ({ children }) => {
             // --- PRODUCT DELETE (NAYA CODE) ---
         else if (item.table_name === 'products' && item.action === 'delete') {
             const realId = idMap[item.data.id] || item.data.id;
+            
+            // NAYA IZAFA: Agar product ki tasveer thi, to usay Storage se delete karein
+            if (item.data.image_url) {
+                const fileName = item.data.image_url.split('/').pop();
+                if (fileName) {
+                    await supabase.storage.from('product-images').remove([fileName]);
+                }
+            }
+
             // Server se delete karein
             const { error: supError } = await supabase
                 .from('products')

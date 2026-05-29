@@ -11,7 +11,7 @@ db.version(57).stores({
   // --- Business Data Tables (Jo Supabase se sync honge) ---
   
   // Products: ID, Category, Name aur Barcode se search karne ke liye
-  products: 'id, local_id, category_id, name, barcode, user_id, is_active, updated_at', 
+  products: 'id, local_id, category_id, name, barcode, user_id, is_active, updated_at, image_url', 
   
   // Categories
   categories: 'id, local_id, user_id, name, updated_at',

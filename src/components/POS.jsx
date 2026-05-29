@@ -1308,6 +1308,9 @@ const POS = () => {
                       
                       {/* Left Side: Name, Category, Brand */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', flex: 1 }}>
+                        {product.image_url && (
+                          <img src={product.image_url} alt={product.name} style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '4px', border: `1px solid ${token.colorBorder}` }} />
+                        )}
                         <Text strong style={{ fontSize: '16px', lineHeight: 1 }}>
                           {product.name}
                         </Text>

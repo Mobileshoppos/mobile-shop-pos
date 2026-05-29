@@ -12,6 +12,7 @@ import { useStaff } from '../context/StaffContext';
 import { db } from '../db';
 import { useTheme } from '../context/ThemeContext';
 import AddPurchaseForm from './AddPurchaseForm';
+import ProductImageUpload from '../components/ProductImageUpload';
 import { getPlanLimits } from '../config/subscriptionPlans';
 
 const { Title, Text } = Typography;
@@ -132,6 +133,9 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                 
                 {/* Left Side: Name, Category, Brand */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', flex: 1 }}>
+                  {product.image_url && (
+                    <img src={product.image_url} alt={product.name} style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: `1px solid ${token.colorBorder}` }} />
+                  )}
                   <Text strong style={{ fontSize: '18px', lineHeight: 1 }}>
                     {product.name}
                   </Text>
@@ -368,7 +372,8 @@ const Inventory = () => {
           category_id: product.category_id,
           default_warranty_days: product.default_warranty_days, // Nayi line
           hs_code: product.hs_code, // NAYA IZAFA: FBR
-          uom: product.uom // NAYA IZAFA: FBR
+          uom: product.uom, // NAYA IZAFA: FBR
+          image_url: product.image_url // NAYA IZAFA: Image
       });
       setIsProductEditModalOpen(true);
   };
@@ -382,7 +387,8 @@ const Inventory = () => {
               brand: values.brand,
               default_warranty_days: values.default_warranty_days,
               hs_code: values.hs_code, // NAYA IZAFA: FBR
-              uom: values.uom // NAYA IZAFA: FBR
+              uom: values.uom, // NAYA IZAFA: FBR
+              image_url: values.image_url // NAYA IZAFA: Image
           };
 
           // Professional Way: DataService ka function use karein jo local DB + Sync Queue dono handle karta hai
@@ -669,7 +675,8 @@ const Inventory = () => {
           sale_price: product.sale_price,
           default_warranty_days: product.default_warranty_days,
           hs_code: product.hs_code, // NAYA IZAFA: FBR
-          uom: product.uom // NAYA IZAFA: FBR
+          uom: product.uom, // NAYA IZAFA: FBR
+          image_url: product.image_url // NAYA IZAFA: Image
       });
       setIsProductModalOpen(true);
   };
@@ -1138,6 +1145,10 @@ const Inventory = () => {
           </Form.Item>
           <Form.Item name="brand" label="Brand" rules={[{ required: true }]}><Input /></Form.Item>
           
+          <Form.Item name="image_url" label="Product Image">
+            <ProductImageUpload />
+          </Form.Item>
+          
           {profile?.fbr_integration_enabled && (
             <Row gutter={16}>
               <Col span={12}>
@@ -1235,6 +1246,10 @@ const Inventory = () => {
         <Form form={productEditForm} layout="vertical" onFinish={handleProductModelUpdate}>
           <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="brand" label="Brand"><Input /></Form.Item>
+          
+          <Form.Item name="image_url" label="Product Image">
+            <ProductImageUpload />
+          </Form.Item>
           
           {profile?.fbr_integration_enabled && (
             <Row gutter={16}>

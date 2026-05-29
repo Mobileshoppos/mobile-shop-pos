@@ -541,14 +541,18 @@ const DataService = {
         }
     }
 
+    // NAYA IZAFA: Delete karne se pehle tasveer ka link nikal lein
+    const productToDelete = await db.products.get(id);
+    const imageUrl = productToDelete ? productToDelete.image_url : null;
+
     // 5. Agar charon (4) checks pass ho gaye, tab hi delete karein.
     await db.products.delete(id);
 
-    // 6. Sync Queue mein 'delete' action daalein
+    // 6. Sync Queue mein 'delete' action daalein (Image URL ke sath)
     await db.sync_queue.add({
       table_name: 'products',
       action: 'delete',
-      data: { id }
+      data: { id, image_url: imageUrl }
     });
 
     return true;
