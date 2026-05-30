@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip, Badge, Tag, Checkbox, theme
 } from 'antd';
-import { ShoppingCartOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined, WalletOutlined, BankOutlined, ClockCircleOutlined, PauseCircleOutlined, LockOutlined, PrinterOutlined } from '@ant-design/icons';
+import { ShoppingCartOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined, WalletOutlined, BankOutlined, ClockCircleOutlined, PauseCircleOutlined, LockOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -63,6 +63,7 @@ const formatPriceRange = (min, max, currency) => {
 const POS = () => {
   const { token } = theme.useToken(); // Control Center Connection
   const { isDarkMode } = useTheme();
+  const [viewMode, setViewMode] = useState('grid'); // NAYA IZAFA: Grid View State (Default Grid rakha hai)
   const [showFilters, setShowFilters] = useState(false);
   const [priceRange, setPriceRange] = useState([null, null]);
   const [filterAttributes, setFilterAttributes] = useState({});
@@ -376,8 +377,16 @@ const POS = () => {
 
   const handleAddToCart = (product) => {
     if (product.quantity <= 0) { message.warning('This product is out of stock!'); return; }
-    setProductForVariantSelection(product);
-    setIsVariantModalOpen(true);
+    
+    // NAYA IZAFA: Agar sirf 1 hi variant ho, to direct cart mein daal dein (Grid View speed ke liye)
+    if (product.groupedVariants && product.groupedVariants.length === 1) {
+       const singleVariant = product.groupedVariants[0];
+       handleVariantQuickAdd(singleVariant);
+    } else {
+       // Agar 1 se zyada variants hon to modal khol dein
+       setProductForVariantSelection(product);
+       setIsVariantModalOpen(true);
+    }
   };
 
   const handleVariantsSelected = (selectedItems) => {
@@ -1181,7 +1190,7 @@ const POS = () => {
       )}
       <Row gutter={16}>
         <Col xs={24} md={14}>
-          <Card variant="borderless" style={{ background: 'transparent', boxShadow: 'none' }} styles={{ body: { padding: isMobile ? '8px 0' : '0 12px 0 0', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 110px)' } }}>
+          <Card variant="borderless" style={{ background: 'transparent', boxShadow: 'none' }} styles={{ body: { padding: isMobile ? '8px 0' : '0 0px 0 0', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 110px)' } }}>
             {/* === ROW 1: SEARCH, CATEGORY, BUTTONS === */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
               
@@ -1220,12 +1229,21 @@ const POS = () => {
               </Select>
 
               {/* 3. Filter Toggle Button (Yeh Naya Hai) */}
-              <Button 
-                icon={<FilterOutlined />} 
-                type={showFilters ? 'primary' : 'default'}
-                onClick={() => setShowFilters(!showFilters)}
-                title="More Filters"
-              />
+              <Tooltip title="More Filters">
+                <Button 
+                  icon={<FilterOutlined />} 
+                  type={showFilters ? 'primary' : 'default'}
+                  onClick={() => setShowFilters(!showFilters)}
+                />
+              </Tooltip>
+
+              {/* 3.5 View Mode Toggle (Naya Izafa) */}
+              <Tooltip title={viewMode === 'grid' ? "Switch to List View" : "Switch to Grid View"}>
+                <Button 
+                  icon={viewMode === 'grid' ? <UnorderedListOutlined /> : <AppstoreOutlined />} 
+                  onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                />
+              </Tooltip>
 
               {/* 4. Top Selling Button */}
               <Tooltip title="Show Top Selling">
@@ -1281,7 +1299,8 @@ const POS = () => {
             <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
             
             <List
-              grid={{ gutter: 16, xs: 1, sm: 1, md: 1, lg: 1, xl: 1 }} // Ab har screen par sirf 1 column dikhega
+              // NAYA IZAFA: Grid View ke mutabiq columns adjust honge
+              grid={viewMode === 'grid' ? { gutter: 12, xs: 2, sm: 3, md: 3, lg: 4, xl: 4 } : { gutter: 16, xs: 1, sm: 1, md: 1, lg: 1, xl: 1 }}
               dataSource={productsWithVariants}
               loading={loading}
               rowKey="id"
@@ -1290,11 +1309,98 @@ const POS = () => {
                 overflowY: 'auto', 
                 overflowX: 'hidden', 
                 paddingLeft: '0px',  // Left side se padding
-                paddingRight: '0px'  // Right side se padding
+                paddingRight: '8px'  // Right side se thori padding taake scrollbar touch na ho
               }}
               renderItem={(product) => (
-                <List.Item style={{ marginBottom: '16px' }}>
-                  <Card
+                <List.Item style={{ marginBottom: viewMode === 'grid' ? '12px' : '16px' }}>
+                  {viewMode === 'grid' ? (
+                    // --- GRID VIEW CARD (Naya Izafa) ---
+                    <Card
+                      hoverable
+                      onClick={() => handleAddToCart(product)}
+                      style={{ 
+                        border: `1px solid ${token.colorBorder}`, 
+                        height: '100%',
+                        background: token.colorBgContainer,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden'
+                      }}
+                      styles={{ body: { padding: '8px', display: 'flex', flexDirection: 'column', height: '100%' } }}
+                    >
+                      {/* Image Box */}
+                      <div style={{ position: 'relative', width: '100%', paddingTop: '100%', marginBottom: '8px', backgroundColor: token.colorFillQuaternary, borderRadius: '6px', overflow: 'hidden' }}>
+                        {product.image_url ? (
+                          <img src={product.image_url} alt={product.name} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: token.colorTextTertiary }}>No Image</div>
+                        )}
+                        {/* Stock Badge */}
+                        <div style={{ position: 'absolute', top: '4px', right: '4px', maxWidth: '90%' }}>
+                           <Tooltip title={`Total Stock: ${product.quantity} (${product.groupedVariants?.length || 1} variants)`} placement="left">
+                             <Tag 
+                               style={{ 
+                                 margin: 0, 
+                                 fontWeight: 'bold', 
+                                 display: 'block', 
+                                 overflow: 'hidden', 
+                                 textOverflow: 'ellipsis', 
+                                 whiteSpace: 'nowrap',
+                                 backgroundColor: product.quantity > 0 ? token.colorPrimary : token.colorError,
+                                 color: '#fff',
+                                 borderColor: 'transparent',
+                                 borderRadius: '4px',
+                                 padding: '0 6px'
+                               }}
+                             >
+                               {product.groupedVariants && product.groupedVariants.length > 1 
+                                 ? product.groupedVariants.map(v => v.display_quantity).join(' / ') 
+                                 : product.quantity}
+                             </Tag>
+                           </Tooltip>
+                        </div>
+                      </div>
+                      
+                      {/* Product Details */}
+                      <div style={{ height: '36px', marginBottom: '4px', overflow: 'hidden' }}>
+                        <Tooltip title={product.name} placement="topLeft" mouseEnterDelay={0.5}>
+                          <Text strong style={{ fontSize: '13px', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                            {product.name}
+                          </Text>
+                        </Tooltip>
+                      </div>
+                      <div style={{ marginBottom: '4px', overflow: 'hidden' }}>
+                        <Tooltip title={product.brand || product.category_name} placement="topLeft" mouseEnterDelay={0.5}>
+                          <Text type="secondary" style={{ fontSize: '11px', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {product.brand || product.category_name}
+                          </Text>
+                        </Tooltip>
+                      </div>
+                      
+                      {/* Price & Cart Icon (Bottom Aligned) */}
+                      <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text strong style={{ fontSize: '13px', color: token.colorSuccess }}>
+                          {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
+                        </Text>
+                        
+                        {/* NAYA IZAFA: Cart Icon Button */}
+                        <Tooltip title={product.quantity > 0 ? "Add to Cart" : "Out of Stock"}>
+                          <Button 
+                            type="text" 
+                            icon={<ShoppingCartOutlined style={{ fontSize: '18px', color: product.quantity > 0 ? token.colorPrimary : undefined }} />} 
+                            size="small"
+                            disabled={product.quantity <= 0} // Agar stock 0 hai to button gray (inactive) ho jayega
+                            onClick={(e) => {
+                              e.stopPropagation(); // Card ke click ko double fire hone se rokne ke liye
+                              handleAddToCart(product);
+                            }}
+                          />
+                        </Tooltip>
+                      </div>
+                    </Card>
+                  ) : (
+                    // --- LIST VIEW CARD (Purana Wala) ---
+                    <Card
                     hoverable
                     style={{ 
                       border: `1px solid ${token.colorBorder}`, 
@@ -1419,13 +1525,14 @@ const POS = () => {
                       )}
                     </div>
                   </Card>
+                  )}
                 </List.Item>
               )}
             />
           </Card>
         </Col>
         <Col xs={24} md={10}>
-          <Card variant="borderless" style={{ background: 'transparent', boxShadow: 'none' }} styles={{ body: { padding: isMobile ? '16px 0 0 0' : '0 0 0 12px', borderLeft: isMobile ? 'none' : `1px solid ${token.colorBorderSecondary}`, borderTop: isMobile ? `1px solid ${token.colorBorderSecondary}` : 'none', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 110px)' } }}>
+          <Card variant="borderless" style={{ background: 'transparent', boxShadow: 'none' }} styles={{ body: { padding: isMobile ? '16px 0 0 0' : '0 0 0 16px', borderLeft: isMobile ? 'none' : `1px solid ${token.colorBorderSecondary}`, borderTop: isMobile ? `1px solid ${token.colorBorderSecondary}` : 'none', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 110px)' } }}>
             {/* --- TOP ROW: Current Bill, Customer Select & Reset --- */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
               <Text strong style={{ fontSize: '15px', whiteSpace: 'nowrap' }}>Current Bill</Text>

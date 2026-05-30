@@ -29,7 +29,11 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
                     const grouped = {};
                     data.forEach(item => {
                         const attributesKey = JSON.stringify(item.item_attributes || {});
-                        const key = `${item.product_id}-${attributesKey}-${item.sale_price}`;
+                        
+                        // NAYA IZAFA: Agar IMEI hai to har item ki alag row banegi, warna bulk items group ho jayenge
+                        const key = item.imei 
+                            ? `${item.product_id}-${item.imei}` 
+                            : `${item.product_id}-${attributesKey}-${item.sale_price}`;
 
                         if (!grouped[key]) {
                             grouped[key] = { ...item, inventory_ids: [], stock: 0, key: key };
@@ -54,16 +58,27 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
         const itemsToAdd = [];
         selectedVariants.forEach(selection => {
             const variant = variants.find(v => v.key === selection.key);
-            const inventoryIdsToSell = variant.inventory_ids.slice(0, selection.quantity);
             
-            inventoryIdsToSell.forEach(invId => {
+            if (variant.imei) {
+                // CASE 1: IMEI Item (Har mobile ki alag entry)
+                const inventoryIdsToSell = variant.inventory_ids.slice(0, selection.quantity);
+                inventoryIdsToSell.forEach(invId => {
+                    itemsToAdd.push({
+                        ...variant,
+                        product_name: product.name,
+                        inventory_id: invId,
+                        quantity: 1,
+                    });
+                });
+            } else {
+                // CASE 2: Bulk Item (Charger/Cable) - Quantity aik sath jayegi
                 itemsToAdd.push({
                     ...variant,
-                    product_name: product.name, // <--- YEH LINE ADD KI HAI (Naam fix karne ke liye)
-                    inventory_id: invId,
-                    quantity: 1,
+                    product_name: product.name,
+                    inventory_id: variant.inventory_ids[0], // POS FIFO logic khud baqi batches sambhal lega
+                    quantity: selection.quantity,
                 });
-            });
+            }
         });
         
         onOk(itemsToAdd);
@@ -152,15 +167,31 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
                         </Button>
                     );
                 } else {
-                    // CASE 2: Bulk Product (Charger/Cable) -> Purana InputNumber dikhayein
-                    return (
-                        <InputNumber
-                            min={0}
-                            max={record.stock}
-                            value={selectedVariants.find(v => v.key === record.key)?.quantity || 0}
-                            onChange={(value) => handleQuantityChange(record.key, value || 0)}
-                        />
-                    );
+                    // CASE 2: Bulk Product (Charger/Cable) -> Naya UX (Add Button)
+                    const currentQty = selectedVariants.find(v => v.key === record.key)?.quantity || 0;
+                    
+                    if (currentQty === 0) {
+                        return (
+                            <Button 
+                                type="default"
+                                icon={<PlusOutlined />}
+                                onClick={() => handleQuantityChange(record.key, 1)}
+                                style={{ width: '110px' }}
+                            >
+                                Add
+                            </Button>
+                        );
+                    } else {
+                        return (
+                            <InputNumber
+                                min={0}
+                                max={record.stock}
+                                value={currentQty}
+                                onChange={(value) => handleQuantityChange(record.key, value || 0)}
+                                style={{ width: '110px' }}
+                            />
+                        );
+                    }
                 }
             }
         }
