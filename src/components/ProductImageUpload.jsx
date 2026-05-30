@@ -3,7 +3,7 @@ import { Upload, message, Spin } from 'antd';
 import { PlusOutlined, LoadingOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient'; // Apne supabaseClient ka path check kar lein
 
-const ProductImageUpload = ({ value, onChange }) => {
+const ProductImageUpload = ({ value, onChange, onUploading }) => {
   const [uploading, setUploading] = useState(false);
 
   // Tasveer ko chota (compress) karne ka function taake Supabase ka bill na aaye
@@ -47,6 +47,7 @@ const ProductImageUpload = ({ value, onChange }) => {
   const handleUpload = async ({ file, onSuccess, onError }) => {
     try {
       setUploading(true);
+      if (onUploading) onUploading(true); // Button disable karne ka signal bhejein
 
       // 0. NAYA IZAFA: Agar purani tasveer mojood hai, to pehle usay Supabase se delete karein
       if (value) {
@@ -99,6 +100,7 @@ const ProductImageUpload = ({ value, onChange }) => {
       onError(error);
     } finally {
       setUploading(false);
+      if (onUploading) onUploading(false); // Button dobara enable karne ka signal bhejein
     }
   };
 

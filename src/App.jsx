@@ -42,6 +42,7 @@ import { useStaff } from './context/StaffContext';
 import LockScreen from './components/LockScreen';
 import { setLoggerNotification } from './utils/logger';
 import { useRegisterSW } from 'virtual:pwa-register/react'; // NAYA IZAFA: PWA Update ke liye
+import ControlCenter from './pages/ControlCenter';
 
 // NAYA SECURITY GUARD: Sirf Owner ko aane dega
 const OwnerOnly = ({ children }) => {
@@ -303,6 +304,7 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route path="staff" element={<OwnerOnly><StaffManagement /></OwnerOnly>} />
         <Route path="subscription" element={<OwnerOnly><SubscriptionPage /></OwnerOnly>} />
         <Route path="logs" element={<OwnerOnly><SystemLogs /></OwnerOnly>} />
+        <Route path="/control-center" element={<ControlCenter />} />
 
         {/* 6. Fallback */}
         <Route path="*" element={<Navigate to="/" />} />

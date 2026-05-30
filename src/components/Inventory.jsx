@@ -427,6 +427,7 @@ const Inventory = () => {
   
   const [editingProduct, setEditingProduct] = useState(null);
   const [nameSuggestions, setNameSuggestions] = useState([]);
+  const [isImageUploading, setIsImageUploading] = useState(false); // NAYA IZAFA: Image upload status
 
   const [searchText, setSearchText] = useState('');
   const [filterCategory, setFilterCategory] = useState(null);
@@ -679,6 +680,39 @@ const Inventory = () => {
           image_url: product.image_url // NAYA IZAFA: Image
       });
       setIsProductModalOpen(true);
+  };
+
+  const handleProductModalCancel = async () => {
+    // Check karein ke form mein abhi kaunsi tasveer hai
+    const currentImageUrl = productForm.getFieldValue('image_url');
+    // Check karein ke shuru mein kaunsi tasveer thi
+    const originalImageUrl = editingProduct ? editingProduct.image_url : null;
+
+    // Agar nayi tasveer upload hui hai aur user ne cancel kar diya hai, to usay Supabase se ura dein
+    if (currentImageUrl && currentImageUrl !== originalImageUrl) {
+      const fileName = currentImageUrl.split('/').pop();
+      if (fileName) {
+        supabase.storage.from('product-images').remove([fileName]).catch(e => console.error(e));
+      }
+    }
+    
+    setIsProductModalOpen(false);
+    setEditingProduct(null);
+    productForm.resetFields();
+  };
+
+  const handleProductEditModalCancel = async () => {
+    const currentImageUrl = productEditForm.getFieldValue('image_url');
+    const originalImageUrl = editingProductModel ? editingProductModel.image_url : null;
+
+    if (currentImageUrl && currentImageUrl !== originalImageUrl) {
+      const fileName = currentImageUrl.split('/').pop();
+      if (fileName) {
+        supabase.storage.from('product-images').remove([fileName]).catch(e => console.error(e));
+      }
+    }
+    
+    setIsProductEditModalOpen(false);
   };
 
   const handleProductOk = async (values) => {
@@ -1125,8 +1159,9 @@ const Inventory = () => {
         title={editingProduct ? "Edit Product Model" : "Add a New Product Model"} 
         open={isProductModalOpen} 
         onOk={productForm.submit} 
-        onCancel={() => { setIsProductModalOpen(false); setEditingProduct(null); productForm.resetFields(); }} 
-        okText="Save Model"
+        onCancel={handleProductModalCancel} 
+        okText={isImageUploading ? "Uploading..." : "Save Model"}
+        okButtonProps={{ disabled: isImageUploading }}
       >
         <Form form={productForm} layout="vertical" onFinish={handleProductOk} style={{marginTop: '24px'}}>
           <Form.Item name="name" label="Product Name" rules={[{ required: true }]}>
@@ -1144,10 +1179,6 @@ const Inventory = () => {
             <Select placeholder="Select...">{categories.map(c => (<Option key={c.id} value={c.id}>{c.name}</Option>))}</Select>
           </Form.Item>
           <Form.Item name="brand" label="Brand" rules={[{ required: true }]}><Input /></Form.Item>
-          
-          <Form.Item name="image_url" label="Product Image">
-            <ProductImageUpload />
-          </Form.Item>
           
           {profile?.fbr_integration_enabled && (
             <Row gutter={16}>
@@ -1203,6 +1234,10 @@ const Inventory = () => {
                 </Col>
             )}
           </Row>
+
+          <Form.Item name="image_url" label="Product Image">
+            <ProductImageUpload onUploading={setIsImageUploading} />
+          </Form.Item>
         </Form>
       </Modal>
 
@@ -1240,16 +1275,13 @@ const Inventory = () => {
         title="Edit Product Details"
         open={isProductEditModalOpen}
         onOk={productEditForm.submit}
-        onCancel={() => setIsProductEditModalOpen(false)}
-        okText="Update"
+        onCancel={handleProductEditModalCancel}
+        okText={isImageUploading ? "Uploading..." : "Update"}
+        okButtonProps={{ disabled: isImageUploading }}
       >
         <Form form={productEditForm} layout="vertical" onFinish={handleProductModelUpdate}>
           <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="brand" label="Brand"><Input /></Form.Item>
-          
-          <Form.Item name="image_url" label="Product Image">
-            <ProductImageUpload />
-          </Form.Item>
           
           {profile?.fbr_integration_enabled && (
             <Row gutter={16}>
@@ -1291,6 +1323,10 @@ const Inventory = () => {
                 <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
               </Form.Item>
           )}
+
+          <Form.Item name="image_url" label="Product Image">
+            <ProductImageUpload onUploading={setIsImageUploading} />
+          </Form.Item>
         </Form>
       </Modal>
       
