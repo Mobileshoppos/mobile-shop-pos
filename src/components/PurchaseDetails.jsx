@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input, Space, Popconfirm, Radio, Checkbox, theme, Tooltip } from 'antd';
-import { FileTextOutlined, ArrowLeftOutlined, DollarCircleOutlined, EditOutlined, RollbackOutlined, DeleteOutlined } from '@ant-design/icons';
+import { FileTextOutlined, ArrowLeftOutlined, DollarCircleOutlined, EditOutlined, RollbackOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
+import BarcodePrinter from '../components/BarcodePrinter';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
@@ -44,6 +45,10 @@ const PurchaseDetails = () => {
     const [selectedReturnItems, setSelectedReturnItems] = useState([]);
     const [returnForm] = Form.useForm();
     const [returnHistory, setReturnHistory] = useState([]);
+
+    // NAYA IZAFA: Bulk Barcode Printer States
+    const [isBarcodePrinterOpen, setIsBarcodePrinterOpen] = useState(false);
+    const [bulkItemsToPrint, setBulkItemsToPrint] = useState([]);
 
     const fetchDetails = async () => {
         setLoading(true);
@@ -104,6 +109,43 @@ const PurchaseDetails = () => {
             totalReturnedAmount: retAmount
         };
     }, [items]);
+
+    // NAYA IZAFA: Bulk Print Handle Function
+    const handleOpenBulkPrint = async () => {
+        setLoading(true);
+        try {
+            const printList = [];
+            for (const group of activeDisplayItems) {
+                let fetchedBarcode = null;
+                
+                // 1. Variant se barcode dhoondne ki koshish karein
+                if (group.variant_id) {
+                    const variant = await db.product_variants.get(group.variant_id);
+                    if (variant) fetchedBarcode = variant.barcode;
+                } 
+                // 2. Agar na mile to Main Product se dhoondein
+                if (!fetchedBarcode && group.product_id) {
+                    const product = await db.products.get(group.product_id);
+                    if (product) fetchedBarcode = product.barcode;
+                }
+
+                printList.push({
+                    product_name: group.product_name,
+                    product_brand: group.product_brand,
+                    barcode: fetchedBarcode,
+                    sale_price: group.sale_price,
+                    quantity: group.quantity, // Total purchased quantity for this item
+                    warranty_days: group.warranty_days || 0
+                });
+            }
+            setBulkItemsToPrint(printList);
+            setIsBarcodePrinterOpen(true);
+        } catch (error) {
+            notification.error({ message: 'Error', description: 'Failed to prepare barcodes for printing.' });
+        } finally {
+            setLoading(false);
+        }
+    };
 
     
     
@@ -238,6 +280,11 @@ const showEditModal = () => {
 </Row>
                 {purchase.notes && ( <div style={{ marginTop: '24px', padding: '12px', background: token.colorFillTertiary, borderRadius: '6px' }}><Text strong>Notes:</Text><br /><Text type="secondary">{purchase.notes}</Text></div> )}
                 <div style={{ marginTop: '24px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '8px' }}>
+    {/* NAYA IZAFA: Bulk Print Button */}
+    <Button block={isMobile} icon={<PrinterOutlined />} onClick={handleOpenBulkPrint}>
+        Print Barcodes
+    </Button>
+    
     <Tooltip title={!activeSession ? "Please open a register shift to process cash payments." : ""}>
         <Button type="primary" block={isMobile} icon={<DollarCircleOutlined />} onClick={showPaymentModal} disabled={purchase.balance_due <= 0 || !activeSession}>
             Record a Payment
@@ -413,6 +460,13 @@ const showEditModal = () => {
     ]}
 />
 </Form></Modal>
+
+            {/* NAYA IZAFA: Bulk Barcode Printer Modal */}
+            <BarcodePrinter 
+                visible={isBarcodePrinterOpen}
+                onClose={() => setIsBarcodePrinterOpen(false)}
+                bulkItems={bulkItemsToPrint}
+            />
         </div>
     );
 };

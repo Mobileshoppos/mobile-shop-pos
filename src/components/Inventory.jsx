@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useLocation, Link } from 'react-router-dom';
 import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme } from 'antd';
-import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined, LockOutlined } from '@ant-design/icons';
+import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined, LockOutlined, PrinterOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -13,6 +13,7 @@ import { db } from '../db';
 import { useTheme } from '../context/ThemeContext';
 import AddPurchaseForm from './AddPurchaseForm';
 import ProductImageUpload from '../components/ProductImageUpload';
+import BarcodePrinter from '../components/BarcodePrinter';
 import { getPlanLimits } from '../config/subscriptionPlans';
 
 const { Title, Text } = Typography;
@@ -49,7 +50,7 @@ const formatPriceRange = (min, max, currency) => {
   return `${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`;
 };
 
-const ProductList = ({ showArchived, products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged, refFirstStock }) => {
+const ProductList = ({ showArchived, products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged, refFirstStock, onPrintBarcode }) => {
   const { token } = theme.useToken(); // Control Center Connection
   const { profile } = useAuth();
   const { isDarkMode } = useTheme();
@@ -281,6 +282,7 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
       }}
       title="Edit Barcode/Price"
     />
+    
     <Button 
       type="text" 
       danger
@@ -418,6 +420,11 @@ const Inventory = () => {
   const [isDamagedModalOpen, setIsDamagedModalOpen] = useState(false);
   const [damagedItem, setDamagedItem] = useState(null);
   const [damagedForm] = Form.useForm();
+
+  // NAYA IZAFA: Barcode Printer State
+  const [isBarcodePrinterOpen, setIsBarcodePrinterOpen] = useState(false);
+  const [barcodeProduct, setBarcodeProduct] = useState(null);
+  const [barcodeVariant, setBarcodeVariant] = useState(null);
   
   // --- NAYE MODALS KI STATE ---
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -1151,7 +1158,37 @@ const Inventory = () => {
             setIsDamagedModalOpen(true);
         }}
         refFirstStock={refFirstStock}
-        ProductList showArchived={showArchived}
+        showArchived={showArchived}
+        onPrintBarcode={async (product, variant) => {
+            let fetchedBarcode = variant.barcode;
+            
+            // Database se asal barcode dhoondna
+            if (!fetchedBarcode) {
+                try {
+                    let targetVariantId = variant.variant_id;
+                    if (!targetVariantId && variant.ids && variant.ids.length > 0) {
+                       const invItem = await db.inventory.get(variant.ids[0]);
+                       if (invItem) targetVariantId = invItem.variant_id;
+                    }
+                    if (targetVariantId) {
+                        const dbVariant = await db.product_variants.get(targetVariantId);
+                        if (dbVariant) fetchedBarcode = dbVariant.barcode;
+                    }
+                } catch (error) {
+                    console.error("Error fetching barcode:", error);
+                }
+            }
+
+            // Agar barcode nahi mila, to error dikhayein
+            if (!fetchedBarcode) {
+                message.warning("No barcode found! Please click 'Edit' (pencil icon) to generate a barcode first.");
+                return;
+            }
+
+            setBarcodeProduct(product);
+            setBarcodeVariant({ ...variant, barcode: fetchedBarcode });
+            setIsBarcodePrinterOpen(true);
+        }}
       />
 
       {/* MODAL 1: PRODUCT MODEL EDIT/CREATE */}
@@ -1252,12 +1289,39 @@ const Inventory = () => {
   <Form form={editForm} layout="vertical" onFinish={handleQuickEditOk}>
     {/* Agar Item IMEI Based NAHI hai, tab hi Barcode dikhao */}
     {!editingItem?.is_imei_based && (
-        <Form.Item 
-            name="barcode" 
-            label="Barcode" 
-            help="Scan new barcode or type to correct it."
-        >
-            <Input prefix={<BarcodeOutlined />} placeholder="Scan Barcode" />
+        <Form.Item label="Barcode" help="Generate a new barcode and print sticker instantly.">
+            <Space.Compact style={{ width: '100%' }}>
+                <Form.Item name="barcode" noStyle>
+                    <Input prefix={<BarcodeOutlined />} placeholder="Scan Barcode" />
+                </Form.Item>
+                <Button 
+                    onClick={() => {
+                        const parentProduct = products.find(p => p.id === editingItem?.product_id);
+                        const catName = parentProduct?.category_name || 'ITM';
+                        const prefix = catName.substring(0, 3).toUpperCase();
+                        const randomNum = Math.floor(10000 + Math.random() * 90000);
+                        editForm.setFieldValue('barcode', `${prefix}-${randomNum}`);
+                    }}
+                >
+                    Generate
+                </Button>
+                <Button 
+                    type="primary"
+                    icon={<PrinterOutlined />} 
+                    onClick={() => {
+                        const currentBarcode = editForm.getFieldValue('barcode');
+                        if (!currentBarcode) {
+                            message.warning("Please generate or enter a barcode first!");
+                            return;
+                        }
+                        const parentProduct = products.find(p => p.id === editingItem.product_id);
+                        setBarcodeProduct(parentProduct || { name: 'Item' });
+                        setBarcodeVariant({ ...editingItem, barcode: currentBarcode, sale_price: editForm.getFieldValue('sale_price') });
+                        setIsBarcodePrinterOpen(true);
+                    }}
+                    title="Print Sticker"
+                />
+            </Space.Compact>
         </Form.Item>
     )}
     
@@ -1380,6 +1444,15 @@ const Inventory = () => {
          />
         </Form>
       </Modal>
+
+      {/* NAYA IZAFA: Barcode Printer Component */}
+      <BarcodePrinter 
+        visible={isBarcodePrinterOpen}
+        onClose={() => setIsBarcodePrinterOpen(false)}
+        product={barcodeProduct}
+        variant={barcodeVariant}
+      />
+
     </div>
   );
 };

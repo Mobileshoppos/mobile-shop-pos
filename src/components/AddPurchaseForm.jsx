@@ -337,8 +337,23 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
     </Form.Item>
 </Col>
                     <Col span={12}>
-                        <Form.Item name="barcode" label="Variant Barcode" tooltip="Assign a unique barcode to this variant.">
-                            <Input prefix={<BarcodeOutlined />} placeholder="Scan or type barcode" disabled={isBarcodeLocked} style={disabledInputStyle} />
+                        <Form.Item label="Variant Barcode" tooltip="Assign a unique barcode to this variant.">
+                            <Space.Compact style={{ width: '100%' }}>
+                                <Form.Item name="barcode" noStyle>
+                                    <Input prefix={<BarcodeOutlined />} placeholder="Scan or type barcode" disabled={isBarcodeLocked} style={disabledInputStyle} />
+                                </Form.Item>
+                                <Button 
+                                    onClick={() => {
+                                        const catName = product?.category_name || 'ITM';
+                                        const prefix = catName.substring(0, 3).toUpperCase();
+                                        const randomNum = Math.floor(10000 + Math.random() * 90000);
+                                        form.setFieldValue('barcode', `${prefix}-${randomNum}`);
+                                    }}
+                                    disabled={isBarcodeLocked}
+                                >
+                                    Generate
+                                </Button>
+                            </Space.Compact>
                         </Form.Item>
                     </Col>
                 </Row>
