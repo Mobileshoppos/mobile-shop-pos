@@ -3,13 +3,15 @@ import { useSearchParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 // Sirf 'Alert' ka izafa kiya hai
 import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio, Switch, Input, Tooltip, theme, Alert, Space, Modal } from 'antd';
-import { ToolOutlined, LockOutlined, CopyOutlined, ShopOutlined, PlusOutlined, DeleteOutlined, EditOutlined, BankOutlined } from '@ant-design/icons';
+import { ToolOutlined, LockOutlined, CopyOutlined, ShopOutlined, PlusOutlined, DeleteOutlined, EditOutlined, BankOutlined, SettingOutlined, DatabaseOutlined, FormatPainterOutlined, CompassOutlined } from '@ant-design/icons';
 import bcrypt from 'bcryptjs';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getPlanLimits } from '../config/subscriptionPlans';
 import DataService from '../DataService';
 import { db } from '../db';
+import download from 'downloadjs';
+import { exportDB, importInto } from 'dexie-export-import';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { 
     themeConfig as initialThemeConfig, 
@@ -27,7 +29,7 @@ const SettingsPage = () => {
   const { token } = theme.useToken(); // Control Center Connection
   const [searchParams, setSearchParams] = useSearchParams(); 
   const isMobile = useMediaQuery('(max-width: 768px)');
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const { user, profile, updateProfile } = useAuth();
   const limits = getPlanLimits(profile?.subscription_tier);
   const isAdvancedLocked = !limits.allow_advanced_settings;
@@ -148,6 +150,8 @@ const SettingsPage = () => {
   const [selectedCurrency, setSelectedCurrency] = useState('PKR');
   const [themeMode, setThemeMode] = useState('dark');
   const [isSaving, setIsSaving] = useState(false);
+  const [isBackupLoading, setIsBackupLoading] = useState(false);
+  const [isRestoreLoading, setIsRestoreLoading] = useState(false);
   const [receiptFormat, setReceiptFormat] = useState('pdf');
   // --- NAYA IZAFA: FBR States ---
   const [fbrIntegrationEnabled, setFbrIntegrationEnabled] = useState(false);
@@ -249,6 +253,56 @@ const SettingsPage = () => {
       }
     }
   }, [profile]);
+
+  // --- NAYA IZAFA: Backup & Restore Functions ---
+  const handleBackup = async () => {
+    try {
+      setIsBackupLoading(true);
+      const blob = await exportDB(db, { prettyJson: true });
+      const date = new Date().toISOString().split('T')[0];
+      download(blob, `MobileShop_Backup_${date}.json`, 'application/json');
+      message.success('Backup downloaded successfully!');
+    } catch (error) {
+      console.error('Backup failed:', error);
+      message.error('Failed to create backup: ' + error.message);
+    } finally {
+      setIsBackupLoading(false);
+    }
+  };
+
+  const handleRestore = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    modal.confirm({
+      title: 'Are you sure you want to restore?',
+      content: 'This will completely replace your current offline data with the backup file. Only do this if you know what you are doing.',
+      okText: 'Yes, Restore',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      onOk: async () => {
+        // NAYA: Global loading message jo screen par ruka rahega
+        const hide = message.loading('Restoring database, please wait... Do not close the app.', 0); 
+        try {
+          setIsRestoreLoading(true);
+          // Purane tables saaf karke file wala data daalein
+          await importInto(db, file, { clearTablesBeforeImport: true });
+          hide(); // Loading message hatayein
+          message.success('Database restored successfully! Reloading...');
+          setTimeout(() => window.location.reload(), 2000); // Naya data load karne ke liye page refresh
+        } catch (error) {
+          hide(); // Loading message hatayein
+          console.error('Restore failed:', error);
+          message.error('Failed to restore database: ' + error.message);
+        } finally {
+          setIsRestoreLoading(false);
+        }
+      }
+    });
+    // Input reset karein taake same file dobara select ho sake
+    event.target.value = '';
+  };
+  // ----------------------------------------------
 
   const handleGeneralSettingsSave = async (event) => {
     event.preventDefault();
@@ -418,6 +472,7 @@ const SettingsPage = () => {
             {
               key: '1',
               label: 'Store Settings',
+              icon: <SettingOutlined />,
               children: (
                 <div style={{ padding: '16px 0' }}>
                   <Row align="middle" gutter={[16, 16]}>
@@ -629,6 +684,7 @@ const SettingsPage = () => {
             {
               key: '2',
               label: 'Inventory',
+              icon: <DatabaseOutlined />,
               children: (
                 <div style={{ padding: '16px 0' }}>
                   <Row align="middle" gutter={[16, 16]}>
@@ -667,6 +723,7 @@ const SettingsPage = () => {
             {
               key: '3',
               label: 'Appearance',
+              icon: <FormatPainterOutlined />,
               children: (
                 <div style={{ padding: '16px 0' }}>
                   <Row align="middle" gutter={[16, 16]}>
@@ -793,12 +850,51 @@ const SettingsPage = () => {
                       </Button>
                     </Col>
                   </Row>
+
+                  <Divider />
+
+                  {/* --- NAYA IZAFA: Backup & Restore UI --- */}
+                  <Title level={4} style={{ fontSize: '16px' }}>Offline Data Backup (PC Transfer)</Title>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: '16px' }}>
+                    Save a safe copy of your shop's data. If your internet is down and you need to change your computer, download this backup and restore it on the new PC so you don't lose any records.
+                  </Text>
+                  
+                  <Row gutter={[16, 16]} align="middle">
+                    <Col xs={24} sm={8}>
+                      <Button 
+                        type="primary" 
+                        onClick={handleBackup} 
+                        loading={isBackupLoading}
+                        block
+                      >
+                        Download Backup
+                      </Button>
+                    </Col>
+                    <Col xs={24} sm={8}>
+                      <input 
+                        type="file" 
+                        id="restore-upload" 
+                        accept=".json" 
+                        style={{ display: 'none' }} 
+                        onChange={handleRestore}
+                      />
+                      <Button 
+                        danger
+                        loading={isRestoreLoading}
+                        onClick={() => document.getElementById('restore-upload').click()}
+                        block
+                      >
+                        Restore Backup
+                      </Button>
+                    </Col>
+                  </Row>
                 </div>
               ),
             },
             {
               key: '4',
               label: 'Navigation',
+              icon: <CompassOutlined />,
               children: (
                 <div style={{ padding: '16px 0' }}>
                   <Title level={4} style={{ fontSize: '16px' }}>Mobile Navigation (Bottom Bar)</Title>
