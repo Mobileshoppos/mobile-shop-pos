@@ -2,7 +2,7 @@ import React from 'react';
 import { useSearchParams } from 'react-router-dom'; 
 import { useState, useEffect } from 'react';
 // Sirf 'Alert' ka izafa kiya hai
-import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio, Switch, Input, Tooltip, theme, Alert, Space, Modal } from 'antd';
+import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio, Switch, Input, Tooltip, theme, Alert, Space, Modal, Tag } from 'antd';
 import { ToolOutlined, LockOutlined, CopyOutlined, ShopOutlined, PlusOutlined, DeleteOutlined, EditOutlined, BankOutlined, SettingOutlined, DatabaseOutlined, FormatPainterOutlined, CompassOutlined } from '@ant-design/icons';
 import bcrypt from 'bcryptjs';
 import { useTheme } from '../context/ThemeContext';
@@ -24,6 +24,51 @@ const { TextArea } = Input;
 
 // Default Policy agar user ne kuch set na kiya ho
 const DEFAULT_POLICY = "No return or exchange after 7 days.\nWarranty claim directly from service center.\nNo warranty for burnt/damaged items.";
+
+// NAYA IZAFA: Standardized Default Keyboard Shortcuts (Browser Safe)
+const DEFAULT_SHORTCUTS = {
+  nav_home: 'alt+h',
+  nav_inventory: 'alt+i',
+  nav_pos: 'alt+p',
+  nav_warranty: 'alt+w',
+  nav_purchases: 'alt+b',
+  nav_customers: 'alt+c',
+  nav_suppliers: 'alt+u',
+  nav_sales_history: 'alt+y',
+  nav_expenses: 'alt+e',
+  nav_damaged_stock: 'alt+d',
+  nav_reports: 'alt+o',
+  nav_staff: 'alt+m',
+  nav_settings: 'alt+s',
+  // --- POS SHORTCUTS (Standardized) ---
+  pos_search: 'alt+f',          
+  pos_customer_search: 'alt+c', 
+  pos_add_customer: 'alt+n',    
+  pos_discount: 'alt+d',        
+  pos_pay_cash: 'alt+1',        
+  pos_pay_bank: 'alt+2',        
+  pos_pay_later: 'alt+3',       
+  pos_hold_bill: 'alt+q',       
+  pos_view_drafts: 'alt+g',     
+  pos_checkout: 'shift+enter',  
+  pos_reset: 'alt+v',           
+  // --- INVENTORY SHORTCUTS (Standardized) ---
+  inv_add: 'alt+n',
+  inv_search: 'alt+f',
+  inv_reset: 'alt+v',
+  // --- CATEGORIES SHORTCUTS (Standardized) ---
+  cat_add: 'alt+n',
+  cat_attr_add: 'alt+a',
+  // --- PURCHASES SHORTCUTS (Standardized) ---
+  pur_search: 'alt+f',
+  pur_add: 'alt+n',
+  // --- CUSTOMERS SHORTCUTS (Standardized) ---
+  cust_search: 'alt+f',
+  cust_add: 'alt+n',
+  // --- SUPPLIERS SHORTCUTS (Standardized) ---
+  sup_search: 'alt+f',
+  sup_add: 'alt+n'
+};
 
 const SettingsPage = () => {
   const { token } = theme.useToken(); // Control Center Connection
@@ -183,6 +228,74 @@ const SettingsPage = () => {
   const [desktopNavItems, setDesktopNavItems] = useState(['/pos', '/inventory', '/warranty', '/customers', '/expenses']);
   const [desktopNavPosition, setDesktopNavPosition] = useState('bottom');
 
+  // NAYA IZAFA: Keyboard Shortcuts States
+  const [customShortcuts, setCustomShortcuts] = useState(DEFAULT_SHORTCUTS);
+  const [recordingShortcutFor, setRecordingShortcutFor] = useState(null);
+
+  // NAYA IZAFA: Key Catcher Logic (Shortcut record karne ke liye)
+  useEffect(() => {
+    if (!recordingShortcutFor) return;
+
+    const handleKeyDown = (e) => {
+      e.preventDefault(); // Browser ka default action rokein
+      
+      // Agar user ne Escape dabaya to cancel kar dein
+      if (e.key === 'Escape') {
+        setRecordingShortcutFor(null);
+        message.info('Shortcut recording cancelled');
+        return;
+      }
+
+      // Sirf modifier keys ko akele record nahi karna
+      if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+
+      let keys = [];
+      if (e.ctrlKey || e.metaKey) keys.push('ctrl');
+      if (e.altKey) keys.push('alt');
+      if (e.shiftKey) keys.push('shift');
+      
+      // Agar koi modifier key nahi hai, to warn karein
+      if (keys.length === 0 && e.key !== 'Enter') {
+        message.warning('Please use a modifier key (Alt, Ctrl, or Shift) for safety.');
+        return;
+      }
+
+      keys.push(e.key.toLowerCase());
+      const newShortcut = keys.join('+');
+
+      // Validation Logic: Global vs Local Conflict Check
+      const isSettingGlobal = recordingShortcutFor.startsWith('nav_');
+      let hasConflict = false;
+      let conflictName = '';
+
+      for (const [key, value] of Object.entries(customShortcuts)) {
+        if (value === newShortcut && key !== recordingShortcutFor) {
+          const isExistingGlobal = key.startsWith('nav_');
+          // Conflict tab hoga jab:
+          // 1. Hum Global shortcut set kar rahe hon aur wo kisi bhi (Global ya Local) se takraye.
+          // 2. Hum Local shortcut set kar rahe hon aur wo kisi Global se takraye.
+          if (isSettingGlobal || isExistingGlobal) {
+            hasConflict = true;
+            conflictName = key;
+            break;
+          }
+        }
+      }
+
+      if (hasConflict) {
+        message.error(`Conflict! ${newShortcut.toUpperCase()} is already used for ${conflictName.replace(/_/g, ' ').toUpperCase()}`);
+        return;
+      }
+
+      setCustomShortcuts(prev => ({ ...prev, [recordingShortcutFor]: newShortcut }));
+      setRecordingShortcutFor(null);
+      message.success(`Shortcut updated to: ${newShortcut.toUpperCase()}`);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [recordingShortcutFor, message]);
+
   const navOptions = [
     { label: 'Home', value: '/' },
     { label: 'POS', value: '/pos' },
@@ -235,6 +348,11 @@ const SettingsPage = () => {
       if (profile.mobile_nav_items) setMobileNavItems(profile.mobile_nav_items);
       if (profile.desktop_nav_items) setDesktopNavItems(profile.desktop_nav_items);
       if (profile.desktop_nav_position) setDesktopNavPosition(profile.desktop_nav_position);
+      
+      // NAYA IZAFA: Load Custom Shortcuts
+      if (profile.custom_shortcuts && Object.keys(profile.custom_shortcuts).length > 0) {
+          setCustomShortcuts({ ...DEFAULT_SHORTCUTS, ...profile.custom_shortcuts });
+      }
       }
       if (profile.low_stock_threshold) setLowStockThreshold(profile.low_stock_threshold);
       
@@ -342,6 +460,7 @@ const SettingsPage = () => {
       desktop_nav_items: desktopNavItems,
       desktop_nav_position: desktopNavPosition,
       theme_mode: themeMode, 
+      custom_shortcuts: customShortcuts, // NAYA IZAFA: Save Shortcuts
     };
 
     const result = await updateProfile(updates);
@@ -461,9 +580,8 @@ const SettingsPage = () => {
           <ToolOutlined style={{ color: token.colorPrimary }} /> App Settings
         </Title>
       )}
-      <Text type="secondary">Change the look and feel of your application here.</Text>
 
-      <Card title="Application Configuration" style={{ marginTop: 24 }}>
+      <Card title="Application Configuration" style={{ marginTop: 8 }}>
         <Tabs 
           activeKey={activeTab} 
           onChange={(key) => { setActiveTab(key); setSearchParams({ tab: key }); }}
@@ -1059,6 +1177,225 @@ const SettingsPage = () => {
                 </div>
               ),
             },
+            {
+              key: '7',
+              label: 'Shortcuts',
+              icon: <ToolOutlined />,
+              children: (
+                <div style={{ padding: '16px 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <div>
+                      <Title level={4} style={{ margin: 0, fontSize: '16px' }}>Keyboard Shortcuts</Title>
+                      <Text type="secondary">Customize keyboard shortcuts to speed up your workflow.</Text>
+                    </div>
+                    <Button 
+                      onClick={() => {
+                        setCustomShortcuts(DEFAULT_SHORTCUTS);
+                        message.success('Shortcuts reset to default.');
+                      }}
+                    >
+                      Reset to Defaults
+                    </Button>
+                  </div>
+
+                  <Alert 
+                    message={recordingShortcutFor ? `Press the keys for: ${recordingShortcutFor.replace(/_/g, ' ').toUpperCase()} (Press ESC to cancel)` : "Click 'Edit' next to a shortcut, then press your desired key combination (e.g., Alt + K)."} 
+                    type={recordingShortcutFor ? "warning" : "info"} 
+                    showIcon 
+                    style={{ marginBottom: '16px' }}
+                  />
+
+                  {/* 1. Global Navigation */}
+                  <Title level={5} style={{ fontSize: '14px', marginTop: '16px', marginBottom: '12px' }}>Global Navigation (All Pages)</Title>
+                  <Row gutter={[12, 12]}>
+                    {[
+                      { key: 'nav_home', label: 'Dashboard' },
+                      { key: 'nav_inventory', label: 'Inventory' },
+                      { key: 'nav_pos', label: 'Point of Sale' },
+                      { key: 'nav_warranty', label: 'Warranty & Claims' },
+                      { key: 'nav_purchases', label: 'Purchase Orders' },
+                      { key: 'nav_customers', label: 'Customers' },
+                      { key: 'nav_suppliers', label: 'Suppliers' },
+                      { key: 'nav_sales_history', label: 'Sales History' },
+                      { key: 'nav_expenses', label: 'Expenses' },
+                      { key: 'nav_damaged_stock', label: 'Damaged Stock' },
+                      { key: 'nav_reports', label: 'Reports' },
+                      { key: 'nav_staff', label: 'Staff / Team' },
+                      { key: 'nav_settings', label: 'App Settings' }
+                    ].map(item => (
+                      <Col xs={24} sm={12} md={8} lg={12} xl={8} key={item.key}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', background: token.colorFillAlter, borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }}>
+                          <Text>{item.label}</Text>
+                          <Space>
+                            <Tag color={recordingShortcutFor === item.key ? 'orange' : 'blue'} style={{ margin: 0 }}>
+                              {customShortcuts[item.key]?.toUpperCase() || 'NONE'}
+                            </Tag>
+                            <Button size="small" type="link" onClick={() => setRecordingShortcutFor(item.key)}>Edit</Button>
+                          </Space>
+                        </div>
+                      </Col>
+                    ))}
+                  </Row>
+
+                  <Divider />
+
+                  {/* 2. POS Shortcuts */}
+                  <Title level={5} style={{ fontSize: '14px', marginBottom: '12px' }}>Point of Sale (POS) Actions</Title>
+                  <Row gutter={[12, 12]}>
+                    {[
+                      { key: 'pos_search', label: 'Search / Scan Item' },
+                      { key: 'pos_customer_search', label: 'Select Customer' },
+                      { key: 'pos_add_customer', label: 'Add New Customer' },
+                      { key: 'pos_discount', label: 'Focus Discount' },
+                      { key: 'pos_pay_cash', label: 'Payment: Cash' },
+                      { key: 'pos_pay_bank', label: 'Payment: Bank' },
+                      { key: 'pos_pay_later', label: 'Payment: Pay Later' },
+                      { key: 'pos_hold_bill', label: 'Hold Bill / Draft' },
+                      { key: 'pos_view_drafts', label: 'View Drafts' }, // NAYA IZAFA
+                      { key: 'pos_checkout', label: 'Complete Sale' },
+                      { key: 'pos_reset', label: 'Reset Bill' }
+                    ].map(item => (
+                      <Col xs={24} sm={12} md={8} lg={12} xl={8} key={item.key}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', background: token.colorFillAlter, borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }}>
+                          <Text>{item.label}</Text>
+                          <Space>
+                            <Tag color={recordingShortcutFor === item.key ? 'orange' : 'green'} style={{ margin: 0 }}>
+                              {customShortcuts[item.key]?.toUpperCase() || 'NONE'}
+                            </Tag>
+                            <Button size="small" type="link" onClick={() => setRecordingShortcutFor(item.key)}>Edit</Button>
+                          </Space>
+                        </div>
+                      </Col>
+                    ))}
+                  </Row>
+
+                  <Divider />
+
+                  {/* 3. Inventory Shortcuts */}
+                  <Title level={5} style={{ fontSize: '14px' }}>Inventory</Title>
+                  <Row align="middle" gutter={[16, 16]} style={{ marginBottom: '8px' }}>
+                    <Col xs={12} sm={8}><Text>Add New Product</Text></Col>
+                    <Col xs={12} sm={16}>
+                      <Space>
+                        <Tag color={recordingShortcutFor === 'inv_add' ? 'orange' : 'purple'} style={{ fontSize: '14px', padding: '4px 8px' }}>{customShortcuts.inv_add?.toUpperCase()}</Tag>
+                        <Button size="small" type="link" onClick={() => setRecordingShortcutFor('inv_add')}>Edit</Button>
+                      </Space>
+                    </Col>
+                  </Row>
+                  <Row align="middle" gutter={[16, 16]} style={{ marginBottom: '8px' }}>
+                    <Col xs={12} sm={8}><Text>Focus Search</Text></Col>
+                    <Col xs={12} sm={16}>
+                      <Space>
+                        <Tag color={recordingShortcutFor === 'inv_search' ? 'orange' : 'purple'} style={{ fontSize: '14px', padding: '4px 8px' }}>{customShortcuts.inv_search?.toUpperCase()}</Tag>
+                        <Button size="small" type="link" onClick={() => setRecordingShortcutFor('inv_search')}>Edit</Button>
+                      </Space>
+                    </Col>
+                  </Row>
+                  <Row align="middle" gutter={[16, 16]} style={{ marginBottom: '8px' }}>
+                    <Col xs={12} sm={8}><Text>Reset Filters</Text></Col>
+                    <Col xs={12} sm={16}>
+                      <Space>
+                        <Tag color={recordingShortcutFor === 'inv_reset' ? 'orange' : 'purple'} style={{ fontSize: '14px', padding: '4px 8px' }}>{customShortcuts.inv_reset?.toUpperCase()}</Tag>
+                        <Button size="small" type="link" onClick={() => setRecordingShortcutFor('inv_reset')}>Edit</Button>
+                      </Space>
+                    </Col>
+                  </Row>
+
+                  <Divider />
+
+                  {/* 4. Categories Shortcuts */}
+                  <Title level={5} style={{ fontSize: '14px' }}>Categories</Title>
+                  <Row align="middle" gutter={[16, 16]} style={{ marginBottom: '8px' }}>
+                    <Col xs={12} sm={8}><Text>Add New Category</Text></Col>
+                    <Col xs={12} sm={16}>
+                      <Space>
+                        <Tag color={recordingShortcutFor === 'cat_add' ? 'orange' : 'magenta'} style={{ fontSize: '14px', padding: '4px 8px' }}>{customShortcuts.cat_add?.toUpperCase()}</Tag>
+                        <Button size="small" type="link" onClick={() => setRecordingShortcutFor('cat_add')}>Edit</Button>
+                      </Space>
+                    </Col>
+                  </Row>
+                  <Row align="middle" gutter={[16, 16]} style={{ marginBottom: '8px' }}>
+                    <Col xs={12} sm={8}><Text>Add New Attribute</Text></Col>
+                    <Col xs={12} sm={16}>
+                      <Space>
+                        <Tag color={recordingShortcutFor === 'cat_attr_add' ? 'orange' : 'magenta'} style={{ fontSize: '14px', padding: '4px 8px' }}>{customShortcuts.cat_attr_add?.toUpperCase()}</Tag>
+                        <Button size="small" type="link" onClick={() => setRecordingShortcutFor('cat_attr_add')}>Edit</Button>
+                      </Space>
+                    </Col>
+                  </Row>
+
+                  <Divider />
+
+                  {/* 5. Purchases Shortcuts */}
+                  <Title level={5} style={{ fontSize: '14px' }}>Purchases</Title>
+                  <Row align="middle" gutter={[16, 16]} style={{ marginBottom: '8px' }}>
+                    <Col xs={12} sm={8}><Text>Focus Search</Text></Col>
+                    <Col xs={12} sm={16}>
+                      <Space>
+                        <Tag color={recordingShortcutFor === 'pur_search' ? 'orange' : 'volcano'} style={{ fontSize: '14px', padding: '4px 8px' }}>{customShortcuts.pur_search?.toUpperCase()}</Tag>
+                        <Button size="small" type="link" onClick={() => setRecordingShortcutFor('pur_search')}>Edit</Button>
+                      </Space>
+                    </Col>
+                  </Row>
+                  <Row align="middle" gutter={[16, 16]} style={{ marginBottom: '8px' }}>
+                    <Col xs={12} sm={8}><Text>Create New Purchase</Text></Col>
+                    <Col xs={12} sm={16}>
+                      <Space>
+                        <Tag color={recordingShortcutFor === 'pur_add' ? 'orange' : 'volcano'} style={{ fontSize: '14px', padding: '4px 8px' }}>{customShortcuts.pur_add?.toUpperCase()}</Tag>
+                        <Button size="small" type="link" onClick={() => setRecordingShortcutFor('pur_add')}>Edit</Button>
+                      </Space>
+                    </Col>
+                  </Row>
+
+                  <Divider />
+
+                  {/* 6. Customers Shortcuts */}
+                  <Title level={5} style={{ fontSize: '14px' }}>Customers</Title>
+                  <Row align="middle" gutter={[16, 16]} style={{ marginBottom: '8px' }}>
+                    <Col xs={12} sm={8}><Text>Focus Search</Text></Col>
+                    <Col xs={12} sm={16}>
+                      <Space>
+                        <Tag color={recordingShortcutFor === 'cust_search' ? 'orange' : 'cyan'} style={{ fontSize: '14px', padding: '4px 8px' }}>{customShortcuts.cust_search?.toUpperCase()}</Tag>
+                        <Button size="small" type="link" onClick={() => setRecordingShortcutFor('cust_search')}>Edit</Button>
+                      </Space>
+                    </Col>
+                  </Row>
+                  <Row align="middle" gutter={[16, 16]} style={{ marginBottom: '8px' }}>
+                    <Col xs={12} sm={8}><Text>Add New Customer</Text></Col>
+                    <Col xs={12} sm={16}>
+                      <Space>
+                        <Tag color={recordingShortcutFor === 'cust_add' ? 'orange' : 'cyan'} style={{ fontSize: '14px', padding: '4px 8px' }}>{customShortcuts.cust_add?.toUpperCase()}</Tag>
+                        <Button size="small" type="link" onClick={() => setRecordingShortcutFor('cust_add')}>Edit</Button>
+                      </Space>
+                    </Col>
+                  </Row>
+
+                  <Divider />
+
+                  {/* 7. Suppliers Shortcuts */}
+                  <Title level={5} style={{ fontSize: '14px' }}>Suppliers</Title>
+                  <Row align="middle" gutter={[16, 16]} style={{ marginBottom: '8px' }}>
+                    <Col xs={12} sm={8}><Text>Focus Search</Text></Col>
+                    <Col xs={12} sm={16}>
+                      <Space>
+                        <Tag color={recordingShortcutFor === 'sup_search' ? 'orange' : 'geekblue'} style={{ fontSize: '14px', padding: '4px 8px' }}>{customShortcuts.sup_search?.toUpperCase()}</Tag>
+                        <Button size="small" type="link" onClick={() => setRecordingShortcutFor('sup_search')}>Edit</Button>
+                      </Space>
+                    </Col>
+                  </Row>
+                  <Row align="middle" gutter={[16, 16]} style={{ marginBottom: '8px' }}>
+                    <Col xs={12} sm={8}><Text>Add New Supplier</Text></Col>
+                    <Col xs={12} sm={16}>
+                      <Space>
+                        <Tag color={recordingShortcutFor === 'sup_add' ? 'orange' : 'geekblue'} style={{ fontSize: '14px', padding: '4px 8px' }}>{customShortcuts.sup_add?.toUpperCase()}</Tag>
+                        <Button size="small" type="link" onClick={() => setRecordingShortcutFor('sup_add')}>Edit</Button>
+                      </Space>
+                    </Col>
+                  </Row>
+
+                </div>
+              ),
+            },
           ]} 
         />
         
@@ -1099,7 +1436,8 @@ const SettingsPage = () => {
                 JSON.stringify(mobileNavItems) === JSON.stringify(profile.mobile_nav_items) &&
                 JSON.stringify(desktopNavItems) === JSON.stringify(profile.desktop_nav_items) &&
                 desktopNavPosition === (profile.desktop_nav_position || 'bottom') &&
-                themeMode === (profile.theme_mode || 'light')
+                themeMode === (profile.theme_mode || 'light') &&
+                JSON.stringify(customShortcuts) === JSON.stringify(profile.custom_shortcuts || DEFAULT_SHORTCUTS)
               )}
             >
               Save All Settings

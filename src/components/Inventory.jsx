@@ -477,20 +477,22 @@ const Inventory = () => {
   }, [selectedCategoryId, selectedBrand, products]);
   // --- FOCUS LOGIC (Corrected Position) ---
   useEffect(() => {
-    const timer = setTimeout(() => {
-      searchInputRef.current?.focus();
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
+    if (!isMobile) {
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isMobile]);
 
   useEffect(() => {
-    if (isProductModalOpen) {
+    if (isProductModalOpen && !isMobile) {
       const timer = setTimeout(() => {
         productNameInputRef.current?.focus();
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [isProductModalOpen]);
+  }, [isProductModalOpen, isMobile]);
 
   useEffect(() => {
     if (!user) return;
@@ -937,6 +939,7 @@ const Inventory = () => {
 
         return isMobile && can('can_edit_inventory') && (
           <Button 
+            id="inv-add-btn-mobile"
             ref={refAddModel} 
             type="primary" 
             size="middle" 
@@ -984,6 +987,7 @@ const Inventory = () => {
           <Col xs={24} sm={8} md={9}>
           <div ref={refSearch}>
             <Input 
+              id="inv-search-input"
               ref={searchInputRef}
               placeholder="Search or Scan..." 
               prefix={<SearchOutlined style={{ color: token.colorTextSecondary }} />}
@@ -1046,6 +1050,7 @@ const Inventory = () => {
 
              {/* Reset Button (Icon Only) */}
              <Button 
+                id="inv-reset-btn"
                 icon={<ReloadOutlined />} 
                 onClick={handleResetFilters} 
                 title="Reset All Filters" 
@@ -1057,6 +1062,7 @@ const Inventory = () => {
 
                return !isMobile && can('can_edit_inventory') && (
                  <Button 
+                   id="inv-add-btn-desktop"
                    ref={refAddModel} 
                    type="primary" 
                    icon={isLimitReached ? <LockOutlined /> : <PlusOutlined />}
@@ -1201,6 +1207,8 @@ const Inventory = () => {
         okButtonProps={{ disabled: isImageUploading }}
       >
         <Form form={productForm} layout="vertical" onFinish={handleProductOk} style={{marginTop: '24px'}}>
+          {/* NAYA IZAFA: Hidden submit button taake Enter dabane se form save ho jaye */}
+          <button type="submit" style={{ display: 'none' }} />
           <Form.Item name="name" label="Product Name" rules={[{ required: true }]}>
             <Input 
               ref={productNameInputRef} 
@@ -1287,6 +1295,8 @@ const Inventory = () => {
   okText="Update"
 >
   <Form form={editForm} layout="vertical" onFinish={handleQuickEditOk}>
+    {/* NAYA IZAFA: Hidden submit button taake Enter dabane se form save ho jaye */}
+    <button type="submit" style={{ display: 'none' }} />
     {/* Agar Item IMEI Based NAHI hai, tab hi Barcode dikhao */}
     {!editingItem?.is_imei_based && (
         <Form.Item label="Barcode" help="Generate a new barcode and print sticker instantly.">
@@ -1344,6 +1354,8 @@ const Inventory = () => {
         okButtonProps={{ disabled: isImageUploading }}
       >
         <Form form={productEditForm} layout="vertical" onFinish={handleProductModelUpdate}>
+          {/* NAYA IZAFA: Hidden submit button taake Enter dabane se form save ho jaye */}
+          <button type="submit" style={{ display: 'none' }} />
           <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="brand" label="Brand"><Input /></Form.Item>
           
@@ -1420,6 +1432,8 @@ const Inventory = () => {
         okButtonProps={{ danger: true }}
       >
         <Form form={damagedForm} layout="vertical" onFinish={handleMarkDamagedOk}>
+          {/* NAYA IZAFA: Hidden submit button taake Enter dabane se form save ho jaye */}
+          <button type="submit" style={{ display: 'none' }} />
           <Text type="secondary" style={{display: 'block', marginBottom: '15px'}}>
             Product: <b>{damagedItem?.product_name}</b><br/>
             Available: <b>{damagedItem?.display_quantity} units</b>

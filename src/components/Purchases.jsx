@@ -164,6 +164,7 @@ const Purchases = () => {
         </Title>
     ) : (
         <Input.Search 
+            id="pur-search-input-desktop"
             placeholder="Search by Supplier or Invoice No..." 
             allowClear 
             onChange={(e) => setSearchText(e.target.value)} 
@@ -173,6 +174,7 @@ const Purchases = () => {
     
     {isMobile && (
         <Input.Search 
+            id="pur-search-input-mobile"
             placeholder="Search by Supplier or Invoice No..." 
             allowClear 
             onChange={(e) => setSearchText(e.target.value)} 
@@ -181,6 +183,7 @@ const Purchases = () => {
     )}
 
     <Button 
+        id="pur-add-btn"
         type="primary" 
         icon={<PlusOutlined />} 
         size="large"

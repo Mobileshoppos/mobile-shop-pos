@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Typography, Table, Button, Modal, Form, Input, App as AntApp,
   Space, Popconfirm, Tooltip, Row, Col, Card, Empty, Select, Switch, Tag, theme
@@ -27,6 +27,7 @@ const Categories = () => {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoryForm] = Form.useForm();
+  const categoryNameInputRef = useRef(null); // NAYA IZAFA
   
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [attributes, setAttributes] = useState([]);
@@ -34,7 +35,21 @@ const Categories = () => {
   const [isAttributeModalOpen, setIsAttributeModalOpen] = useState(false);
   const [editingAttribute, setEditingAttribute] = useState(null);
   const [attributeForm] = Form.useForm();
+  const attributeNameInputRef = useRef(null); // NAYA IZAFA
   const attributeType = Form.useWatch('attribute_type', attributeForm);
+
+  // NAYA IZAFA: Modal khulte hi cursor set karna (Sirf Desktop par)
+  useEffect(() => {
+    if (isCategoryModalOpen && !isMobile) {
+      setTimeout(() => categoryNameInputRef.current?.focus(), 100);
+    }
+  }, [isCategoryModalOpen, isMobile]);
+
+  useEffect(() => {
+    if (isAttributeModalOpen && !isMobile) {
+      setTimeout(() => attributeNameInputRef.current?.focus(), 100);
+    }
+  }, [isAttributeModalOpen, isMobile]);
 
   const getCategories = useCallback(async () => {
     try {
@@ -266,6 +281,7 @@ const Categories = () => {
                 const isLocked = !limits.allow_custom_categories;
                 return (
                   <Button 
+                    id="cat-add-btn"
                     type="primary" 
                     icon={isLocked ? <LockOutlined /> : <PlusOutlined />} 
                     onClick={() => {
@@ -315,6 +331,7 @@ const Categories = () => {
                       const isLocked = !limits.allow_custom_categories;
                       return (
                         <Button 
+                          id="attr-add-btn"
                           type="primary" 
                           icon={isLocked ? <LockOutlined /> : <PlusOutlined />} 
                           onClick={() => {
@@ -354,13 +371,16 @@ const Categories = () => {
 
       <Modal title={editingCategory ? 'Edit Category' : 'Add New Category'} open={isCategoryModalOpen} onCancel={handleCategoryModalCancel} onOk={() => categoryForm.submit()} okText="Save">
         <Form form={categoryForm} layout="vertical" onFinish={handleCategoryModalOk} style={{ marginTop: '24px' }}>
+          {/* NAYA IZAFA: Enter dabane se form save karne ke liye hidden button */}
+          <button type="submit" style={{ display: 'none' }} />
+          
           <Form.Item 
               name="name" 
               label="Category Name" 
               rules={[{ required: true }]}
               help={editingCategory ? "Note: Renaming will update all existing products in this category." : ""}
           >
-    <Input placeholder="e.g. Smartphones, Audio, Accessories" />
+    <Input ref={categoryNameInputRef} placeholder="e.g. Smartphones, Audio, Accessories" />
         </Form.Item>
           <Form.Item 
             name="is_imei_based" 
@@ -379,7 +399,10 @@ const Categories = () => {
 
       <Modal title={editingAttribute ? 'Edit Attribute' : 'Add New Attribute'} open={isAttributeModalOpen} onCancel={handleAttributeModalCancel} onOk={() => attributeForm.submit()} okText="Save">
         <Form form={attributeForm} layout="vertical" onFinish={handleAttributeModalOk} style={{ marginTop: '24px' }}>
-          <Form.Item name="attribute_name" label="Attribute Name" rules={[{ required: true }]}><Input placeholder="e.g., Color, Storage, IMEI" /></Form.Item>
+          {/* NAYA IZAFA: Enter dabane se form save karne ke liye hidden button */}
+          <button type="submit" style={{ display: 'none' }} />
+          
+          <Form.Item name="attribute_name" label="Attribute Name" rules={[{ required: true }]}><Input ref={attributeNameInputRef} placeholder="e.g., Color, Storage, IMEI" /></Form.Item>
           <Form.Item name="attribute_type" label="Input Type" rules={[{ required: true }]}><Select><Option value="text">Text</Option><Option value="number">Number</Option><Option value="select">Select</Option></Select></Form.Item>
           {attributeType === 'select' && (
             <Form.Item name="options" label="Options (comma-separated)" rules={[{ required: true, message: 'Please provide options for the select type!'}]}>

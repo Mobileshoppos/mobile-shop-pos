@@ -767,6 +767,7 @@ const SupplierDashboard = () => {
                                                 </Text>
                                             </Space>
                                             <Button 
+                                                id="sup-add-btn"
                                                 type="primary" 
                                                 size="small" 
                                                 icon={isLocked ? <LockOutlined /> : <PlusOutlined />} 
@@ -781,6 +782,7 @@ const SupplierDashboard = () => {
                                             </Button>
                                         </Flex>
                                         <Input
+                                            id="sup-search-input"
                                             ref={searchInputRef}
                                             placeholder="Search supplier..."
                                             prefix={<SearchOutlined />}
@@ -919,7 +921,9 @@ const SupplierDashboard = () => {
             )}
 
             <Modal title={editingSupplier ? "Edit Supplier" : "Add New Supplier"} open={isModalVisible} onOk={handleModalOk} onCancel={() => setIsModalVisible(false)} okText="Save" destroyOnHidden>
-                <Form form={form} layout="vertical" name="supplier_form" style={{ marginTop: 10 }}>
+                <Form form={form} layout="vertical" name="supplier_form" style={{ marginTop: 10 }} onFinish={handleModalOk}>
+                    {/* NAYA IZAFA: Enter dabane se form save karne ke liye hidden button */}
+                    <button type="submit" style={{ display: 'none' }} />
                     <Tabs defaultActiveKey="1" items={[
                         {
                             key: '1',

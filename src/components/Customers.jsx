@@ -1179,6 +1179,7 @@ const handleCloseInvoiceSearchModal = () => {
     {/* Computer (Desktop) ke liye Search Bar */}
     {!isMobile && (
       <Input
+        id="cust-search-input-desktop"
         ref={searchInputRef}
         placeholder="Search by Name or Phone..."
         prefix={<SearchOutlined />}
@@ -1192,6 +1193,7 @@ const handleCloseInvoiceSearchModal = () => {
     {/* Mobile ke liye Search Bar (Sirf mobile par nazar aayega) */}
     {isMobile && (
       <Input
+        id="cust-search-input-mobile"
         ref={searchInputRef}
         placeholder="Search by Name or Phone..."
         prefix={<SearchOutlined />}
@@ -1237,6 +1239,7 @@ const handleCloseInvoiceSearchModal = () => {
             
             return (
                 <Button
+                    id="cust-add-btn"
                     type="primary"
                     icon={isLocked ? <LockOutlined /> : <UserAddOutlined />}
                     size="large"
@@ -1365,6 +1368,8 @@ const handleCloseInvoiceSearchModal = () => {
     <Table columns={customerColumns} dataSource={customers} loading={loading} rowKey="id" />
 )} <Modal title={editingCustomer ? "Edit Customer" : "Add New Customer"} open={isAddModalOpen} onCancel={() => setIsAddModalOpen(false)} onOk={() => addForm.submit()} okText="Save"> 
   <Form form={addForm} layout="vertical" onFinish={handleAddCustomer}>
+  {/* NAYA IZAFA: Enter dabane se form save karne ke liye hidden button */}
+  <button type="submit" style={{ display: 'none' }} />
   <Row gutter={16}>
     <Col span={12}>
       <Form.Item name="name" label="Full Name" rules={[{ required: true, message: 'Please enter name' }]}>

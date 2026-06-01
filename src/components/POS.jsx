@@ -83,14 +83,24 @@ const POS = () => {
   const [amountPaid, setAmountPaid] = useState(0);
   const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
   const [addForm] = Form.useForm();
+  const customerNameInputRef = useRef(null); // NAYA IZAFA: Auto-focus ke liye
   const [discount, setDiscount] = useState(0);
+  const isMobile = useMediaQuery('(max-width: 768px)'); // <--- isMobile KO UPAR LE AAYE HAIN
+
+  // NAYA IZAFA: Modal khulte hi cursor Full Name par lane ke liye
+  useEffect(() => {
+    if (isAddCustomerModalOpen && !isMobile) {
+      setTimeout(() => {
+        customerNameInputRef.current?.focus();
+      }, 100);
+    }
+  }, [isAddCustomerModalOpen, isMobile]);
   const [discountType, setDiscountType] = useState('Amount');
   const [isMasterPinModalVisible, setIsMasterPinModalVisible] = useState(false);
   const [pendingDiscountValue, setPendingDiscountValue] = useState(0);
   const [masterPinInput, setMasterPinInput] = useState('');
   const [lastSaleData, setLastSaleData] = useState(null);
   const searchInputRef = useRef(null);
-  const isMobile = useMediaQuery('(max-width: 768px)');
   const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
   const [productForVariantSelection, setProductForVariantSelection] = useState(null);
   const [isDraftModalOpen, setIsDraftModalOpen] = useState(false); 
@@ -261,7 +271,7 @@ const POS = () => {
       message.error("Error loading initial data: " + error.message);
     } finally {
       setLoading(false);
-      if (searchInputRef.current) {
+      if (searchInputRef.current && !isMobile) {
         searchInputRef.current.focus();
       }
     }
@@ -954,7 +964,7 @@ const POS = () => {
         setAllProducts(productsData);
         setDisplayedProducts(productsData);
 
-        if (searchInputRef.current) { searchInputRef.current.focus(); }
+        if (searchInputRef.current && !isMobile) { searchInputRef.current.focus(); }
         setIsSubmitting(false);
   };
 
@@ -1196,6 +1206,7 @@ const POS = () => {
               
               {/* 1. Search & Scan Input */}
               <Input
+                id="pos-search-input"
                 placeholder="Scan Barcode or Search..."
                 prefix={<BarcodeOutlined style={{ color: token.colorPrimary, fontSize: '18px' }} />}
                 value={searchTerm}
@@ -1255,7 +1266,7 @@ const POS = () => {
                     setPriceRange([null, null]); 
                     setFilterAttributes({});     
                     setDisplayedProducts(topSellingProducts);
-                    if (searchInputRef.current) searchInputRef.current.focus();
+                    if (searchInputRef.current && !isMobile) searchInputRef.current.focus();
                   }}
                 />
               </Tooltip>
@@ -1539,6 +1550,7 @@ const POS = () => {
               
               <Space.Compact style={{ flex: 1 }}>
                 <Select 
+                  id="pos-customer-select"
                   showSearch 
                   variant="borderless"
                   placeholder="Select customer..." 
@@ -1559,6 +1571,7 @@ const POS = () => {
                   return (
                     <Tooltip title={isLocked ? (isFeatureLocked ? "Upgrade to add new customers" : "Customer limit reached") : "Add New Customer"}>
                       <Button 
+                        id="pos-add-customer-btn"
                         icon={<UserAddOutlined />} 
                         type="text"
                         onClick={() => {
@@ -1605,21 +1618,21 @@ const POS = () => {
             {/* 2. Hold Bill (Only if cart has items) */}
             {cart.length > 0 && (
               <Tooltip title="Hold Bill / Quotation">
-                <Button type="text" icon={<PauseCircleOutlined style={{ color: token.colorWarning }} />} onClick={handleHoldBill} style={{ padding: '0 8px' }} />
+                <Button id="pos-hold-bill-btn" type="text" icon={<PauseCircleOutlined style={{ color: token.colorWarning }} />} onClick={handleHoldBill} style={{ padding: '0 8px' }} />
               </Tooltip>
             )}
 
             {/* 3. View Drafts (Always visible) */}
             <Tooltip title="View Drafts">
               <Badge count={heldCount} size="small" offset={[-5, 5]}>
-                <Button type="text" icon={<ClockCircleOutlined />} onClick={() => setIsDraftModalOpen(true)} style={{ padding: '0 8px' }} />
+                <Button id="pos-view-drafts-btn" type="text" icon={<ClockCircleOutlined />} onClick={() => setIsDraftModalOpen(true)} style={{ padding: '0 8px' }} />
               </Badge>
             </Tooltip>
 
             {/* 4. Reset Bill (Only if cart has items) */}
             {cart.length > 0 && (
               <Tooltip title="Reset Bill">
-                <Button danger type="text" icon={<DeleteOutlined />} onClick={handleResetCart} style={{ padding: '0 8px' }} />
+                <Button id="pos-reset-bill-btn" danger type="text" icon={<DeleteOutlined />} onClick={handleResetCart} style={{ padding: '0 8px' }} />
               </Tooltip>
             )}
             </div>
@@ -1783,6 +1796,7 @@ const POS = () => {
                   <Text type="secondary" style={{ fontSize: '13px' }}>Discount</Text>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     <InputNumber 
+  id="pos-discount-input"
   variant="borderless" 
   size="small" 
   style={{ width: '80px', background: token.colorFillAlter, borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }} 
@@ -1843,6 +1857,7 @@ const POS = () => {
                 
                 {/* 1. Cash Button */}
                 <Card 
+                  id="pos-pay-cash-btn"
                   hoverable 
                   onClick={() => { setPaymentMethod('Paid'); setCashOrBank('Cash'); }}
                   style={{ 
@@ -1860,6 +1875,7 @@ const POS = () => {
 
                 {/* 2. Bank/Card Button */}
                 <Card 
+                  id="pos-pay-bank-btn"
                   hoverable 
                   onClick={() => { setPaymentMethod('Paid'); setCashOrBank('Bank'); }}
                   style={{ 
@@ -1877,6 +1893,7 @@ const POS = () => {
 
                 {/* 3. Pay Later (Credit) Button */}
                 <Card 
+                  id="pos-pay-later-btn"
                   hoverable 
                   onClick={() => { if(selectedCustomer && !isWalkIn) setPaymentMethod('Unpaid'); }}
                   style={{ 
@@ -1897,6 +1914,7 @@ const POS = () => {
                 {/* 4. Complete Sale Button */}
                 <Tooltip title={!activeSession ? "Please open a register shift to complete sales." : ""}>
                   <Button 
+                    id="pos-complete-sale-btn"
                     type="primary" 
                     disabled={cart.length === 0 || isSubmitting || !activeSession} 
                     loading={isSubmitting} 
@@ -1937,10 +1955,12 @@ const POS = () => {
   width={600}
 >
   <Form form={addForm} layout="vertical" onFinish={handleAddCustomer} style={{ marginTop: '20px' }}>
+    {/* NAYA IZAFA: Hidden submit button taake Enter dabane se form save ho jaye */}
+    <button type="submit" style={{ display: 'none' }} />
     <Row gutter={16}>
       <Col span={12}>
         <Form.Item name="name" label="Full Name" rules={[{ required: true, message: 'Please enter name' }]}>
-          <Input placeholder="e.g. John Doe" />
+          <Input ref={customerNameInputRef} placeholder="e.g. John Doe" />
         </Form.Item>
       </Col>
       <Col span={12}>
