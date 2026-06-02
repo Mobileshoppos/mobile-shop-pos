@@ -36,7 +36,7 @@ const DEFAULT_SHORTCUTS = {
   nav_suppliers: 'alt+u',
   nav_sales_history: 'alt+y',
   nav_expenses: 'alt+e',
-  nav_damaged_stock: 'alt+d',
+  nav_damaged_stock: 'alt+k',
   nav_reports: 'alt+o',
   nav_staff: 'alt+m',
   nav_settings: 'alt+s',

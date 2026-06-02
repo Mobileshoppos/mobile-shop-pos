@@ -98,7 +98,7 @@ const ControlCenter = () => {
       title: 'Current Plan', 
       dataIndex: 'subscription_tier', 
       key: 'plan', 
-      render: (plan) => <Tag color={plan === 'pro' ? 'gold' : plan === 'growth' ? 'green' : 'blue'}>{plan?.toUpperCase()}</Tag> 
+      render: (plan) => <Tag color={plan === 'scale' ? 'purple' : plan === 'pro' ? 'gold' : plan === 'growth' ? 'green' : 'blue'}>{plan?.toUpperCase()}</Tag> 
     },
     { title: 'Joined On', dataIndex: 'created_at', key: 'created_at', render: (date) => new Date(date).toLocaleDateString() },
     {
@@ -115,6 +115,7 @@ const ControlCenter = () => {
             <Option value="free">Free</Option>
             <Option value="growth">Growth</Option>
             <Option value="pro">Pro</Option>
+            <Option value="scale">Scale</Option>
           </Select>
           <Button 
             danger 

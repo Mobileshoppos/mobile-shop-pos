@@ -32,61 +32,90 @@ const SubscriptionPage = () => {
   ];
 
   // --- PLANS CONFIGURATION (Website Content) ---
+  const freePlan = {
+    key: 'free',
+    title: 'Free',
+    priceMonthly: 0,
+    priceYearly: 0,
+    description: 'Perfect for starting out with all basic features.',
+    features: [
+      'Limited items',
+      'Limited products models',
+      'Built-in walk-in customer',
+      'Built-in cash supplier',
+      'Customer management',
+      'Price control'
+    ],
+    buttonText: 'Start for Free',
+  };
+
   const plans = [
-    {
-      key: 'free',
-      title: 'Free',
-      priceMonthly: 0,
-      priceYearly: 0,
-      description: 'Perfect for starting out with all basic features.',
-      features: [
-        'Limited items',
-        'Limited products models',
-        'Built-in walk-in customer',
-        'Built-in cash supplier',
-        'Customer management',
-        'Price control'
-      ],
-      buttonText: 'Start for Free',
-      isPopular: false
-    },
     {
       key: 'growth',
       title: 'Growth',
-      priceMonthly: 999,
-      priceYearly: 10788, // 10% Discount (899 * 12)
+      priceMonthly: 1199,
+      priceYearly: 12950,
       description: 'Perfect for growing shops. More items, more staff, more sales.',
       features: [
-        '2,500 stock items',
-        '500 Product models',
+        'Offline-first technology',
+        '2,500 Active stock items',
+        '100 Product models',
         '1000 Customers',
-        '100 Suppliers',
-        '2 Staff seats',
-        'Warranty system',
+        '20 Suppliers',
+        'Expenses management',
+        'Damaged stock repoting',
+        'Screen lock with encrypted PIN',
+        'Secure login with one time token',
+        '1 Staff seat (with encrypted PIN system)',
         'Reports & analytics',
-        'Advanced settings'
+        'Counters built-in plus 1',
+        'Low stock alert',
+        'Track fast selling & slow moving products',
+        'Custom size barcode generator '
       ],
-      buttonText: 'Upgrade to Growth',
-      isPopular: true, // Website ki tarah Growth ko highlight kiya hai
-      highlightColor: '#3ecf8e' // SadaPOS Green Color
+      buttonText: 'Go to Growth',
+      isPopular: false
     },
     {
       key: 'pro',
       title: 'Pro',
-      priceMonthly: 1799,
-      priceYearly: 19428, // 10% Discount (1619 * 12)
-      description: 'Everything you need for a large business, for high‑volume stores.',
+      priceMonthly: 2399,
+      priceYearly: 25909,
+      description: 'Advanced tools for growing businesses that require more staff and dedicated support.',
+      features: [
+        '15,000 Active stock items',
+        '300 Product models',
+        '3,000 Customers',
+        '100 Suppliers',
+        '4 Staff seats',
+        'Priority support',
+        'Custom reports',
+        'Warranty system',
+        'Advanced settings',
+        'Counters  3'
+      ],
+      buttonText: 'Get Pro Power',
+      isPopular: true,
+      highlightColor: '#3ecf8e'
+    },
+    {
+      key: 'scale',
+      title: 'Scale',
+      priceMonthly: 4599,
+      priceYearly: 49669,
+      description: 'Unrestricted resources for large-scale operations requiring maximum capacity and speed.',
       features: [
         'Unlimited stock items',
         'Unlimited product models',
         'Unlimited customers',
         'Unlimited suppliers',
-        '5 Staff seats',
+        'Up to 10 Staff seats',
         'Priority support',
         'Custom reports',
-        'Unlimited everything'
+        'Unlimited everything',
+        'Counters up to 10'
       ],
-      buttonText: 'Get Pro Power',
+      buttonText: 'Get Scale Power',
       isPopular: false
     }
   ];
@@ -217,17 +246,22 @@ const SubscriptionPage = () => {
                   {isCurrent ? 'Current Plan' : plan.buttonText}
                 </Button>
 
-                <Divider />
+                {(plan.key === 'pro' || plan.key === 'scale') && (
+                  <Text strong style={{ display: 'block', marginBottom: '10px', fontSize: '21px' }}>
+                    {plan.key === 'pro' ? 'Everything in Growth, Plus:' : 'Everything in Pro, Plus:'}
+                  </Text>
+                )}
+
 
                 {/* FEATURES LIST */}
                 <List
                   dataSource={plan.features}
                   split={false}
                   renderItem={(item) => (
-                    <List.Item style={{ padding: '6px 0', border: 'none', justifyContent: 'flex-start' }}>
+                    <List.Item style={{ padding: '8px 0', border: 'none', justifyContent: 'flex-start' }}>
                       <div style={{ display: 'flex', alignItems: 'start', gap: '10px' }}>
-                        <CheckOutlined style={{ color: token.colorSuccess, marginTop: '4px' }} />
-                        <Text style={{ fontSize: '14px' }}>
+                        <CheckOutlined style={{ color: token.colorSuccess, marginTop: '2px', fontSize: '18px' }} />
+                        <Text style={{ fontSize: '16px' }}>
                           {/* Khaas features ko Bold karein */}
                           {(item.includes('Offline-First') || item.includes('Delta Sync') || item.includes('No Setup')) 
                             ? <strong>{item}</strong> 
@@ -242,6 +276,49 @@ const SubscriptionPage = () => {
           );
         })}
       </Row>
+
+      {/* --- FREE PLAN BANNER (NEW) --- */}
+      <Card
+        style={{
+          marginTop: '30px',
+          borderRadius: '12px',
+          border: `1px solid ${token.colorBorder}`,
+          background: token.colorBgContainer,
+          textAlign: 'left'
+        }}
+        styles={{ body: { padding: '24px' } }}
+      >
+        <Row align="middle" justify="space-between" gutter={[24, 24]}>
+          <Col xs={24} md={16}>
+            <Title level={3} style={{ margin: 0 }}>{freePlan.title}</Title>
+            <Paragraph type="secondary" style={{ marginBottom: '16px' }}>
+              {freePlan.description}
+            </Paragraph>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
+              {freePlan.features.map((item, index) => (
+                <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <CheckOutlined style={{ color: token.colorSuccess }} />
+                  <Text style={{ fontSize: '14px' }}>{item}</Text>
+                </div>
+              ))}
+            </div>
+          </Col>
+          <Col xs={24} md={8} style={{ textAlign: isMobile ? 'left' : 'right' }}>
+            <div style={{ marginBottom: '16px' }}>
+              <Text style={{ fontSize: '14px', verticalAlign: 'top', marginRight: 2 }}>PKR</Text>
+              <Title level={2} style={{ margin: 0, display: 'inline-block' }}>0</Title>
+              <Text type="secondary">/forever</Text>
+            </div>
+            <Button 
+              size="large"
+              disabled={currentTier === 'free'}
+              style={{ width: '100%', maxWidth: isMobile ? '100%' : '200px' }}
+            >
+              {currentTier === 'free' ? 'Current Plan' : freePlan.buttonText}
+            </Button>
+          </Col>
+        </Row>
+      </Card>
 
       {/* --- PAYMENT MODAL (UNCHANGED LOGIC) --- */}
       <Modal

@@ -7,7 +7,8 @@
 // 3. max_customers      -> Function: check_customer_limit()
 // 4. max_suppliers      -> Function: check_supplier_limit()
 // 5. max_staff          -> Function: check_staff_limit()
-// 6. warranty_system    -> Function: check_warranty_limit() (Free plan block + 1000 safety max limit)
+// 6. max_counters       -> Function: check_register_limit()
+// 7. warranty_system    -> Function: check_warranty_limit() (Free/Growth plan block + 1000 safety max limit)
 //
 // React sirf User ko rokta hai (UI), lekin Database asal Security Guard hai.
 // Dono jagah limits same honi chahiye.
@@ -23,7 +24,7 @@ export const SUBSCRIPTION_PLANS = {
     max_suppliers: 1,           // Kul Suppliers (Active + Archive) (* Supabase mai limit 2 hogi)
     max_staff: 0,               // Sirf Active Staff Seats
     max_total_staff: 500,       // Global Safety Limit (Active + Archive)
-    max_counters: 1,            // Kul Counters (Nodes)
+    max_counters: 1,            // Kul Counters 1 yani default mai jo milta hai (Nodes)
     always_show_badge: true,    // Free plan par hamesha dikhao
 
     // --- Feature Flags ---
@@ -44,12 +45,12 @@ export const SUBSCRIPTION_PLANS = {
     name: 'Growth Plan',
     // --- Ginti (Limits) ---
     max_items: 2500,            // Kul Available Stock (Busy Shop ke liye kafi hai)
-    max_models: 1000,           // Kul Product Models (Active + Archive)
+    max_models: 100,            // Kul Product Models (Active + Archive)
     max_customers: 1000,        // Kul Customers (Active + Archive)
-    max_suppliers: 100,         // Kul Suppliers (Active + Archive)
-    max_staff: 2,               // 2 Salesmen allow hain
+    max_suppliers: 20,          // Kul Suppliers (Active + Archive)
+    max_staff: 1,               // 2 Salesmen allow hain
     max_total_staff: 500,       // Global Safety Limit (Active + Archive)
-    max_counters: 3,            // Kul Counters (Nodes)
+    max_counters: 2,            // Kul Counters 1 default wala plus 1 mazeed (Nodes)
     always_show_badge: false,   // Hamesha mat dikhao
     badge_threshold: 0.8,       // Jab 80% quota khatam ho tab dikhao
 
@@ -59,7 +60,7 @@ export const SUBSCRIPTION_PLANS = {
     allow_custom_categories: true,
     allow_customer_management: true,
     allow_supplier_management: true,
-    allow_warranty_system: true,      
+    allow_warranty_system: false,      
     allow_advanced_settings: true,     
     allow_custom_threshold: true,      
     allow_monthly_reports: true,       
@@ -70,11 +71,38 @@ export const SUBSCRIPTION_PLANS = {
   pro: {
     name: 'Pro Plan',
     // --- Ginti (Limits) ---
-    max_items: 50000,           // Unlimited jaisa (Large Inventory)
-    max_models: 5000,           // Kul Product Models (Active + Archive)
+    max_items: 15000,           // Unlimited jaisa (Large Inventory)
+    max_models: 300,            // Kul Product Models (Active + Archive)
+    max_customers: 3000,        // Kul Customers (Active + Archive)
+    max_suppliers: 100,         // Kul Suppliers (Active + Archive)
+    max_staff: 4,               // 5 Salesmen allow hain
+    max_total_staff: 500,       // Global Safety Limit (Active + Archive)
+    max_counters: 4,            // Kul Counters 1 default wala 3 mazeed (Nodes)
+    always_show_badge: false,   // Hamesha mat dikhao
+    badge_threshold: 0.8,       // Jab 80% quota khatam ho tab dikhao
+
+    // --- Feature Flags ---
+    allow_reports: true,
+    allow_backup: true,
+    allow_custom_categories: true,
+    allow_customer_management: true,
+    allow_supplier_management: true,
+    allow_warranty_system: true,
+    allow_advanced_settings: true,
+    allow_custom_threshold: true,      
+    allow_monthly_reports: true,       
+    allow_custom_date_reports: true,   
+    allow_price_change_control: true   
+  },
+
+  scale: {
+    name: 'Scale Plan',
+    // --- Ginti (Limits) ---
+    max_items: 50000,           // Kul Available Stock
+    max_models: 1000,           // Kul Product Models (Active + Archive)
     max_customers: 5000,        // Kul Customers (Active + Archive)
     max_suppliers: 500,         // Kul Suppliers (Active + Archive)
-    max_staff: 5,               // 5 Salesmen allow hain
+    max_staff: 10,              // 10 Salesmen allow hain
     max_total_staff: 500,       // Global Safety Limit (Active + Archive)
     max_counters: 10,           // Kul Counters (Nodes)
     always_show_badge: false,   // Hamesha mat dikhao
