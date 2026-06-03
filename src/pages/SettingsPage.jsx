@@ -234,7 +234,12 @@ const SettingsPage = () => {
 
   // NAYA IZAFA: Key Catcher Logic (Shortcut record karne ke liye)
   useEffect(() => {
-    if (!recordingShortcutFor) return;
+    if (!recordingShortcutFor) {
+      window.isRecordingShortcut = false;
+      return;
+    }
+    
+    window.isRecordingShortcut = true;
 
     const handleKeyDown = (e) => {
       e.preventDefault(); // Browser ka default action rokein
@@ -293,7 +298,10 @@ const SettingsPage = () => {
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.isRecordingShortcut = false;
+    };
   }, [recordingShortcutFor, message]);
 
   const navOptions = [

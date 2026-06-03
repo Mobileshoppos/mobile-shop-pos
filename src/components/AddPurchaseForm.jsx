@@ -11,6 +11,8 @@ import { formatCurrency } from '../utils/currencyFormatter';
 import { useSync } from '../context/SyncContext';
 import { db } from '../db';
 import { useTheme } from '../context/ThemeContext';
+import { useNavigate } from 'react-router-dom';
+import { getPlanLimits } from '../config/subscriptionPlans';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -373,7 +375,8 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
 const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, editingPurchase, editingItems }) => {
   const { profile } = useAuth();
   const { activeStaff } = useStaff(); // <--- NAYA IZAFA
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
+  const navigate = useNavigate();
   const { refetchStockCount } = useAuth();
   const { syncAllData, processSyncQueue } = useSync();
   const [form] = Form.useForm();
@@ -581,6 +584,42 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
      const updatedList = [...purchaseItems];
      updatedList.splice(index, 1);
      setPurchaseItems(updatedList);
+  };
+
+  // --- NAYA IZAFA: Subscription Limit Check for New Supplier ---
+  const handleAddNewSupplierClick = async () => {
+    const limits = getPlanLimits(profile?.subscription_tier);
+    const isFeatureLocked = !limits.allow_supplier_management;
+    
+    const totalCount = await db.suppliers.count(); // Asli ginti database se
+    const isLimitReached = totalCount >= limits.max_suppliers;
+    const isLocked = isFeatureLocked || isLimitReached;
+    
+    if (isLocked) {
+        modal.confirm({
+            title: isFeatureLocked ? 'Supplier Management Locked' : 'Supplier Limit Reached',
+            content: (
+                <div>
+                    {isFeatureLocked ? (
+                        <>
+                            <p>Free Plan only supports <b>Cash Purchases</b>.</p>
+                            <p>To manage Supplier Ledgers (Udhaar/Khata) and Payments, please upgrade to Growth or Pro Plan.</p>
+                        </>
+                    ) : (
+                        <>
+                            <p>You have reached your plan's limit of <b>{limits.max_suppliers} suppliers</b>.</p>
+                            <p>Please upgrade your subscription to add more suppliers.</p>
+                        </>
+                    )}
+                </div>
+            ),
+            okText: 'View Plans',
+            cancelText: 'Close',
+            onOk: () => navigate('/subscription')
+        });
+        return;
+    }
+    setIsAddSupplierModalOpen(true);
   };
 
   // --- NAYA IZAFA: Add New Supplier ---
@@ -791,7 +830,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
                         <Tooltip title="Add New Supplier">
                             <Button 
                                 icon={<UserAddOutlined />} 
-                                onClick={() => setIsAddSupplierModalOpen(true)}
+                                onClick={handleAddNewSupplierClick}
                                 disabled={editingPurchase && editingPurchase.amount_paid > 0}
                             />
                         </Tooltip>

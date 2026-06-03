@@ -36,6 +36,9 @@ import { useRef } from 'react';
 
 const { Title, Text } = Typography;
 
+// NAYA FIX: Ant Design ke infinite loop se bachne ke liye isay bahar define kiya gaya hai
+const flexColProps = { flex: '1 1 0' };
+
 const Dashboard = () => {
   const { isDarkMode } = useTheme();
   const { can, activeStaff, activeSession, lockApp } = useStaff(); // <--- lockApp shamil kiya
@@ -419,7 +422,7 @@ const Dashboard = () => {
       ) : (
         <Row gutter={[16, 16]} style={{ width: '100%', margin: 0 }}>
         {/* Card 1: Sales */}
-        <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
+        <Col xs={24} sm={12} md={8} lg={flexColProps}>
           <Card ref={refSales} style={{ ...cardStyle, backgroundColor: isDarkMode ? '#2C3E50' : token.colorPrimary }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>
@@ -440,7 +443,7 @@ const Dashboard = () => {
         </Col>
 
         {/* Card: Cash Drawer / Cash in Hand */}
-        <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
+        <Col xs={24} sm={12} md={8} lg={flexColProps}>
           <Card ref={refCash} style={{ ...cardStyle, backgroundColor: isDarkMode ? '#0F7A82' : '#088395' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Statistic
@@ -497,7 +500,7 @@ const Dashboard = () => {
         </Col>
 
         {/* Card 2: Profit (Updated Layout for Clarity) */}
-        <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
+        <Col xs={24} sm={12} md={8} lg={flexColProps}>
           <Card ref={refProfit} style={{ ...cardStyle, backgroundColor: isDarkMode ? '#1E8449' : '#237804' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Net Profit</span>}
@@ -539,7 +542,7 @@ const Dashboard = () => {
         </Col>
 
         {/* Card 3: Expenses */}
-        <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
+        <Col xs={24} sm={12} md={8} lg={flexColProps}>
           <Card style={{ ...cardStyle, backgroundColor: isDarkMode ? '#BA4A00' : '#d4380d' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Total Expenses</span>}
@@ -582,7 +585,7 @@ const Dashboard = () => {
         </Col>
 
         {/* Card 4: Receivables & Payables (Money In vs Money Out) */}
-        <Col xs={24} sm={12} md={8} lg={{ flex: '1 1 0' }}>
+        <Col xs={24} sm={12} md={8} lg={flexColProps}>
           <Card style={{ ...cardStyle, backgroundColor: isDarkMode ? '#5B2C6F' : '#531dab' }}>
             <Statistic
               title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Accounts Receivable</span>}
@@ -853,7 +856,8 @@ const Dashboard = () => {
             <Radio.Group buttonStyle="solid" style={{ width: '100%', display: 'flex' }}>
               <Radio.Button value="In" style={{ flex: 1, textAlign: 'center' }}>Cash In</Radio.Button>
               <Radio.Button value="Out" style={{ flex: 1, textAlign: 'center' }}>Cash Out</Radio.Button>
-              <Radio.Button value="Transfer" style={{ flex: 1, textAlign: 'center' }}>Transfer</Radio.Button>
+              {/* Aarzi tor par Transfer button hide kiya gaya hai */}
+              {/* <Radio.Button value="Transfer" style={{ flex: 1, textAlign: 'center' }}>Transfer</Radio.Button> */}
             </Radio.Group>
           </Form.Item>
 

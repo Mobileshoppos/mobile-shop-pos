@@ -56,6 +56,9 @@ const KeyboardShortcuts = () => {
 
   useEffect(() => {
     const handleKeyDown = (event) => {
+      // Agar settings page par naya shortcut record ho raha hai, to global shortcuts ko rok dein
+      if (window.isRecordingShortcut) return;
+
       let keys = [];
       if (event.ctrlKey || event.metaKey) keys.push('ctrl');
       if (event.altKey) keys.push('alt');
