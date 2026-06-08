@@ -2,8 +2,8 @@ import React from 'react';
 import { useSearchParams } from 'react-router-dom'; 
 import { useState, useEffect } from 'react';
 // Sirf 'Alert' ka izafa kiya hai
-import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio, Switch, Input, Tooltip, theme, Alert, Space, Modal, Tag } from 'antd';
-import { ToolOutlined, LockOutlined, CopyOutlined, ShopOutlined, PlusOutlined, DeleteOutlined, EditOutlined, BankOutlined, SettingOutlined, DatabaseOutlined, FormatPainterOutlined, CompassOutlined } from '@ant-design/icons';
+import { Card, Typography, Slider, Row, Col, InputNumber, ColorPicker, Divider, Button, Popconfirm, Tabs, Select, App, Radio, Switch, Input, Tooltip, theme, Alert, Space, Modal, Tag, ConfigProvider } from 'antd';
+import { ToolOutlined, LockOutlined, CopyOutlined, ShopOutlined, PlusOutlined, DeleteOutlined, EditOutlined, BankOutlined, SettingOutlined, DatabaseOutlined, FormatPainterOutlined, CompassOutlined, WalletOutlined } from '@ant-design/icons';
 import bcrypt from 'bcryptjs';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -97,6 +97,15 @@ const SettingsPage = () => {
   // Form handle karne ke liye simple states
   const [regName, setRegName] = useState('');
   const [regType, setRegType] = useState('counter');
+  
+  // --- NAYA IZAFA: Payment Accounts States ---
+  const [paymentAccounts, setPaymentAccounts] = useState([]);
+  const [isAccountModalVisible, setIsAccountModalVisible] = useState(false);
+  const [editingAccount, setEditingAccount] = useState(null);
+  const [accountName, setAccountName] = useState('');
+  const [accountType, setAccountType] = useState('Bank');
+  const [accountBalance, setAccountBalance] = useState(0);
+
   // NAYA IZAFA: Device Pairing States
   const[pairedRegisterId, setPairedRegisterId] = useState(localStorage.getItem('paired_register_id'));
 
@@ -124,6 +133,12 @@ const SettingsPage = () => {
     });
     
     setRegisters(sortedData);
+
+    // NAYA IZAFA: Payment Accounts bhi load karein
+    if (DataService.getPaymentAccounts) {
+        const accountsData = await DataService.getPaymentAccounts();
+        setPaymentAccounts(accountsData);
+    }
   };
 
   useEffect(() => {
@@ -181,6 +196,62 @@ const SettingsPage = () => {
     await db.registers.delete(id);
     await db.sync_queue.add({ table_name: 'registers', action: 'delete', data: { id } });
     message.success("Node deleted successfully");
+    loadRegisters();
+  };
+
+  // --- NAYA IZAFA: Accounts Handle Karne Ke Functions ---
+  const handleAddAccount = async () => {
+    if (!accountName) { message.error("Please enter an account name"); return; }
+    
+    const newAcc = {
+      id: editingAccount ? editingAccount.id : crypto.randomUUID(),
+      user_id: user.id,
+      name: accountName,
+      type: accountType,
+      opening_balance: accountBalance,
+      is_active: true,
+      is_default: editingAccount ? editingAccount.is_default : false
+    };
+
+    if (editingAccount) {
+      await DataService.updatePaymentAccount(editingAccount.id, newAcc);
+      message.success("Account updated");
+    } else {
+      await DataService.addPaymentAccount(newAcc);
+      message.success("New Account created");
+    }
+
+    setAccountName('');
+    setAccountType('Bank');
+    setAccountBalance(0);
+    setEditingAccount(null);
+    setIsAccountModalVisible(false);
+    loadRegisters();
+  };
+
+  const deleteAccount = async (id, isDefault, accountName) => {
+    if (isDefault) {
+        message.error("Cannot delete default system accounts.");
+        return;
+    }
+
+    // --- NAYA IZAFA: History Check ---
+    const salesCount = await db.sales.where('payment_method').equals(accountName).count();
+    const expCount = await db.expenses.where('payment_method').equals(accountName).count();
+    const payCount = await db.customer_payments.where('payment_method').equals(accountName).count();
+    const supPayCount = await db.supplier_payments.where('payment_method').equals(accountName).count();
+    const adjCount = await db.cash_adjustments.filter(a => a.payment_method === accountName || a.transfer_to === accountName).count();
+
+    const totalHistory = salesCount + expCount + payCount + supPayCount + adjCount;
+
+    if (totalHistory > 0) {
+        message.error(`Cannot delete! "${accountName}" has ${totalHistory} recorded transactions. Please rename it or keep it for audit purposes.`);
+        return;
+    }
+    // ----------------------------------
+
+    await DataService.deletePaymentAccount(id);
+    message.success("Account deleted successfully");
     loadRegisters();
   };
 
@@ -582,6 +653,12 @@ const SettingsPage = () => {
   const currentBgContainerColor = isDarkMode ? darkTheme.colorBgContainer : lightTheme.colorBgContainer;
 
   return (
+    <ConfigProvider theme={{ 
+      components: { 
+        Tabs: { itemActiveBg: token.colorCardBg, cardBg: token.colorBgLayout, colorBorderSecondary: token.colorBorder },
+        Divider: { colorSplit: token.colorBorder } // NAYA IZAFA: Dividers ko wazeh karne ke liye
+      } 
+    }}>
     <div style={{ padding: isMobile ? '12px 4px' : '4px' }}>
       {isMobile && (
         <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
@@ -1088,7 +1165,7 @@ const SettingsPage = () => {
             },
             {
               key: '6',
-              label: 'Registers & Nodes',
+              label: 'Registers & Accounts',
               icon: <ShopOutlined />,
               children: (
                 <div style={{ padding: '16px 0' }}>
@@ -1104,7 +1181,7 @@ const SettingsPage = () => {
                         disabled={registers.length >= (limits.max_counters || 1)}
                         onClick={() => { setEditingRegister(null); setRegName(''); setRegType('counter'); setIsRegisterModalVisible(true); }}
                       >
-                        Add Node
+                        Add Counter
                       </Button>
                       {registers.length >= (limits.max_counters || 1) && (
                         <Text type="warning" style={{ display: 'block', fontSize: '11px', marginTop: '4px' }}>
@@ -1118,7 +1195,7 @@ const SettingsPage = () => {
                     {registers.map((reg, index) => (
                       <Col xs={24} sm={12} md={8} key={reg.id}>
                         <Card size="small" actions={
-                          index === 0 // NAYA IZAFA: Jo list mein pehle number par hai (Oldest), usay delete nahi kiya ja sakta
+                          index === 0 
                           ?[
                               <EditOutlined key="edit" onClick={() => { setEditingRegister(reg); setRegName(reg.name); setRegType(reg.type); setIsRegisterModalVisible(true); }} />
                             ]
@@ -1142,7 +1219,6 @@ const SettingsPage = () => {
                               </Text>
                             </div>
                             
-                            {/* NAYA IZAFA: Device Pairing Button */}
                             {pairedRegisterId === reg.id ? (
                               <Button size="small" danger onClick={handleUnpairDevice}>
                                 Unpair PC
@@ -1168,7 +1244,6 @@ const SettingsPage = () => {
                     )}
                   </Row>
 
-                  {/* Add/Edit Modal */}
                   <Modal
                     title={editingRegister ? "Edit Counter" : "Add New Counter"}
                     open={isRegisterModalVisible}
@@ -1178,10 +1253,90 @@ const SettingsPage = () => {
                     <div style={{ marginTop: '16px' }}>
                       <Text strong>Node Name</Text>
                       <Input placeholder="e.g. Front Counter" value={regName} onChange={e => setRegName(e.target.value)} style={{ marginTop: '8px', marginBottom: '16px' }} />
-                      
-                      {/* Node Type ki zaroorat nahi rahi kyunke ab sirf Counter banega */}
                     </div>
                   </Modal>
+
+                  <Divider style={{ margin: '32px 0' }} />
+
+                  {/* --- NAYA IZAFA: Payment Accounts Section --- */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <div>
+                      <Title level={4} style={{ margin: 0, fontSize: '16px' }}>Payment Accounts & Wallets</Title>
+                      <Text type="secondary">Manage your Banks, Mobile Wallets, and Cash accounts.</Text>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <Button 
+                        type="primary" 
+                        icon={<PlusOutlined />} 
+                        onClick={() => { setEditingAccount(null); setAccountName(''); setAccountType('Bank'); setAccountBalance(0); setIsAccountModalVisible(true); }}
+                      >
+                        Add Account
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Row gutter={[16, 16]}>
+                    {paymentAccounts.map((acc) => (
+                      <Col xs={24} sm={12} md={8} key={acc.id}>
+                        <Card size="small" actions={
+                          acc.is_default
+                          ?[
+                              <EditOutlined key="edit" onClick={() => { setEditingAccount(acc); setAccountName(acc.name); setAccountType(acc.type); setAccountBalance(acc.opening_balance); setIsAccountModalVisible(true); }} />
+                            ]
+                          :[
+                              <EditOutlined key="edit" onClick={() => { setEditingAccount(acc); setAccountName(acc.name); setAccountType(acc.type); setAccountBalance(acc.opening_balance); setIsAccountModalVisible(true); }} />,
+                              <Popconfirm title="Delete this account?" onConfirm={() => deleteAccount(acc.id, acc.is_default, acc.name)}>
+                                <DeleteOutlined key="delete" style={{ color: token.colorError }} />
+                              </Popconfirm>
+                            ]
+                        }>
+                          <Card.Meta 
+                            avatar={acc.type === 'Cash' ? <WalletOutlined style={{ fontSize: '24px', color: token.colorSuccess }} /> : <BankOutlined style={{ fontSize: '24px', color: token.colorInfo }} />}
+                            title={
+                              <Space>
+                                {acc.name}
+                                {acc.is_default && <Tag color="blue" style={{ fontSize: '10px', margin: 0 }}>Default</Tag>}
+                              </Space>
+                            }
+                            description={acc.type}
+                          />
+                        </Card>
+                      </Col>
+                    ))}
+                    {paymentAccounts.length === 0 && (
+                      <Col span={24}>
+                        <Text type="secondary">No custom accounts added yet.</Text>
+                      </Col>
+                    )}
+                  </Row>
+
+                  <Modal
+                    title={editingAccount ? "Edit Account" : "Add New Account"}
+                    open={isAccountModalVisible}
+                    onCancel={() => setIsAccountModalVisible(false)}
+                    onOk={handleAddAccount}
+                  >
+                    <div style={{ marginTop: '16px' }}>
+                      <Text strong>Account Name</Text>
+                      <Input placeholder="e.g. Meezan Bank, JazzCash" value={accountName} onChange={e => setAccountName(e.target.value)} style={{ marginTop: '8px', marginBottom: '16px' }} />
+                      
+                      <Text strong>Account Type</Text>
+                      <Select value={accountType} onChange={setAccountType} style={{ width: '100%', marginTop: '8px', marginBottom: '16px' }}>
+                        <Select.Option value="Bank">Bank Account</Select.Option>
+                        <Select.Option value="Wallet">Mobile Wallet (JazzCash/Easypaisa)</Select.Option>
+                      </Select>
+
+                      <Text strong>Opening Balance</Text>
+                      <InputNumber 
+                        style={{ width: '100%', marginTop: '8px' }} 
+                        value={accountBalance} 
+                        onChange={setAccountBalance} 
+                        min={0}
+                        disabled={editingAccount && editingAccount.is_default}
+                      />
+                    </div>
+                  </Modal>
+
                 </div>
               ),
             },
@@ -1454,6 +1609,7 @@ const SettingsPage = () => {
         </Row>
       </Card>
     </div>
+    </ConfigProvider>
   );
 };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table, Radio, Modal, Form, InputNumber, Input, App, Tooltip, Tabs, theme, DatePicker, Alert, Select } from 'antd';
+import { Card, Row, Col, Statistic, Typography, List, Button, Spin, Space, Tag, Table, Radio, Modal, Form, InputNumber, Input, App, Tooltip, Tabs, theme, DatePicker, Alert, Select, ConfigProvider } from 'antd';
 import dayjs from 'dayjs';
 import {
   HomeOutlined,
@@ -31,8 +31,10 @@ import { db } from '../db';
 import { useAuth } from '../context/AuthContext';
 import { useStaff } from '../context/StaffContext'; 
 import { formatCurrency } from '../utils/currencyFormatter';
+import { generateInvoiceId } from '../utils/idGenerator'; // <--- NAYA IZAFA
 import { useTheme } from '../context/ThemeContext';
 import { useRef } from 'react';
+import DailyFinancialSummary from "../components/DailyFinancialSummary";
 
 const { Title, Text } = Typography;
 
@@ -78,11 +80,16 @@ const Dashboard = () => {
   const [adjustmentForm] = Form.useForm();
   // --- COUNTERS STATE FOR ADJUSTMENT ---
   const [allCounters, setAllCounters] = useState([]);
+  const [paymentAccounts, setPaymentAccounts] = useState([]); // <--- NAYA IZAFA
 
   useEffect(() => {
     const loadCounters = async () => {
       const regs = await DataService.getRegisters();
       setAllCounters(regs.filter(r => r.type === 'counter'));
+      if (DataService.getPaymentAccounts) {
+        const accounts = await DataService.getPaymentAccounts();
+        setPaymentAccounts(accounts);
+      }
     };
     loadCounters();
   }, []);
@@ -94,9 +101,11 @@ const Dashboard = () => {
   const handleAdjustmentSubmit = async (values) => {
     try {
       setIsAdjustmentSubmitting(true);
+      const vNo = await generateInvoiceId(); // <--- NAYA IZAFA
       const adjustmentData = {
         id: crypto.randomUUID(),
         local_id: crypto.randomUUID(),
+        voucher_no: `ADJ-${vNo}`, // <--- NAYA IZAFA
         user_id: user?.id, 
         amount: values.amount,
         type: values.type,
@@ -211,6 +220,15 @@ const Dashboard = () => {
 
   // --- Custom Styles for Cards ---
   const cardStyle = { borderRadius: 8, border: 'none', color: '#ffffff', height: '100%' };
+  
+  // NAYA: Reports page wala same style in 5 cards ke liye
+  const reportCardStyle = {
+    borderRadius: 8,
+    border: `1px solid ${token.colorPrimary}33`, 
+    boxShadow: `0 4px 12px ${token.colorPrimary}15`, 
+    transition: 'all 0.3s ease',
+    backgroundColor: token.colorCardBg || token.colorBgContainer
+  };
 
   // --- Graph Configuration (CONTROL CENTER LINKED) ---
   const config = {
@@ -282,6 +300,7 @@ const Dashboard = () => {
   };
 
   return (
+    <ConfigProvider theme={{ components: { Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg } } }}>
     <div style={{ padding: isMobile ? '12px 4px' : '4px' }}>
       
       {/* HEADER WITH FILTERS */}
@@ -473,10 +492,22 @@ const Dashboard = () => {
                 {/* Transfer to Vault button removed */}
               </Space>
             </div>
-            <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
-                <span>Bank Balance:</span>
-                <span>{formatCurrency(stats?.bankBalance || 0, profile?.currency)}</span>
-            </div>
+            {/* --- NAYA IZAFA: Dynamic Accounts Breakdown (Banks & Wallets) --- */}
+            {stats?.accountsBreakdown?.length > 0 ? (
+              <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+                {stats.accountsBreakdown.map((acc, idx) => (
+                  <div key={`acc-${idx}`} style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <span style={{ color: 'rgba(255,255,255,0.9)' }}>{acc.name}:</span>
+                    <span style={{ fontWeight: 'bold' }}>{formatCurrency(acc.balance, profile?.currency)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Bank Balance:</span>
+                  <span style={{ fontWeight: 'bold' }}>{formatCurrency(stats?.bankBalance || 0, profile?.currency)}</span>
+              </div>
+            )}
             
             {/* --- NAYA IZAFA: Counters Breakdown --- */}
             {stats?.countersBreakdown?.length > 0 && (
@@ -631,6 +662,15 @@ const Dashboard = () => {
       </Row>
       )}
 
+      {/* --- NAYA IZAFA: Daily Financial Summary Table --- */}
+      {can('can_view_reports') && (
+        <Row gutter={[16, 16]} style={{ width: '100%', margin: 0, marginTop: 16 }}>
+          <Col span={24}>
+            <DailyFinancialSummary timeRange={timeRange} customDates={customDates} />
+          </Col>
+        </Row>
+      )}
+
       {/* --- SECTION 2: GRAPH & ALERTS --- */}
       <Row gutter={[16, 16]} style={{ marginTop: 10 }}>
         
@@ -645,8 +685,7 @@ const Dashboard = () => {
     timeRange === 'month' ? "Sales Overview (This Month)" : 
     "Sales Overview (Custom Range)"
   } 
-  // variant="borderless" hata diya
-  style={{ borderRadius: 5, border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9' }} // <--- Border add kiya
+  style={reportCardStyle}
 >
              <div style={{ height: 265 }}>
    {/* Key lagane se chart force-refresh hoga jab theme badlegi */}
@@ -657,8 +696,7 @@ const Dashboard = () => {
           {/* 2. Recent Transactions Table */}
           <Card 
   title="Recent Transactions" 
-  // variant="borderless" hata diya
-  style={{ borderRadius: 5, marginTop: 15, border: isDarkMode ? '1px solid #424242' : `1px solid ${token.colorBorder}` }}
+  style={{ ...reportCardStyle, marginTop: 15 }}
 >
             <Table
               dataSource={stats?.recentSales || []}
@@ -712,7 +750,7 @@ const Dashboard = () => {
             <Col span={24}>
               <Card 
                 title={<Space><AlertOutlined style={{ color: token.colorError }} /> Low Stock Alert</Space>} 
-                style={{ borderRadius: 5, border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9' }}
+                style={reportCardStyle}
                 styles={{ body: { padding: '0 12px' } }}
                 extra={<Button type="link" onClick={() => navigate('/inventory?low_stock=true')}>View All</Button>}
               >
@@ -749,7 +787,7 @@ const Dashboard = () => {
       <Radio.Button value="profit">Profit</Radio.Button>
     </Radio.Group>
   }
-  style={{ borderRadius: 5, border: isDarkMode ? '1px solid #424242' : '1px solid #d9d9d9' }}
+  style={reportCardStyle}
   styles={{ body: { padding: '0 12px' } }}
 >
                 <List
@@ -778,7 +816,7 @@ const Dashboard = () => {
               <Col span={24} style={{ marginTop: 16 }}>
   <Card 
     title={<Space><ShoppingOutlined style={{ color: token.colorPrimary }} /> Inventory Assets</Space>} 
-    style={{ borderRadius: 5, border: isDarkMode ? '1px solid #424242' : `1px solid ${token.colorBorder}` }}
+    style={reportCardStyle}
     styles={{ body: { padding: '12px' } }}
   >
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -856,8 +894,7 @@ const Dashboard = () => {
             <Radio.Group buttonStyle="solid" style={{ width: '100%', display: 'flex' }}>
               <Radio.Button value="In" style={{ flex: 1, textAlign: 'center' }}>Cash In</Radio.Button>
               <Radio.Button value="Out" style={{ flex: 1, textAlign: 'center' }}>Cash Out</Radio.Button>
-              {/* Aarzi tor par Transfer button hide kiya gaya hai */}
-              {/* <Radio.Button value="Transfer" style={{ flex: 1, textAlign: 'center' }}>Transfer</Radio.Button> */}
+              <Radio.Button value="Transfer" style={{ flex: 1, textAlign: 'center' }}>Transfer</Radio.Button>
             </Radio.Group>
           </Form.Item>
 
@@ -879,10 +916,16 @@ const Dashboard = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="payment_method" label={<Text strong>Source</Text>} rules={[{ required: true }]}>
-                <Select>
-                  <Select.Option value="Cash">Physical Cash</Select.Option>
-                  <Select.Option value="Bank">Bank / Online</Select.Option>
+              <Form.Item name="payment_method" label={<Text strong>Source / Medium</Text>} rules={[{ required: true, message: 'Please select' }]}>
+                <Select placeholder="Select Source">
+                  <Select.OptGroup label="Physical Cash">
+                    <Select.Option value="Cash">This Counter (Cash)</Select.Option>
+                  </Select.OptGroup>
+                  <Select.OptGroup label="Banks & Wallets">
+                    {paymentAccounts.map(acc => (
+                      <Select.Option key={acc.id} value={acc.name}>{acc.name}</Select.Option>
+                    ))}
+                  </Select.OptGroup>
                 </Select>
               </Form.Item>
             </Col>
@@ -894,12 +937,13 @@ const Dashboard = () => {
               getFieldValue('type') === 'Transfer' ? (
                 <Form.Item name="transfer_to" label={<Text strong>Transfer Destination</Text>} rules={[{ required: true, message: 'Select where to send' }]}>
                   <Select placeholder="Where are the funds going?">
-                    <Select.OptGroup label="Internal">
-                      <Select.Option value="Bank">Bank Account</Select.Option>
-                      <Select.Option value="Cash">Main Cashier (Vault)</Select.Option>
+                    <Select.OptGroup label="Banks & Wallets">
+                      {paymentAccounts.map(acc => (
+                        <Select.Option key={`dest-${acc.id}`} value={acc.name}>{acc.name}</Select.Option>
+                      ))}
                     </Select.OptGroup>
-                    <Select.OptGroup label="Other Counters">
-                      {allCounters.filter(c => c.id !== (activeSession?.register_id || localStorage.getItem('paired_register_id'))).map(c => (
+                    <Select.OptGroup label="Counters">
+                      {allCounters.map(c => (
                         <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
                       ))}
                     </Select.OptGroup>
@@ -926,6 +970,7 @@ const Dashboard = () => {
         </Form>
       </Modal>
     </div>
+    </ConfigProvider>
   );
 };
 

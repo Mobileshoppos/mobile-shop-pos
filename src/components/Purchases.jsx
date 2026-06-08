@@ -118,7 +118,7 @@ const Purchases = () => {
             dataIndex: 'balance_due', key: 'balance_due', align: 'right',
             render: (amount) => (
                 <Text style={{ color: amount > 0 ? token.colorError : (amount < 0 ? token.colorSuccess : token.colorTextSecondary) }} strong>
-                    {formatCurrency(Math.max(0, amount), profile?.currency)}
+                    {formatCurrency(amount, profile?.currency)}
                 </Text>
             ),
             sorter: (a, b) => a.balance_due - b.balance_due,
@@ -223,7 +223,7 @@ const Purchases = () => {
                         </Col>
                         <Col style={{ textAlign: 'right' }}>
                             <Text style={{ color: token.colorTextSecondary }}>Balance Due</Text><br />
-                            <Text style={{ color: purchase.balance_due > 0 ? token.colorError : token.colorTextSecondary }} strong>
+                            <Text style={{ color: purchase.balance_due > 0 ? token.colorError : (purchase.balance_due < 0 ? token.colorSuccess : token.colorTextSecondary) }} strong>
     {formatCurrency(purchase.balance_due, profile?.currency)}
 </Text>
                         </Col>

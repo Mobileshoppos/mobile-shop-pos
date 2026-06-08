@@ -22,6 +22,7 @@ import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
 import { useStaff } from '../context/StaffContext'; // <--- NAYA IZAFA
 import { formatCurrency } from '../utils/currencyFormatter';
+import { generateInvoiceId } from '../utils/idGenerator'; // <--- NAYA IZAFA
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { db } from '../db'; // Database check karne ke liye
@@ -38,6 +39,7 @@ const Expenses = () => {
   const [expenses, setExpenses] = useState([]);
   const [categories, setCategories] = useState([]);
   const [staffMembers, setStaffMembers] = useState([]); // <--- NAYA IZAFA
+  const [paymentAccounts, setPaymentAccounts] = useState([]); // <--- NAYA IZAFA
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
@@ -61,6 +63,11 @@ const Expenses = () => {
       const expensesData = await DataService.getExpenses();
       const categoriesData = await DataService.getExpenseCategories();
       const staffData = await DataService.getStaffMembers(); // <--- NAYA IZAFA
+
+      if (DataService.getPaymentAccounts) {
+          const accountsData = await DataService.getPaymentAccounts();
+          setPaymentAccounts(accountsData);
+      }
 
       setExpenses(expensesData);
       setCategories(categoriesData);
@@ -102,9 +109,10 @@ const Expenses = () => {
       });
     } else {
       form.resetFields();
+      const defaultCash = paymentAccounts.find(a => a.type === 'Cash')?.name || 'Cash';
       form.setFieldsValue({ 
         expense_date: dayjs(),
-        payment_method: 'Cash' // Naya kharcha hamesha Cash se shuru ho
+        payment_method: defaultCash 
       });
     }
     setIsModalOpen(true);
@@ -118,8 +126,10 @@ const Expenses = () => {
 
   const handleOk = async (values) => {
     try {
+      const vNo = await generateInvoiceId(); // <--- NAYA IZAFA
       const expenseData = {
         ...values,
+        voucher_no: `EXP-${vNo}`, // <--- NAYA IZAFA
         user_id: user.id,
         staff_id: activeStaff?.id, // <--- NAYA IZAFA
         expense_date: dayjs(values.expense_date).format('YYYY-MM-DD'),
@@ -192,10 +202,10 @@ const Expenses = () => {
     { title: 'Title / Description', dataIndex: 'title', key: 'title' },
     { title: 'Category', dataIndex: 'expense_categories', key: 'category', render: (category) => category ? category.name : 'N/A' },
     { 
-      title: 'Method', 
+      title: 'Paid From', 
       dataIndex: 'payment_method', 
       key: 'payment_method', 
-      render: (method) => <Tag color={method === 'Bank' ? 'cyan' : 'default'}>{method || 'Cash'}</Tag> 
+      render: (method) => <Tag color={method === 'Cash' ? 'default' : 'cyan'}>{method || 'Cash'}</Tag> 
     },
     { title: 'Amount', dataIndex: 'amount', key: 'amount', align: 'right', render: (amount) => <Text strong>{formatCurrency(amount, profile?.currency)}</Text> },
     { 
@@ -270,11 +280,17 @@ const Expenses = () => {
           <Form.Item name="amount" label="Amount" rules={[{ required: true }]}>
             <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={1} />
           </Form.Item>
-          <Form.Item name="payment_method" label="Paid From" initialValue="Cash">
-            <Radio.Group buttonStyle="solid">
-              <Radio.Button value="Cash">Cash</Radio.Button>
-              <Radio.Button value="Bank">Bank / Online</Radio.Button>
-            </Radio.Group>
+          <Form.Item name="payment_method" label="Paid From" rules={[{ required: true }]}>
+            <Select placeholder="Select Account">
+              <Select.OptGroup label="Physical Cash">
+                <Select.Option value="Cash">Cash (Counter)</Select.Option>
+              </Select.OptGroup>
+              <Select.OptGroup label="Banks & Wallets">
+                {paymentAccounts.map(acc => (
+                  <Select.Option key={acc.id} value={acc.name}>{acc.name}</Select.Option>
+                ))}
+              </Select.OptGroup>
+            </Select>
           </Form.Item>
           <Form.Item name="category_id" label="Category" rules={[{ required: true }]}>
             <Select placeholder="Select a category">

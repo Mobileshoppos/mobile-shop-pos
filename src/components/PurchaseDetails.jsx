@@ -9,6 +9,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
 import { useStaff } from '../context/StaffContext'; // <--- NAYA IZAFA
 import { formatCurrency } from '../utils/currencyFormatter';
+import { generateInvoiceId } from '../utils/idGenerator'; // <--- NAYA IZAFA
 import { db } from '../db';
 import { useSync } from '../context/SyncContext';
 import AddPurchaseForm from '../components/AddPurchaseForm';
@@ -45,6 +46,7 @@ const PurchaseDetails = () => {
     const [selectedReturnItems, setSelectedReturnItems] = useState([]);
     const [returnForm] = Form.useForm();
     const [returnHistory, setReturnHistory] = useState([]);
+    const [paymentAccounts, setPaymentAccounts] = useState([]); // <--- NAYA IZAFA
 
     // NAYA IZAFA: Bulk Barcode Printer States
     const [isBarcodePrinterOpen, setIsBarcodePrinterOpen] = useState(false);
@@ -53,6 +55,10 @@ const PurchaseDetails = () => {
     const fetchDetails = async () => {
         setLoading(true);
         try {
+            if (DataService.getPaymentAccounts) {
+                const accountsData = await DataService.getPaymentAccounts();
+                setPaymentAccounts(accountsData);
+            }
             const { purchase: purchaseData, items: itemsData } = await DataService.getPurchaseDetails(id);
             setPurchase(purchaseData);
             setItems(itemsData || []);
@@ -191,8 +197,12 @@ const PurchaseDetails = () => {
         
     ];
     
-    const showPaymentModal = () => { paymentForm.setFieldsValue({ amount: purchase.balance_due, payment_date: dayjs(), payment_method: 'Cash' }); setIsPaymentModalVisible(true); };
-    const handlePaymentSubmit = async (values) => { try { if (values.amount > purchase.balance_due) { notification.warning({ message: 'Warning', description: 'Payment amount cannot be greater than the balance due.' }); return; } const paymentData = { local_id: crypto.randomUUID(), amount: values.amount, payment_date: values.payment_date.format('YYYY-MM-DD'), payment_method: values.payment_method, notes: values.notes || null, supplier_id: purchase.supplier_id, purchase_id: purchase.id, staff_id: activeStaff?.id, register_id: activeSession ? activeSession.register_id : defaultCounterId, session_id: activeSession ? activeSession.id : null }; await DataService.recordPurchasePayment(paymentData); notification.success({ message: 'Success', description: 'Payment recorded successfully!' }); setIsPaymentModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to record payment.' }); } };
+    const showPaymentModal = () => { 
+        const defaultCash = paymentAccounts.find(a => a.type === 'Cash')?.name || 'Cash';
+        paymentForm.setFieldsValue({ amount: purchase.balance_due, payment_date: dayjs(), payment_method: defaultCash }); 
+        setIsPaymentModalVisible(true); 
+    };
+    const handlePaymentSubmit = async (values) => { try { if (values.amount > purchase.balance_due) { notification.warning({ message: 'Warning', description: 'Payment amount cannot be greater than the balance due.' }); return; } const vNo = await generateInvoiceId(); const paymentData = { local_id: crypto.randomUUID(), voucher_no: `PAY-${vNo}`, amount: values.amount, payment_date: values.payment_date.format('YYYY-MM-DD'), payment_method: values.payment_method, notes: values.notes || null, supplier_id: purchase.supplier_id, purchase_id: purchase.id, staff_id: activeStaff?.id, register_id: activeSession ? activeSession.register_id : defaultCounterId, session_id: activeSession ? activeSession.id : null }; await DataService.recordPurchasePayment(paymentData); notification.success({ message: 'Success', description: 'Payment recorded successfully!' }); setIsPaymentModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to record payment.' }); } };
 const showEditModal = () => {
         setIsEditModalVisible(true);
     };
@@ -272,9 +282,9 @@ const showEditModal = () => {
     <Col span={isMobile ? 24 : 6}>
         <Statistic 
             title="Balance Due" 
-            value={Math.max(0, purchase.balance_due)} 
+            value={purchase.balance_due} 
             valueStyle={{ color: purchase.balance_due > 0 ? token.colorError : token.colorSuccess }} 
-            formatter={() => formatCurrency(Math.max(0, purchase.balance_due), profile?.currency)} 
+            formatter={() => formatCurrency(purchase.balance_due, profile?.currency)} 
         />
     </Col>
 </Row>
@@ -365,11 +375,17 @@ const showEditModal = () => {
             <Link to="/purchases"><Button style={{ marginTop: '24px' }} icon={<ArrowLeftOutlined />}>Back to Purchases List</Button></Link>
             
             {/* Tamam Modals waise hi rahenge */}
-            <Modal title="Record Payment" open={isPaymentModalVisible} onCancel={() => setIsPaymentModalVisible(false)} onOk={paymentForm.submit} okText="Save Payment"><Form form={paymentForm} layout="vertical" onFinish={handlePaymentSubmit} style={{marginTop: '24px'}}><Form.Item name="amount" label="Payment Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} /></Form.Item><Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="payment_method" label="Paid From" rules={[{ required: true }]}>
-    <Radio.Group buttonStyle="solid">
-        <Radio.Button value="Cash">Cash</Radio.Button>
-        <Radio.Button value="Bank">Bank / Online</Radio.Button>
-    </Radio.Group>
+            <Modal title="Record Payment" open={isPaymentModalVisible} onCancel={() => setIsPaymentModalVisible(false)} onOk={paymentForm.submit} okText="Save Payment"><Form form={paymentForm} layout="vertical" onFinish={handlePaymentSubmit} style={{marginTop: '24px'}}><Form.Item name="amount" label="Payment Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} /></Form.Item><Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="payment_method" label="Paid From Account" rules={[{ required: true }]}>
+    <Select placeholder="Select Account">
+        <Select.OptGroup label="Physical Cash">
+            <Select.Option value="Cash">Cash (Counter)</Select.Option>
+        </Select.OptGroup>
+        <Select.OptGroup label="Banks & Wallets">
+            {paymentAccounts.map(acc => (
+                <Select.Option key={acc.id} value={acc.name}>{acc.name}</Select.Option>
+            ))}
+        </Select.OptGroup>
+    </Select>
 </Form.Item><Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item></Form></Modal>
 {/* --- NAYA EDIT FORM (AddPurchaseForm ko hi use karega) --- */}
         {isEditModalVisible && (

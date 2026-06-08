@@ -126,7 +126,14 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
           <List.Item>
             <Card
               hoverable
-              style={{ border: `1px solid ${token.colorBorder}`, backgroundColor: token.colorBgContainer, height: '100%' }}
+              style={{ 
+                borderRadius: 8,
+                border: `1px solid ${token.colorPrimary}33`, 
+                boxShadow: `0 4px 12px ${token.colorPrimary}15`, 
+                transition: 'all 0.3s ease',
+                backgroundColor: token.colorCardBg || token.colorBgContainer, 
+                height: '100%' 
+              }}
               styles={{ body: { padding: '16px' } }}
             >
               {/* === HEADER AREA (SINGLE ROW) === */}

@@ -81,6 +81,10 @@ const POS = () => {
   const [paymentMethod, setPaymentMethod] = useState('Paid');
   const [cashOrBank, setCashOrBank] = useState('Cash');
   const [amountPaid, setAmountPaid] = useState(0);
+  
+  // --- NAYA IZAFA: Payment Accounts States ---
+  const [paymentAccounts, setPaymentAccounts] = useState([]);
+  const [selectedAccountId, setSelectedAccountId] = useState('Cash'); // NAYA IZAFA: Default Cash set kar diya
   const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
   const [addForm] = Form.useForm();
   const customerNameInputRef = useRef(null); // NAYA IZAFA: Auto-focus ke liye
@@ -266,6 +270,13 @@ const POS = () => {
       // 4. Filhal "Top Selling" mein hum saare products dikhayenge (Offline mein calculation mushkil hai)
       setDisplayedProducts(productsData);
       setTopSellingProducts(productsData); 
+
+      // 5. NAYA IZAFA: Payment Accounts Load Karein
+      if (DataService.getPaymentAccounts) {
+          const accountsData = await DataService.getPaymentAccounts();
+          setPaymentAccounts(accountsData);
+          // Cash ab default hai, is liye yahan se find wala logic hata diya
+      }
 
     } catch (error) {
       message.error("Error loading initial data: " + error.message);
@@ -704,7 +715,8 @@ const POS = () => {
               tax_amount: taxAmount, 
               tax_rate_applied: profile?.tax_enabled ? profile?.tax_rate : 0, 
               total_amount: grandTotal, 
-              payment_method: paymentMethod === 'Paid' ? cashOrBank : 'Cash',
+              // NAYA IZAFA: Ab chahe Full payment ho ya Advance (Udhaar), dono suraton mein selected account ka naam save hoga
+              payment_method: paymentAccounts.find(a => a.id === selectedAccountId)?.name || 'Cash',
               amount_paid_at_sale: paymentMethod === 'Paid' ? grandTotal : amountPaid, 
               payment_status: (paymentMethod === 'Unpaid' && (grandTotal - amountPaid > 0)) ? 'Unpaid' : 'Paid', 
               user_id: user.id,
@@ -1330,9 +1342,12 @@ const POS = () => {
                       hoverable
                       onClick={() => handleAddToCart(product)}
                       style={{ 
-                        border: `1px solid ${token.colorBorder}`, 
+                        borderRadius: 8,
+                        border: `1px solid ${token.colorPrimary}33`, 
+                        boxShadow: `0 4px 12px ${token.colorPrimary}15`, 
+                        transition: 'all 0.3s ease',
+                        backgroundColor: token.colorCardBg || token.colorBgContainer,
                         height: '100%',
-                        background: token.colorBgContainer,
                         display: 'flex',
                         flexDirection: 'column',
                         overflow: 'hidden'
@@ -1414,9 +1429,12 @@ const POS = () => {
                     <Card
                     hoverable
                     style={{ 
-                      border: `1px solid ${token.colorBorder}`, 
-                      height: '100%',
-                      background: token.colorBgContainer
+                      borderRadius: 8,
+                      border: `1px solid ${token.colorPrimary}33`, 
+                      boxShadow: `0 4px 12px ${token.colorPrimary}15`, 
+                      transition: 'all 0.3s ease',
+                      backgroundColor: token.colorCardBg || token.colorBgContainer,
+                      height: '100%'
                     }}
                     styles={{ body: { padding: '12px' } }}
                   >
@@ -1853,65 +1871,60 @@ const POS = () => {
 
             {/* --- NEW VIDEO-STYLE PAYMENT & CHECKOUT ROW --- */}
             <div style={{ marginBottom: '0px' }}>
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 
-                {/* 1. Cash Button */}
-                <Card 
-                  id="pos-pay-cash-btn"
-                  hoverable 
-                  onClick={() => { setPaymentMethod('Paid'); setCashOrBank('Cash'); }}
-                  style={{ 
-                    flex: 1, 
-                    height: '38px',
-                    borderColor: paymentMethod === 'Paid' && cashOrBank === 'Cash' ? token.colorPrimary : token.colorBorder,
-                    background: paymentMethod === 'Paid' && cashOrBank === 'Cash' ? token.controlItemBgActive : 'transparent'
-                  }}
-                  styles={{ body: { padding: '0', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' } }}
+                {/* 1. Payment Type Toggle (Full vs Credit) */}
+                <Radio.Group 
+                  value={paymentMethod} 
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  buttonStyle="solid"
+                  size="large"
+                  style={{ flexShrink: 0, display: 'flex' }}
+                  disabled={!selectedCustomer || isWalkIn}
                 >
-                  <div title="Cash" style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <WalletOutlined style={{ fontSize: '18px', color: paymentMethod === 'Paid' && cashOrBank === 'Cash' ? token.colorPrimary : token.colorTextSecondary }} />
-                  </div>
-                </Card>
+                  <Tooltip title="Pay Full Amount">
+                    <Radio.Button value="Paid" style={{ padding: '0 12px', textAlign: 'center' }}>
+                      <WalletOutlined /> Full
+                    </Radio.Button>
+                  </Tooltip>
+                  <Tooltip title={(!selectedCustomer || isWalkIn) ? "Select customer for Credit Sale" : "Pay Later / Credit"}>
+                    <Radio.Button value="Unpaid" style={{ padding: '0 12px', textAlign: 'center' }}>
+                      <UserAddOutlined /> Credit
+                    </Radio.Button>
+                  </Tooltip>
+                </Radio.Group>
 
-                {/* 2. Bank/Card Button */}
-                <Card 
-                  id="pos-pay-bank-btn"
-                  hoverable 
-                  onClick={() => { setPaymentMethod('Paid'); setCashOrBank('Bank'); }}
-                  style={{ 
-                    flex: 1, 
-                    height: '38px',
-                    borderColor: paymentMethod === 'Paid' && cashOrBank === 'Bank' ? token.colorPrimary : token.colorBorder,
-                    background: paymentMethod === 'Paid' && cashOrBank === 'Bank' ? token.controlItemBgActive : 'transparent'
-                  }}
-                  styles={{ body: { padding: '0', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' } }}
-                >
-                  <div title="Card / Bank" style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <BankOutlined style={{ fontSize: '18px', color: paymentMethod === 'Paid' && cashOrBank === 'Bank' ? token.colorPrimary : token.colorTextSecondary }} />
-                  </div>
-                </Card>
+                {/* 2. Unified Account Dropdown (Cash + Banks) */}
+                <Select
+                  id="pos-account-select"
+                  size="large"
+                  value={selectedAccountId}
+                  onChange={(val) => setSelectedAccountId(val)}
+                  style={{ flex: 1 }}
+                  placeholder="Select Account"
+                  options={[
+                    {
+                      value: 'Cash',
+                      label: (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <WalletOutlined style={{ color: token.colorSuccess }} />
+                          <span style={{ fontWeight: 500, fontSize: '13px' }}>Cash (Counter)</span>
+                        </div>
+                      )
+                    },
+                    ...paymentAccounts.map(acc => ({
+                      value: acc.id,
+                      label: (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <BankOutlined style={{ color: token.colorInfo }} />
+                          <span style={{ fontWeight: 500, fontSize: '13px' }}>{acc.name}</span>
+                        </div>
+                      )
+                    }))
+                  ]}
+                />
 
-                {/* 3. Pay Later (Credit) Button */}
-                <Card 
-                  id="pos-pay-later-btn"
-                  hoverable 
-                  onClick={() => { if(selectedCustomer && !isWalkIn) setPaymentMethod('Unpaid'); }}
-                  style={{ 
-                    flex: 1, 
-                    height: '38px',
-                    opacity: (!selectedCustomer || isWalkIn) ? 0.5 : 1,
-                    cursor: (!selectedCustomer || isWalkIn) ? 'not-allowed' : 'pointer',
-                    borderColor: paymentMethod === 'Unpaid' ? token.colorPrimary : token.colorBorder,
-                    background: paymentMethod === 'Unpaid' ? token.controlItemBgActive : 'transparent'
-                  }}
-                  styles={{ body: { padding: '0', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' } }}
-                >
-                  <div title="Pay Later" style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <UserAddOutlined style={{ fontSize: '18px', color: paymentMethod === 'Unpaid' ? token.colorPrimary : token.colorTextSecondary }} />
-                  </div>
-                </Card>
-
-                {/* 4. Complete Sale Button */}
+                {/* 3. Complete Sale Button */}
                 <Tooltip title={!activeSession ? "Please open a register shift to complete sales." : ""}>
                   <Button 
                     id="pos-complete-sale-btn"
@@ -1919,7 +1932,7 @@ const POS = () => {
                     disabled={cart.length === 0 || isSubmitting || !activeSession} 
                     loading={isSubmitting} 
                     onClick={handleCompleteSale}
-                    style={{ flex: 2.5, height: '38px', fontSize: '16px', fontWeight: 'bold', borderRadius: '8px', padding: '0 4px', whiteSpace: 'normal', lineHeight: 1.2 }}
+                    style={{ flex: 1.5, height: '38px', fontSize: '15px', fontWeight: 'bold', borderRadius: '8px', padding: '0 4px' }}
                   >
                     Complete Sale
                   </Button>

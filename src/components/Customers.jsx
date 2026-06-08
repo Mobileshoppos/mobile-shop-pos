@@ -14,6 +14,7 @@ import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
 import { useSync } from '../context/SyncContext';
 import DataService from '../DataService';
+import { generateInvoiceId } from '../utils/idGenerator'; // <--- NAYA IZAFA
 
 const { Title, Text } = Typography;
 // Global Countries List
@@ -50,11 +51,16 @@ const Customers = () => {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCityFilter, setSelectedCityFilter] = useState(null); 
+  const [availableCities, setAvailableCities] = useState([]); 
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState(null); // <--- NAYA IZAFA
+  const [availableGroups, setAvailableGroups] = useState([]); // <--- NAYA IZAFA
   const [ledgerData, setLedgerData] = useState([]);
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [staffMembers, setStaffMembers] = useState([]); // <--- NAYA IZAFA
+  const [paymentAccounts, setPaymentAccounts] = useState([]); // <--- NAYA IZAFA
   const [showArchived, setShowArchived] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedSale, setSelectedSale] = useState(null);
@@ -116,16 +122,36 @@ const Customers = () => {
       // 1. Archive Filter
       data = data.filter(c => showArchived ? c.is_active === false : c.is_active !== false);
 
-      // 2. Search Filter (Name ya Phone se dhoondna)
+      // Shehron (Cities) aur Groups ki list nikalna taake dropdown mein dikha sakein
+      const cities = [...new Set(data.map(c => c.city).filter(Boolean))].sort();
+      const groups = [...new Set(data.map(c => c.customer_group).filter(Boolean))].sort();
+      setAvailableCities(cities);
+      setAvailableGroups(groups);
+
+      // 2. City aur Group Dropdown Filter
+      if (selectedCityFilter) {
+        data = data.filter(c => c.city === selectedCityFilter);
+      }
+      if (selectedGroupFilter) {
+        data = data.filter(c => c.customer_group === selectedGroupFilter);
+      }
+
+      // 3. Search Filter (Name, Phone ya City se dhoondna)
       if (searchTerm) {
         const lowerSearch = searchTerm.toLowerCase();
         data = data.filter(c => 
           (c.name && c.name.toLowerCase().includes(lowerSearch)) || 
-          (c.phone_number && c.phone_number.includes(lowerSearch))
+          (c.phone_number && c.phone_number.includes(lowerSearch)) ||
+          (c.city && c.city.toLowerCase().includes(lowerSearch))
         );
       }
       
       setCustomers(data.sort((a, b) => a.name.localeCompare(b.name)));
+
+      if (DataService.getPaymentAccounts) {
+          const accountsData = await DataService.getPaymentAccounts();
+          setPaymentAccounts(accountsData);
+      }
     } catch (error) { 
       message.error('Error fetching customers: ' + error.message); 
     } finally { 
@@ -133,7 +159,8 @@ const Customers = () => {
     }
   };
 
-  useEffect(() => { if (user) getCustomers(); }, [user, showArchived, refreshTrigger, searchTerm]);
+  // selectedCityFilter aur selectedGroupFilter dono ko dependency array mein daal diya
+  useEffect(() => { if (user) getCustomers(); }, [user, showArchived, refreshTrigger, searchTerm, selectedCityFilter, selectedGroupFilter]);
   // --- NAYA: SILENT REFRESH LISTENER (Customers ko chupke se update karne ke liye) ---
   useEffect(() => {
     const handleRefresh = () => {
@@ -216,9 +243,11 @@ const Customers = () => {
   
   const handleReceivePayment = async (values) => {
     try {
+      const vNo = await generateInvoiceId(); // <--- NAYA IZAFA
       const paymentData = { 
           id: crypto.randomUUID(),
           local_id: crypto.randomUUID(),
+          voucher_no: `RCPT-${vNo}`, // <--- NAYA IZAFA
           customer_id: selectedCustomer.id, 
           amount_paid: values.amount, 
           payment_method: cashOrBank,
@@ -277,9 +306,11 @@ const Customers = () => {
 
   const handleConfirmPayout = async (values) => {
     try {
+      const vNo = await generateInvoiceId(); // <--- NAYA IZAFA
       const payoutData = { 
           id: crypto.randomUUID(),
           local_id: crypto.randomUUID(),
+          voucher_no: `PAY-${vNo}`, // <--- NAYA IZAFA
           customer_id: selectedCustomer.id, 
           amount_paid: values.amount, 
           payment_method: cashOrBank,
@@ -590,15 +621,17 @@ const handleCloseInvoiceSearchModal = () => {
 
       // 3. Payment (Credit) Record Banayein (Yeh hamesha banega taake Ledger maintain rahe)
       const paymentId = crypto.randomUUID();
+      const vNoInternal = await generateInvoiceId(); // NAYA IZAFA
       const paymentRecord = {
         id: paymentId,
         local_id: paymentId,
+        voucher_no: `RET-${vNoInternal}`, // <--- FIX: RCPT ki jagah RET kar diya
         customer_id: selectedSale.customer_id,
         amount_paid: -totalRefundAmount, // Negative amount for credit
         user_id: user.id,
-        staff_id: activeStaff?.id, // <--- NAYA IZAFA
-        register_id: activeSession?.register_id || null, // NAYA IZAFA
-        session_id: activeSession?.id || null,           // NAYA IZAFA
+        staff_id: activeStaff?.id, 
+        register_id: activeSession?.register_id || null, 
+        session_id: activeSession?.id || null,           
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -635,13 +668,17 @@ const handleCloseInvoiceSearchModal = () => {
       if (refundCashNow) {
           // Agar user ne kaha "Abhi Cash Wapis Karo"
           const payoutId = crypto.randomUUID();
+          const vNoPayout = await generateInvoiceId(); // <--- NAYA IZAFA
+          const defaultCashAcc = paymentAccounts.find(a => a.type === 'Cash')?.name || 'Cash';
           payoutRecord = {
               id: payoutId,
               local_id: payoutId,
+              voucher_no: `PAY-${vNoPayout}`, // <--- NAYA IZAFA
               customer_id: selectedSale.customer_id,
               amount_paid: maxCashRefundable, // <--- AB YEH SIRF JAYEZ CASH WAPAS KAREGA
-              payment_method: 'Cash',
-              remarks: `Auto-Refund for Return #${returnId}`,
+              payment_method: defaultCashAcc,
+              // FIX: Lambi UUID ki jagah Asal Invoice ka number dikhayein
+              remarks: `Cash Refund for Inv #${selectedSale?.invoice_id || selectedSale?.id.split('-')[0].toUpperCase()}`,
               user_id: user.id,
               register_id: activeSession?.register_id || null, // NAYA IZAFA
               session_id: activeSession?.id || null,           // NAYA IZAFA
@@ -719,21 +756,19 @@ const handleCloseInvoiceSearchModal = () => {
 
     const finalRefund = Math.max(0, netRefundableWithTax - returnFee);
 
-    // Naya Hisaab: Is invoice par kitna udhaar baki tha?
-    const invoiceTotal = selectedSale?.total_amount || 0;
-    const invoicePaid = selectedSale?.amount_paid_at_sale || 0;
-    const unpaidOnInvoice = Math.max(0, invoiceTotal - invoicePaid);
+        // Naya Hisaab: Customer ka Asli (Current) Udhaar kitna hai?
+        const currentCustomerDebt = Math.max(0, selectedCustomer?.balance || 0);
 
-    // Dukandar sirf utna cash wapas kar sakta hai jitna udhaar se zyada ho
-    const maxCash = Math.max(0, finalRefund - unpaidOnInvoice);
+        // Dukandar sirf utna cash wapas kar sakta hai jitna udhaar se zyada ho
+        const maxCash = Math.max(0, finalRefund - currentCustomerDebt);
 
-    return { 
-      totalRefundAmount: finalRefund, 
-      debtOnInvoice: unpaidOnInvoice, 
-      maxCashRefundable: maxCash,
-      taxRefundable: taxToReturn // <--- NAYA IZAFA
-    };
-  }, [selectedReturnItems, selectedSale, returnFee]);
+        return { 
+          totalRefundAmount: finalRefund, 
+          debtOnInvoice: currentCustomerDebt, 
+          maxCashRefundable: maxCash,
+          taxRefundable: taxToReturn // <--- NAYA IZAFA
+        };
+      }, [selectedReturnItems, selectedSale, returnFee, selectedCustomer]);
   
 
   const handleViewLedger = async (customer) => {
@@ -883,6 +918,8 @@ const handleCloseInvoiceSearchModal = () => {
   const customerColumns = [
     { title: 'Customer Name', dataIndex: 'name' },
     { title: 'Phone', dataIndex: 'phone_number' },
+    { title: 'Group', dataIndex: 'customer_group', render: (grp) => grp ? <Tag color="purple">{grp}</Tag> : <Text type="secondary">-</Text> },
+    { title: 'City', dataIndex: 'city', render: (city) => city || <Text type="secondary">-</Text> },
     { title: 'Address', dataIndex: 'address', render: (address) => address || <Text type="secondary">N/A</Text> },
     { title: 'Balance', dataIndex: 'balance', align: 'right', render: (b) => <Text style={{ color: b > 0 ? token.colorError : token.colorSuccess }}>{formatCurrency(b, profile?.currency)}</Text> },
     // Is hisse ko dhoond kar replace karein
@@ -1081,9 +1118,9 @@ const handleCloseInvoiceSearchModal = () => {
             )}
             {/* ------------------------------------------ */}
 
-            <Descriptions.Item label="Grand Total"><strong>{formatCurrency(record.details.total_amount || 0, profile?.currency)}</strong></Descriptions.Item>
-            <Descriptions.Item label="Amount Paid at Sale">{formatCurrency(record.details.amount_paid_at_sale || 0, profile?.currency)}</Descriptions.Item>
-            <Descriptions.Item label="New Udhaar from this Sale"><strong>{formatCurrency(record.debit, profile?.currency)}</strong></Descriptions.Item>
+            <Descriptions.Item label="Grand total"><strong>{formatCurrency(record.details.total_amount || 0, profile?.currency)}</strong></Descriptions.Item>
+            <Descriptions.Item label="Amount paid at sale">{formatCurrency(record.details.amount_paid_at_sale || 0, profile?.currency)}</Descriptions.Item>
+            <Descriptions.Item label="New credit from this sale"><strong>{formatCurrency(record.debit, profile?.currency)}</strong></Descriptions.Item>
           </Descriptions>
           <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px'}}>
             <Title level={5} style={{ margin: 0 }}>Items in this Invoice</Title>
@@ -1176,32 +1213,70 @@ const handleCloseInvoiceSearchModal = () => {
         </Title>
     )}
 
-    {/* Computer (Desktop) ke liye Search Bar */}
+    {/* Computer (Desktop) ke liye Search Bar aur Filters */}
     {!isMobile && (
-      <Input
-        id="cust-search-input-desktop"
-        ref={searchInputRef}
-        placeholder="Search by Name or Phone..."
-        prefix={<SearchOutlined />}
-        style={{ width: 300, marginLeft: 20 }}
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        allowClear
-      />
+      <Space style={{ marginLeft: 20 }}>
+        <Input
+          id="cust-search-input-desktop"
+          ref={searchInputRef}
+          placeholder="Search by Name or Phone..."
+          prefix={<SearchOutlined />}
+          style={{ width: 250 }}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          allowClear
+        />
+        <Select
+          placeholder="Filter by City"
+          allowClear
+          style={{ width: 150 }}
+          value={selectedCityFilter}
+          onChange={(val) => setSelectedCityFilter(val)}
+          options={availableCities.map(city => ({ label: city, value: city }))}
+        />
+        <Select
+          placeholder="Filter by Group"
+          allowClear
+          style={{ width: 150 }}
+          value={selectedGroupFilter}
+          onChange={(val) => setSelectedGroupFilter(val)}
+          options={availableGroups.map(g => ({ label: g, value: g }))}
+        />
+      </Space>
     )}
 
-    {/* Mobile ke liye Search Bar (Sirf mobile par nazar aayega) */}
+    {/* Mobile ke liye Search Bar aur Filters */}
     {isMobile && (
-      <Input
-        id="cust-search-input-mobile"
-        ref={searchInputRef}
-        placeholder="Search by Name or Phone..."
-        prefix={<SearchOutlined />}
-        style={{ marginBottom: '16px', width: '100%' }}
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        allowClear
-      />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px', width: '100%' }}>
+        <Input
+          id="cust-search-input-mobile"
+          ref={searchInputRef}
+          placeholder="Search Name or Phone..."
+          prefix={<SearchOutlined />}
+          style={{ width: '100%' }}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          allowClear
+        />
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Select
+            placeholder="City"
+            allowClear
+            style={{ flex: 1 }}
+            value={selectedCityFilter}
+            onChange={(val) => setSelectedCityFilter(val)}
+            options={availableCities.map(city => ({ label: city, value: city }))}
+          />
+          <Select
+            placeholder="Group"
+            allowClear
+            style={{ flex: 1 }}
+            value={selectedGroupFilter}
+            onChange={(val) => setSelectedGroupFilter(val)}
+            options={availableGroups.map(g => ({ label: g, value: g }))}
+          />
+        </div>
+      </div>
     )}
     <div style={{ 
         display: 'flex', 
@@ -1414,9 +1489,22 @@ const handleCloseInvoiceSearchModal = () => {
     </Col>
   </Row>
 
-  <Form.Item name="address" label="Street Address">
-    <Input placeholder="Building, Street, Area..." />
-  </Form.Item>
+  <Row gutter={16}>
+    <Col span={12}>
+      <Form.Item name="address" label="Street Address">
+        <Input placeholder="Building, Street, Area..." />
+      </Form.Item>
+    </Col>
+    <Col span={12}>
+      <Form.Item name="customer_group" label="Customer Group" tooltip="Assign to a specific route or category">
+        <Select 
+          mode="tags" 
+          placeholder="e.g. Wholesale, Route A" 
+          options={availableGroups.map(g => ({ label: g, value: g }))}
+        />
+      </Form.Item>
+    </Col>
+  </Row>
 
   <Row gutter={16}>
     <Col span={12}>
@@ -1498,11 +1586,17 @@ const handleCloseInvoiceSearchModal = () => {
 </Modal> <Modal title={`Payment from: ${selectedCustomer?.name}`} open={isPaymentModalOpen} onCancel={handlePaymentCancel} onOk={() => paymentForm.submit()} okText="Confirm Payment"> <Title level={5}>Balance: <Text type="danger">{formatCurrency(selectedCustomer?.balance, profile?.currency)}</Text></Title> <Form form={paymentForm} layout="vertical" onFinish={handleReceivePayment}><Form.Item name="amount" label="Amount Received" rules={[{ required: true }]}>
     <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={1} max={selectedCustomer?.balance} />
 </Form.Item>
-<Form.Item label="Receive In">
-  <Radio.Group onChange={(e) => setCashOrBank(e.target.value)} value={cashOrBank} buttonStyle="solid">
-    <Radio.Button value="Cash">Cash</Radio.Button>
-    <Radio.Button value="Bank">Bank / Online</Radio.Button>
-  </Radio.Group>
+<Form.Item label="Receive In Account" required>
+  <Select value={cashOrBank} onChange={setCashOrBank} placeholder="Select Account">
+    <Select.OptGroup label="Physical Cash">
+      <Select.Option value="Cash">Cash (Counter)</Select.Option>
+    </Select.OptGroup>
+    <Select.OptGroup label="Banks & Wallets">
+      {paymentAccounts.map(acc => (
+        <Select.Option key={acc.id} value={acc.name}>{acc.name}</Select.Option>
+      ))}
+    </Select.OptGroup>
+  </Select>
 </Form.Item>
 </Form> </Modal> <Modal title={`Return for Invoice #${selectedSale?.invoice_id || selectedSale?.id}`} open={isReturnModalOpen} onCancel={handleReturnCancel} onOk={() => returnForm.submit()} okText="Confirm Return" confirmLoading={isReturnSubmitting} okButtonProps={{ disabled: selectedReturnItems.length === 0 || returnFee > maxAllowedFee }}> 
   <Table 
@@ -1610,7 +1704,7 @@ const handleCloseInvoiceSearchModal = () => {
      <Descriptions.Item label="Item Return Value">
        {formatCurrency(totalRefundAmount, profile?.currency)}
      </Descriptions.Item>
-     <Descriptions.Item label="Adjusted against Invoice Debt">
+     <Descriptions.Item label="Adjusted against Customer Debt">
        <Text type="danger">-{formatCurrency(Math.min(totalRefundAmount, debtOnInvoice), profile?.currency)}</Text>
      </Descriptions.Item>
      <Descriptions.Item label="Available for Cash Refund">
@@ -1643,11 +1737,17 @@ const handleCloseInvoiceSearchModal = () => {
 >
   <Title level={5}>Credit Balance: <Text type="success">{formatCurrency(Math.abs(selectedCustomer?.balance || 0), profile?.currency)}</Text></Title>
   <Form form={payoutForm} layout="vertical" onFinish={handleConfirmPayout}>
-    <Form.Item label="Pay From">
-  <Radio.Group onChange={(e) => setCashOrBank(e.target.value)} value={cashOrBank} buttonStyle="solid">
-    <Radio.Button value="Cash">Cash</Radio.Button>
-    <Radio.Button value="Bank">Bank / Online</Radio.Button>
-  </Radio.Group>
+    <Form.Item label="Pay From Account" required>
+  <Select value={cashOrBank} onChange={setCashOrBank} placeholder="Select Account">
+    <Select.OptGroup label="Physical Cash">
+      <Select.Option value="Cash">Cash (Counter)</Select.Option>
+    </Select.OptGroup>
+    <Select.OptGroup label="Banks & Wallets">
+      {paymentAccounts.map(acc => (
+        <Select.Option key={acc.id} value={acc.name}>{acc.name}</Select.Option>
+      ))}
+    </Select.OptGroup>
+  </Select>
 </Form.Item>
     <Form.Item
       name="amount"

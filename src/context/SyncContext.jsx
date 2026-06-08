@@ -132,6 +132,10 @@ export const SyncProvider = ({ children }) => {
         window.dispatchEvent(new CustomEvent('local-db-updated'));
       }
 
+      // 0.1 Payment Accounts (Banks, Wallets, Cash)
+      const { data: paymentAccounts } = await supabase.from('payment_accounts').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('payment_accounts', paymentAccounts, pendingIds);
+
       // 1. Categories
       const { data: categories } = await supabase.from('categories').select('*').or(`user_id.eq.${user.id},user_id.is.null`).gt('updated_at', lastSyncTime);
       await smartPut('categories', categories, pendingIds);
@@ -482,8 +486,9 @@ export const SyncProvider = ({ children }) => {
                     p_payment_date: item.data.payment_date,
                     p_notes: item.data.notes,
                     p_staff_id: item.data.staff_id,
-                    p_register_id: item.data.register_id, // <--- NAYA IZAFA (MULTI-COUNTER)
-                    p_session_id: item.data.session_id    // <--- NAYA IZAFA (MULTI-COUNTER)
+                    p_register_id: item.data.register_id,
+                    p_session_id: item.data.session_id,
+                    p_voucher_no: item.data.voucher_no
                 });
                 error = supError;
             }
@@ -530,8 +535,9 @@ export const SyncProvider = ({ children }) => {
                     p_method: item.data.payment_method || item.data.refund_method || 'Cash',
                     p_notes: item.data.notes,
                     p_staff_id: item.data.staff_id,
-                    p_register_id: item.data.register_id, // <--- NAYA IZAFA (MULTI-COUNTER)
-                    p_session_id: item.data.session_id    // <--- NAYA IZAFA (MULTI-COUNTER)
+                    p_register_id: item.data.register_id,
+                    p_session_id: item.data.session_id,
+                    p_voucher_no: item.data.voucher_no
                 });
                 error = supError;
             }
@@ -547,8 +553,9 @@ export const SyncProvider = ({ children }) => {
                     p_payment_date: item.data.payment_date,
                     p_notes: item.data.notes,
                     p_staff_id: item.data.staff_id,
-                    p_register_id: item.data.register_id, // <--- NAYA IZAFA (MULTI-COUNTER)
-                    p_session_id: item.data.session_id    // <--- NAYA IZAFA (MULTI-COUNTER)
+                    p_register_id: item.data.register_id,
+                    p_session_id: item.data.session_id,
+                    p_voucher_no: item.data.voucher_no
                 });
                 error = supError;
             }
@@ -654,6 +661,21 @@ export const SyncProvider = ({ children }) => {
             }
             else if (item.table_name === 'registers' && item.action === 'create') {
                 const { error: supError } = await supabase.from('registers').upsert([item.data]);
+                error = supError;
+            }
+
+            // --- Payment Accounts Sync (NAYA IZAFA) ---
+            else if (item.table_name === 'payment_accounts' && item.action === 'create') {
+                const { error: supError } = await supabase.from('payment_accounts').upsert([item.data], { onConflict: 'id' });
+                error = supError;
+            }
+            else if (item.table_name === 'payment_accounts' && item.action === 'update') {
+                const { id, ...updates } = item.data;
+                const { error: supError } = await supabase.from('payment_accounts').update(updates).eq('id', id);
+                error = supError;
+            }
+            else if (item.table_name === 'payment_accounts' && item.action === 'delete') {
+                const { error: supError } = await supabase.from('payment_accounts').delete().eq('id', item.data.id);
                 error = supError;
             }
 

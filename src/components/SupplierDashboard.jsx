@@ -11,6 +11,7 @@ import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
 import { useSync } from '../context/SyncContext';
 import { useTheme } from '../context/ThemeContext';
+import { generateInvoiceId } from '../utils/idGenerator'; // <--- NAYA IZAFA
 import { getPlanLimits } from '../config/subscriptionPlans';
 
 const { Sider, Content } = Layout;
@@ -23,6 +24,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
     const { profile } = useAuth();
     const [ledgerData, setLedgerData] = useState([]);
     const [staffMembers, setStaffMembers] = useState([]); // <--- NAYA IZAFA
+    const [paymentAccounts, setPaymentAccounts] = useState([]); // <--- NAYA IZAFA
     // NAYA: Stats save karne ke liye state
     const [calculatedStats, setCalculatedStats] = useState(null); 
     const [loading, setLoading] = useState(true);
@@ -39,6 +41,10 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
         try {
             const staff = await DataService.getStaffMembers(); // <--- NAYA IZAFA
             setStaffMembers(staff); // <--- NAYA IZAFA
+            if (DataService.getPaymentAccounts) {
+                const accountsData = await DataService.getPaymentAccounts();
+                setPaymentAccounts(accountsData);
+            }
             const { supplier: calculatedSup, purchases, payments, refunds } = await DataService.getSupplierLedgerDetails(supplier.id);
             
             const totalRefundsAmount = (refunds || []).reduce((sum, r) => sum + (r.amount || 0), 0);
@@ -137,6 +143,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
     const handlePaymentSubmit = async (values) => {
         try {
             const paymentId = crypto.randomUUID();
+            const vNo = await generateInvoiceId(); // <--- NAYA IZAFA
             const formattedValues = {
                 ...values,
                 payment_date: values.payment_date ? values.payment_date.toISOString() : new Date().toISOString()
@@ -145,8 +152,9 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
             const paymentData = { 
                 id: paymentId, 
                 local_id: paymentId, 
+                voucher_no: `PAY-${vNo}`, // <--- NAYA IZAFA (Voucher Save Karein)
                 supplier_id: supplier.id, 
-                staff_id: activeStaff?.id, // <--- NAYA IZAFA
+                staff_id: activeStaff?.id, 
                 ...formattedValues 
             };
             
@@ -172,6 +180,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
     const handleRefundSubmit = async (values) => {
         try {
             const refundId = crypto.randomUUID();
+            const vNo = await generateInvoiceId(); // <--- NAYA IZAFA
             const formattedValues = {
                 ...values,
                 refund_date: values.refund_date ? values.refund_date.toISOString() : new Date().toISOString()
@@ -180,8 +189,9 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
             const refundData = { 
                 id: refundId, 
                 local_id: refundId, 
+                voucher_no: `RCPT-${vNo}`, // <--- NAYA IZAFA (Voucher Save Karein)
                 supplier_id: supplier.id, 
-                staff_id: activeStaff?.id, // <--- NAYA IZAFA
+                staff_id: activeStaff?.id, 
                 ...formattedValues 
             };
             
@@ -300,8 +310,17 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
                 <Form form={paymentForm} layout="vertical" onFinish={handlePaymentSubmit} style={{marginTop: 24}}>
                     <Form.Item name="amount" label="Payment Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} /></Form.Item>
                     <Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
-                    <Form.Item name="payment_method" label="Payment Method" rules={[{ required: true }]}>
-                        <Select><Select.Option value="Cash">Cash</Select.Option><Select.Option value="Bank Transfer">Bank Transfer</Select.Option></Select>
+                    <Form.Item name="payment_method" label="Paid From Account" rules={[{ required: true }]}>
+                        <Select placeholder="Select Account">
+                            <Select.OptGroup label="Physical Cash">
+                                <Select.Option value="Cash">Cash (Counter)</Select.Option>
+                            </Select.OptGroup>
+                            <Select.OptGroup label="Banks & Wallets">
+                                {paymentAccounts.map(acc => (
+                                    <Select.Option key={acc.id} value={acc.name}>{acc.name}</Select.Option>
+                                ))}
+                            </Select.OptGroup>
+                        </Select>
                     </Form.Item>
                     <Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item>
                 </Form>
@@ -310,8 +329,17 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
                 <Form form={refundForm} layout="vertical" onFinish={handleRefundSubmit} style={{marginTop: 24}}>
                     <Form.Item name="amount" label="Refund Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} max={supplier?.credit_balance} /></Form.Item>
                     <Form.Item name="refund_date" label="Refund Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
-                    <Form.Item name="refund_method" label="Refund Method" rules={[{ required: true }]}>
-                        <Select><Select.Option value="Cash">Cash</Select.Option><Select.Option value="Bank Transfer">Bank Transfer</Select.Option></Select>
+                    <Form.Item name="refund_method" label="Refund To Account" rules={[{ required: true }]}>
+                        <Select placeholder="Select Account">
+                            <Select.OptGroup label="Physical Cash">
+                                <Select.Option value="Cash">Cash (Counter)</Select.Option>
+                            </Select.OptGroup>
+                            <Select.OptGroup label="Banks & Wallets">
+                                {paymentAccounts.map(acc => (
+                                    <Select.Option key={acc.id} value={acc.name}>{acc.name}</Select.Option>
+                                ))}
+                            </Select.OptGroup>
+                        </Select>
                     </Form.Item>
                     <Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item>
                 </Form>
@@ -346,6 +374,7 @@ const SupplierDashboard = () => {
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [isViewModalVisible, setIsViewModalVisible] = useState(false);
     const [activeBalances, setActiveBalances] = useState({ due: 0, credit: 0 });
+    const [paymentAccounts, setPaymentAccounts] = useState([]); // <--- NAYA IZAFA
     // --- NAYA: Payment & Refund Logic ---
     const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
     const [paymentForm] = Form.useForm();
@@ -365,8 +394,10 @@ const SupplierDashboard = () => {
     const handlePaymentSubmit = async (values) => {
         try {
             const paymentId = crypto.randomUUID();
+            const vNo = await generateInvoiceId(); // <--- NAYA IZAFA (Error Fix: vNo generate karein)
             const paymentData = { 
                 id: paymentId, local_id: paymentId, 
+                voucher_no: `PAY-${vNo}`, 
                 supplier_id: selectedSupplier.id, 
                 staff_id: activeStaff?.id,
                 // NAYA IZAFA: Agar staff hai to uska counter, warna Owner ka default counter
@@ -397,8 +428,10 @@ const SupplierDashboard = () => {
     const handleRefundSubmit = async (values) => {
         try {
             const refundId = crypto.randomUUID();
+            const vNo = await generateInvoiceId(); // <--- NAYA IZAFA (Error Fix: vNo generate karein)
             const refundData = { 
                 id: refundId, local_id: refundId, 
+                voucher_no: `RCPT-${vNo}`, 
                 supplier_id: selectedSupplier.id, 
                 staff_id: activeStaff?.id,
                 // NAYA IZAFA: Agar staff hai to uska counter, warna Owner ka default counter
@@ -453,6 +486,11 @@ const SupplierDashboard = () => {
             const data = await DataService.getSuppliers(showArchived);
             setSuppliers(data || []);
             
+            if (DataService.getPaymentAccounts) {
+                const accountsData = await DataService.getPaymentAccounts();
+                setPaymentAccounts(accountsData);
+            }
+
             if (selectIdAfterFetch) {
                 setSelectedSupplierId(selectIdAfterFetch);
             } else if (!isMobile && data && data.length > 0 && !selectedSupplierId) {
@@ -614,7 +652,7 @@ const SupplierDashboard = () => {
                                             type="text"
                                             icon={<DollarCircleOutlined style={{ fontSize: '20px', color: token.colorSuccess }} />} 
                                             onClick={showPaymentModal}
-                                            disabled={!selectedSupplier || activeBalances.due <= 0 || !activeSession}
+                                            disabled={!selectedSupplier || !activeSession}
                                             title="Record Payment"
                                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                         />
@@ -624,7 +662,7 @@ const SupplierDashboard = () => {
                                             type="text"
                                             icon={<MinusCircleOutlined style={{ fontSize: '20px', color: token.colorError }} />} 
                                             onClick={showRefundModal}
-                                            disabled={!selectedSupplier || activeBalances.credit <= 0 || !activeSession}
+                                            disabled={!selectedSupplier || !activeSession}
                                             title="Record Refund"
                                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                         />
@@ -1083,8 +1121,17 @@ const SupplierDashboard = () => {
                 <Form form={paymentForm} layout="vertical" onFinish={handlePaymentSubmit} style={{marginTop: 24}}>
                     <Form.Item name="amount" label="Payment Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} /></Form.Item>
                     <Form.Item name="payment_date" label="Payment Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
-                    <Form.Item name="payment_method" label="Payment Method" rules={[{ required: true }]}>
-                        <Select><Select.Option value="Cash">Cash</Select.Option><Select.Option value="Bank Transfer">Bank Transfer</Select.Option></Select>
+                    <Form.Item name="payment_method" label="Paid From Account" rules={[{ required: true }]}>
+                        <Select placeholder="Select Account">
+                            <Select.OptGroup label="Physical Cash">
+                                <Select.Option value="Cash">Cash (Counter)</Select.Option>
+                            </Select.OptGroup>
+                            <Select.OptGroup label="Banks & Wallets">
+                                {paymentAccounts.map(acc => (
+                                    <Select.Option key={acc.id} value={acc.name}>{acc.name}</Select.Option>
+                                ))}
+                            </Select.OptGroup>
+                        </Select>
                     </Form.Item>
                     <Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item>
                 </Form>
@@ -1093,10 +1140,19 @@ const SupplierDashboard = () => {
             {/* --- REFUND MODAL --- */}
             <Modal title={`Record Refund from ${selectedSupplier?.name}`} open={isRefundModalVisible} onCancel={() => setIsRefundModalVisible(false)} onOk={refundForm.submit} okText="Save Refund">
                 <Form form={refundForm} layout="vertical" onFinish={handleRefundSubmit} style={{marginTop: 24}}>
-                    <Form.Item name="amount" label="Refund Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} max={selectedSupplier?.credit_balance} /></Form.Item>
+                    <Form.Item name="amount" label="Refund Amount" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={0} /></Form.Item>
                     <Form.Item name="refund_date" label="Refund Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
-                    <Form.Item name="refund_method" label="Refund Method" rules={[{ required: true }]}>
-                        <Select><Select.Option value="Cash">Cash</Select.Option><Select.Option value="Bank Transfer">Bank Transfer</Select.Option></Select>
+                    <Form.Item name="refund_method" label="Refund To Account" rules={[{ required: true }]}>
+                        <Select placeholder="Select Account">
+                            <Select.OptGroup label="Physical Cash">
+                                <Select.Option value="Cash">Cash (Counter)</Select.Option>
+                            </Select.OptGroup>
+                            <Select.OptGroup label="Banks & Wallets">
+                                {paymentAccounts.map(acc => (
+                                    <Select.Option key={acc.id} value={acc.name}>{acc.name}</Select.Option>
+                                ))}
+                            </Select.OptGroup>
+                        </Select>
                     </Form.Item>
                     <Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item>
                 </Form>

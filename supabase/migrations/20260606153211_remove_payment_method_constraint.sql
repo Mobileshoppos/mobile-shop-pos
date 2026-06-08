@@ -1,0 +1,2 @@
+-- Purana rule khatam kar rahe hain taake custom account names (e.g., EasyPaisa, JazzCash) save ho sakein
+ALTER TABLE "public"."supplier_payments" DROP CONSTRAINT IF EXISTS "supplier_payments_payment_method_check";

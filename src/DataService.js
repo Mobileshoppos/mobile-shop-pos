@@ -916,7 +916,7 @@ async addCustomer(customerData) {
     // 1. Check: Kya customer ka balance bilkul 0 hai?
     const customer = await db.customers.get(id);
     if (customer && Math.abs(customer.balance || 0) > 0.01) {
-      throw new Error("Cannot delete: This customer has a pending balance (Udhaar).");
+      throw new Error("Cannot delete: This customer has a pending balance (Credit).");
     }
 
     // 2. Check: Kya iski koi Sales History hai?
@@ -1688,8 +1688,9 @@ async addCustomer(customerData) {
         if ((c.balance || 0) > 0) totalReceivables += c.balance; 
     });
     
-    // Suppliers jinko hamne paise dene hain
-    await db.suppliers.each(s => { 
+    // Suppliers jinko hamne paise dene hain (Smart Calculation)
+    const suppliersList = await this.getSuppliers();
+    suppliersList.forEach(s => { 
         if ((s.balance_due || 0) > 0) totalPayables += s.balance_due; 
     });
 
@@ -2158,8 +2159,8 @@ async addCustomer(customerData) {
         }
     }
 
-    // 3. Suppliers & Aging
-    const suppliers = await db.suppliers.toArray();
+    // 3. Suppliers & Aging (Smart Calculation)
+    const suppliers = await this.getSuppliers();
     let totalSupplierPayable = 0;
     let supplierAging = { current: 0, mid: 0, old: 0 };
 
@@ -2377,6 +2378,350 @@ async addCustomer(customerData) {
         category: key,
         amount: groupMap[key]
     }));
+  },
+
+  // --- NAYA IZAFA: Daily Financial Summary (Busy Software Style) ---
+  async getDailyFinancialSummary(timeRange = 'today', customDates = []) {
+    let start = new Date();
+    let end = new Date();
+
+    if (timeRange === 'custom' && customDates && customDates.length === 2) {
+        start = new Date(customDates[0]); start.setHours(0,0,0,0);
+        end = new Date(customDates[1]); end.setHours(23,59,59,999);
+    } else if (timeRange === 'month') {
+        start.setDate(1); start.setHours(0,0,0,0);
+    } else if (timeRange === 'week') {
+        const day = start.getDay() || 7;
+        if (day !== 1) start.setHours(-24 * (day - 1)); else start.setHours(0,0,0,0);
+    } else {
+        start.setDate(start.getDate() - 6); // Default 7 days
+        start.setHours(0,0,0,0);
+    }
+
+    const startMs = start.getTime();
+    const endMs = end.getTime();
+
+    // Data fetch karna (Expenses ko bhi shamil kiya gaya hai)
+    const [allSales, allPurchases, allReceipts, allPayments, allExpenses] = await Promise.all([
+        db.sales.toArray(),
+        db.purchases.toArray(),
+        db.customer_payments.toArray(),
+        db.supplier_payments.toArray(),
+        db.expenses.toArray()
+    ]);
+
+    const summaryMap = {};
+
+    const initDate = (dateStr) => {
+        if (!summaryMap[dateStr]) {
+            summaryMap[dateStr] = { date: dateStr, sale: 0, purchase: 0, receipt: 0, payment: 0 };
+        }
+    };
+
+    // 1. Sales & Cash Receipts
+    allSales.forEach(s => {
+        const t = new Date(s.sale_date || s.created_at).getTime();
+        if (t >= startMs && t <= endMs) {
+            const dateStr = new Date(t).toISOString().split('T')[0];
+            initDate(dateStr);
+            summaryMap[dateStr].sale += ((s.total_amount || 0) - (s.tax_amount || 0));
+            // NAYA: Jo paisa sale ke waqt foran mil gaya (Cash Sale), wo Receipt hai
+            summaryMap[dateStr].receipt += (s.amount_paid_at_sale || 0);
+        }
+    });
+
+    // 2. Purchases
+    allPurchases.forEach(p => {
+        const t = new Date(p.purchase_date).getTime();
+        if (t >= startMs && t <= endMs) {
+            const dateStr = new Date(t).toISOString().split('T')[0];
+            initDate(dateStr);
+            summaryMap[dateStr].purchase += (p.total_amount || 0);
+            // FIX: 'amount_paid' yahan se hata diya gaya hai taake double counting na ho. 
+            // Payments ab sirf 'supplier_payments' table se count honge.
+        }
+    });
+
+    // 3. Udhaar ki Wusooli (Receipts)
+    allReceipts.forEach(r => {
+        const t = new Date(r.created_at).getTime();
+        if (t >= startMs && t <= endMs) {
+            const dateStr = new Date(t).toISOString().split('T')[0];
+            initDate(dateStr);
+            summaryMap[dateStr].receipt += (r.amount_paid || 0);
+        }
+    });
+
+    // 4. Udhaar ki Adaigi (Payments)
+    allPayments.forEach(p => {
+        const t = new Date(p.payment_date || p.created_at).getTime();
+        if (t >= startMs && t <= endMs) {
+            const dateStr = new Date(t).toISOString().split('T')[0];
+            initDate(dateStr);
+            summaryMap[dateStr].payment += (p.amount || 0);
+        }
+    });
+
+    // 5. Kharchay (Expenses) bhi Payment hain
+    allExpenses.forEach(e => {
+        const t = new Date(e.expense_date || e.created_at).getTime();
+        if (t >= startMs && t <= endMs) {
+            const dateStr = new Date(t).toISOString().split('T')[0];
+            initDate(dateStr);
+            summaryMap[dateStr].payment += (e.amount || 0);
+        }
+    });
+
+    // 6. NAYA IZAFA: Manual Cash In/Out aur Refunds ko Day Book mein shamil karna
+    const allAdjustments = await db.cash_adjustments.toArray();
+    const allRefunds = await db.supplier_refunds.toArray();
+    const allPayouts = await db.credit_payouts.toArray();
+
+    allAdjustments.forEach(a => {
+        const t = new Date(a.created_at).getTime();
+        if (t >= startMs && t <= endMs) {
+            const dateStr = new Date(t).toISOString().split('T')[0];
+            initDate(dateStr);
+            if (a.type === 'In') summaryMap[dateStr].receipt += (a.amount || 0);
+            if (a.type === 'Out') summaryMap[dateStr].payment += (a.amount || 0);
+        }
+    });
+
+    allRefunds.forEach(r => {
+        const t = new Date(r.refund_date || r.created_at).getTime();
+        if (t >= startMs && t <= endMs) {
+            const dateStr = new Date(t).toISOString().split('T')[0];
+            initDate(dateStr);
+            summaryMap[dateStr].receipt += (r.amount || 0); // Supplier ne wapis kiye (Inflow)
+        }
+    });
+
+    allPayouts.forEach(p => {
+        const t = new Date(p.created_at).getTime();
+        if (t >= startMs && t <= endMs) {
+            const dateStr = new Date(t).toISOString().split('T')[0];
+            initDate(dateStr);
+            summaryMap[dateStr].payment += (p.amount_paid || 0); // Customer ko wapis kiye (Outflow)
+        }
+    });
+
+    // Date ke hisaab se sort karke wapis bhejna (Nayi date sab se upar)
+    return Object.values(summaryMap).sort((a, b) => new Date(b.date) - new Date(a.date));
+  },
+
+  // --- NAYA IZAFA: Drill-down (Pop-up) ke liye data lana ---
+  async getDrillDownData(dateStr, type) {
+    const startMs = new Date(dateStr).setHours(0,0,0,0);
+    const endMs = new Date(dateStr).setHours(23,59,59,999);
+    let results = [];
+
+    if (type === 'sale') {
+        const sales = await db.sales.toArray();
+        const customers = await db.customers.toArray();
+        const custMap = {}; customers.forEach(c => custMap[c.id] = c.name);
+
+        sales.filter(s => {
+            const t = new Date(s.sale_date || s.created_at).getTime();
+            return t >= startMs && t <= endMs;
+        }).forEach(s => {
+            results.push({
+                id: s.id,
+                ref_no: s.invoice_id || s.id.split('-')[0].toUpperCase(),
+                party_name: custMap[s.customer_id] || 'Walk-in Customer',
+                // FIX: toLowerCase() lagaya taake 'Paid' aur 'paid' dono ko sahi pakre
+                description: (s.payment_status && s.payment_status.toLowerCase() === 'paid') ? 'Cash Sale' : 'Credit Sale',
+                amount: ((s.total_amount || 0) - (s.tax_amount || 0)),
+                payment_mode: s.payment_method || 'Cash', 
+                link: null 
+            });
+        });
+    }
+    else if (type === 'purchase') {
+        const purchases = await db.purchases.toArray();
+        const suppliers = await db.suppliers.toArray();
+        const suppMap = {}; suppliers.forEach(s => suppMap[s.id] = s.name);
+        
+        purchases.filter(p => {
+            const t = new Date(p.purchase_date).getTime();
+            return t >= startMs && t <= endMs;
+        }).forEach(p => {
+            results.push({
+                id: p.id,
+                ref_no: p.invoice_id || p.id.split('-')[0].toUpperCase(),
+                party_name: suppMap[p.supplier_id] || 'Unknown Supplier',
+                description: p.status === 'paid' ? 'Cash Purchase' : 'Credit Purchase',
+                amount: p.total_amount || 0,
+                payment_mode: p.amount_paid > 0 ? 'Cash' : null, // <--- FIX: Sirf tab Cash tag dikhaye jab paise diye gaye hon
+                link: `/purchases/${p.id}` 
+            });
+        });
+    }
+    else if (type === 'receipt') {
+        const sales = await db.sales.toArray();
+        const payments = await db.customer_payments.toArray();
+        const customers = await db.customers.toArray();
+        const custMap = {}; customers.forEach(c => custMap[c.id] = c.name);
+
+        sales.filter(s => {
+            const t = new Date(s.sale_date || s.created_at).getTime();
+            return t >= startMs && t <= endMs && (s.amount_paid_at_sale > 0);
+        }).forEach(s => {
+            results.push({
+                id: s.id,
+                ref_no: s.invoice_id || s.id.split('-')[0].toUpperCase(),
+                party_name: custMap[s.customer_id] || 'Walk-in Customer',
+                description: 'Cash Sale Receipt',
+                amount: s.amount_paid_at_sale,
+                payment_mode: s.payment_method || 'Cash', // <--- NAYA IZAFA
+                link: null 
+            });
+        });
+
+        payments.filter(p => {
+            const t = new Date(p.created_at).getTime();
+            return t >= startMs && t <= endMs;
+        }).forEach(p => {
+            const isReturn = p.amount_paid < 0;
+            let finalRefNo = p.voucher_no || ((isReturn ? 'RET-' : 'RCPT-') + p.id.split('-')[0].toUpperCase());
+            
+            // Purani entries jin mein ghalti se RCPT save ho gaya tha, unko display mein theek kar dein
+            if (isReturn && finalRefNo.startsWith('RCPT-')) {
+                finalRefNo = finalRefNo.replace('RCPT-', 'RET-');
+            }
+
+            results.push({
+                id: p.id,
+                ref_no: finalRefNo, 
+                party_name: custMap[p.customer_id] || 'Customer',
+                description: isReturn ? 'Sale Return' : 'Customer Payment', // <--- FIX: Description theek ho gayi
+                amount: p.amount_paid,
+                payment_mode: p.payment_method || 'Cash', 
+                link: '/customers' 
+            });
+        });
+
+        // NAYA IZAFA: Manual Cash In aur Supplier Refunds
+        const adjustments = await db.cash_adjustments.toArray();
+        const supRefunds = await db.supplier_refunds.toArray();
+        const suppliers = await db.suppliers.toArray();
+        const supMap = {}; suppliers.forEach(s => supMap[s.id] = s.name);
+
+        adjustments.filter(a => {
+            const t = new Date(a.created_at).getTime();
+            return t >= startMs && t <= endMs && a.type === 'In';
+        }).forEach(a => {
+            results.push({
+                id: a.id,
+                ref_no: a.voucher_no || ('ADJ-' + a.id.split('-')[0].toUpperCase()),
+                party_name: 'Internal',
+                description: a.notes || 'Manual Cash In',
+                amount: a.amount,
+                payment_mode: a.payment_method || 'Cash',
+                link: null
+            });
+        });
+
+        supRefunds.filter(r => {
+            const t = new Date(r.refund_date || r.created_at).getTime();
+            return t >= startMs && t <= endMs;
+        }).forEach(r => {
+            results.push({
+                id: r.id,
+                ref_no: r.voucher_no || ('RCPT-' + r.id.split('-')[0].toUpperCase()),
+                party_name: supMap[r.supplier_id] || 'Supplier',
+                description: r.notes || 'Supplier Refund',
+                amount: r.amount,
+                payment_mode: r.refund_method || r.payment_method || 'Cash',
+                link: '/suppliers'
+            });
+        });
+    }
+    else if (type === 'payment') {
+        const purchases = await db.purchases.toArray();
+        const payments = await db.supplier_payments.toArray();
+        const expenses = await db.expenses.toArray();
+        
+        const suppliers = await db.suppliers.toArray();
+        const suppMap = {}; suppliers.forEach(s => suppMap[s.id] = s.name);
+        const expCats = await db.expense_categories.toArray();
+        const expMap = {}; expCats.forEach(c => expMap[c.id] = c.name);
+
+        // FIX: Purchases block yahan se hata diya gaya hai taake payment pop-up mein double counting na ho.
+
+        payments.filter(p => {
+            const t = new Date(p.payment_date || p.created_at).getTime();
+            return t >= startMs && t <= endMs;
+        }).forEach(p => {
+            results.push({
+                id: p.id,
+                ref_no: p.voucher_no || ('PAY-' + p.id.split('-')[0].toUpperCase()), 
+                party_name: suppMap[p.supplier_id] || 'Supplier',
+                description: 'Supplier Payment',
+                amount: p.amount,
+                payment_mode: p.payment_method || 'Cash', // <--- NAYA IZAFA
+                link: '/suppliers' 
+            });
+        });
+
+        expenses.filter(e => {
+            const t = new Date(e.expense_date || e.created_at).getTime();
+            return t >= startMs && t <= endMs;
+        }).forEach(e => {
+            results.push({
+                id: e.id,
+                ref_no: e.voucher_no || ('EXP-' + e.id.split('-')[0].toUpperCase()), 
+                party_name: expMap[e.category_id] || 'Business Expense',
+                description: e.title || 'Operating Expense',
+                amount: e.amount,
+                payment_mode: e.payment_method || 'Cash', 
+                link: '/expenses' 
+            });
+        });
+
+        // NAYA IZAFA: Manual Cash Out aur Customer Payouts
+        const adjustments = await db.cash_adjustments.toArray();
+        const payouts = await db.credit_payouts.toArray();
+        const customers = await db.customers.toArray();
+        const custMap = {}; customers.forEach(c => custMap[c.id] = c.name);
+
+        adjustments.filter(a => {
+            const t = new Date(a.created_at).getTime();
+            return t >= startMs && t <= endMs && a.type === 'Out';
+        }).forEach(a => {
+            results.push({
+                id: a.id,
+                ref_no: a.voucher_no || ('ADJ-' + a.id.split('-')[0].toUpperCase()),
+                party_name: 'Internal',
+                description: a.notes || 'Manual Cash Out',
+                amount: a.amount,
+                payment_mode: a.payment_method || 'Cash',
+                link: null
+            });
+        });
+
+        payouts.filter(p => {
+            const t = new Date(p.created_at).getTime();
+            return t >= startMs && t <= endMs;
+        }).forEach(p => {
+            // FIX: Agar description mein lambi UUID ho to usay saaf kar dein
+            let desc = p.remarks || 'Customer Refund / Payout';
+            if (desc.includes('Auto-Refund for Return #') && desc.length > 40) {
+                desc = 'Cash Refund for Returned Items';
+            }
+
+            results.push({
+                id: p.id,
+                ref_no: p.voucher_no || ('PAY-' + p.id.split('-')[0].toUpperCase()),
+                party_name: custMap[p.customer_id] || 'Customer',
+                description: desc,
+                amount: p.amount_paid,
+                payment_mode: p.payment_method || 'Cash',
+                link: '/customers'
+            });
+        });
+    }
+
+    return results.sort((a, b) => b.amount - a.amount);
   },
 
 // --- EXPENSES SECTION ---
@@ -2691,7 +3036,7 @@ async addCustomer(customerData) {
         else if (bal < 0) totalReceivables += Math.abs(bal); // Advance diya hua hai (Hum ne lena hai -> Receivable)
     });
 
-    const suppliers = await db.suppliers.toArray();
+    const suppliers = await this.getSuppliers(); // Smart Calculation
     const products = await db.products.toArray();
 
     const inventoryMap = {}; 
@@ -2863,24 +3208,43 @@ async addCustomer(customerData) {
 
     const cashInHand = precise(startingCash + (cashSales + cashReceived + cashRefunds + totalCashIn + cashTransfersIn) - (cashExpenses + cashPaidToSuppliers + cashPayouts + totalCashOut + cashTransfersOut));
 
-    // --- BANK LOGIC (Smart Fix for 'Bank' vs 'Bank Transfer') ---
-    // Helper function taake dono spellings check ho sakein
-    const isBank = (method) => method === 'Bank' || method === 'Bank Transfer';
+    // --- NAYA IZAFA: DYNAMIC ACCOUNTS LOGIC (Banks & Wallets) ---
+    const paymentAccounts = await db.payment_accounts.toArray();
+    const accountsBreakdown = [];
+    let legacyBankBalance = 0; // Purane code ko crash se bachane ke liye
 
-    const bankSales = bankSalesTotal;
-    const bankReceived = customerPayments.filter(p => isBank(p.payment_method)).reduce((sum, p) => sum + (p.amount_paid || 0), 0);
-    const bankExpenses = expenses.filter(e => isBank(e.payment_method)).reduce((sum, e) => sum + (e.amount || 0), 0);
-    const bankPaidToSuppliers = supplierPayments.filter(p => isBank(p.payment_method)).reduce((sum, p) => sum + (p.amount || 0), 0);
-    const bankPayouts = creditPayouts.filter(p => isBank(p.payment_method)).reduce((sum, p) => sum + (p.amount_paid || 0), 0);
-    const bankRefunds = supplierRefunds.filter(r => isBank(r.payment_method) || isBank(r.refund_method)).reduce((sum, r) => sum + (r.amount || 0), 0);
+    for (const acc of paymentAccounts) {
+        const accName = acc.name;
+        // Purane records jin mein sirf 'Bank' ya 'Cash' likha tha, unhein default accounts mein shamil karein
+        const isLegacyBank = acc.is_default && acc.type === 'Bank'; 
+        const isLegacyCash = acc.is_default && acc.type === 'Cash'; 
+        
+        const matchMethod = (method) => 
+            method === accName || 
+            (isLegacyBank && (method === 'Bank' || method === 'Bank Transfer')) ||
+            (isLegacyCash && method === 'Cash');
 
-    const totalBankIn = cashAdjustments.filter(a => a.type === 'In' && isBank(a.payment_method)).reduce((sum, a) => sum + (a.amount || 0), 0);
-    const totalBankOut = cashAdjustments.filter(a => a.type === 'Out' && isBank(a.payment_method)).reduce((sum, a) => sum + (a.amount || 0), 0);
-    
-    const bankTransfersIn = cashAdjustments.filter(a => a.type === 'Transfer' && isBank(a.transfer_to)).reduce((sum, a) => sum + (a.amount || 0), 0);
-    const bankTransfersOut = cashAdjustments.filter(a => a.type === 'Transfer' && isBank(a.payment_method)).reduce((sum, a) => sum + (a.amount || 0), 0);
+        const accSales = sales.filter(s => matchMethod(s.payment_method)).reduce((sum, s) => sum + (s.amount_paid_at_sale || 0), 0);
+        const accReceived = customerPayments.filter(p => matchMethod(p.payment_method)).reduce((sum, p) => sum + (p.amount_paid || 0), 0);
+        const accExpenses = expenses.filter(e => matchMethod(e.payment_method)).reduce((sum, e) => sum + (e.amount || 0), 0);
+        const accPaidSup = supplierPayments.filter(p => matchMethod(p.payment_method)).reduce((sum, p) => sum + (p.amount || 0), 0);
+        const accPayouts = creditPayouts.filter(p => matchMethod(p.payment_method)).reduce((sum, p) => sum + (p.amount_paid || 0), 0);
+        const accRefunds = supplierRefunds.filter(r => matchMethod(r.payment_method) || matchMethod(r.refund_method)).reduce((sum, r) => sum + (r.amount || 0), 0);
 
-    const bankBalance = precise((bankSales + bankReceived + bankRefunds + totalBankIn + bankTransfersIn) - (bankExpenses + bankPaidToSuppliers + bankPayouts + totalBankOut + bankTransfersOut));
+        const accIn = cashAdjustments.filter(a => a.type === 'In' && matchMethod(a.payment_method)).reduce((sum, a) => sum + (a.amount || 0), 0);
+        const accOut = cashAdjustments.filter(a => a.type === 'Out' && matchMethod(a.payment_method)).reduce((sum, a) => sum + (a.amount || 0), 0);
+        
+        // Transfer logic
+        const accTransfersIn = cashAdjustments.filter(a => a.type === 'Transfer' && matchMethod(a.transfer_to)).reduce((sum, a) => sum + (a.amount || 0), 0);
+        const accTransfersOut = cashAdjustments.filter(a => a.type === 'Transfer' && matchMethod(a.payment_method)).reduce((sum, a) => sum + (a.amount || 0), 0);
+
+        const currentBal = precise((Number(acc.opening_balance) || 0) + accSales + accReceived + accRefunds + accIn + accTransfersIn - accExpenses - accPaidSup - accPayouts - accOut - accTransfersOut);
+
+        accountsBreakdown.push({ name: accName, balance: currentBal });
+        
+        if (isLegacyBank) legacyBankBalance = currentBal;
+    }
+    const bankBalance = legacyBankBalance;
 
 
     // Suppliers ka udhaar (Payables)
@@ -2964,6 +3328,7 @@ async addCustomer(customerData) {
     return {
         totalSales: netSalesCurrent,
         countersBreakdown, 
+        accountsBreakdown, // <--- NAYA IZAFA: All custom accounts
         totalReturnFees: totalReturnFeesCurrent,
         salesGrowth,
         cashInHand: totalCashInCounters, // <--- Purani logic ki jagah counters ka sum use kiya
@@ -3863,9 +4228,12 @@ async addCustomer(customerData) {
 
     // 1. Cash IN: Normal "In" + Wo Transfers jo is counter ki taraf aaye (transfer_to)
     const adjIn = allAdjustments.filter(a => {
-      if (a.payment_method !== 'Cash') return false;
+      // Agar direct Cash In hai, to source Cash hona chahiye
+      if (a.type === 'In' && a.payment_method !== 'Cash') return false;
+      
       if (a.type === 'In' && a.session_id === sessionId) return true;
       
+      // Agar Transfer ho kar is counter mein aa raha hai, to chahe Bank se aaye ya Cash se, wo is counter ke liye Cash IN hai
       const isForThisCounter = (a.type === 'In' && a.register_id === regId) || (a.type === 'Transfer' && a.transfer_to === regId);
       if (isForThisCounter && isWithinSession(a.created_at)) return true;
       
@@ -3945,8 +4313,8 @@ async addCustomer(customerData) {
     
     // Transfer logic shamil ki gayi
     const recentAdjIn = allAdjs.filter(a => 
-      a.payment_method === 'Cash' && a.created_at > timeFilter &&
-      ( (a.register_id === registerId && a.type === 'In') || (a.transfer_to === registerId && a.type === 'Transfer') )
+      a.created_at > timeFilter &&
+      ( (a.payment_method === 'Cash' && a.register_id === registerId && a.type === 'In') || (a.transfer_to === registerId && a.type === 'Transfer') )
     ).reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
 
     const recentAdjOut = allAdjs.filter(a => 
@@ -4012,31 +4380,63 @@ async addCustomer(customerData) {
     let ledger = [];
 
     adjustments.forEach(a => {
+      let txType = 'Info';
+      
+      // 1. Agar Cash In hai is counter par
+      if (a.type === 'In' && a.register_id === registerId) {
+          txType = 'Credit (In)';
+      } 
+      // 2. Agar Cash Out hai is counter se
+      else if (a.type === 'Out' && a.register_id === registerId) {
+          txType = 'Debit (Out)';
+      } 
+      // 3. Agar Transfer hai aur is counter mein paisa AAYA hai
+      else if (a.type === 'Transfer' && a.transfer_to === registerId) {
+          txType = 'Credit (In)';
+      } 
+      // 4. Agar Transfer hai aur is counter se paisa GAYA hai
+      else if (a.type === 'Transfer' && a.register_id === registerId) {
+          txType = 'Debit (Out)';
+      }
+
       ledger.push({
         id: a.id,
         date: a.created_at,
-        type: a.register_id === registerId ? 'Debit (Out)' : 'Credit (In)',
+        type: txType,
         amount: a.amount,
         notes: a.notes,
         source: 'Manual Adjustment / Transfer'
       });
     });
 
+    // --- NAYA IZAFA: Name Mapping ke liye Data Layein ---
+    const customers = await db.customers.toArray();
+    const suppliers = await db.suppliers.toArray();
+    const purchases = await db.purchases.toArray();
+
+    const custMap = {}; customers.forEach(c => custMap[c.id] = c.name);
+    const supMap = {}; suppliers.forEach(s => supMap[s.id] = s.name);
+    const purMap = {}; purchases.forEach(p => purMap[p.id] = p.invoice_id || p.id.slice(0,8));
+    // -----------------------------------------------------
+
     sales.forEach(s => {
       if (s.payment_method === 'Cash') {
-        ledger.push({ id: s.id, date: s.created_at, type: 'Credit (In)', amount: s.amount_paid_at_sale, notes: `Sale #${s.invoice_id || s.id.slice(0,8)}`, source: 'Sales' });
+        ledger.push({ id: s.id, date: s.created_at, type: 'Credit (In)', amount: s.amount_paid_at_sale, notes: `Sale #${s.invoice_id || s.id.slice(0,8)} - ${custMap[s.customer_id] || 'Walk-in'}`, source: 'Sales' });
       }
     });
 
     payments.forEach(p => {
       if (p.payment_method === 'Cash') {
-        ledger.push({ id: p.id, date: p.created_at, type: 'Credit (In)', amount: p.amount_paid, notes: 'Customer Payment Received', source: 'Collection' });
+        const vNoDisplay = p.voucher_no || `RCPT-${p.id.slice(0,6).toUpperCase()}`;
+        ledger.push({ id: p.id, date: p.created_at, type: 'Credit (In)', amount: p.amount_paid, notes: `Received from ${custMap[p.customer_id] || 'Customer'} (${vNoDisplay})`, source: 'Collection' });
       }
     });
 
     supPayments.forEach(sp => {
       if (sp.payment_method === 'Cash') {
-        ledger.push({ id: sp.id, date: sp.created_at, type: 'Debit (Out)', amount: sp.amount, notes: 'Paid to Supplier', source: 'Supplier Payment' });
+        let note = `Paid to ${supMap[sp.supplier_id] || 'Supplier'}`;
+        if (sp.purchase_id) note += ` (Inv #${purMap[sp.purchase_id]})`;
+        ledger.push({ id: sp.id, date: sp.created_at, type: 'Debit (Out)', amount: sp.amount, notes: note, source: 'Supplier Payment' });
       }
     });
 
@@ -4046,17 +4446,15 @@ async addCustomer(customerData) {
       }
     });
 
-    // NAYA IZAFA: Customer Payouts (Refunds) ko ledger mein shamil karna
     payouts.forEach(p => {
       if (p.payment_method === 'Cash') {
-        ledger.push({ id: p.id, date: p.created_at, type: 'Debit (Out)', amount: p.amount_paid, notes: p.remarks || 'Customer Credit Payout', source: 'Credit Settlement' });
+        ledger.push({ id: p.id, date: p.created_at, type: 'Debit (Out)', amount: p.amount_paid, notes: `Refunded to ${custMap[p.customer_id] || 'Customer'}`, source: 'Credit Settlement' });
       }
     });
 
-    // NAYA IZAFA: Supplier Refunds ko ledger mein shamil karna
     supRefunds.forEach(r => {
       if (r.payment_method === 'Cash') {
-        ledger.push({ id: r.id, date: r.created_at, type: 'Credit (In)', amount: r.amount, notes: r.notes || 'Refund from Supplier', source: 'Supplier Refund' });
+        ledger.push({ id: r.id, date: r.created_at, type: 'Credit (In)', amount: r.amount, notes: `Refund from ${supMap[r.supplier_id] || 'Supplier'}`, source: 'Supplier Refund' });
       }
     });
 
@@ -4104,6 +4502,102 @@ async addCustomer(customerData) {
 
     // Tarikh ke hisab se sort karein
     return ledger.sort((a, b) => new Date(b.date) - new Date(a.date));
+  },
+
+  // --- NAYA IZAFA: BANK ACCOUNT LEDGER ---
+  async getBankAccountLedger(accountName) {
+    // 1. Account ki details nikalain taake Opening Balance mil sake
+    const account = await db.payment_accounts.filter(a => a.name === accountName).first();
+    const openingBal = account ? (Number(account.opening_balance) || 0) : 0;
+
+    const sales = await db.sales.toArray();
+    const expenses = await db.expenses.toArray();
+    const payments = await db.customer_payments.toArray();
+    const supPayments = await db.supplier_payments.toArray();
+    const payouts = await db.credit_payouts.toArray();
+    const supRefunds = await db.supplier_refunds.toArray();
+    const adjustments = await db.cash_adjustments.toArray();
+
+    // --- NAYA IZAFA: Name Mapping ke liye Data Layein ---
+    const customers = await db.customers.toArray();
+    const suppliers = await db.suppliers.toArray();
+    const purchases = await db.purchases.toArray();
+
+    const custMap = {}; customers.forEach(c => custMap[c.id] = c.name);
+    const supMap = {}; suppliers.forEach(s => supMap[s.id] = s.name);
+    const purMap = {}; purchases.forEach(p => purMap[p.id] = p.invoice_id || p.id.slice(0,8));
+    // -----------------------------------------------------
+
+    let ledger = [];
+
+    if (openingBal > 0) {
+        ledger.push({ id: 'opening_bal', date: account ? account.created_at : new Date(0).toISOString(), type: 'Info', amount: openingBal, notes: 'Opening Balance', source: 'System (Account Created)' });
+    }
+
+    sales.forEach(s => {
+        if (s.payment_method === accountName) ledger.push({ id: s.id, date: s.created_at, type: 'Credit (In)', amount: s.amount_paid_at_sale, notes: `Sale #${s.invoice_id || s.id.slice(0,8)} - ${custMap[s.customer_id] || 'Walk-in'}`, source: 'Sales' });
+    });
+    payments.forEach(p => {
+        const vNoDisplay = p.voucher_no || `RCPT-${p.id.slice(0,6).toUpperCase()}`;
+        if (p.payment_method === accountName) ledger.push({ id: p.id, date: p.created_at, type: 'Credit (In)', amount: p.amount_paid, notes: `Received from ${custMap[p.customer_id] || 'Customer'} (${vNoDisplay})`, source: 'Collection' });
+    });
+    supPayments.forEach(sp => {
+        let note = `Paid to ${supMap[sp.supplier_id] || 'Supplier'}`;
+        if (sp.purchase_id) note += ` (Inv #${purMap[sp.purchase_id]})`;
+        if (sp.payment_method === accountName) ledger.push({ id: sp.id, date: sp.created_at, type: 'Debit (Out)', amount: sp.amount, notes: note, source: 'Supplier Payment' });
+    });
+    expenses.forEach(e => {
+        if (e.payment_method === accountName) ledger.push({ id: e.id, date: e.created_at, type: 'Debit (Out)', amount: e.amount, notes: e.title, source: 'Expense' });
+    });
+    payouts.forEach(p => {
+        if (p.payment_method === accountName) ledger.push({ id: p.id, date: p.created_at, type: 'Debit (Out)', amount: p.amount_paid, notes: `Refunded to ${custMap[p.customer_id] || 'Customer'}`, source: 'Credit Settlement' });
+    });
+    supRefunds.forEach(r => {
+        if (r.refund_method === accountName || r.payment_method === accountName) ledger.push({ id: r.id, date: r.created_at, type: 'Credit (In)', amount: r.amount, notes: `Refund from ${supMap[r.supplier_id] || 'Supplier'}`, source: 'Supplier Refund' });
+    });
+    adjustments.forEach(a => {
+        let txType = 'Info';
+        if (a.type === 'In' && a.payment_method === accountName) txType = 'Credit (In)';
+        else if (a.type === 'Out' && a.payment_method === accountName) txType = 'Debit (Out)';
+        else if (a.type === 'Transfer' && a.transfer_to === accountName) txType = 'Credit (In)';
+        else if (a.type === 'Transfer' && a.payment_method === accountName) txType = 'Debit (Out)';
+
+        if (txType !== 'Info') {
+            ledger.push({ id: a.id, date: a.created_at, type: txType, amount: a.amount, notes: a.notes, source: 'Manual Adjustment / Transfer' });
+        }
+    });
+
+    return ledger.sort((a, b) => new Date(b.date) - new Date(a.date));
+  },
+
+  // --- NAYA IZAFA: PAYMENT ACCOUNTS FUNCTIONS ---
+  async getPaymentAccounts() {
+    const accounts = await db.payment_accounts.toArray();
+    return accounts.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  },
+
+  async addPaymentAccount(accountData) {
+    if (!accountData.id) accountData.id = crypto.randomUUID();
+    accountData.local_id = accountData.id;
+    accountData.created_at = new Date().toISOString();
+    accountData.updated_at = new Date().toISOString();
+    
+    await db.payment_accounts.add(accountData);
+    await db.sync_queue.add({ table_name: 'payment_accounts', action: 'create', data: accountData });
+    return accountData;
+  },
+
+  async updatePaymentAccount(id, updates) {
+    updates.updated_at = new Date().toISOString();
+    await db.payment_accounts.update(id, updates);
+    await db.sync_queue.add({ table_name: 'payment_accounts', action: 'update', data: { id, ...updates } });
+    return true;
+  },
+
+  async deletePaymentAccount(id) {
+    await db.payment_accounts.delete(id);
+    await db.sync_queue.add({ table_name: 'payment_accounts', action: 'delete', data: { id } });
+    return true;
   },
 
 };

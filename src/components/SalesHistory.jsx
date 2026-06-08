@@ -331,7 +331,7 @@ const SalesHistory = () => {
   title: 'Method',
   dataIndex: 'payment_method',
   key: 'payment_method',
-  render: (method) => <Tag color={method === 'Bank' ? 'cyan' : 'default'}>{method || 'Cash'}</Tag>,
+  render: (method) => <Tag color={method === 'Cash' ? 'default' : 'cyan'}>{method || 'Cash'}</Tag>,
   width: 100,
 },
     {

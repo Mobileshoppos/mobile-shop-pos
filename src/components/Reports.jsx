@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Tabs, Card, Row, Col, Statistic, Spin, DatePicker, Space, theme, Table, Progress, Divider, Tag, Empty, Button, Dropdown, Menu, Radio, Badge, Tooltip, App, Select } from 'antd';
+import { Typography, Tabs, Card, Row, Col, Statistic, Spin, DatePicker, Space, theme, Table, Progress, Divider, Tag, Empty, Button, Dropdown, Menu, Radio, Badge, Tooltip, App, Select, ConfigProvider } from 'antd';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -80,13 +80,11 @@ const Reports = () => {
   // --- UPDATED: Universal Glow Style (Light & Dark Compatible) ---
   const cardStyle = {
     borderRadius: 8,
-    // Border ko thora aur wazeh kiya (33 means ~20% opacity)
     border: `1px solid ${token.colorPrimary}33`, 
-    // Shadow ko thora "Soft" aur "Deep" kiya taake Light mode mein bhi nazar aaye
     boxShadow: `0 4px 12px ${token.colorPrimary}15`, 
     height: '100%',
-    transition: 'all 0.3s ease', // Theme badalte waqt smooth transition
-    backgroundColor: token.colorBgContainer // Card ka apna background theme ke mutabiq
+    transition: 'all 0.3s ease', 
+    backgroundColor: token.colorCardBg || token.colorBgContainer // Ab yeh ThemeConfig se control hoga
   };
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'sales');
 
@@ -100,7 +98,9 @@ const Reports = () => {
   const [auditData, setAuditData] = useState(null);
   // --- VAULT LEDGER STATES (NAYA IZAFA) ---
   const [allRegisters, setAllRegisters] = useState([]);
+  const [paymentAccounts, setPaymentAccounts] = useState([]); // NAYA IZAFA
   const [selectedRegForLedger, setSelectedRegForLedger] = useState(null);
+  const [selectedAccountType, setSelectedAccountType] = useState('counter'); // 'counter' ya 'bank'
   const [registerLedgerData, setRegisterLedgerData] = useState([]);
   const [activeSessionsData, setActiveSessionsData] = useState([]); 
   const [currentCounterCash, setCurrentCounterCash] = useState(0); // NAYA IZAFA
@@ -486,22 +486,52 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           const regs = await DataService.getRegisters();
           setAllRegisters(regs);
           
+          let accounts = [];
+          if (DataService.getPaymentAccounts) {
+              accounts = await DataService.getPaymentAccounts();
+              // Sirf Bank/Wallets filter karein kyunke Cash to Counter hai
+              const banks = accounts.filter(a => a.type !== 'Cash');
+              setPaymentAccounts(banks);
+          }
+
           // NAYA IZAFA: Staff aur Active Sessions mangwayein taake cards par naam likh sakein
           const staff = await DataService.getStaffMembers();
           setStaffList(staff);
           const sessions = await db.register_sessions.filter(s => !s.closed_at).toArray();
           setActiveSessionsData(sessions);
 
-          if (regs.length > 0 && !selectedRegForLedger) {
-            setSelectedRegForLedger(regs[0].id);
+          // Default Selection
+          if (!selectedRegForLedger) {
+            if (regs.length > 0) {
+                setSelectedRegForLedger(regs[0].id);
+                setSelectedAccountType('counter');
+            } else if (accounts.length > 0) {
+                setSelectedRegForLedger(accounts[0].name);
+                setSelectedAccountType('bank');
+            }
           }
-          if (selectedRegForLedger) {
-            const ledger = await DataService.getRegisterLedger(selectedRegForLedger);
-            setRegisterLedgerData(ledger);
 
-            // NAYA IZAFA: Sahi Cash Calculate Karna (Real-world logic via Master Function)
-            const trueCash = await DataService.getRegisterCurrentCash(selectedRegForLedger);
-            setCurrentCounterCash(trueCash);
+          if (selectedRegForLedger) {
+            if (selectedAccountType === 'counter') {
+                const ledger = await DataService.getRegisterLedger(selectedRegForLedger);
+                setRegisterLedgerData(ledger);
+                const trueCash = await DataService.getRegisterCurrentCash(selectedRegForLedger);
+                setCurrentCounterCash(trueCash);
+            } else {
+                const ledger = await DataService.getBankAccountLedger(selectedRegForLedger);
+                setRegisterLedgerData(ledger);
+                
+                // Bank ka balance nikalna (Opening Balance + In - Out)
+                const accDetails = accounts.find(a => a.name === selectedRegForLedger);
+                const openingBal = accDetails ? Number(accDetails.opening_balance) || 0 : 0;
+                
+                let bal = openingBal;
+                ledger.forEach(tx => {
+                    if (tx.type === 'Credit (In)') bal += Number(tx.amount);
+                    if (tx.type === 'Debit (Out)') bal -= Number(tx.amount);
+                });
+                setCurrentCounterCash(bal);
+            }
           }
         }
       } catch (error) {
@@ -708,9 +738,11 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 formatter={(val) => formatCurrency(val, profile?.currency)} 
                 valueStyle={{ fontSize: '20px' }}
               />
-              <div style={{ height: '20px', marginTop: 4 }}>
-                <Progress percent={cashPercent} size="small" strokeColor={token.colorSuccess} showInfo={false} />
-                <Text type="secondary" style={{ fontSize: '10px' }}>{cashPercent}% of total</Text>
+              <div style={{ height: '25px', marginTop: 4 }}>
+                <Progress percent={cashPercent} size="small" strokeColor={token.colorSuccess} showInfo={false} style={{ marginBottom: 2 }} />
+                <div style={{ marginTop: '-8px' }}>
+                  <Text type="secondary" style={{ fontSize: '13px', fontWeight: 500 }}>{cashPercent}% of total</Text>
+                </div>
               </div>
             </Col>
 
@@ -722,9 +754,11 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 formatter={(val) => formatCurrency(val, profile?.currency)} 
                 valueStyle={{ fontSize: '20px' }}
               />
-              <div style={{ height: '20px', marginTop: 4 }}>
-                <Progress percent={bankPercent} size="small" strokeColor={token.colorInfo} showInfo={false} />
-                <Text type="secondary" style={{ fontSize: '10px' }}>{bankPercent}% of total</Text>
+              <div style={{ height: '25px', marginTop: 4 }}>
+                <Progress percent={bankPercent} size="small" strokeColor={token.colorInfo} showInfo={false} style={{ marginBottom: 2 }} />
+                <div style={{ marginTop: '-8px' }}>
+                  <Text type="secondary" style={{ fontSize: '13px', fontWeight: 500 }}>{bankPercent}% of total</Text>
+                </div>
               </div>
             </Col>
 
@@ -1577,19 +1611,20 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
       <div style={{ marginTop: '16px' }}>
         <Card style={cardStyle}>
           <div style={{ marginBottom: '20px' }}>
-            <Text strong style={{ display: 'block', marginBottom: '12px' }}>Select Counter to View Ledger:</Text>
+            <Text strong style={{ display: 'block', marginBottom: '12px' }}>Select Account to View Ledger:</Text>
             
             {/* NAYA IZAFA: Dropdown ki jagah Selectable Cards */}
             <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }} className="hide-scrollbar">
+              {/* 1. Counters Render Karein */}
               {allRegisters.map(reg => {
-                const isSelected = selectedRegForLedger === reg.id;
+                const isSelected = selectedRegForLedger === reg.id && selectedAccountType === 'counter';
                 const activeSession = activeSessionsData.find(s => s.register_id === reg.id);
                 const staffName = activeSession ? (staffList.find(s => s.id === activeSession.staff_id)?.name || 'Owner') : 'Empty';
                 
                 return (
                   <div 
                     key={reg.id}
-                    onClick={() => setSelectedRegForLedger(reg.id)}
+                    onClick={() => { setSelectedRegForLedger(reg.id); setSelectedAccountType('counter'); }}
                     style={{
                       minWidth: '200px',
                       padding: '12px',
@@ -1601,18 +1636,41 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                       position: 'relative'
                     }}
                   >
-                    {/* Status Dot */}
-                    <div style={{ 
-                      position: 'absolute', top: '12px', right: '12px', width: '10px', height: '10px', borderRadius: '50%',
-                      background: reg.status === 'open' ? token.colorSuccess : token.colorTextDisabled
-                    }} />
-                    
+                    <div style={{ position: 'absolute', top: '12px', right: '12px', width: '10px', height: '10px', borderRadius: '50%', background: reg.status === 'open' ? token.colorSuccess : token.colorTextDisabled }} />
                     <Text strong style={{ fontSize: '15px', display: 'block', marginBottom: '4px' }}>{reg.name}</Text>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <UserOutlined style={{ color: token.colorTextSecondary, fontSize: '12px' }} />
-                      <Text type="secondary" style={{ fontSize: '12px' }}>
-                        {reg.status === 'open' ? `In Use: ${staffName}` : 'Closed'}
-                      </Text>
+                      <Text type="secondary" style={{ fontSize: '12px' }}>{reg.status === 'open' ? `In Use: ${staffName}` : 'Closed'}</Text>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* 2. Banks & Wallets Render Karein */}
+              {paymentAccounts.map(acc => {
+                const isSelected = selectedRegForLedger === acc.name && selectedAccountType === 'bank';
+                
+                return (
+                  <div 
+                    key={acc.id}
+                    onClick={() => { setSelectedRegForLedger(acc.name); setSelectedAccountType('bank'); }}
+                    style={{
+                      minWidth: '200px',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      border: `2px solid ${isSelected ? token.colorInfo : token.colorBorderSecondary}`,
+                      background: isSelected ? (isDarkMode ? token.colorInfo + '22' : token.colorInfo + '11') : 'transparent',
+                      transition: 'all 0.2s ease',
+                      position: 'relative'
+                    }}
+                  >
+                    <div style={{ position: 'absolute', top: '12px', right: '12px' }}>
+                       <BankOutlined style={{ color: token.colorInfo }} />
+                    </div>
+                    <Text strong style={{ fontSize: '15px', display: 'block', marginBottom: '4px' }}>{acc.name}</Text>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Text type="secondary" style={{ fontSize: '12px' }}>{acc.type}</Text>
                     </div>
                   </div>
                 );
@@ -1633,12 +1691,12 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 alignItems: 'center'
               }}>
                 <div>
-                  <Text type="secondary">Current Estimated Cash in this Counter:</Text>
+                  <Text type="secondary">Current Estimated Balance in this Account:</Text>
                   <Title level={4} style={{ margin: 0, color: token.colorPrimary }}>
                     {formatCurrency(currentCounterCash, profile?.currency)}
                   </Title>
                 </div>
-                <BankOutlined style={{ fontSize: '32px', opacity: 0.3 }} />
+                {selectedAccountType === 'counter' ? <ShopOutlined style={{ fontSize: '32px', opacity: 0.3 }} /> : <BankOutlined style={{ fontSize: '32px', opacity: 0.3 }} />}
               </div>
             </Col>
           </Row>
@@ -1708,7 +1766,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
     },
     {
       key: 'vault_flow',
-      label: <span><ShopOutlined /> Counter Ledgers</span>,
+      label: <span><ShopOutlined /> Account Ledgers</span>,
       children: renderVaultFlowTab(),
     },
   ];
@@ -1723,6 +1781,12 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
   );
 
   return (
+    <ConfigProvider theme={{ 
+      components: { 
+        Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg },
+        Tabs: { itemActiveBg: token.colorCardBg, cardBg: token.colorBgLayout, colorBorderSecondary: token.colorBorder }
+      } 
+    }}>
     <div style={{ padding: isMobile ? '12px 4px' : '4px', position: 'relative', minHeight: '80vh' }}>
       
       {/* --- LOCK OVERLAY CARD --- */}
@@ -1850,7 +1914,8 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         )}
       />
     </div> {/* Content Wrapper End */}
-    </div> /* Main Container End */
+    </div>
+    </ConfigProvider>
   );
 };
 
