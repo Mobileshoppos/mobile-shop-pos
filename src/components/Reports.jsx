@@ -57,9 +57,12 @@ import {
   PieChartOutlined,
   HistoryOutlined,
   ShopOutlined,
-  UserOutlined
+  UserOutlined,
+  PrinterOutlined
 } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf'; // <--- NAYA IZAFA
+import autoTable from 'jspdf-autotable'; // <--- NAYA IZAFA
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -369,6 +372,265 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
 
     } catch (error) {
       message.error("Export failed: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- NAYA IZAFA: PROFESSIONAL PDF EXPORT LOGIC ---
+  const handleCurrentTabPdfExport = async () => {
+    setLoading(true);
+    try {
+      const startDate = dateRange[0].format('YYYY-MM-DD');
+      const endDate = dateRange[1].format('YYYY-MM-DD');
+      const curr = profile?.currency || ''; 
+      
+      const doc = new jsPDF();
+      
+      // --- Professional Header ---
+      doc.setFontSize(22);
+      doc.setTextColor(26, 182, 201); // Aap ki Theme ka Primary Color
+      doc.text(profile?.shop_name || 'My Shop', 14, 20);
+      
+      doc.setFontSize(14);
+      doc.setTextColor(40, 40, 40);
+      doc.text(`Business Report: ${activeTab.replace('_', ' ').toUpperCase()}`, 14, 28);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      doc.text(`Date Range: ${startDate} to ${endDate}`, 14, 34);
+      doc.text(`Generated On: ${dayjs().format('DD MMM YYYY, hh:mm A')}`, 14, 40);
+
+      let startY = 50; // Pehla table kahan se shuru hoga
+
+      // Helper function: Table draw karne ke liye taake code chota rahe
+      const addTable = (title, head, body) => {
+        if (body.length === 0) return;
+        
+        // Agar page par jagah kam hai to naya page shuru karein
+        if (startY > 250) {
+            doc.addPage();
+            startY = 20;
+        }
+
+        doc.setFontSize(11);
+        doc.setTextColor(40, 40, 40);
+        doc.text(title, 14, startY);
+        
+        autoTable(doc, {
+          startY: startY + 4,
+          head: [head],
+          body: body,
+          theme: 'grid',
+          headStyles: { fillColor: [26, 182, 201], fontSize: 10 },
+          styles: { fontSize: 9 },
+        });
+        
+        startY = doc.lastAutoTable.finalY + 15; // Agle table ke liye jagah
+      };
+
+      // --- TAB 1: SALES & REVENUE ---
+      if (activeTab === 'sales') {
+        const data = await DataService.getSalesAndRevenueReport(startDate, endDate);
+        
+        addTable("FINANCIAL SUMMARY", ["Description", "Amount"], [
+          ["Total Cash Sales", formatCurrency(data.cashSales, curr)],
+          ["Total Bank Sales", formatCurrency(data.bankSales, curr)],
+          ["Total Tax Collected", formatCurrency(data.totalTaxCollected, curr)],
+          ["Total Tax Refunded", formatCurrency(data.totalTaxRefunded, curr)],
+          ["Net Tax Payable", formatCurrency(data.netTax, curr)]
+        ]);
+
+        addTable("CATEGORY BREAKDOWN", ["Category Name", "Revenue", "Profit"], 
+          data.categoryBreakdown.map(c => [c.category, formatCurrency(c.revenue, curr), formatCurrency(c.profit, curr)])
+        );
+
+        addTable("STAFF PERFORMANCE", ["Staff Name", "Invoices", "Units Sold", "Revenue", "Profit"], 
+          data.staffPerformance.map(s => [s.name, s.sale_count, s.items_sold, formatCurrency(s.total_sales, curr), formatCurrency(s.profit, curr)])
+        );
+
+        addTable("TOP SELLING PRODUCTS", ["Product Name", "Quantity Sold", "Total Revenue", "Total Profit"], 
+          data.topProductsByQty.map(p => [p.name, p.qty, formatCurrency(p.revenue, curr), formatCurrency(p.profit, curr)])
+        );
+      } 
+      // --- TAB 2: PROFIT & LOSS ---
+      else if (activeTab === 'profit_loss') {
+        const data = await DataService.getDetailedProfitLossReport(startDate, endDate);
+        
+        addTable("PROFIT & LOSS STATEMENT", ["Description", "Amount"], [
+          ["Gross Sales (Total Invoices)", formatCurrency(data.totalRevenue + (data.totalRefunds || 0), curr)],
+          ["Returns & Refunds", `- ${formatCurrency(data.totalRefunds || 0, curr)}`],
+          ["Net Revenue (A)", formatCurrency(data.totalRevenue, curr)],
+          ["Cost of Goods Sold (B)", `- ${formatCurrency(data.totalCost, curr)}`],
+          ["Gross Profit (A - B)", formatCurrency(data.grossProfit, curr)],
+          ["Total Operating Expenses (C)", `- ${formatCurrency(data.totalExpenses, curr)}`],
+          ["Damaged Stock Loss (D)", `- ${formatCurrency(data.damagedLoss || 0, curr)}`],
+          ["NET PROFIT", formatCurrency(data.netProfit, curr)],
+          ["Net Profit Margin", `${data.profitMargin}%`]
+        ]);
+
+        addTable("OPERATING EXPENSES BREAKDOWN", ["Expense Category", "Total Amount"], 
+          data.expenseBreakdown.map(e => [e.category, formatCurrency(e.amount, curr)])
+        );
+      }
+      // --- TAB 3: INVENTORY & ASSETS ---
+      else if (activeTab === 'inventory') {
+        const data = await DataService.getInventoryReport();
+        
+        addTable("INVENTORY SUMMARY", ["Description", "Amount / Quantity"], [
+          ["Total Stock Units", `${data.totalUnits}`],
+          ["Total Asset Value", formatCurrency(data.totalAssetValue, curr)],
+          ["Potential Profit", formatCurrency(data.totalPotentialProfit, curr)],
+          ["Damaged Stock Loss", formatCurrency(data.totalDamagedLoss || 0, curr)],
+          ["Out of Stock Items", `${data.outOfStockItems?.length || 0}`]
+        ]);
+
+        addTable("INVENTORY VALUATION BY CATEGORY", ["Category Name", "Stock Quantity", "Asset Value"], 
+          data.categoryValuation.map(v => [v.name, v.qty, formatCurrency(v.value, curr)])
+        );
+
+        addTable("BRAND-WISE VALUATION", ["Brand Name", "Stock Quantity", "Asset Value", "Potential Profit"], 
+          data.brandValuation.map(v => [v.name, v.qty, formatCurrency(v.value, curr), formatCurrency(v.profit, curr)])
+        );
+
+        addTable("LOW STOCK ALERTS", ["Product Name", "Remaining Stock"], 
+          data.lowStockItems.map(i => [`${i.brand} ${i.name}`, i.current_qty])
+        );
+
+        addTable("SLOW MOVING ITEMS", ["Product Name", "Current Stock"], 
+          data.slowMovingItems.map(i => [`${i.brand} ${i.name}`, i.qty])
+        );
+      }
+      // --- TAB 4: LEDGERS & ACCOUNTS ---
+      else if (activeTab === 'ledgers') {
+        const data = await DataService.getLedgerReport();
+        
+        addTable("ACCOUNTS SUMMARY", ["Metric", "Amount"], [
+          ["Total Receivables (To Collect)", formatCurrency(data.grandTotalReceivable, curr)], // Fixed
+          ["Total Payables (To Pay)", formatCurrency(data.grandTotalPayable, curr)], // Fixed
+          ["Net Cash Position", formatCurrency(data.netPosition, curr)], // Added
+          ["Total Customer Credits", formatCurrency(data.totalCustomerCredits, curr)]
+        ]);
+
+        addTable("ACCOUNTS RECEIVABLE (CUSTOMERS)", ["Customer Name", "Outstanding Balance"], 
+          data.topDebtors.map(d => [d.name, formatCurrency(d.balance, curr)])
+        );
+
+        addTable("CUSTOMER CREDITS", ["Customer Name", "Credit Amount"], 
+          data.topCreditCustomers.map(d => [d.name, formatCurrency(d.balance, curr)])
+        );
+
+        addTable("ACCOUNTS PAYABLE (SUPPLIERS)", ["Supplier Name", "Outstanding Balance"], 
+          data.topCreditors.map(c => [c.name, formatCurrency(c.balance, curr)]) // Fixed: balance_due to balance
+        );
+
+        addTable("SUPPLIER CREDITS", ["Supplier Name", "Credit Amount"], 
+          data.topSupplierCredits.map(c => [c.name, formatCurrency(c.balance, curr)])
+        );
+
+        addTable("STAFF ACCOUNTS", ["Staff Name", "Balance (Advance / Salary Due)"], 
+          data.staffBalances.map(s => [s.name, formatCurrency(s.balance, curr)])
+        );
+      }
+      // --- TAB 5: CASH & AUDIT ---
+      else if (activeTab === 'audit') {
+        const data = await DataService.getCashAuditReport(startDate, endDate);
+        const staff = await DataService.getStaffMembers();
+        
+        addTable("CASH & AUDIT SUMMARY", ["Description", "Amount"], [
+          ["Total Manual Cash In", formatCurrency(data.totalIn, curr)],
+          ["Total Manual Cash Out", formatCurrency(data.totalOut, curr)],
+          ["Total Shortages (Missing Cash)", formatCurrency(data.totalShortage || 0, curr)], // Naya Izafa
+          ["Net Audit Difference", formatCurrency(data.netDifference || 0, curr)] // Fixed: totalDifference se netDifference
+        ]);
+
+        addTable("STAFF LEDGER ACTIVITY", ["Date", "Staff Name", "Transaction Type", "Amount", "Notes"], 
+          data.staffTransactions.map(t => {
+            const sName = staff.find(s => s.id === t.staff_id)?.name || 'Owner / Admin';
+            return [dayjs(t.entry_date).format('DD MMM YYYY'), sName, t.type, formatCurrency(t.amount, curr), t.notes || '-'];
+          })
+        );
+
+        // NAYA IZAFA: Recent Closing Audit ka table jo miss ho gaya tha
+        addTable("RECENT CLOSING AUDIT", ["Date", "Staff Name", "Expected Cash", "Actual Cash", "Difference", "Remarks"], 
+          data.recentClosings.map(c => {
+            const sName = staff.find(s => s.id === c.staff_id)?.name || 'Owner / Admin';
+            return [
+              dayjs(c.closed_at).format('DD MMM, hh:mm A'), 
+              sName, 
+              formatCurrency(c.expected_closing, curr), 
+              formatCurrency(c.actual_closing, curr), 
+              formatCurrency(c.difference, curr), 
+              c.notes || '-'
+            ];
+          })
+        );
+      }
+      // --- TAB 6: ACCOUNT LEDGERS (VAULT FLOW) ---
+      else if (activeTab === 'vault_flow') {
+        const summaryBody = [];
+        const allLedgersToPrint = []; // Jin accounts mein transactions hongi, unko yahan save karenge
+
+        // 1. Tamam Counters ka data jama karna
+        for (const reg of allRegisters) {
+          const bal = await DataService.getRegisterCurrentCash(reg.id);
+          summaryBody.push([`${reg.name} (Counter)`, formatCurrency(bal, curr)]);
+          
+          const ledger = await DataService.getRegisterLedger(reg.id);
+          if (ledger && ledger.length > 0) {
+            allLedgersToPrint.push({ name: `${reg.name} (Counter)`, data: ledger });
+          }
+        }
+
+        // 2. Tamam Banks/Wallets ka data jama karna
+        for (const acc of paymentAccounts) {
+          const ledger = await DataService.getBankAccountLedger(acc.name);
+          
+          // Bank ka balance nikalna
+          const openingBal = Number(acc.opening_balance) || 0;
+          let bal = openingBal;
+          ledger.forEach(tx => {
+              if (tx.type === 'Credit (In)') bal += Number(tx.amount);
+              if (tx.type === 'Debit (Out)') bal -= Number(tx.amount);
+          });
+          
+          summaryBody.push([`${acc.name} (Bank/Wallet)`, formatCurrency(bal, curr)]);
+          
+          if (ledger && ledger.length > 0) {
+            allLedgersToPrint.push({ name: `${acc.name} (Bank/Wallet)`, data: ledger });
+          }
+        }
+
+        // 3. Pehle sab accounts ki 'Master Summary' print karein
+        addTable("ALL ACCOUNTS SUMMARY", ["Account Name", "Current Estimated Balance"], summaryBody);
+
+        // 4. Phir har account ka alag alag Ledger print karein
+        for (const accLedger of allLedgersToPrint) {
+          addTable(`LEDGER: ${accLedger.name.toUpperCase()}`, ["Date & Time", "Source", "Description", "Type", "Amount"], 
+            accLedger.data.map(tx => {
+              let amountStr = formatCurrency(tx.amount, curr);
+              if (tx.type === 'Credit (In)') amountStr = `+ ${amountStr}`;
+              else if (tx.type === 'Debit (Out)') amountStr = `- ${amountStr}`;
+              
+              return [
+                dayjs(tx.date).format('DD MMM YYYY, hh:mm A'), 
+                tx.source, 
+                tx.notes || '-', 
+                tx.type, 
+                amountStr
+              ];
+            })
+          );
+        }
+      }
+
+      // Print Dialog open karna
+      doc.autoPrint();
+      window.open(doc.output('bloburl'), '_blank');
+      message.success("Professional PDF Report prepared!");
+
+    } catch (error) {
+      message.error("PDF Export failed: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -1893,8 +2155,9 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 },
                 {
                   key: '3',
-                  label: 'Export to PDF (Coming Soon)',
-                  disabled: true,
+                  label: 'Print Current Tab (PDF)',
+                  icon: <PrinterOutlined />,
+                  onClick: handleCurrentTabPdfExport,
                 },
               ],
             }}

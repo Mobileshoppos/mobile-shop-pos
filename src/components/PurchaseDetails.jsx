@@ -3,6 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input, Space, Popconfirm, Radio, Checkbox, theme, Tooltip } from 'antd';
 import { FileTextOutlined, ArrowLeftOutlined, DollarCircleOutlined, EditOutlined, RollbackOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import BarcodePrinter from '../components/BarcodePrinter';
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -153,6 +155,84 @@ const PurchaseDetails = () => {
         }
     };
 
+    // --- NAYA IZAFA: Purchase Invoice Print Karne Ka Function ---
+    const handlePrintInvoice = () => {
+        const doc = new jsPDF();
+        const curr = profile?.currency || '';
+        
+        // 1. Header (Shop Name & Invoice Details)
+        doc.setFontSize(22);
+        doc.setTextColor(26, 182, 201); // Primary Color
+        doc.text(profile?.shop_name || 'My Shop', 14, 20);
+        
+        doc.setFontSize(14);
+        doc.setTextColor(40, 40, 40);
+        doc.text(`Purchase Invoice #${purchase.invoice_id || purchase.id.slice(0, 8)}`, 14, 28);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Date: ${new Date(purchase.purchase_date).toLocaleDateString()}`, 14, 34);
+        doc.text(`Supplier: ${purchase.suppliers?.name || 'N/A'}`, 14, 40);
+        doc.text(`Status: ${purchase.status.replace('_', ' ').toUpperCase()}`, 14, 46);
+
+        // 2. Financial Summary Table
+        autoTable(doc, {
+            startY: 52,
+            head: [['Total Amount', 'Amount Paid', 'Balance Due']],
+            body: [[
+                formatCurrency(purchase.total_amount, curr),
+                formatCurrency(purchase.amount_paid, curr),
+                formatCurrency(purchase.balance_due, curr)
+            ]],
+            theme: 'grid',
+            headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0] }
+        });
+
+        let finalY = doc.lastAutoTable.finalY + 12;
+
+        // 3. Active Items Table
+        doc.setFontSize(12);
+        doc.setTextColor(40, 40, 40);
+        doc.text(`Items in this Purchase (${activeDisplayItems.length})`, 14, finalY);
+        
+        autoTable(doc, {
+            startY: finalY + 4,
+            head: [['Product Name', 'Quantity', 'Purchase Price', 'Subtotal']],
+            body: activeDisplayItems.map(item => [
+                item.product_name,
+                item.quantity.toString(),
+                formatCurrency(item.purchase_price, curr),
+                formatCurrency(item.quantity * item.purchase_price, curr)
+            ]),
+            theme: 'grid',
+            headStyles: { fillColor: [26, 182, 201] }
+        });
+
+        finalY = doc.lastAutoTable.finalY + 12;
+
+        // 4. Returned Items Table (Agar kuch wapas hua hai to hi print hoga)
+        if (returnedDisplayItems.length > 0) {
+            doc.setTextColor(255, 77, 79); // Red Color for Returns
+            doc.text(`Returned Items (Total Value: ${formatCurrency(totalReturnedAmount, curr)})`, 14, finalY);
+            
+            autoTable(doc, {
+                startY: finalY + 4,
+                head: [['Product Name', 'Returned Qty', 'Purchase Price', 'Refund Value']],
+                body: returnedDisplayItems.map(item => [
+                    item.product_name,
+                    item.quantity.toString(),
+                    formatCurrency(item.purchase_price, curr),
+                    formatCurrency(item.quantity * item.purchase_price, curr)
+                ]),
+                theme: 'grid',
+                headStyles: { fillColor: [255, 77, 79] }
+            });
+        }
+
+        // Print Dialog open karein
+        doc.autoPrint();
+        window.open(doc.output('bloburl'), '_blank');
+    };
     
     
     const itemColumns = [
@@ -290,6 +370,11 @@ const showEditModal = () => {
 </Row>
                 {purchase.notes && ( <div style={{ marginTop: '24px', padding: '12px', background: token.colorFillTertiary, borderRadius: '6px' }}><Text strong>Notes:</Text><br /><Text type="secondary">{purchase.notes}</Text></div> )}
                 <div style={{ marginTop: '24px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '8px' }}>
+    {/* NAYA IZAFA: Print Invoice Button */}
+    <Button type="default" block={isMobile} icon={<FileTextOutlined />} onClick={handlePrintInvoice}>
+        Print Invoice
+    </Button>
+
     {/* NAYA IZAFA: Bulk Print Button */}
     <Button block={isMobile} icon={<PrinterOutlined />} onClick={handleOpenBulkPrint}>
         Print Barcodes

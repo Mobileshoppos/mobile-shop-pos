@@ -81,6 +81,8 @@ const SettingsPage = () => {
   const isWarrantyLocked = !limits.allow_warranty_system;
   const isThresholdLocked = !limits.allow_custom_threshold;
   const isPriceChangeLocked = !limits.allow_price_change_control; // <-- NAYA LINK
+  const isWholesaleLocked = !limits.allow_wholesale_pricing;
+  const isCreditLimitLocked = !limits.allow_customer_credit_limits; // <--- NAYA IZAFA
 
   // Naya: Active Tab ki state
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || '1');
@@ -293,6 +295,9 @@ const SettingsPage = () => {
   const [warrantySystemEnabled, setWarrantySystemEnabled] = useState(true);
   const [posDiscountEnabled, setPosDiscountEnabled] = useState(true);
   const [allowCartPriceChange, setAllowCartPriceChange] = useState(true);
+  const [wholesalePricingEnabled, setWholesalePricingEnabled] = useState(false);
+  const [enableCustomerCreditLimits, setEnableCustomerCreditLimits] = useState(false); // <--- NAYA IZAFA
+  const [defaultCreditLimit, setDefaultCreditLimit] = useState(0); // <--- NAYA IZAFA
   const [mobileNavEnabled, setMobileNavEnabled] = useState(true);
   const [desktopNavEnabled, setDesktopNavEnabled] = useState(true);
   const [mobileNavItems, setMobileNavItems] = useState(["/", "/pos", "/inventory", "/sales-history"]);
@@ -422,6 +427,9 @@ const SettingsPage = () => {
           setWarrantySystemEnabled(profile.warranty_system_enabled);
       if (profile.pos_discount_enabled !== undefined) setPosDiscountEnabled(profile.pos_discount_enabled);
       if (profile.allow_cart_price_change !== undefined) setAllowCartPriceChange(profile.allow_cart_price_change);
+      if (profile.wholesale_pricing_enabled !== undefined) setWholesalePricingEnabled(profile.wholesale_pricing_enabled);
+      if (profile.enable_customer_credit_limits !== undefined) setEnableCustomerCreditLimits(profile.enable_customer_credit_limits); // <--- NAYA IZAFA
+      if (profile.default_credit_limit !== undefined) setDefaultCreditLimit(profile.default_credit_limit); // <--- NAYA IZAFA
       if (profile.mobile_nav_enabled !== undefined) setMobileNavEnabled(profile.mobile_nav_enabled);
       if (profile.desktop_nav_enabled !== undefined) setDesktopNavEnabled(profile.desktop_nav_enabled);
       if (profile.mobile_nav_items) setMobileNavItems(profile.mobile_nav_items);
@@ -512,7 +520,7 @@ const SettingsPage = () => {
       currency: selectedCurrency,
       receipt_format: receiptFormat,
       // --- NAYA IZAFA: Save FBR Settings ---
-      fbr_integration_enabled: fbrIntegrationEnabled,
+      fbr_integration_enabled: isAdvancedLocked ? false : fbrIntegrationEnabled,
       fbr_pos_id: fbrPosId,
       fbr_ntn: fbrNtn,
       fbr_fee: fbrFee,
@@ -523,16 +531,19 @@ const SettingsPage = () => {
       tax_rate: taxRate,
       // -------------------------------------
       low_stock_alerts_enabled: lowStockAlerts,
-      low_stock_threshold: lowStockThreshold,
+      low_stock_threshold: isThresholdLocked ? 5 : lowStockThreshold,
       warranty_policy: warrantyPolicy,
       quotation_policy: quotationPolicy,
       quotation_validity_days: quotationValidityDays,
       staff_discount_limit: staffDiscountLimit,
       reprint_button_enabled: reprintButtonEnabled,
-      qr_code_enabled: qrCodeEnabled,
-      warranty_system_enabled: warrantySystemEnabled,
-      pos_discount_enabled: posDiscountEnabled,
+      qr_code_enabled: isAdvancedLocked ? false : qrCodeEnabled,
+      warranty_system_enabled: isWarrantyLocked ? false : warrantySystemEnabled,
+      pos_discount_enabled: isAdvancedLocked ? false : posDiscountEnabled,
       allow_cart_price_change: allowCartPriceChange,
+      wholesale_pricing_enabled: isWholesaleLocked ? false : wholesalePricingEnabled,
+      enable_customer_credit_limits: isCreditLimitLocked ? false : enableCustomerCreditLimits, // <--- NAYA IZAFA
+      default_credit_limit: defaultCreditLimit, // <--- NAYA IZAFA
       mobile_nav_enabled: mobileNavEnabled,
       desktop_nav_enabled: desktopNavEnabled,
       mobile_nav_items: mobileNavItems,
@@ -710,7 +721,7 @@ const SettingsPage = () => {
                     </Col>
                     <Col xs={24} sm={18}>
                       <Space wrap>
-                        <Switch checked={fbrIntegrationEnabled} onChange={setFbrIntegrationEnabled} disabled={isAdvancedLocked} />
+                        <Switch checked={fbrIntegrationEnabled && !isAdvancedLocked} onChange={setFbrIntegrationEnabled} disabled={isAdvancedLocked} />
                         {fbrIntegrationEnabled && (
                           <>
                             <Input placeholder="POS ID" value={fbrPosId} onChange={(e) => setFbrPosId(e.target.value)} style={{ width: 120 }} />
@@ -738,7 +749,7 @@ const SettingsPage = () => {
                       <Text type="secondary" style={{ display: 'block' }}>Print invoice QR code on receipts.</Text>
                     </Col>
                     <Col xs={24} sm={18}>
-                      <Switch checked={qrCodeEnabled} onChange={setQrCodeEnabled} disabled={isAdvancedLocked} />
+                      <Switch checked={qrCodeEnabled && !isAdvancedLocked} onChange={setQrCodeEnabled} disabled={isAdvancedLocked} />
                       {isAdvancedLocked && <Text type="warning" style={{ display: 'block', fontSize: '12px', marginTop: '4px' }}>Available in Growth and Pro plans.</Text>}
                     </Col>
                   </Row>
@@ -749,7 +760,7 @@ const SettingsPage = () => {
                       <Text type="secondary" style={{ display: 'block' }}>Turn off to hide all warranty related features.</Text>
                     </Col>
                     <Col xs={24} sm={18}>
-                      <Switch checked={warrantySystemEnabled} onChange={setWarrantySystemEnabled} disabled={isWarrantyLocked} />
+                      <Switch checked={warrantySystemEnabled && !isWarrantyLocked} onChange={setWarrantySystemEnabled} disabled={isWarrantyLocked} />
                       {isWarrantyLocked && <Text type="warning" style={{ display: 'block', fontSize: '12px', marginTop: '4px' }}>Available in Growth and Pro plans.</Text>}
                     </Col>
                   </Row>
@@ -772,9 +783,9 @@ const SettingsPage = () => {
                     <Col xs={24} sm={18}>
                       <Space wrap>
                         <Switch 
-                          checked={posDiscountEnabled} 
-                          onChange={setPosDiscountEnabled} 
-                          disabled={isAdvancedLocked} 
+                          checked={posDiscountEnabled && !isAdvancedLocked}
+                          onChange={setPosDiscountEnabled}
+                          disabled={isAdvancedLocked}
                         />
                         {posDiscountEnabled && (
                           <Tooltip title="Maximum discount a staff can give without Master PIN">
@@ -835,8 +846,51 @@ const SettingsPage = () => {
                    <Switch 
                      checked={allowCartPriceChange} 
                      onChange={setAllowCartPriceChange} 
-                     disabled={isPriceChangeLocked} // <-- Hamesha False rahega (yani Active)
+                     disabled={isPriceChangeLocked} 
                   />
+                    </Col>
+                  </Row>
+                  <Divider />
+                  <Row align="middle" gutter={[16, 16]}>
+                    <Col xs={24} sm={6}>
+                      <Text strong>Enable Wholesale Pricing</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>Set different prices for wholesale customers.</Text>
+                    </Col>
+                    <Col xs={24} sm={18}>
+                      <Switch 
+                        checked={wholesalePricingEnabled && !isWholesaleLocked} 
+                        onChange={setWholesalePricingEnabled} 
+                        disabled={isWholesaleLocked} 
+                      />
+                      {isWholesaleLocked && <Text type="warning" style={{ display: 'block', fontSize: '12px', marginTop: '4px' }}>Available in Pro and Scale plans.</Text>}
+                    </Col>
+                  </Row>
+                  <Divider />
+                  <Row align="middle" gutter={[16, 16]}>
+                    <Col xs={24} sm={6}>
+                      <Text strong>Customer Credit Limits</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>Block sales if customer exceeds their credit limit.</Text>
+                    </Col>
+                    <Col xs={24} sm={18}>
+                      <Space wrap>
+                        <Switch 
+                          checked={enableCustomerCreditLimits && !isCreditLimitLocked} 
+                          onChange={setEnableCustomerCreditLimits} 
+                          disabled={isCreditLimitLocked} 
+                        />
+                        {enableCustomerCreditLimits && !isCreditLimitLocked && (
+                          <Tooltip title="Maximum limit a staff can give to a new customer without Master PIN">
+                            <InputNumber 
+                              min={0} 
+                              value={defaultCreditLimit} 
+                              onChange={setDefaultCreditLimit} 
+                              addonBefore="Default Limit Rs." 
+                              style={{ width: 220 }}
+                            />
+                          </Tooltip>
+                        )}
+                      </Space>
+                      {isCreditLimitLocked && <Text type="warning" style={{ display: 'block', fontSize: '12px', marginTop: '4px' }}>Available in Pro and Scale plans.</Text>}
                     </Col>
                   </Row>
                   <Divider />
@@ -1594,6 +1648,8 @@ const SettingsPage = () => {
                 taxName === (profile.tax_name ?? 'GST') &&
                 taxRate === (profile.tax_rate ?? 0) &&
                 allowCartPriceChange === (profile.allow_cart_price_change ?? true) &&
+                wholesalePricingEnabled === (profile.wholesale_pricing_enabled ?? false) &&
+                enableCustomerCreditLimits === (profile.enable_customer_credit_limits ?? false) &&
                 mobileNavEnabled === profile.mobile_nav_enabled &&
                 desktopNavEnabled === profile.desktop_nav_enabled && 
                 JSON.stringify(mobileNavItems) === JSON.stringify(profile.mobile_nav_items) &&

@@ -9,6 +9,7 @@ import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
 import { printThermalReceipt } from '../utils/thermalPrinter';
 import { useSync } from '../context/SyncContext';
+import DataExport from '../components/DataExport'; // <--- NAYA IZAFA
 
 const { Title, Text } = Typography;
 
@@ -262,6 +263,18 @@ const SalesHistory = () => {
     window.location.reload(); 
   };
 
+  // --- NAYA IZAFA: Sales Export Columns ---
+  const exportColumns = [
+    { title: 'Date & Time', dataIndex: 'formattedDate' },
+    { title: 'Invoice #', dataIndex: 'invoice_id' },
+    { title: 'Customer', dataIndex: 'customer_name' },
+    { title: 'Total Items', dataIndex: 'total_items' },
+    { title: 'Method', dataIndex: 'payment_method' },
+    { title: 'Total Amount', dataIndex: 'total_amount' },
+    { title: 'Payment Status', dataIndex: 'payment_status' },
+    { title: 'Salesperson', dataIndex: 'salesperson_name' }
+  ];
+
   const columns = [
     {
       title: 'Inv: #',
@@ -447,18 +460,32 @@ const SalesHistory = () => {
               ]}
             />
           </Space>
-          <Button 
-            icon={<ReloadOutlined />} 
-            onClick={() => {
-              setSearchText('');
-              setDateRange(null);
-              setStatusFilter('all');
-              setStaffFilter('all');
-              // window.location.reload() ki zaroorat nahi, states khud reset ho jayengi
-            }}
-          >
-            Reset
-          </Button>
+          
+          {/* --- NAYA IZAFA: Export Buttons aur Reset Button ko ek sath kiya --- */}
+          <Space>
+            <DataExport 
+              data={sales.map(s => ({
+                ...s,
+                formattedDate: new Date(s.created_at).toLocaleString(),
+                payment_status: s.payment_status.toUpperCase()
+              }))} 
+              exportColumns={exportColumns} 
+              fileName="Sales_History" 
+              reportTitle="Sales History Report" 
+            />
+            <Button 
+              icon={<ReloadOutlined />} 
+              onClick={() => {
+                setSearchText('');
+                setDateRange(null);
+                setStatusFilter('all');
+                setStaffFilter('all');
+              }}
+            >
+              Reset
+            </Button>
+          </Space>
+
         </Space>
         <Table
           columns={columns}

@@ -21,6 +21,8 @@ const { Option } = Select;
 const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialValues, existingItems, editingItemIndex }) => {
   const { profile } = useAuth();
   const { isDarkMode } = useTheme();
+  const limits = getPlanLimits(profile?.subscription_tier);
+  const isWholesaleActive = profile?.wholesale_pricing_enabled && limits.allow_wholesale_pricing;
   const { message } = App.useApp(); 
   const [form] = Form.useForm();
   const [imeis, setImeis] = useState(['']);
@@ -36,6 +38,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
           const formData = {
               purchase_price: initialValues.purchase_price,
               sale_price: initialValues.sale_price,
+              wholesale_price: initialValues.wholesale_price,
               quantity: initialValues.quantity || 1,
               barcode: initialValues.barcode,
               warranty_days: initialValues.warranty_days ?? product?.default_warranty_days ?? 0,
@@ -53,6 +56,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
           const commonValues = {
             purchase_price: product.purchase_price || '', 
             sale_price: product.sale_price || '', 
+            wholesale_price: product.wholesale_price || '', 
             warranty_days: product.default_warranty_days || 0,
           };
           if (isImeiCategory) {
@@ -148,6 +152,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
             name: product.name,
             purchase_price: values.purchase_price,
             sale_price: values.sale_price,
+            wholesale_price: values.wholesale_price,
             warranty_days: values.warranty_days || 0,
             quantity: 1,
             imei: imei,
@@ -205,6 +210,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
             name: product.name,
             purchase_price: values.purchase_price,
             sale_price: values.sale_price,
+            wholesale_price: values.wholesale_price,
             warranty_days: values.warranty_days || 0,
             quantity: values.quantity,
             item_attributes: item_attributes,
@@ -248,8 +254,11 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
         {isImeiCategory ? (
             <>
                 <Row gutter={16}>
-                    <Col span={12}><Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
-                    <Col span={12}><Form.Item name="sale_price" label="Sale Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    <Col span={isWholesaleActive ? 8 : 12}><Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    <Col span={isWholesaleActive ? 8 : 12}><Form.Item name="sale_price" label={isWholesaleActive ? "Retail Price" : "Sale Price"} rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    {isWholesaleActive && (
+                        <Col span={8}><Form.Item name="wholesale_price" label="Wholesale Price"><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    )}
                     
                     {/* --- NAYA CODE: IMEI Warranty Check --- */}
                     {profile?.warranty_system_enabled !== false && (
@@ -292,8 +301,11 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
         ) : (
             <>
                 <Row gutter={16}>
-                    <Col span={12}><Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
-                    <Col span={12}><Form.Item name="sale_price" label="Sale Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    <Col span={isWholesaleActive ? 8 : 12}><Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    <Col span={isWholesaleActive ? 8 : 12}><Form.Item name="sale_price" label={isWholesaleActive ? "Retail Price" : "Sale Price"} rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    {isWholesaleActive && (
+                        <Col span={8}><Form.Item name="wholesale_price" label="Wholesale Price"><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    )}
                     
                     {/* --- NAYA CODE: Bulk Warranty Check --- */}
                     {profile?.warranty_system_enabled !== false && (
@@ -375,6 +387,8 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
 const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, editingPurchase, editingItems }) => {
   const { profile } = useAuth();
   const { activeStaff } = useStaff(); // <--- NAYA IZAFA
+  const limits = getPlanLimits(profile?.subscription_tier);
+  const isWholesaleActive = profile?.wholesale_pricing_enabled && limits.allow_wholesale_pricing;
   const { message, modal } = App.useApp();
   const navigate = useNavigate();
   const { refetchStockCount } = useAuth();

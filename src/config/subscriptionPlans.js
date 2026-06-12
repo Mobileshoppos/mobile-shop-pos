@@ -38,7 +38,10 @@ export const SUBSCRIPTION_PLANS = {
     allow_custom_threshold: false,        
     allow_monthly_reports: false,         
     allow_custom_date_reports: false,     
-    allow_price_change_control: true      
+    allow_price_change_control: true,
+    allow_wholesale_pricing: false,
+    allow_customer_credit_limits: false,
+    allow_stock_location: false  
   },
 
   growth: {
@@ -65,7 +68,10 @@ export const SUBSCRIPTION_PLANS = {
     allow_custom_threshold: true,      
     allow_monthly_reports: true,       
     allow_custom_date_reports: true,   
-    allow_price_change_control: true   
+    allow_price_change_control: true,
+    allow_wholesale_pricing: false,
+    allow_customer_credit_limits: false,
+    allow_stock_location: true
   },
 
   pro: {
@@ -92,7 +98,10 @@ export const SUBSCRIPTION_PLANS = {
     allow_custom_threshold: true,      
     allow_monthly_reports: true,       
     allow_custom_date_reports: true,   
-    allow_price_change_control: true   
+    allow_price_change_control: true,
+    allow_wholesale_pricing: true,
+    allow_customer_credit_limits: true,
+    allow_stock_location: true
   },
 
   scale: {
@@ -119,7 +128,10 @@ export const SUBSCRIPTION_PLANS = {
     allow_custom_threshold: true,      
     allow_monthly_reports: true,       
     allow_custom_date_reports: true,   
-    allow_price_change_control: true   
+    allow_price_change_control: true,
+    allow_wholesale_pricing: true,
+    allow_customer_credit_limits: true,
+    allow_stock_location: true
   }
 };
 

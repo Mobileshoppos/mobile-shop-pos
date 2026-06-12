@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS wholesale_pricing_enabled boolean DEFAULT false;

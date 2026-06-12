@@ -15,6 +15,7 @@ import { db } from '../db';
 import { useSync } from '../context/SyncContext';
 import DataService from '../DataService';
 import { generateInvoiceId } from '../utils/idGenerator'; // <--- NAYA IZAFA
+import DataExport from '../components/DataExport'; // <--- NAYA IZAFA: Export ke liye
 
 const { Title, Text } = Typography;
 // Global Countries List
@@ -40,7 +41,7 @@ const Customers = () => {
 
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { user, profile } = useAuth();
-  const { activeStaff, activeSession } = useStaff(); // <--- activeSession yahan shamil kar diya
+  const { activeStaff, activeSession, verifyMasterPin, can } = useStaff(); // <--- can shamil kar diya
   const { processSyncQueue } = useSync();
   
   const [customers, setCustomers] = useState([]);
@@ -73,6 +74,11 @@ const Customers = () => {
   const [searchedSale, setSearchedSale] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [payoutForm] = Form.useForm();
+  
+  // --- NAYA IZAFA: PIN States ---
+  const [isMasterPinModalVisible, setIsMasterPinModalVisible] = useState(false);
+  const [masterPinInput, setMasterPinInput] = useState('');
+  const [pendingCustomerValues, setPendingCustomerValues] = useState(null);
   
   const [addForm] = Form.useForm();
   const [cashOrBank, setCashOrBank] = useState('Cash');
@@ -183,54 +189,95 @@ const Customers = () => {
     setIsAddModalOpen(true);
   };
 
+  // --- NAYA IZAFA: Helper Function ---
+  const processSaveCustomer = async (values) => {
+      try {
+          if (editingCustomer) {
+            await DataService.updateCustomer(editingCustomer.id, values);
+            message.success('Customer updated successfully!');
+          } else {
+            const newCustomer = { 
+                ...values, 
+                // Ab limit handleAddCustomer mein theek ho kar aayegi
+                credit_limit: profile?.enable_customer_credit_limits ? values.credit_limit : null,
+                id: crypto.randomUUID(), 
+                local_id: crypto.randomUUID(),
+                user_id: user.id, 
+                balance: 0 
+            };
+            await db.customers.add(newCustomer);
+            await db.sync_queue.add({ table_name: 'customers', action: 'create', data: newCustomer });
+            message.success('Customer added successfully!');
+          }
+          setIsAddModalOpen(false);
+          setEditingCustomer(null);
+          addForm.resetFields();
+          await getCustomers();
+          processSyncQueue();
+      } catch (error) {
+          message.error('Error saving customer: ' + error.message);
+      }
+  };
+
+  const handleMasterPinVerify = () => {
+      if (verifyMasterPin(masterPinInput)) {
+          setIsMasterPinModalVisible(false);
+          setMasterPinInput('');
+          message.success("Credit limit approved by Admin.");
+          processSaveCustomer(pendingCustomerValues);
+      } else {
+          message.error("Invalid Master PIN!");
+          setMasterPinInput('');
+      }
+  };
+
   const handleAddCustomer = async (values) => {
-    // 1. Phone number ki safai (Normalize) taake database saaf rahe
     if (values.phone_number) {
       values.phone_number = values.phone_number.replace(/[^\d+]/g, '');
     }
 
     try {
-      // 2. SMART DUPLICATE CHECK (Aakhri 10 digits wala)
       const existingCustomerName = await DataService.checkDuplicateCustomer(values.phone_number, editingCustomer?.id);
       if (existingCustomerName) {
-        addForm.setFields([
-          {
-            name: 'phone_number',
-            errors: [`Registered to: ${existingCustomerName}`],
-          },
-        ]);
+        addForm.setFields([{ name: 'phone_number', errors: [`Registered to: ${existingCustomerName}`] }]);
         return;
       }
-      if (editingCustomer) {
-        // EDIT MODE
-        await DataService.updateCustomer(editingCustomer.id, values);
-        message.success('Customer updated successfully!');
-      } else {
-        // ADD MODE
-        const newCustomer = { 
-            ...values, 
-            id: crypto.randomUUID(), 
-            local_id: crypto.randomUUID(),
-            user_id: user.id, 
-            balance: 0 
-        };
-        await db.customers.add(newCustomer);
-        await db.sync_queue.add({
-            table_name: 'customers',
-            action: 'create',
-            data: newCustomer
-        });
-        message.success('Customer added successfully!');
+
+      // --- SMART LOGIC: Default Limit vs Unlimited ---
+      let finalCreditLimit = values.credit_limit;
+      const defaultLimit = profile?.default_credit_limit || 0;
+
+      if (profile?.enable_customer_credit_limits) {
+          if (finalCreditLimit === undefined || finalCreditLimit === null) {
+              if (activeStaff && !can('can_set_credit_limit')) {
+                  // Agar edit kar raha hai aur permission nahi hai, to purani limit rehne do
+                  finalCreditLimit = editingCustomer ? editingCustomer.credit_limit : defaultLimit;
+              } else {
+                  finalCreditLimit = null; // Unlimited
+              }
+          }
       }
 
-      setIsAddModalOpen(false);
-      setEditingCustomer(null);
-      addForm.resetFields();
-      await getCustomers();
-      processSyncQueue();
+      const updatedValues = { ...values, credit_limit: finalCreditLimit };
+
+      // --- NAYA IZAFA: Owner PIN Check ---
+      if (profile?.enable_customer_credit_limits && activeStaff) {
+          const isUnlimited = finalCreditLimit === null;
+          const oldLimit = editingCustomer ? editingCustomer.credit_limit : 0;
+          const isIncreasing = finalCreditLimit > oldLimit || (isUnlimited && oldLimit !== null);
+
+          if (isIncreasing && (isUnlimited || finalCreditLimit > defaultLimit)) {
+              setPendingCustomerValues(updatedValues);
+              setIsMasterPinModalVisible(true);
+              return;
+          }
+      }
+
+      // Agar sab theek hai
+      processSaveCustomer(updatedValues);
 
     } catch (error) { 
-      message.error('Error saving customer: ' + error.message); 
+      message.error('Error validation: ' + error.message); 
     }
   };
 
@@ -915,6 +962,25 @@ const handleCloseInvoiceSearchModal = () => {
     }
 };
 
+  // --- NAYA IZAFA: Export ke liye columns define kiye hain ---
+  const exportColumns = [
+    { title: 'Customer Name', dataIndex: 'name' },
+    { title: 'Phone', dataIndex: 'phone_number' },
+    { title: 'Group', dataIndex: 'customer_group' },
+    { title: 'City', dataIndex: 'city' },
+    { title: 'Address', dataIndex: 'address' },
+    { title: 'Balance', dataIndex: 'balance' }
+  ];
+
+  // --- NAYA IZAFA: Ledger Export Columns ---
+  const ledgerExportColumns = [
+    { title: 'Date', dataIndex: 'formattedDate' },
+    { title: 'Description', dataIndex: 'description' },
+    { title: 'Debit', dataIndex: 'debit' },
+    { title: 'Credit', dataIndex: 'credit' },
+    { title: 'Balance', dataIndex: 'balance' }
+  ];
+
   const customerColumns = [
     { title: 'Customer Name', dataIndex: 'name' },
     { title: 'Phone', dataIndex: 'phone_number' },
@@ -1304,6 +1370,14 @@ const handleCloseInvoiceSearchModal = () => {
             </Space>
         </Space>
 
+        {/* --- NAYA IZAFA: PDF aur Excel Buttons --- */}
+        <DataExport 
+            data={customers} 
+            exportColumns={exportColumns} 
+            fileName="Customers_List" 
+            reportTitle="Customers Directory" 
+        />
+
         {/* Add Customer Button */}
         {(() => {
             const limits = getPlanLimits(profile?.subscription_tier);
@@ -1523,10 +1597,40 @@ const handleCloseInvoiceSearchModal = () => {
       </Form.Item>
     </Col>
   </Row>
+
+  {/* --- NAYA IZAFA: Credit Limit Field --- */}
+  {profile?.enable_customer_credit_limits && can('can_set_credit_limit') && (
+    <Row gutter={16}>
+      <Col span={12}>
+        <Form.Item 
+          name="credit_limit" 
+          label="Credit Limit (Rs)" 
+          tooltip="Maximum allowed debt. Leave empty for unlimited, or enter 0 for NO CREDIT."
+        >
+          <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 50000" />
+        </Form.Item>
+      </Col>
+    </Row>
+  )}
+
 </Form> 
 </Modal> 
 <Modal
-    title={`Ledger: ${selectedCustomer?.name}`}
+    title={
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '95%' }}>
+        <span>Ledger: {selectedCustomer?.name}</span>
+        {/* --- NAYA IZAFA: Ledger Print/Excel Buttons --- */}
+        <DataExport 
+            data={ledgerData.map(item => ({
+                ...item,
+                formattedDate: new Date(item.date).toLocaleString()
+            }))} 
+            exportColumns={ledgerExportColumns} 
+            fileName={`Ledger_${selectedCustomer?.name}`} 
+            reportTitle={`Account Statement: ${selectedCustomer?.name}`} 
+        />
+      </div>
+    }
     open={isLedgerModalOpen}
     onCancel={() => setIsLedgerModalOpen(false)}
     footer={null}
@@ -1862,6 +1966,30 @@ const handleCloseInvoiceSearchModal = () => {
       </div>
     )}
 </Modal>
+
+{/* --- NAYA IZAFA: Master PIN Modal --- */}
+<Modal
+  title="Admin Approval Required"
+  open={isMasterPinModalVisible}
+  onOk={handleMasterPinVerify}
+  onCancel={() => { setIsMasterPinModalVisible(false); setMasterPinInput(''); setPendingCustomerValues(null); }}
+  okText="Approve"
+  centered
+  width={300}
+>
+  <div style={{ textAlign: 'center' }}>
+    <LockOutlined style={{ fontSize: '32px', color: token.colorWarning, marginBottom: '16px' }} />
+    <p>Credit limit exceeds the default allowed ({profile?.default_credit_limit || 0} Rs). Enter Master PIN to authorize.</p>
+    <Input.Password 
+      placeholder="Enter Master PIN" 
+      value={masterPinInput}
+      onChange={e => setMasterPinInput(e.target.value.replace(/[^0-9]/g, ''))}
+      onPressEnter={handleMasterPinVerify}
+      autoFocus
+    />
+  </div>
+</Modal>
+
  </div> 
  );
 };

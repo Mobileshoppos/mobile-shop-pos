@@ -3,6 +3,7 @@ import { Layout, Flex, Card, Table, Button, Modal, Form, Input, Select, Checkbox
 import dayjs from 'dayjs'; // Tarikh handle karne ke liye
 import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined, InboxOutlined, ReloadOutlined, HistoryOutlined, ArrowLeftOutlined, DollarCircleOutlined, ArrowUpOutlined, ArrowDownOutlined, EyeOutlined, LockOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
+import DataExport from '../components/DataExport'; // <--- NAYA IZAFA
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext'; 
 import { useNavigate } from 'react-router-dom'; 
@@ -28,7 +29,8 @@ const permissionOptions = [
   { label: 'Manage Exp. Categories', value: 'can_manage_expense_categories' },
   { label: 'Manage Shop Profile', value: 'can_manage_profile' },
   { label: 'Edit/Delete Inventory', value: 'can_edit_inventory' },
-  { label: 'Manage Customers', value: 'can_manage_people' }
+  { label: 'Manage Customers', value: 'can_manage_people' },
+  { label: 'Set Credit Limits', value: 'can_set_credit_limit' } // <--- NAYA IZAFA
 ];
 
 const StaffManagement = () => {
@@ -462,33 +464,55 @@ const StaffManagement = () => {
                     </Space>
                   </div>
                   <Space wrap>
-                    <Button type="primary" icon={<DollarCircleOutlined />} onClick={() => {
-                        ledgerForm.resetFields();
-                        // NAYA: Modal khulne se pehle hi default amount set kar dein
-                        const defaultAmount = selectedStaff.balance > 0 ? selectedStaff.balance : null;
-                        ledgerForm.setFieldsValue({ 
-                          type: 'Payment', 
-                          entry_date: dayjs(),
-                          amount: defaultAmount,
-                          notes: 'Salary Paid'
-                        });
-                        setIsTransactionModalOpen(true);
-                    }}>
-                      Record Transaction
-                    </Button>
+                    {/* --- NAYA IZAFA: Staff Ledger Export (Print/Excel) --- */}
+                    <DataExport 
+                        data={ledgerEntries.map(item => ({
+                            ...item,
+                            formattedDate: dayjs(item.entry_date).format('DD MMM YYYY'),
+                            formattedAmount: (item.type === 'Salary' || item.type === 'Commission' ? '+' : '-') + formatCurrency(item.amount, profile?.currency)
+                        }))} 
+                        exportColumns={[
+                            { title: 'Date', dataIndex: 'formattedDate' },
+                            { title: 'Type', dataIndex: 'type' },
+                            { title: 'Remarks', dataIndex: 'notes' },
+                            { title: 'Amount', dataIndex: 'formattedAmount' }
+                        ]} 
+                        fileName={`Ledger_${selectedStaff.name}`} 
+                        reportTitle={`Staff Ledger: ${selectedStaff.name}`} 
+                    />
+
+                    {/* Record Transaction Icon */}
+                    <Tooltip title="Record Transaction">
+                        <Button type="primary" icon={<DollarCircleOutlined />} onClick={() => {
+                            ledgerForm.resetFields();
+                            const defaultAmount = selectedStaff.balance > 0 ? selectedStaff.balance : null;
+                            ledgerForm.setFieldsValue({ 
+                              type: 'Payment', 
+                              entry_date: dayjs(),
+                              amount: defaultAmount,
+                              notes: 'Salary Paid'
+                            });
+                            setIsTransactionModalOpen(true);
+                        }} />
+                    </Tooltip>
                     
-                    <Button icon={<EditOutlined />} onClick={() => handleOpenModal(selectedStaff)}>Edit</Button>
-                    <Popconfirm 
-                      title={selectedStaff.is_active ? "Archive this staff?" : "Restore this staff?"} 
-                      onConfirm={() => handleToggleStatus(selectedStaff)}
-                    >
-                      <Button 
-                        danger={selectedStaff.is_active} 
-                        icon={selectedStaff.is_active ? <InboxOutlined /> : <ReloadOutlined />}
-                      >
-                        {selectedStaff.is_active ? "Archive" : "Restore"}
-                      </Button>
-                    </Popconfirm>
+                    {/* Edit Staff Icon */}
+                    <Tooltip title="Edit Staff Details">
+                        <Button icon={<EditOutlined />} onClick={() => handleOpenModal(selectedStaff)} />
+                    </Tooltip>
+
+                    {/* Archive/Restore Icon */}
+                    <Tooltip title={selectedStaff.is_active ? "Archive Staff" : "Restore Staff"}>
+                        <Popconfirm 
+                          title={selectedStaff.is_active ? "Archive this staff?" : "Restore this staff?"} 
+                          onConfirm={() => handleToggleStatus(selectedStaff)}
+                        >
+                          <Button 
+                            danger={selectedStaff.is_active} 
+                            icon={selectedStaff.is_active ? <InboxOutlined /> : <ReloadOutlined />}
+                          />
+                        </Popconfirm>
+                    </Tooltip>
                   </Space>
                 </Flex>
                 
@@ -562,6 +586,7 @@ const StaffManagement = () => {
         onCancel={() => setIsModalVisible(false)}
         onOk={() => form.submit()}
         okText={editingStaff ? "Save Changes" : "Add Staff"}
+        width={800} // <--- NAYA IZAFA: Modal ki width barha di
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <Tabs defaultActiveKey="1" items={[

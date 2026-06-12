@@ -442,21 +442,22 @@ const DataService = {
     // A. Master Variant update karein (Dexie + Queue)
     await db.product_variants.update(variantId, { 
       barcode: updates.barcode, 
-      sale_price: updates.sale_price 
+      sale_price: updates.sale_price,
+      wholesale_price: updates.wholesale_price // <--- NAYA IZAFA
     });
     await db.sync_queue.add({ 
       table_name: 'product_variants', 
       action: 'update', 
-      data: { id: variantId, barcode: updates.barcode, sale_price: updates.sale_price } 
+      data: { id: variantId, barcode: updates.barcode, sale_price: updates.sale_price, wholesale_price: updates.wholesale_price } // <--- NAYA IZAFA
     });
 
     // B. Mojooda Stock (Inventory) ki Sale Price update karein (Dexie + Queue)
     for (const invId of inventoryIds) {
-      await db.inventory.update(invId, { sale_price: updates.sale_price });
+      await db.inventory.update(invId, { sale_price: updates.sale_price, wholesale_price: updates.wholesale_price }); // <--- NAYA IZAFA
       await db.sync_queue.add({ 
         table_name: 'inventory', 
         action: 'update', 
-        data: { id: invId, sale_price: updates.sale_price } 
+        data: { id: invId, sale_price: updates.sale_price, wholesale_price: updates.wholesale_price } // <--- NAYA IZAFA
       });
     }
     return true;
@@ -1194,6 +1195,7 @@ async addCustomer(customerData) {
                 available_qty: Number(item.quantity) - alreadyUsed, // Nayi quantity mein se bikay hue nikaal dein
                 purchase_price: item.purchase_price,
                 sale_price: item.sale_price,
+                wholesale_price: item.wholesale_price, // <--- NAYA IZAFA
                 imei: item.imei,
                 item_attributes: item.item_attributes,
                 status: (Number(item.quantity) - alreadyUsed) <= 0 ? 'Sold' : 'Available'
@@ -1213,6 +1215,7 @@ async addCustomer(customerData) {
                 damaged_qty: 0,
                 purchase_price: item.purchase_price,
                 sale_price: item.sale_price,
+                wholesale_price: item.wholesale_price, // <--- NAYA IZAFA
                 imei: item.imei,
                 item_attributes: item.item_attributes,
                 user_id: purchaseToUpdate.user_id,

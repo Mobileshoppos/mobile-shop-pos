@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List, Dropdown, Tabs, Descriptions, Divider, Switch, Tooltip } from 'antd';
 import { ShopOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, EyeOutlined, LockOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
+import DataExport from '../components/DataExport'; // <--- NAYA IZAFA
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
@@ -204,6 +205,17 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
         }
     };
 
+    // --- NAYA IZAFA: Ledger Export Columns ---
+    const exportColumns = [
+        { title: 'Date', dataIndex: 'formattedDate' },
+        { title: 'Staff', dataIndex: 'staffName' },
+        { title: 'Type', dataIndex: 'type' },
+        { title: 'Details', dataIndex: 'details' },
+        { title: 'Debit (Bill)', dataIndex: 'debit' },
+        { title: 'Credit (Paid)', dataIndex: 'credit' },
+        { title: 'Balance', dataIndex: 'running_balance' }
+    ];
+
     const ledgerColumns = [
         { 
     title: 'Date', 
@@ -258,7 +270,20 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
                 <Col xs={12} sm={5}><Statistic title="Your Credit" value={calculatedStats?.credit_balance || 0} valueStyle={{ color: token.colorSuccess }} formatter={() => formatCurrency(calculatedStats?.credit_balance || 0, profile?.currency)} /></Col>
             </Row>
 
-            <Title level={4}>Transaction Ledger</Title>
+            {/* --- NAYA IZAFA: Heading aur Export Buttons ko ek sath kiya --- */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <Title level={4} style={{ margin: 0 }}>Transaction Ledger</Title>
+                <DataExport 
+                    data={ledgerData.map(item => ({
+                        ...item,
+                        formattedDate: new Date(item.date).toLocaleString(),
+                        staffName: staffMembers.find(s => s.id === item.staff_id)?.name || 'Owner'
+                    }))} 
+                    exportColumns={exportColumns} 
+                    fileName={`Ledger_${supplier?.name}`} 
+                    reportTitle={`Account Statement: ${supplier?.name}`} 
+                />
+            </div>
             
             {isMobile ? (
                 <List
@@ -616,6 +641,16 @@ const SupplierDashboard = () => {
         suppliers.reduce((sum, s) => sum + (s.total_refunds || 0), 0)
     , [suppliers]);
 
+    // --- NAYA IZAFA: Suppliers List Export Columns ---
+    const supplierExportColumns = [
+        { title: 'Supplier Name', dataIndex: 'name' },
+        { title: 'Contact Person', dataIndex: 'contact_person' },
+        { title: 'Phone', dataIndex: 'phone' },
+        { title: 'City', dataIndex: 'city' },
+        { title: 'Balance Due', dataIndex: 'balance_due' },
+        { title: 'Credit Balance', dataIndex: 'credit_balance' }
+    ];
+
     const renderSupplierDetails = () => {
         if (!selectedSupplierId || !selectedSupplier) return (
             <Content style={{ padding: isMobile ? 0 : '0 24px', minHeight: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -804,6 +839,13 @@ const SupplierDashboard = () => {
                                                     {showArchived ? "Archived" : "Active"}
                                                 </Text>
                                             </Space>
+                                            {/* --- NAYA IZAFA: Suppliers List Export --- */}
+                                            <DataExport 
+                                                data={filteredSuppliers} 
+                                                exportColumns={supplierExportColumns} 
+                                                fileName="Suppliers_List" 
+                                                reportTitle="Suppliers Directory" 
+                                            />
                                             <Button 
                                                 id="sup-add-btn"
                                                 type="primary" 
@@ -887,6 +929,13 @@ const SupplierDashboard = () => {
                                                     {showArchived ? "Archived" : "Active"}
                                                 </Text>
                                             </Space>
+                                            {/* --- NAYA IZAFA: Suppliers List Export --- */}
+                                            <DataExport 
+                                                data={filteredSuppliers} 
+                                                exportColumns={supplierExportColumns} 
+                                                fileName="Suppliers_List" 
+                                                reportTitle="Suppliers Directory" 
+                                            />
                                             <Button 
                                                 type="primary" 
                                                 size="small" 

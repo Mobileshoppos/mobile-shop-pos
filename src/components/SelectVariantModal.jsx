@@ -4,10 +4,12 @@ import { PlusOutlined, CheckOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
+import { getPlanLimits } from '../config/subscriptionPlans'; // <--- NAYA IZAFA
 import { db } from '../db';
 
 const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
     const { profile } = useAuth();
+    const limits = getPlanLimits(profile?.subscription_tier); // <--- NAYA IZAFA
     const { message } = App.useApp();
     const [variants, setVariants] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -33,7 +35,7 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
                         // NAYA IZAFA: Agar IMEI hai to har item ki alag row banegi, warna bulk items group ho jayenge
                         const key = item.imei 
                             ? `${item.product_id}-${item.imei}` 
-                            : `${item.product_id}-${attributesKey}-${item.sale_price}`;
+                            : `${item.product_id}-${attributesKey}-${item.sale_price}-${item.wholesale_price}`;
 
                         if (!grouped[key]) {
                             grouped[key] = { ...item, inventory_ids: [], stock: 0, key: key };
@@ -199,7 +201,14 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
 
     return (
         <Modal
-            title={`Select Variants for: ${product?.name}`}
+            title={
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span>Select Variants for: {product?.name}</span>
+                    {limits.allow_stock_location && product?.rack_location && (
+                        <Tag color="blue" style={{ margin: 0, fontSize: '13px' }}>📍 Loc: {product.rack_location}</Tag>
+                    )}
+                </div>
+            }
             open={visible}
             onCancel={onCancel}
             onOk={handleOk}

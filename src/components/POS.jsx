@@ -70,7 +70,9 @@ const POS = () => {
   const [advancedFilters, setAdvancedFilters] = useState([]);
   const { message, modal } = App.useApp();
   const { user, profile, refetchStockCount } = useAuth();
-  const { activeStaff, verifyMasterPin, activeSession } = useStaff();
+  const { activeStaff, verifyMasterPin, activeSession, can } = useStaff(); // <--- can shamil kar diya
+  const limits = getPlanLimits(profile?.subscription_tier);
+  const isWholesaleActive = profile?.wholesale_pricing_enabled && limits.allow_wholesale_pricing;
   const { processSyncQueue } = useSync();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +88,7 @@ const POS = () => {
   const [paymentAccounts, setPaymentAccounts] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState('Cash'); // NAYA IZAFA: Default Cash set kar diya
   const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
+  const [availableGroups, setAvailableGroups] = useState([]); // <--- NAYA IZAFA: Customer Groups ke liye
   const [addForm] = Form.useForm();
   const customerNameInputRef = useRef(null); // NAYA IZAFA: Auto-focus ke liye
   const [discount, setDiscount] = useState(0);
@@ -103,6 +106,8 @@ const POS = () => {
   const [isMasterPinModalVisible, setIsMasterPinModalVisible] = useState(false);
   const [pendingDiscountValue, setPendingDiscountValue] = useState(0);
   const [masterPinInput, setMasterPinInput] = useState('');
+  const [masterPinAction, setMasterPinAction] = useState(null); // <--- NAYA IZAFA (Pehchanne ke liye ke PIN kis kaam ke liye hai)
+  const [pendingCustomerValues, setPendingCustomerValues] = useState(null); // <--- NAYA IZAFA
   const [lastSaleData, setLastSaleData] = useState(null);
   const searchInputRef = useRef(null);
   const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
@@ -256,6 +261,10 @@ const POS = () => {
       // 1. Customers Local DB se layein
       const customersData = await db.customers.toArray();
       setCustomers(customersData.sort((a, b) => a.name.localeCompare(b.name)));
+      
+      // NAYA IZAFA: Customer Groups ki list nikalna
+      const groups = [...new Set(customersData.map(c => c.customer_group).filter(Boolean))].sort();
+      setAvailableGroups(groups);
 
       // 2. Products Local DB se layein (Wohi DataService jo Inventory mein use kiya tha)
       const { productsData } = await DataService.getInventoryData();
@@ -424,8 +433,18 @@ const POS = () => {
     setCart(currentCart => {
       let updatedCart = [...currentCart];
 
-      const imeiItemsToAdd = selectedItems.filter(i => i.category_is_imei_based || i.imei);
-      const quantityItemsToAdd = selectedItems.filter(i => !i.category_is_imei_based && !i.imei);
+      const isWholesale = isWholesaleActive && selectedCustomer && customers.find(c => c.id === selectedCustomer)?.customer_group?.includes('Wholesale');
+
+              const imeiItemsToAdd = selectedItems.filter(i => i.category_is_imei_based || i.imei).map(i => ({
+                  ...i,
+                  retail_price: i.sale_price, // Asli qeemat mehfooz karein
+                  sale_price: (isWholesale && i.wholesale_price) ? i.wholesale_price : i.sale_price
+              }));
+              const quantityItemsToAdd = selectedItems.filter(i => !i.category_is_imei_based && !i.imei).map(i => ({
+                  ...i,
+                  retail_price: i.sale_price, // Asli qeemat mehfooz karein
+                  sale_price: (isWholesale && i.wholesale_price) ? i.wholesale_price : i.sale_price
+              }));
 
       // 1. IMEI Items (Inki quantity hamesha 1 hoti hai)
       imeiItemsToAdd.forEach(item => {
@@ -456,7 +475,7 @@ const POS = () => {
             ? parentProduct.variants
                 .filter(v => 
                     JSON.stringify(v.item_attributes || {}) === JSON.stringify(item.item_attributes || {}) &&
-                    v.sale_price === item.sale_price &&
+                    (v.sale_price === item.sale_price || v.sale_price === item.retail_price) &&
                     (v.status || 'available').toLowerCase() === 'available'
                 )
                 .reduce((sum, v) => sum + (v.available_qty || 0), 0) 
@@ -530,6 +549,7 @@ const POS = () => {
                         product_name: parentProduct.name,
                         variant_id: inventoryItem.variant_id,
                         sale_price: inventoryItem.sale_price || parentProduct.sale_price,
+                        wholesale_price: inventoryItem.wholesale_price, // <--- NAYA IZAFA
                         purchase_price: inventoryItem.purchase_price,
                     };
                     handleVariantsSelected([itemToAdd]);
@@ -554,6 +574,7 @@ const POS = () => {
                      product_name: parentProduct.name,
                      variant_id: inventoryItem.variant_id || inventoryItem.id,
                      sale_price: inventoryItem.sale_price || parentProduct.sale_price,
+                     wholesale_price: inventoryItem.wholesale_price, // <--- NAYA IZAFA
                      purchase_price: inventoryItem.purchase_price,
                      imei: trimmedValue 
                  };
@@ -586,7 +607,7 @@ const POS = () => {
               ? parentProduct.variants
                   .filter(v => 
                       JSON.stringify(v.item_attributes || {}) === JSON.stringify(item.item_attributes || {}) &&
-                      v.sale_price === item.sale_price &&
+                      (v.sale_price === item.sale_price || v.sale_price === item.retail_price) &&
                       (v.status || 'available').toLowerCase() === 'available'
                   )
                   .reduce((sum, v) => sum + (v.available_qty || 0), 0) 
@@ -621,6 +642,26 @@ const POS = () => {
     
     const udhaarAmount = grandTotal - amountPaid;
     
+    // --- NAYA IZAFA: Customer Credit Limit Check ---
+    if (paymentMethod === 'Unpaid' && profile?.enable_customer_credit_limits && selectedCustomer) {
+        const customer = customers.find(c => c.id === selectedCustomer);
+        // Agar customer ki limit set hai (NULL nahi hai)
+        if (customer && customer.credit_limit !== null && customer.credit_limit !== undefined) {
+            const totalFutureDebt = (customer.balance || 0) + udhaarAmount;
+            if (totalFutureDebt > customer.credit_limit) {
+                if (!window.creditLimitAuthorizedForThisSale) {
+                    setMasterPinAction('credit_limit');
+                    setIsMasterPinModalVisible(true);
+                    // Sale yahin rok dein, modal khul jayega
+                    return;
+                }
+            }
+        }
+    }
+    // Reset authorization for next sale
+    window.creditLimitAuthorizedForThisSale = false;
+    // -----------------------------------------------
+
     // Confirmation Modal hata diya gaya hai taake sale foran complete ho
     let saleDataForReceipt = null;
         
@@ -982,6 +1023,33 @@ const POS = () => {
 
   const subtotal = cart.reduce((sum, item) => sum + (item.sale_price * item.quantity), 0);
   const isWalkIn = customers.find(c => c.id === selectedCustomer)?.name === 'Walk-in Customer';
+
+  // --- NAYA IZAFA: Dynamic Wholesale Pricing ---
+  useEffect(() => {
+    if (cart.length > 0) {
+      const customer = customers.find(c => c.id === selectedCustomer);
+      const isWholesale = isWholesaleActive && customer?.customer_group?.includes('Wholesale');
+
+      let priceChanged = false;
+      const updatedCart = cart.map(item => {
+        // Agar retail_price save nahi hai, to pehle usey save kar lein
+        const retail = item.retail_price || item.sale_price;
+        const newPrice = (isWholesale && item.wholesale_price) ? item.wholesale_price : retail;
+        
+        if (item.sale_price !== newPrice) {
+          priceChanged = true;
+          return { ...item, retail_price: retail, sale_price: newPrice };
+        }
+        return { ...item, retail_price: retail };
+      });
+
+      if (priceChanged) {
+        setCart(updatedCart);
+        message.info(`Prices updated to ${isWholesale ? 'Wholesale' : 'Retail'} for this customer.`);
+      }
+    }
+  }, [selectedCustomer, customers]);
+  // ---------------------------------------------
   // Agar Walk-in select ho jaye to payment method ko "Paid" par reset kar dein
   useEffect(() => {
     if (isWalkIn && paymentMethod === 'Unpaid') {
@@ -1007,59 +1075,80 @@ const POS = () => {
   const grandTotal = totalAfterDiscount + taxAmount + fbrFeeAmount;
   // -----------------------------------
 
+  // --- NAYA IZAFA: Helper function taake code repeat na ho
+  const processSaveCustomer = async (values) => {
+      try {
+          const newCustomer = { 
+              ...values, 
+              // Ab limit handleAddCustomer mein theek ho kar aayegi
+              credit_limit: profile?.enable_customer_credit_limits ? values.credit_limit : null,
+              id: crypto.randomUUID(), 
+              local_id: crypto.randomUUID(),
+              user_id: user.id, 
+              balance: 0 
+          };
+          await db.customers.add(newCustomer);
+          await db.sync_queue.add({ table_name: 'customers', action: 'create', data: newCustomer });
+          message.success('Customer added successfully!');
+          setIsAddCustomerModalOpen(false);
+          addForm.resetFields();
+          setCustomers(currentCustomers => [...currentCustomers, newCustomer].sort((a, b) => a.name.localeCompare(b.name)));
+          setSelectedCustomer(newCustomer.id);
+      } catch (error) {
+          message.error('Error adding customer: ' + error.message);
+      }
+  };
+
   // NAYA handleAddCustomer (Offline-First)
   const handleAddCustomer = async (values) => {
-    // 1. Phone number ki safai (Normalize)
     if (values.phone_number) {
       values.phone_number = values.phone_number.replace(/[^\d+]/g, '');
     }
 
     try {
-      // 2. SMART DUPLICATE CHECK
       const existingCustomerName = await DataService.checkDuplicateCustomer(values.phone_number);
       if (existingCustomerName) {
-        addForm.setFields([
-          {
-            name: 'phone_number',
-            errors: [`Registered to: ${existingCustomerName}`],
-          },
-        ]);
+        addForm.setFields([{ name: 'phone_number', errors: [`Registered to: ${existingCustomerName}`] }]);
         return;
       }
-      // 1. Naya Customer Object banayein
-      const newCustomer = { 
-          ...values, 
-          id: crypto.randomUUID(), 
-          local_id: crypto.randomUUID(),
-          user_id: user.id, 
-          balance: 0 
-      };
 
-      // 2. Local DB mein save karein
-      await db.customers.add(newCustomer);
+      // --- SMART LOGIC: Default Limit vs Unlimited ---
+      let finalCreditLimit = values.credit_limit;
+      const defaultLimit = profile?.default_credit_limit || 0;
+
+      if (profile?.enable_customer_credit_limits) {
+          if (finalCreditLimit === undefined || finalCreditLimit === null) {
+              if (activeStaff && !can('can_set_credit_limit')) {
+                  // Staff jiske paas permission nahi, usay chup-chap Default Limit de do
+                  finalCreditLimit = defaultLimit;
+              } else {
+                  // Owner ya permission wala staff khali chhore to Unlimited (null)
+                  finalCreditLimit = null;
+              }
+          }
+      }
+
+      // Values ko update kar dein taake processSaveCustomer ko sahi data mile
+      const updatedValues = { ...values, credit_limit: finalCreditLimit };
+
+      // --- OWNER PIN CHECK ---
+      if (profile?.enable_customer_credit_limits && activeStaff) {
+          const isUnlimited = finalCreditLimit === null;
+
+          // Agar Limit Default se zyada hai, ya Unlimited hai, tab PIN mango
+          if (isUnlimited || finalCreditLimit > defaultLimit) {
+              setPendingCustomerValues(updatedValues);
+              setMasterPinAction('customer_create_limit');
+              setIsMasterPinModalVisible(true);
+              return; 
+          }
+      }
       
-      // 3. Sync Queue mein daalein (Taake internet aane par upload ho)
-      await db.sync_queue.add({
-          table_name: 'customers',
-          action: 'create',
-          data: newCustomer
-      });
-
-      message.success('Customer added successfully!');
-      setIsAddCustomerModalOpen(false);
-      addForm.resetFields();
-
-      // 4. Dropdown list ko update karein
-      setCustomers(currentCustomers => 
-        [...currentCustomers, newCustomer].sort((a, b) => a.name.localeCompare(b.name))
-      );
-      setSelectedCustomer(newCustomer.id);
-      
-      // 5. Upload Trigger karein (Agar internet hua to foran chala jayega)
-      // processSyncQueue(); <--- Hata diya, Auto-Sync zindabad!
+      // Agar sab theek hai, ya Owner khud add kar raha hai
+      processSaveCustomer(updatedValues);
 
     } catch (error) {
-      message.error('Error adding customer: ' + error.message);
+      message.error('Error validation: ' + error.message);
     }
   };
   
@@ -1089,6 +1178,7 @@ const POS = () => {
     // Check: Kya limit cross ho rahi hai?
     if (discountPercent > limit) {
       setPendingDiscountValue(value || 0);
+      setMasterPinAction('discount'); // <--- NAYA IZAFA
       setIsMasterPinModalVisible(true); // PIN Modal khol dein
     } else {
       setDiscount(value || 0);
@@ -1097,10 +1187,27 @@ const POS = () => {
 
   const handleMasterPinVerify = () => {
     if (verifyMasterPin(masterPinInput)) {
-      setDiscount(pendingDiscountValue);
-      setIsMasterPinModalVisible(false);
-      setMasterPinInput('');
-      message.success("Discount approved by Admin.");
+      if (masterPinAction === 'credit_limit') {
+          window.creditLimitAuthorizedForThisSale = true;
+          setIsMasterPinModalVisible(false);
+          setMasterPinInput('');
+          setMasterPinAction(null);
+          message.success("Credit limit override approved by Admin.");
+          handleCompleteSale(); // Sale dobara chalayein
+      } else if (masterPinAction === 'customer_create_limit') {
+          // NAYA IZAFA: Customer save karne do
+          setIsMasterPinModalVisible(false);
+          setMasterPinInput('');
+          setMasterPinAction(null);
+          message.success("Customer credit limit approved by Admin.");
+          processSaveCustomer(pendingCustomerValues);
+      } else {
+          setDiscount(pendingDiscountValue);
+          setIsMasterPinModalVisible(false);
+          setMasterPinInput('');
+          setMasterPinAction(null);
+          message.success("Discount approved by Admin.");
+      }
     } else {
       message.error("Invalid Master PIN!");
       setMasterPinInput('');
@@ -1401,6 +1508,12 @@ const POS = () => {
                             {product.brand || product.category_name}
                           </Text>
                         </Tooltip>
+                        {/* --- NAYA IZAFA: Grid Card par Location --- */}
+                        {limits.allow_stock_location && product.rack_location && (
+                           <Text type="secondary" style={{ fontSize: '10px', display: 'block', color: token.colorPrimary }}>
+                             📍 {product.rack_location}
+                           </Text>
+                        )}
                       </div>
                       
                       {/* Price & Cart Icon (Bottom Aligned) */}
@@ -1451,6 +1564,12 @@ const POS = () => {
                         </Text>
                         <Tag style={{ margin: 0, fontSize: '11px', padding: '0 4px' }}>{product.category_name}</Tag>
                         {product.brand && <Text type="secondary" style={{ fontSize: '12px' }}>{product.brand}</Text>}
+                        {/* --- NAYA IZAFA: List Card par Location --- */}
+                        {limits.allow_stock_location && product.rack_location && (
+                           <Tag color="blue" style={{ margin: 0, fontSize: '10px', padding: '0 4px' }}>
+                             📍 {product.rack_location}
+                           </Tag>
+                        )}
                       </div>
                       
                       {/* Right Side: Price, Total Stock */}
@@ -2013,9 +2132,22 @@ const POS = () => {
       </Col>
     </Row>
 
-    <Form.Item name="address" label="Street Address">
-      <Input placeholder="Building, Street, Area..." />
-    </Form.Item>
+    <Row gutter={16}>
+      <Col span={12}>
+        <Form.Item name="address" label="Street Address">
+          <Input placeholder="Building, Street, Area..." />
+        </Form.Item>
+      </Col>
+      <Col span={12}>
+        <Form.Item name="customer_group" label="Customer Group" tooltip="Assign to a specific route or category">
+          <Select 
+            mode="tags" 
+            placeholder="e.g. Wholesale, Route A" 
+            options={availableGroups.map(g => ({ label: g, value: g }))}
+          />
+        </Form.Item>
+      </Col>
+    </Row>
 
     <Row gutter={16}>
       <Col span={12}>
@@ -2034,6 +2166,22 @@ const POS = () => {
         </Form.Item>
       </Col>
     </Row>
+
+    {/* --- NAYA IZAFA: Credit Limit Field --- */}
+    {profile?.enable_customer_credit_limits && can('can_set_credit_limit') && (
+      <Row gutter={16}>
+        <Col span={12}>
+          <Form.Item 
+            name="credit_limit" 
+            label="Credit Limit (Rs)" 
+            tooltip="Maximum allowed debt. Leave empty for unlimited, or enter 0 for NO CREDIT."
+          >
+            <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 50000" />
+          </Form.Item>
+        </Col>
+      </Row>
+    )}
+
   </Form>
 </Modal>
       {isVariantModalOpen && <SelectVariantModal visible={isVariantModalOpen} onCancel={() => setIsVariantModalOpen(false)} onOk={handleVariantsSelected} product={productForVariantSelection} cart={cart} />}
@@ -2074,14 +2222,20 @@ const POS = () => {
         title="Admin Approval Required"
         open={isMasterPinModalVisible}
         onOk={handleMasterPinVerify}
-        onCancel={() => { setIsMasterPinModalVisible(false); setMasterPinInput(''); }}
+        onCancel={() => { setIsMasterPinModalVisible(false); setMasterPinInput(''); setMasterPinAction(null); }}
         okText="Approve"
         centered
         width={300}
       >
         <div style={{ textAlign: 'center' }}>
           <LockOutlined style={{ fontSize: '32px', color: token.colorWarning, marginBottom: '16px' }} />
-          <p>Discount exceeds staff limit. Please enter <b>Master PIN</b> to authorize.</p>
+          <p>
+            {masterPinAction === 'credit_limit' 
+              ? "Customer's credit limit exceeded! Please enter Master PIN to override and allow this sale." 
+              : masterPinAction === 'customer_create_limit'
+              ? `Credit limit exceeds the default allowed (${profile?.default_credit_limit || 0} Rs). Enter Master PIN to authorize.`
+              : "Discount exceeds staff limit. Please enter Master PIN to authorize."}
+          </p>
           <Input.Password 
             placeholder="Enter Master PIN" 
             value={masterPinInput}

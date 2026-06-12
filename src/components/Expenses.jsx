@@ -19,6 +19,7 @@ import {
 } from 'antd';
 import { PlusOutlined, EditOutlined, CloseCircleOutlined, DollarCircleOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
+import DataExport from '../components/DataExport'; // <--- NAYA IZAFA
 import { useAuth } from '../context/AuthContext';
 import { useStaff } from '../context/StaffContext'; // <--- NAYA IZAFA
 import { formatCurrency } from '../utils/currencyFormatter';
@@ -197,6 +198,16 @@ const Expenses = () => {
     }
   };
 
+  // --- NAYA IZAFA: Expense Export Columns ---
+  const exportColumns = [
+    { title: 'Date', dataIndex: 'formattedDate' },
+    { title: 'Title / Description', dataIndex: 'title' },
+    { title: 'Category', dataIndex: 'categoryName' },
+    { title: 'Paid From', dataIndex: 'payment_method' },
+    { title: 'Amount', dataIndex: 'amount' },
+    { title: 'Handled By', dataIndex: 'staffName' }
+  ];
+
   const columns = [
     { title: 'Date', dataIndex: 'expense_date', key: 'expense_date', render: (date) => dayjs(date).format('DD MMM, YYYY') },
     { title: 'Title / Description', dataIndex: 'title', key: 'title' },
@@ -259,11 +270,27 @@ const Expenses = () => {
   return (
     <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: isMobile ? 'space-between' : 'flex-end', marginBottom: '16px', gap: '16px' }}>
-        <Tooltip title={!activeSession ? "Please open a register shift to add expenses." : ""}>
-          <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => showModal()} style={{ width: isMobile ? '100%' : 'auto' }} disabled={!activeSession}>
-            Add New Expense
-          </Button>
-        </Tooltip>
+        
+        {/* --- NAYA IZAFA: Export Buttons aur Add Button ek sath --- */}
+        <Space>
+          <DataExport 
+            data={expenses.map(e => ({
+              ...e,
+              formattedDate: dayjs(e.expense_date).format('DD MMM, YYYY'),
+              categoryName: e.expense_categories ? e.expense_categories.name : 'N/A',
+              staffName: staffMembers.find(s => s.id === e.staff_id)?.name || 'Owner'
+            }))} 
+            exportColumns={exportColumns} 
+            fileName="Expenses_List" 
+            reportTitle="Expenses Report" 
+          />
+          <Tooltip title={!activeSession ? "Please open a register shift to add expenses." : ""}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => showModal()} style={{ width: isMobile ? '100%' : 'auto' }} disabled={!activeSession}>
+              Add New Expense
+            </Button>
+          </Tooltip>
+        </Space>
+
       </div>
       {isMobile && (
         <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>

@@ -3,6 +3,7 @@ import { Table, Tag, Typography, Button, App as AntApp, Flex, List, Card, Row, C
 import { FileTextOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import DataService from '../DataService';
+import DataExport from '../components/DataExport'; // <--- NAYA IZAFA
 import AddPurchaseForm from './AddPurchaseForm';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
@@ -69,6 +70,17 @@ const Purchases = () => {
         }
         setIsAddModalVisible(true);
     };
+
+    // --- NAYA IZAFA: Export ke liye columns ---
+    const exportColumns = [
+        { title: 'Date', dataIndex: 'formattedDate' },
+        { title: 'Invoice No.', dataIndex: 'invoice_id' },
+        { title: 'Supplier', dataIndex: 'supplier_name' },
+        { title: 'Total Amount', dataIndex: 'total_amount' },
+        { title: 'Amount Paid', dataIndex: 'amount_paid' },
+        { title: 'Balance Due', dataIndex: 'balance_due' },
+        { title: 'Status', dataIndex: 'status' }
+    ];
 
     const columns =[
         {
@@ -182,16 +194,28 @@ const Purchases = () => {
         />
     )}
 
-    <Button 
-        id="pur-add-btn"
-        type="primary" 
-        icon={<PlusOutlined />} 
-        size="large"
-        onClick={handleOpenAddModal}
-        style={{ width: isMobile ? '100%' : 'auto' }} 
-    >
-        Create New Purchase
-    </Button>
+    {/* --- NAYA IZAFA: Export Buttons aur Add Button ko ikatha kiya --- */}
+    <div style={{ display: 'flex', gap: '12px', width: isMobile ? '100%' : 'auto', justifyContent: isMobile ? 'space-between' : 'flex-end', alignItems: 'center' }}>
+        <DataExport 
+            data={filteredPurchases.map(p => ({
+                ...p,
+                formattedDate: new Date(p.purchase_date).toLocaleDateString(),
+                status: p.status.replace('_', ' ').toUpperCase()
+            }))} 
+            exportColumns={exportColumns} 
+            fileName="Purchase_History" 
+            reportTitle="Purchase History Report" 
+        />
+        <Button 
+            id="pur-add-btn"
+            type="primary" 
+            icon={<PlusOutlined />} 
+            onClick={handleOpenAddModal}
+            style={{ flex: isMobile ? 1 : 'none' }} 
+        >
+            Create New Purchase
+        </Button>
+    </div>
 </Flex>
 
             {isMobile ? (

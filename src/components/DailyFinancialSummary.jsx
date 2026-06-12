@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Table, Typography, Spin, ConfigProvider, theme, Modal, Tag, Button, Space, App } from 'antd';
 import { PrinterOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
-import * as XLSX from 'xlsx';
 import DataService from '../DataService';
+import DataExport from './DataExport'; // <--- NAYA IZAFA: Smart Export System
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import dayjs from 'dayjs';
@@ -60,88 +60,22 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
     }
   };
 
-  // --- NAYA IZAFA: Excel Export Logic ---
-  const handleExportExcel = (exportData, title, isModal = false) => {
-    let sheetData = [];
-    if (!isModal) {
-      sheetData = exportData.map(row => ({
-        'Date': dayjs(row.date).format('DD-MMM-YYYY'),
-        'Daily Sale': row.sale,
-        'Daily Purchase': row.purchase,
-        'Daily Receipt': row.receipt,
-        'Daily Payment': row.payment
-      }));
-    } else {
-      sheetData = exportData.map(row => ({
-        'Ref No.': row.ref_no,
-        'Party / Category': row.party_name,
-        'Description': row.description,
-        'Payment Mode': row.payment_mode || 'Cash',
-        'Amount': row.amount
-      }));
-    }
-    
-    const ws = XLSX.utils.json_to_sheet(sheetData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Data");
-    XLSX.writeFile(wb, `${title.replace(/\s+/g, '_')}_${dayjs().format('YYYYMMDD')}.xlsx`);
-    message.success(`${title} exported to Excel!`);
-  };
+  // --- NAYA IZAFA: Smart Export Columns ---
+  const summaryExportColumns = [
+    { title: 'Date', dataIndex: 'formattedDate' },
+    { title: 'Daily Sale', dataIndex: 'sale' },
+    { title: 'Daily Purchase', dataIndex: 'purchase' },
+    { title: 'Daily Receipt', dataIndex: 'receipt' },
+    { title: 'Daily Payment', dataIndex: 'payment' }
+  ];
 
-  // --- NAYA IZAFA: Print Logic ---
-  const handlePrint = (printData, title, isModal = false) => {
-    const printWindow = window.open('', '_blank');
-    let html = `
-      <html><head><title>${title}</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; }
-        th { background-color: #f4f4f4; }
-        .right { text-align: right; }
-        .center { text-align: center; }
-        h2 { text-align: center; color: #333; }
-      </style>
-      </head><body>
-      <h2>${profile?.shop_name || 'My Shop'}</h2>
-      <h3 class="center">${title}</h3>
-      <table>
-    `;
-
-    if (!isModal) {
-      html += `<tr><th>Date</th><th class="right">Daily Sale</th><th class="right">Daily Purchase</th><th class="right">Daily Receipt</th><th class="right">Daily Payment</th></tr>`;
-      printData.forEach(row => {
-        html += `<tr>
-          <td>${dayjs(row.date).format('DD-MMM-YYYY')}</td>
-          <td class="right">${formatCurrency(row.sale, profile?.currency)}</td>
-          <td class="right">${formatCurrency(row.purchase, profile?.currency)}</td>
-          <td class="right">${formatCurrency(row.receipt, profile?.currency)}</td>
-          <td class="right">${formatCurrency(row.payment, profile?.currency)}</td>
-        </tr>`;
-      });
-    } else {
-      html += `<tr><th>Ref No.</th><th>Party / Category</th><th>Description</th><th>Payment Mode</th><th class="right">Amount</th></tr>`;
-      printData.forEach(row => {
-        html += `<tr>
-          <td>${row.ref_no}</td>
-          <td>${row.party_name}</td>
-          <td>${row.description}</td>
-          <td>${row.payment_mode || 'Cash'}</td>
-          <td class="right">${formatCurrency(row.amount, profile?.currency)}</td>
-        </tr>`;
-      });
-    }
-
-    html += `</table></body></html>`;
-    printWindow.document.write(html);
-    printWindow.document.close();
-    
-    // Thora wait taake design load ho jaye phir print ka dabba khule
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 250);
-  };
+  const modalExportColumns = [
+    { title: 'Ref No.', dataIndex: 'ref_no' },
+    { title: 'Party / Category', dataIndex: 'party_name' },
+    { title: 'Description', dataIndex: 'description' },
+    { title: 'Mode', dataIndex: 'payment_mode' },
+    { title: 'Amount', dataIndex: 'amount' }
+  ];
 
   const columns = [
     {
@@ -248,14 +182,15 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       <Card 
         title={<Text strong style={{ fontSize: '16px' }}>Daily Financial Summary (Day Book)</Text>} 
         extra={
-          <Space>
-            <Button size="small" icon={<FileExcelOutlined />} onClick={() => handleExportExcel(data, 'Daily_Financial_Summary')}>
-              Excel
-            </Button>
-            <Button size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(data, 'Daily Financial Summary')}>
-              Print
-            </Button>
-          </Space>
+          <DataExport 
+            data={data.map(item => ({
+              ...item,
+              formattedDate: dayjs(item.date).format('DD-MMM-YYYY')
+            }))} 
+            exportColumns={summaryExportColumns} 
+            fileName="Daily_Financial_Summary" 
+            reportTitle="Daily Financial Summary (Day Book)" 
+          />
         }
         style={{ ...reportCardStyle, marginTop: 16 }}
         styles={{ body: { padding: 0 } }}
@@ -278,10 +213,15 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
         title={
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '24px' }}>
             <Title level={4} style={{ margin: 0, color: token.colorPrimary }}>{modalTitle}</Title>
-            <Space>
-              <Button size="small" icon={<FileExcelOutlined />} onClick={() => handleExportExcel(modalData, modalTitle, true)} />
-              <Button size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(modalData, modalTitle, true)} />
-            </Space>
+            <DataExport 
+              data={modalData.map(item => ({
+                ...item,
+                payment_mode: item.payment_mode || 'Cash'
+              }))} 
+              exportColumns={modalExportColumns} 
+              fileName={modalTitle.replace(/[^a-zA-Z0-9]/g, '_')} 
+              reportTitle={modalTitle} 
+            />
           </div>
         }
         open={isModalVisible}

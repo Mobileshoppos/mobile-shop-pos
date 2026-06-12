@@ -53,6 +53,7 @@ const formatPriceRange = (min, max, currency) => {
 const ProductList = ({ showArchived, products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged, refFirstStock, onPrintBarcode }) => {
   const { token } = theme.useToken(); // Control Center Connection
   const { profile } = useAuth();
+  const limits = getPlanLimits(profile?.subscription_tier); // <--- NAYA IZAFA: Yahan limits ko define kar diya
   const { isDarkMode } = useTheme();
   const { can } = useStaff(); // <--- Naya Guard
   
@@ -151,6 +152,11 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                     {product.category_name}
                   </Tag>
                   {product.brand && <Text type="secondary" style={{ fontSize: '13px' }}>{product.brand}</Text>}
+                  {limits.allow_stock_location && product.rack_location && (
+                    <Tag color="blue" style={{ margin: 0, fontSize: '11px', padding: '2px 6px' }}>
+                      📍 {product.rack_location}
+                    </Tag>
+                  )}
                 </div>
 
                 {/* --- RIGHT SIDE (Price + Menu) --- */}
@@ -356,6 +362,8 @@ const Inventory = () => {
   const location = useLocation();
   const { message, modal, notification } = App.useApp();
   const { user, profile } = useAuth();
+  const limits = getPlanLimits(profile?.subscription_tier);
+  const isWholesaleActive = profile?.wholesale_pricing_enabled && limits.allow_wholesale_pricing;
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [purchaseInitialData, setPurchaseInitialData] = useState(null);
@@ -382,7 +390,8 @@ const Inventory = () => {
           default_warranty_days: product.default_warranty_days, // Nayi line
           hs_code: product.hs_code, // NAYA IZAFA: FBR
           uom: product.uom, // NAYA IZAFA: FBR
-          image_url: product.image_url // NAYA IZAFA: Image
+          image_url: product.image_url, // NAYA IZAFA: Image
+          rack_location: product.rack_location // <--- NAYA IZAFA: Location
       });
       setIsProductEditModalOpen(true);
   };
@@ -397,7 +406,8 @@ const Inventory = () => {
               default_warranty_days: values.default_warranty_days,
               hs_code: values.hs_code, // NAYA IZAFA: FBR
               uom: values.uom, // NAYA IZAFA: FBR
-              image_url: values.image_url // NAYA IZAFA: Image
+              image_url: values.image_url, // NAYA IZAFA: Image
+              rack_location: values.rack_location // <--- NAYA IZAFA: Location
           };
 
           // Professional Way: DataService ka function use karein jo local DB + Sync Queue dono handle karta hai
@@ -693,7 +703,8 @@ const Inventory = () => {
           default_warranty_days: product.default_warranty_days,
           hs_code: product.hs_code, // NAYA IZAFA: FBR
           uom: product.uom, // NAYA IZAFA: FBR
-          image_url: product.image_url // NAYA IZAFA: Image
+          image_url: product.image_url, // NAYA IZAFA: Image
+          rack_location: product.rack_location // <--- NAYA IZAFA: Location
       });
       setIsProductModalOpen(true);
   };
@@ -830,7 +841,8 @@ const Inventory = () => {
       // 2. Pehle wo value set karein jo abhi hamare paas hai (Temporary)
       editForm.setFieldsValue({
           barcode: variant.barcode || '', 
-          sale_price: variant.sale_price
+          sale_price: variant.sale_price,
+          wholesale_price: variant.wholesale_price // <--- NAYA IZAFA
       });
 
       // 3. ASAL DATA: Local Database se confirm karein (Taake 100% sahi Barcode nazar aaye)
@@ -894,7 +906,8 @@ const Inventory = () => {
       // Hum naya DataService function use kar rahe hain jo Barcode aur Price dono handle karega
       await DataService.updateQuickEdit(variantId, editingItem.ids, {
         barcode: values.barcode || null,
-        sale_price: values.sale_price
+        sale_price: values.sale_price,
+        wholesale_price: values.wholesale_price // <--- NAYA IZAFA
       });
 
       // 4. UI SUCCESS
@@ -1230,7 +1243,18 @@ const Inventory = () => {
           >
             <Select placeholder="Select...">{categories.map(c => (<Option key={c.id} value={c.id}>{c.name}</Option>))}</Select>
           </Form.Item>
-          <Form.Item name="brand" label="Brand" rules={[{ required: true }]}><Input /></Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="brand" label="Brand" rules={[{ required: true }]}><Input /></Form.Item>
+            </Col>
+            {limits.allow_stock_location && (
+              <Col span={12}>
+                <Form.Item name="rack_location" label="Stock Location (Rack/Shelf)" tooltip="e.g. Shelf A, Counter 2">
+                  <Input placeholder="e.g. Shelf A" />
+                </Form.Item>
+              </Col>
+            )}
+          </Row>
           
           {profile?.fbr_integration_enabled && (
             <Row gutter={16}>
@@ -1344,11 +1368,21 @@ const Inventory = () => {
     
     <Form.Item 
         name="sale_price" 
-        label="Sale Price" 
+        label={isWholesaleActive ? "Retail Price (Sale)" : "Sale Price"} 
         rules={[{ required: true }]}
     >
         <InputNumber style={{ width: '100%' }} />
     </Form.Item>
+    
+    {/* --- NAYA IZAFA: Wholesale Price in Quick Edit --- */}
+    {isWholesaleActive && (
+        <Form.Item 
+            name="wholesale_price" 
+            label="Wholesale Price" 
+        >
+            <InputNumber style={{ width: '100%' }} />
+        </Form.Item>
+    )}
   </Form>
 </Modal>
 
@@ -1364,7 +1398,18 @@ const Inventory = () => {
           {/* NAYA IZAFA: Hidden submit button taake Enter dabane se form save ho jaye */}
           <button type="submit" style={{ display: 'none' }} />
           <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="brand" label="Brand"><Input /></Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="brand" label="Brand"><Input /></Form.Item>
+            </Col>
+            {limits.allow_stock_location && (
+              <Col span={12}>
+                <Form.Item name="rack_location" label="Stock Location (Rack/Shelf)" tooltip="e.g. Shelf A, Counter 2">
+                  <Input placeholder="e.g. Shelf A" />
+                </Form.Item>
+              </Col>
+            )}
+          </Row>
           
           {profile?.fbr_integration_enabled && (
             <Row gutter={16}>
