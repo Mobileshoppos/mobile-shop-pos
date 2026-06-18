@@ -455,12 +455,22 @@ export const SyncProvider = ({ children }) => {
                     .upsert([item.data], { onConflict: 'id' });
                 error = supError;
             }
+            else if (item.table_name === 'customer_payments' && item.action === 'update') {
+                const { id, ...updates } = item.data;
+                const { error: supError } = await supabase.from('customer_payments').update(updates).eq('id', id);
+                error = supError;
+            }
 
             // --- Credit Payouts Sync (UUID Simplified) ---
             else if (item.table_name === 'credit_payouts' && item.action === 'create') {
                 const { error: supError } = await supabase
                     .from('credit_payouts')
                     .upsert([item.data], { onConflict: 'id' });
+                error = supError;
+            }
+            else if (item.table_name === 'credit_payouts' && item.action === 'update') {
+                const { id, ...updates } = item.data;
+                const { error: supError } = await supabase.from('credit_payouts').update(updates).eq('id', id);
                 error = supError;
             }
 

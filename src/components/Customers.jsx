@@ -125,6 +125,22 @@ const Customers = () => {
       let data = await db.customers.toArray();
       setTotalCount(data.length); // <--- NAYA: Filter hone se pehle poori ginti save kar li
       
+      // --- NAYA IZAFA: Purane brackets aur slashes wale data ko saaf karna ---
+      data = data.map(c => {
+          let cleanGroup = c.customer_group;
+          if (typeof cleanGroup === 'string' && cleanGroup.startsWith('[')) {
+              try { cleanGroup = JSON.parse(cleanGroup).join(', '); } catch(e) {}
+          } else if (Array.isArray(cleanGroup)) {
+              cleanGroup = cleanGroup.join(', ');
+          }
+          // Agar phir bhi koi faltu quotes ya slashes bach jayen to unhein hata dein
+          if (typeof cleanGroup === 'string') {
+              cleanGroup = cleanGroup.replace(/["\[\]\\]/g, ''); 
+          }
+          return { ...c, customer_group: cleanGroup };
+      });
+      // -----------------------------------------------------------------------
+
       // 1. Archive Filter
       data = data.filter(c => showArchived ? c.is_active === false : c.is_active !== false);
 
@@ -185,7 +201,11 @@ const Customers = () => {
 
   const showEditModal = (customer) => {
     setEditingCustomer(customer);
-    addForm.setFieldsValue(customer);
+    addForm.setFieldsValue({
+      ...customer,
+      // Form mein tags ke liye isay wapis array banana parta hai
+      customer_group: customer.customer_group ? customer.customer_group.split(', ') : []
+    });
     setIsAddModalOpen(true);
   };
 
@@ -235,6 +255,12 @@ const Customers = () => {
     if (values.phone_number) {
       values.phone_number = values.phone_number.replace(/[^\d+]/g, '');
     }
+
+    // --- NAYA IZAFA: Group ko array se nikal kar plain text banana ---
+    if (Array.isArray(values.customer_group)) {
+        values.customer_group = values.customer_group.join(', ');
+    }
+    // ----------------------------------------------------------------
 
     try {
       const existingCustomerName = await DataService.checkDuplicateCustomer(values.phone_number, editingCustomer?.id);
@@ -395,6 +421,138 @@ const Customers = () => {
 
     } catch (error) {
       message.error('Failed to settle credit: ' + error.message);
+    }
+  };
+
+  const handleVoidPayment = async (paymentRecord) => {
+    try {
+      const voidRemarks = paymentRecord.details.remarks?.startsWith('[VOID]') 
+        ? paymentRecord.details.remarks 
+        : `[VOID] ${paymentRecord.details.remarks || 'Cancelled by Owner'}`;
+
+      // 1. Local DB mein update karein
+      await db.customer_payments.update(paymentRecord.details.id, {
+        amount_paid: 0,
+        remarks: voidRemarks,
+        updated_at: new Date().toISOString()
+      });
+
+      // 2. Sync Queue mein dalein
+      await db.sync_queue.add({
+        table_name: 'customer_payments',
+        action: 'update',
+        data: { id: paymentRecord.details.id, amount_paid: 0, remarks: voidRemarks }
+      });
+
+      // 3. Customer ka naya balance calculate karein
+      const currentCustomer = await db.customers.get(selectedCustomer.id);
+      if (currentCustomer) {
+         const sales = await db.sales.where('customer_id').equals(selectedCustomer.id).toArray();
+         const payments = await db.customer_payments.where('customer_id').equals(selectedCustomer.id).toArray();
+         const payouts = await db.credit_payouts.where('customer_id').equals(selectedCustomer.id).toArray();
+         
+         const totalUdhaar = sales.reduce((sum, s) => sum + ((s.total_amount || 0) - (s.amount_paid_at_sale || 0)), 0);
+         const totalWusooli = payments.reduce((sum, p) => sum + Math.abs(p.amount_paid || 0), 0);
+         const totalPayouts = payouts.reduce((sum, p) => sum + (p.amount_paid || 0), 0);
+         
+         const newBalance = totalUdhaar + totalPayouts - totalWusooli;
+
+         await db.customers.update(selectedCustomer.id, { balance: newBalance });
+         
+         setCustomers(prev => prev.map(c => 
+            c.id === selectedCustomer.id ? { ...c, balance: newBalance } : c
+         ));
+      }
+
+      // 4. System Logs mein record rakhein (Khufia nishani)
+      const logData = {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        level: 'warning',
+        category: 'Security',
+        message: `Customer Payment Voided`,
+        details: {
+          customer_name: selectedCustomer.name,
+          original_amount: paymentRecord.credit,
+          payment_id: paymentRecord.details.id,
+          action_by: activeStaff?.name || 'Owner'
+        },
+        created_at: new Date().toISOString()
+      };
+      await db.system_logs.add(logData);
+      await db.sync_queue.add({ table_name: 'system_logs', action: 'create', data: logData });
+
+      message.success('Payment voided successfully!');
+      
+      // Ledger ko dobara load karein
+      handleViewLedger(selectedCustomer);
+      processSyncQueue();
+
+    } catch (error) {
+      message.error('Failed to void payment: ' + error.message);
+    }
+  };
+
+  const handleVoidPayout = async (payoutRecord) => {
+    try {
+      const voidRemarks = payoutRecord.details.remarks?.startsWith('[VOID]') 
+        ? payoutRecord.details.remarks 
+        : `[VOID] ${payoutRecord.details.remarks || 'Cancelled by Owner'}`;
+
+      // 1. Local DB update
+      await db.credit_payouts.update(payoutRecord.details.id, {
+        amount_paid: 0,
+        remarks: voidRemarks,
+        updated_at: new Date().toISOString()
+      });
+
+      // 2. Sync Queue update
+      await db.sync_queue.add({
+        table_name: 'credit_payouts',
+        action: 'update',
+        data: { id: payoutRecord.details.id, amount_paid: 0, remarks: voidRemarks }
+      });
+
+      // 3. Customer Balance Theek karna
+      const currentCustomer = await db.customers.get(selectedCustomer.id);
+      if (currentCustomer) {
+         const sales = await db.sales.where('customer_id').equals(selectedCustomer.id).toArray();
+         const payments = await db.customer_payments.where('customer_id').equals(selectedCustomer.id).toArray();
+         const payouts = await db.credit_payouts.where('customer_id').equals(selectedCustomer.id).toArray();
+         
+         const totalUdhaar = sales.reduce((sum, s) => sum + ((s.total_amount || 0) - (s.amount_paid_at_sale || 0)), 0);
+         const totalWusooli = payments.reduce((sum, p) => sum + Math.abs(p.amount_paid || 0), 0);
+         const totalPayouts = payouts.reduce((sum, p) => sum + (p.amount_paid || 0), 0);
+         
+         const newBalance = totalUdhaar + totalPayouts - totalWusooli;
+         await db.customers.update(selectedCustomer.id, { balance: newBalance });
+         setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, balance: newBalance } : c));
+      }
+
+      // 4. System Logs
+      const logData = {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        level: 'warning',
+        category: 'Security',
+        message: `Customer Payout Voided`,
+        details: {
+          customer_name: selectedCustomer.name,
+          original_amount: payoutRecord.debit,
+          payout_id: payoutRecord.details.id,
+          action_by: activeStaff?.name || 'Owner'
+        },
+        created_at: new Date().toISOString()
+      };
+      await db.system_logs.add(logData);
+      await db.sync_queue.add({ table_name: 'system_logs', action: 'create', data: logData });
+
+      message.success('Payout voided successfully!');
+      handleViewLedger(selectedCustomer);
+      processSyncQueue();
+
+    } catch (error) {
+      message.error('Failed to void payout: ' + error.message);
     }
   };
 
@@ -898,7 +1056,7 @@ const handleCloseInvoiceSearchModal = () => {
 
         const paymentsTx = payments.map(p => {
             const isReturn = p.amount_paid < 0;
-            let description = 'Payment Received';
+            let description = p.amount_paid === 0 ? '[VOID] Payment Cancelled' : 'Payment Received';
             let returnDetails = null;
 
             if (isReturn) {
@@ -939,7 +1097,7 @@ const handleCloseInvoiceSearchModal = () => {
         const payoutsTx = payouts.map(p => ({
             type: 'payout',
             date: p.created_at,
-            description: `Cash Refund / Payout`,
+            description: p.amount_paid === 0 ? '[VOID] Payout Cancelled' : 'Cash Refund / Payout',
             debit: Number(p.amount_paid),
             credit: 0,
             details: p
@@ -994,32 +1152,30 @@ const handleCloseInvoiceSearchModal = () => {
       key: 'actions', 
       render: (_, record) => (
         <Space>
-          <Button icon={<EyeOutlined />} onClick={() => handleViewLedger(record)}>Ledger</Button>
+          <Tooltip title="View Ledger">
+            <Button icon={<EyeOutlined />} onClick={() => handleViewLedger(record)} />
+          </Tooltip>
           
           {/* --- NAYA CONDITIONAL LOGIC --- */}
-          {record.balance > 0 ? (
-            <Tooltip title={!activeSession ? "Please open a register shift to process cash transactions." : ""}>
-              <Button 
-                icon={<DollarCircleOutlined />} 
-                onClick={() => showPaymentModal(record)}
-                disabled={!activeSession}
-              >
-                Payment receive
-              </Button>
-            </Tooltip>
-          ) : record.balance < 0 ? (
-            <Tooltip title={!activeSession ? "Please open a register shift to process cash transactions." : ""}>
+          <Tooltip title={!activeSession ? "Please open a register shift to process cash transactions." : "Receive Payment"}>
+            <Button 
+              icon={<DollarCircleOutlined />} 
+              onClick={() => showPaymentModal(record)}
+              disabled={!activeSession}
+            />
+          </Tooltip>
+          
+          {record.balance < 0 && (
+            <Tooltip title={!activeSession ? "Please open a register shift to process cash transactions." : "Settle Credit"}>
               <Button 
                 type="primary" 
                 ghost 
                 icon={<DollarCircleOutlined />} 
                 onClick={() => showPayoutModal(record)}
                 disabled={!activeSession}
-              >
-                Settle Credit
-              </Button>
+              />
             </Tooltip>
-          ) : null}
+          )}
 
           <Dropdown 
             trigger={['click']}
@@ -1203,7 +1359,7 @@ const handleCloseInvoiceSearchModal = () => {
             </Tooltip>
           </div>
           <>
-            <Table columns={saleItemCols} dataSource={groupedDataSource} pagination={false} rowKey={(item) => `${item.product_id}-${item.price_at_sale}`} style={{marginTop: '8px'}} />
+            <Table columns={saleItemCols} dataSource={groupedDataSource} pagination={false} rowKey="id" style={{marginTop: '8px'}} />
             {record.details.discount > 0 && (
               <div style={{ textAlign: 'right', marginTop: '12px', paddingRight: '24px' }}>
                 <Text type="secondary" style={{ fontSize: '14px' }}>Invoice Discount: </Text>
@@ -1391,7 +1547,6 @@ const handleCloseInvoiceSearchModal = () => {
                     id="cust-add-btn"
                     type="primary"
                     icon={isLocked ? <LockOutlined /> : <UserAddOutlined />}
-                    size="large"
                     onClick={() => {
                         if (isLocked) {
                             modal.confirm({
@@ -1458,23 +1613,23 @@ const handleCloseInvoiceSearchModal = () => {
                 <Space style={{ width: '100%' }}>
                   <Button icon={<EyeOutlined />} onClick={() => handleViewLedger(customer)} style={{ flex: 1 }}>Ledger</Button>
                   
-                  {customer.balance > 0 ? (
-                    <Tooltip title={!activeSession ? "Please open a register shift to process cash transactions." : ""}>
-                      <span style={{ flex: 1, display: 'flex' }}>
-                        <Button icon={<DollarCircleOutlined />} onClick={() => showPaymentModal(customer)} style={{ width: '100%' }} disabled={!activeSession}>
-                          Payment receive
-                        </Button>
-                      </span>
-                    </Tooltip>
-                  ) : customer.balance < 0 ? (
+                  <Tooltip title={!activeSession ? "Please open a register shift to process cash transactions." : ""}>
+                    <span style={{ flex: 1, display: 'flex' }}>
+                      <Button icon={<DollarCircleOutlined />} onClick={() => showPaymentModal(customer)} style={{ width: '100%' }} disabled={!activeSession}>
+                        Receive
+                      </Button>
+                    </span>
+                  </Tooltip>
+
+                  {customer.balance < 0 && (
                     <Tooltip title={!activeSession ? "Please open a register shift to process cash transactions." : ""}>
                       <span style={{ flex: 1, display: 'flex' }}>
                         <Button type="primary" ghost icon={<DollarCircleOutlined />} onClick={() => showPayoutModal(customer)} style={{ width: '100%' }} disabled={!activeSession}>
-                          Settle Credit
+                          Settle
                         </Button>
                       </span>
                     </Tooltip>
-                  ) : null}
+                  )}
 
                   <Dropdown 
                     trigger={['click']}
@@ -1634,7 +1789,7 @@ const handleCloseInvoiceSearchModal = () => {
     open={isLedgerModalOpen}
     onCancel={() => setIsLedgerModalOpen(false)}
     footer={null}
-    width={isMobile ? '95vw' : 1000}
+    width={isMobile ? '95vw' : '85vw'}
 >
     {ledgerLoading ? <div style={{ textAlign: 'center', padding: '50px' }}><Spin /></div> : (
         isMobile ? (
@@ -1658,6 +1813,25 @@ const handleCloseInvoiceSearchModal = () => {
                                 <Text type="secondary">Balance: </Text>
                                 <Text strong>{formatCurrency(record.balance, profile?.currency)}</Text>
                             </div>
+                            {(record.type === 'payment' && record.credit > 0 && !activeStaff) || (record.type === 'payout' && record.debit > 0 && !activeStaff) ? (
+                                <div style={{ marginTop: '10px', textAlign: 'right' }}>
+                                    <Button 
+                                        size="small" 
+                                        danger 
+                                        onClick={() => {
+                                            modal.confirm({
+                                                title: record.type === 'payment' ? 'VOID this payment?' : 'VOID this payout?',
+                                                content: 'This will set amount to 0 and revert the balance. Proceed?',
+                                                okText: 'Yes, Void it',
+                                                okType: 'danger',
+                                                onOk: () => record.type === 'payment' ? handleVoidPayment(record) : handleVoidPayout(record)
+                                            });
+                                        }}
+                                    >
+                                        {record.type === 'payment' ? 'Void Payment' : 'Void Payout'}
+                                    </Button>
+                                </div>
+                            ) : null}
                             {(record.type === 'sale' || record.type === 'return') && (
                                 <div style={{ marginTop: '10px' }}>
                                     {expandedRowRender(record)}
@@ -1682,14 +1856,47 @@ const handleCloseInvoiceSearchModal = () => {
     },
     { title: 'Debit', dataIndex: 'debit', align: 'right', render: a => a > 0 ? <Text>{formatCurrency(a, profile?.currency)}</Text> : '-' },
     { title: 'Credit', dataIndex: 'credit', align: 'right', render: a => a > 0 ? <Text type="success">{formatCurrency(a, profile?.currency)}</Text> : '-' },
-    { title: 'Balance', dataIndex: 'balance', align: 'right', render: a => <Text strong>{formatCurrency(a, profile?.currency)}</Text> }
+    { title: 'Balance', dataIndex: 'balance', align: 'right', render: a => <Text strong>{formatCurrency(a, profile?.currency)}</Text> },
+    { 
+      title: 'Action', 
+      key: 'action', 
+      align: 'center',
+      render: (_, record) => {
+        if ((record.type === 'payment' && record.credit > 0 && !activeStaff) || (record.type === 'payout' && record.debit > 0 && !activeStaff)) {
+          return (
+            <Button 
+              type="link" 
+              danger 
+              size="small"
+              onClick={() => {
+                modal.confirm({
+                  title: record.type === 'payment' ? 'VOID this payment?' : 'VOID this payout?',
+                  content: 'This will set amount to 0 and revert the balance. Proceed?',
+                  okText: 'Yes, Void it',
+                  okType: 'danger',
+                  onOk: () => record.type === 'payment' ? handleVoidPayment(record) : handleVoidPayout(record)
+                });
+              }}
+            >
+              Void
+            </Button>
+          );
+        }
+        return null;
+      }
+    }
 ]}
             />
         )
     )}
-</Modal> <Modal title={`Payment from: ${selectedCustomer?.name}`} open={isPaymentModalOpen} onCancel={handlePaymentCancel} onOk={() => paymentForm.submit()} okText="Confirm Payment"> <Title level={5}>Balance: <Text type="danger">{formatCurrency(selectedCustomer?.balance, profile?.currency)}</Text></Title> <Form form={paymentForm} layout="vertical" onFinish={handleReceivePayment}><Form.Item name="amount" label="Amount Received" rules={[{ required: true }]}>
-    <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={1} max={selectedCustomer?.balance} />
-</Form.Item>
+</Modal> <Modal title={`Payment from: ${selectedCustomer?.name}`} open={isPaymentModalOpen} onCancel={handlePaymentCancel} onOk={() => paymentForm.submit()} okText="Confirm Payment"> 
+  <Title level={5}>
+    Balance: <Text type={selectedCustomer?.balance > 0 ? "danger" : "success"}>{formatCurrency(selectedCustomer?.balance, profile?.currency)}</Text>
+  </Title> 
+  <Form form={paymentForm} layout="vertical" onFinish={handleReceivePayment}>
+    <Form.Item name="amount" label="Amount Received" rules={[{ required: true }]}>
+      <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} min={1} />
+    </Form.Item>
 <Form.Item label="Receive In Account" required>
   <Select value={cashOrBank} onChange={setCashOrBank} placeholder="Select Account">
     <Select.OptGroup label="Physical Cash">

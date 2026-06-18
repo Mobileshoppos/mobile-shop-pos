@@ -1,0 +1,1 @@
+ALTER TABLE "public"."credit_payouts" DROP CONSTRAINT IF EXISTS "credit_payouts_amount_paid_check";

@@ -74,8 +74,8 @@ export const lightThemeTokens = {
   
   // --- Text & Links ---
   colorText: '#333333',
-  colorTextSecondary: '#2A4B54', // MAZEED DARK KIYA: Taake dhundla na lage
-  colorTextDescription: '#2A4B54', // MAZEED DARK KIYA: Statistic titles ke liye
+  colorTextSecondary: '#2A4B54',
+  colorTextDescription: '#2A4B54',
   colorLink: '#088395',
   colorLinkHover: '#5F6368',
   
