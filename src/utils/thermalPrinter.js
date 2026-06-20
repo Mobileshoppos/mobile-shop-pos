@@ -207,3 +207,113 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
     `);
     printWindow.document.close();
 };
+
+// --- NAYA IZAFA: Customer Payment Thermal Receipt ---
+export const printThermalPaymentReceipt = async (paymentDetails, currency = 'PKR') => {
+    const {
+        shopName, shopAddress, shopPhone, paymentDate, customerName,
+        voucher_no, amountPaid, paymentMethod, remainingBalance, footerMessage
+    } = paymentDetails;
+
+    const formatMoney = (num) => `${currency} ${Number(num).toFixed(2)}`;
+
+    let receiptContent = `
+        <div style="width: 270px; font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #000; margin: 0 auto;">
+            
+            <!-- HEADER -->
+            <div style="text-align: center; margin-bottom: 10px;">
+                <h2 style="margin: 0; font-size: 16px; font-weight: bold;">${shopName || 'MY SHOP'}</h2>
+                <p style="margin: 2px 0; font-size: 11px;">${shopAddress || ''}</p>
+                <p style="margin: 2px 0; font-size: 11px;">${shopPhone || ''}</p>
+            </div>
+
+            <hr style="border-top: 1px dashed #000; margin: 5px 0;">
+            
+            <div style="text-align: center; margin: 8px 0;">
+                <h3 style="margin: 0; font-size: 14px; font-weight: bold; text-decoration: underline;">PAYMENT RECEIPT</h3>
+            </div>
+
+            <!-- INFO -->
+            <div style="font-size: 11px; margin-bottom: 8px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                    <span>Receipt #:</span>
+                    <span>${voucher_no || ''}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                    <span>Date:</span>
+                    <span>${dayjs(paymentDate).format('DD-MMM-YYYY hh:mm A')}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                    <span>Customer:</span>
+                    <span>${customerName || 'Customer'}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                    <span>Payment Mode:</span>
+                    <span>${paymentMethod || 'Cash'}</span>
+                </div>
+            </div>
+
+            <hr style="border-top: 1px dashed #000; margin: 10px 0;">
+
+            <!-- AMOUNT -->
+            <div style="font-size: 12px;">
+                <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; margin: 5px 0;">
+                    <span>AMOUNT RECEIVED:</span>
+                    <span>${formatMoney(amountPaid)}</span>
+                </div>
+                
+                <hr style="border-top: 1px solid #000; margin: 5px 0;">
+
+                <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                    <span>Remaining Balance:</span>
+                    <span style="font-weight: bold;">${formatMoney(remainingBalance)}</span>
+                </div>
+            </div>
+
+            <hr style="border-top: 1px dashed #000; margin: 10px 0;">
+
+            <!-- POLICY -->
+            ${footerMessage ? `
+            <div style="text-align: left; font-size: 10px; margin-bottom: 10px;">
+                <p style="margin: 0; white-space: pre-wrap;">${footerMessage}</p>
+            </div>
+            <hr style="border-top: 1px dashed #000; margin: 10px 0;">
+            ` : ''}
+            
+            <!-- FOOTER -->
+            <div style="text-align: center; font-size: 11px;">
+                <p>Thank you for your payment!</p>
+                <p>Software by: <b>SadaPos</b></p>
+            </div>
+        </div>
+    `;
+
+    const printWindow = window.open('', '_blank', 'width=300,height=600');
+    printWindow.document.write(`
+        <html>
+            <head>
+                <title>Print Payment Receipt</title>
+                <style>
+                    body { margin: 0; padding: 5px; background-color: #fff; }
+                    @media print {
+                        @page { margin: 0; size: auto; }
+                        body { margin: 0; }
+                    }
+                </style>
+            </head>
+            <body>
+                ${receiptContent}
+                <script>
+                    window.onload = function() {
+                        window.focus();
+                        setTimeout(() => { 
+                            window.print(); 
+                            window.close();
+                        }, 500);
+                    }
+                </script>
+            </body>
+        </html>
+    `);
+    printWindow.document.close();
+};

@@ -329,3 +329,108 @@ export const generateQuotationReceipt = async (saleDetails, currency = 'PKR') =>
     console.error("Error creating PDF:", e);
   }
 };
+
+// --- NAYA IZAFA: Customer Payment Receipt Generator ---
+export const generatePaymentReceipt = async (paymentDetails, currency = 'PKR') => {
+  if (!paymentDetails) return;
+
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a5' // Payment receipt thori choti (A5) achi lagti hai
+  });
+
+  const {
+    shopName, shopAddress, shopPhone, paymentDate, customerName,
+    voucher_no, amountPaid, paymentMethod, remainingBalance, footerMessage
+  } = paymentDetails;
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  // --- 1. HEADER SECTION ---
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.setTextColor(40, 40, 40);
+  doc.text(safeString(shopName) || 'MY SHOP', pageWidth / 2, 20, { align: 'center' });
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(80, 80, 80);
+  doc.text(safeString(shopAddress) || '', pageWidth / 2, 26, { align: 'center' });
+  doc.text(`Phone: ${safeString(shopPhone)}`, pageWidth / 2, 31, { align: 'center' });
+
+  // Line Separator
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, 36, pageWidth - 10, 36);
+
+  // --- 2. TITLE ---
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(22, 119, 255); // Blue color
+  doc.text('PAYMENT RECEIPT', pageWidth / 2, 45, { align: 'center' });
+
+  // --- 3. DETAILS SECTION ---
+  const startY = 55;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
+
+  doc.text(`Receipt #: ${safeString(voucher_no)}`, 14, startY);
+  doc.text(`Date: ${dayjs(paymentDate).format('DD-MMM-YYYY hh:mm A')}`, pageWidth - 14, startY, { align: 'right' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('Received From:', 14, startY + 10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(safeString(customerName) || 'Customer', 45, startY + 10);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('Payment Mode:', 14, startY + 18);
+  doc.setFont('helvetica', 'normal');
+  doc.text(safeString(paymentMethod) || 'Cash', 45, startY + 18);
+
+  // --- 4. AMOUNT BOX ---
+  const boxY = startY + 28;
+  doc.setFillColor(245, 245, 245);
+  doc.rect(14, boxY, pageWidth - 28, 20, 'F');
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('Amount Received:', 20, boxY + 13);
+  
+  doc.setFontSize(16);
+  doc.setTextColor(35, 120, 4); // Green color for amount
+  doc.text(formatCurrency(amountPaid || 0, currency), pageWidth - 20, boxY + 14, { align: 'right' });
+
+  // --- 5. BALANCE SECTION ---
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
+  doc.text('Remaining Balance:', 14, boxY + 30);
+  doc.setFont('helvetica', 'bold');
+  doc.text(formatCurrency(remainingBalance || 0, currency), 50, boxY + 30);
+
+  // --- 6. FOOTER ---
+  const footerY = doc.internal.pageSize.getHeight() - 20;
+  
+  if (footerMessage) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(80, 80, 80);
+      const splitText = doc.splitTextToSize(footerMessage, pageWidth - 28);
+      doc.text(splitText, 14, footerY - 15);
+  }
+
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(9);
+  doc.setTextColor(100, 100, 100);
+  doc.text('Thank you for your payment!', pageWidth / 2, footerY, { align: 'center' });
+  doc.text('Software by SadaPos', pageWidth / 2, footerY + 5, { align: 'center' });
+
+  try {
+    const blob = doc.output('blob');
+    const blobUrl = URL.createObjectURL(blob);
+    window.open(blobUrl, '_blank');
+  } catch (e) {
+    console.error("Error creating PDF:", e);
+  }
+};

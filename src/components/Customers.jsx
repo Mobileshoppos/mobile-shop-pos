@@ -3,7 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag, Dropdown, Menu, Tooltip, Select, theme, Switch
 } from 'antd';
-import { UserSwitchOutlined, UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined, MoreOutlined, EditOutlined, ReloadOutlined, InboxOutlined, DeleteOutlined, SearchOutlined, LockOutlined } from '@ant-design/icons';
+import { UserSwitchOutlined, UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined, MoreOutlined, EditOutlined, ReloadOutlined, InboxOutlined, DeleteOutlined, SearchOutlined, LockOutlined, PrinterOutlined } from '@ant-design/icons';
+import { generatePaymentReceipt } from '../utils/receiptGenerator';
+import { printThermalPaymentReceipt } from '../utils/thermalPrinter';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useStaff } from '../context/StaffContext'; // <--- NAYA IZAFA
@@ -74,6 +76,30 @@ const Customers = () => {
   const [searchedSale, setSearchedSale] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [payoutForm] = Form.useForm();
+
+  // --- NAYA IZAFA: Raseed Print Karne Ka Helper Function ---
+  const handlePrintPaymentReceipt = (paymentRecord, currentBalance) => {
+    const receiptData = {
+      shopName: profile?.shop_name || 'My Shop',
+      shopAddress: profile?.address || '',
+      shopPhone: profile?.phone_number || '',
+      paymentDate: paymentRecord.created_at || new Date().toISOString(),
+      customerName: selectedCustomer?.name || 'Customer',
+      voucher_no: paymentRecord.voucher_no || `RCPT-${(paymentRecord.id || '').split('-')[0].toUpperCase()}`,
+      amountPaid: Math.abs(paymentRecord.amount_paid || paymentRecord.amount || 0),
+      paymentMethod: paymentRecord.payment_method || 'Cash',
+      remainingBalance: currentBalance,
+      footerMessage: profile?.warranty_policy
+    };
+
+    if (profile?.receipt_format === 'none') {
+      message.info('Receipt printing is disabled in settings.');
+    } else if (profile?.receipt_format === 'thermal') {
+      printThermalPaymentReceipt(receiptData, profile?.currency);
+    } else {
+      generatePaymentReceipt(receiptData, profile?.currency);
+    }
+  };
   
   // --- NAYA IZAFA: PIN States ---
   const [isMasterPinModalVisible, setIsMasterPinModalVisible] = useState(false);
@@ -343,18 +369,34 @@ const Customers = () => {
 
       // 3. Balance Update (UI)
       const currentCustomer = await db.customers.get(selectedCustomer.id);
+      let updatedBalance = 0; // NAYA: Variable ko bahar define kiya
       if (currentCustomer) {
-          const newBalance = (currentCustomer.balance || 0) - values.amount;
-          await db.customers.update(selectedCustomer.id, { balance: newBalance });
+          updatedBalance = (currentCustomer.balance || 0) - values.amount;
+          await db.customers.update(selectedCustomer.id, { balance: updatedBalance });
           
           setCustomers(prev => prev.map(c => 
-              c.id === selectedCustomer.id ? { ...c, balance: newBalance } : c
+              c.id === selectedCustomer.id ? { ...c, balance: updatedBalance } : c
           ));
       }
 
       message.success('Payment received successfully!');
       handlePaymentCancel();
       processSyncQueue();
+
+      // --- NAYA IZAFA: Raseed Print Karne Ka Prompt ---
+      // Agar settings mein print disable (none) hai, to prompt na dikhayein
+      if (profile?.receipt_format !== 'none') {
+        modal.confirm({
+          title: 'Payment Received!',
+          content: 'Do you want to print a receipt for this payment?',
+          okText: 'Yes, Print',
+          cancelText: 'No',
+          icon: <PrinterOutlined style={{ color: token.colorPrimary }} />,
+          onOk: () => {
+            handlePrintPaymentReceipt(paymentData, updatedBalance);
+          }
+        });
+      }
 
     } catch (error) { 
         message.error('Failed to receive payment: ' + error.message); 
@@ -1815,21 +1857,32 @@ const handleCloseInvoiceSearchModal = () => {
                             </div>
                             {(record.type === 'payment' && record.credit > 0 && !activeStaff) || (record.type === 'payout' && record.debit > 0 && !activeStaff) ? (
                                 <div style={{ marginTop: '10px', textAlign: 'right' }}>
-                                    <Button 
-                                        size="small" 
-                                        danger 
-                                        onClick={() => {
-                                            modal.confirm({
-                                                title: record.type === 'payment' ? 'VOID this payment?' : 'VOID this payout?',
-                                                content: 'This will set amount to 0 and revert the balance. Proceed?',
-                                                okText: 'Yes, Void it',
-                                                okType: 'danger',
-                                                onOk: () => record.type === 'payment' ? handleVoidPayment(record) : handleVoidPayout(record)
-                                            });
-                                        }}
-                                    >
-                                        {record.type === 'payment' ? 'Void Payment' : 'Void Payout'}
-                                    </Button>
+                                    <Space>
+                                        {record.type === 'payment' && (
+                                            <Button 
+                                                size="small" 
+                                                icon={<PrinterOutlined />} 
+                                                onClick={() => handlePrintPaymentReceipt(record.details, record.balance)}
+                                            >
+                                                Print
+                                            </Button>
+                                        )}
+                                        <Button 
+                                            size="small" 
+                                            danger 
+                                            onClick={() => {
+                                                modal.confirm({
+                                                    title: record.type === 'payment' ? 'VOID this payment?' : 'VOID this payout?',
+                                                    content: 'This will set amount to 0 and revert the balance. Proceed?',
+                                                    okText: 'Yes, Void it',
+                                                    okType: 'danger',
+                                                    onOk: () => record.type === 'payment' ? handleVoidPayment(record) : handleVoidPayout(record)
+                                                });
+                                            }}
+                                        >
+                                            {record.type === 'payment' ? 'Void Payment' : 'Void Payout'}
+                                        </Button>
+                                    </Space>
                                 </div>
                             ) : null}
                             {(record.type === 'sale' || record.type === 'return') && (
@@ -1864,22 +1917,34 @@ const handleCloseInvoiceSearchModal = () => {
       render: (_, record) => {
         if ((record.type === 'payment' && record.credit > 0 && !activeStaff) || (record.type === 'payout' && record.debit > 0 && !activeStaff)) {
           return (
-            <Button 
-              type="link" 
-              danger 
-              size="small"
-              onClick={() => {
-                modal.confirm({
-                  title: record.type === 'payment' ? 'VOID this payment?' : 'VOID this payout?',
-                  content: 'This will set amount to 0 and revert the balance. Proceed?',
-                  okText: 'Yes, Void it',
-                  okType: 'danger',
-                  onOk: () => record.type === 'payment' ? handleVoidPayment(record) : handleVoidPayout(record)
-                });
-              }}
-            >
-              Void
-            </Button>
+            <Space>
+              {record.type === 'payment' && (
+                <Tooltip title="Print Receipt">
+                  <Button 
+                    type="text" 
+                    icon={<PrinterOutlined style={{ color: token.colorPrimary }} />} 
+                    size="small"
+                    onClick={() => handlePrintPaymentReceipt(record.details, record.balance)}
+                  />
+                </Tooltip>
+              )}
+              <Button 
+                type="link" 
+                danger 
+                size="small"
+                onClick={() => {
+                  modal.confirm({
+                    title: record.type === 'payment' ? 'VOID this payment?' : 'VOID this payout?',
+                    content: 'This will set amount to 0 and revert the balance. Proceed?',
+                    okText: 'Yes, Void it',
+                    okType: 'danger',
+                    onOk: () => record.type === 'payment' ? handleVoidPayment(record) : handleVoidPayout(record)
+                  });
+                }}
+              >
+                Void
+              </Button>
+            </Space>
           );
         }
         return null;
