@@ -33,6 +33,7 @@ import dayjs from 'dayjs';
 import { useSync } from '../context/SyncContext';
 import DataService from '../DataService';
 import RegisterClosingModal from './RegisterClosingModal';
+import VoucherSearchModal from './VoucherSearchModal'; // <--- NAYA IZAFA
 import { db } from '../db';
 import { getPlanLimits } from '../config/subscriptionPlans';
 
@@ -153,6 +154,39 @@ const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
   const [suppliers, setSuppliers] = React.useState([]);
   const [resolveForm] = Form.useForm();
   const [isClosingModalVisible, setIsClosingModalVisible] = React.useState(false);
+  const [isVoucherSearchOpen, setIsVoucherSearchOpen] = React.useState(false); // <--- NAYA IZAFA
+
+  // --- NAYA IZAFA: Keyboard Shortcut to Open Search Modal ---
+  React.useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      // Input, Textarea ya Select mein typing karte waqt shortcut kaam na kare
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) && !window.isRecordingShortcut) {
+        return;
+      }
+
+      // Settings se saved shortcut nikalain ya default 'alt+x' use karein
+      const shortcut = profile?.custom_shortcuts?.global_search || 'alt+x';
+      const keys = shortcut.toLowerCase().split('+');
+
+      const ctrlReq = keys.includes('ctrl');
+      const altReq = keys.includes('alt');
+      const shiftReq = keys.includes('shift');
+      const mainKey = keys.find(k => !['ctrl', 'alt', 'shift'].includes(k));
+
+      const ctrlMatch = ctrlReq ? (e.ctrlKey || e.metaKey) : !(e.ctrlKey || e.metaKey);
+      const altMatch = altReq ? e.altKey : !e.altKey;
+      const shiftMatch = shiftReq ? e.shiftKey : !e.shiftKey;
+      const keyMatch = e.key.toLowerCase() === mainKey;
+
+      if (ctrlMatch && altMatch && shiftMatch && keyMatch) {
+        e.preventDefault();
+        setIsVoucherSearchOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [profile]);
 
   // Naya Logic: Jaise hi stuckCount badle, list khud refresh ho jaye
   React.useEffect(() => {
@@ -400,6 +434,16 @@ return (
               border: 'none', 
               height: '50px'
             }}>
+
+              {/* --- NAYA IZAFA: Voucher Search Trigger Button --- */}
+              <Tooltip title="Search any Voucher / Bill">
+                <Button 
+                  shape="circle" 
+                  icon={<FileTextOutlined />} 
+                  onClick={() => setIsVoucherSearchOpen(true)}
+                  style={{ border: `1px solid ${token.colorPrimary}33`, color: token.colorPrimary }}
+                />
+              </Tooltip>
               
               {!isMobile && (
                 <>
@@ -611,6 +655,12 @@ return (
       <RegisterClosingModal 
         visible={isClosingModalVisible} 
         onCancel={() => setIsClosingModalVisible(false)} 
+      />
+
+      {/* --- NAYA IZAFA: Voucher Search Modal Component --- */}
+      <VoucherSearchModal 
+        open={isVoucherSearchOpen} 
+        onClose={() => setIsVoucherSearchOpen(false)} 
       />
     </>
   );

@@ -222,8 +222,19 @@ const Customers = () => {
   useEffect(() => {
     if (searchParams.get('openReturn') === 'true') {
       setIsInvoiceSearchModalOpen(true);
+      
+      // --- NAYA IZAFA: URL se Invoice ID nikal kar auto-fill aur auto-search karna ---
+      const passedInvoiceId = searchParams.get('invoiceId');
+      if (passedInvoiceId) {
+        // FIX: Form ko screen par load hone ka mukammal waqt dene ke liye dono kaamon ko setTimeout mein daal diya
+        setTimeout(() => {
+          invoiceSearchForm.setFieldsValue({ invoiceId: passedInvoiceId });
+          invoiceSearchForm.submit();
+        }, 300); 
+      }
+      // -----------------------------------------------------------------------------
     }
-  }, [searchParams]);
+  }, [searchParams, invoiceSearchForm]);
 
   const showEditModal = (customer) => {
     setEditingCustomer(customer);
@@ -1175,6 +1186,7 @@ const handleCloseInvoiceSearchModal = () => {
   // --- NAYA IZAFA: Ledger Export Columns ---
   const ledgerExportColumns = [
     { title: 'Date', dataIndex: 'formattedDate' },
+    { title: 'Voucher No.', dataIndex: 'ref_no' }, // <--- NAYA IZAFA
     { title: 'Description', dataIndex: 'description' },
     { title: 'Debit', dataIndex: 'debit' },
     { title: 'Credit', dataIndex: 'credit' },
@@ -1818,10 +1830,16 @@ const handleCloseInvoiceSearchModal = () => {
         <span>Ledger: {selectedCustomer?.name}</span>
         {/* --- NAYA IZAFA: Ledger Print/Excel Buttons --- */}
         <DataExport 
-            data={ledgerData.map(item => ({
-                ...item,
-                formattedDate: new Date(item.date).toLocaleString()
-            }))} 
+            data={ledgerData.map(item => {
+                let ref = '';
+                if (item.type === 'sale') ref = item.details?.invoice_id || item.details?.id?.split('-')[0]?.toUpperCase();
+                else ref = item.details?.voucher_no || item.details?.id?.split('-')[0]?.toUpperCase();
+                return {
+                    ...item,
+                    formattedDate: new Date(item.date).toLocaleString(),
+                    ref_no: ref
+                };
+            })} 
             exportColumns={ledgerExportColumns} 
             fileName={`Ledger_${selectedCustomer?.name}`} 
             reportTitle={`Account Statement: ${selectedCustomer?.name}`} 
@@ -1901,6 +1919,16 @@ const handleCloseInvoiceSearchModal = () => {
                 expandable={{ expandedRowRender, rowExpandable: (record) => record.type === 'sale' || record.type === 'return' }}
                 columns={[
     { title: 'Date', dataIndex: 'date', render: d => new Date(d).toLocaleString() },
+    { 
+      title: 'Voucher No.', 
+      key: 'ref_no', 
+      render: (_, record) => {
+        let ref = '';
+        if (record.type === 'sale') ref = record.details?.invoice_id || record.details?.id?.split('-')[0]?.toUpperCase();
+        else ref = record.details?.voucher_no || record.details?.id?.split('-')[0]?.toUpperCase();
+        return <Text code>{ref || '-'}</Text>;
+      }
+    },
     { title: 'Description', dataIndex: 'description' },
     { 
       title: 'Staff', 

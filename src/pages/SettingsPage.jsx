@@ -40,6 +40,7 @@ const DEFAULT_SHORTCUTS = {
   nav_reports: 'alt+o',
   nav_staff: 'alt+m',
   nav_settings: 'alt+s',
+  global_search: 'alt+x',
   // --- POS SHORTCUTS (Standardized) ---
   pos_search: 'alt+f',          
   pos_customer_search: 'alt+c', 
@@ -1438,7 +1439,8 @@ const SettingsPage = () => {
                       { key: 'nav_damaged_stock', label: 'Damaged Stock' },
                       { key: 'nav_reports', label: 'Reports' },
                       { key: 'nav_staff', label: 'Staff / Team' },
-                      { key: 'nav_settings', label: 'App Settings' }
+                      { key: 'nav_settings', label: 'App Settings' },
+                      { key: 'global_search', label: 'Universal Search' }
                     ].map(item => (
                       <Col xs={24} sm={12} md={8} lg={12} xl={8} key={item.key}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', background: token.colorFillAlter, borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }}>

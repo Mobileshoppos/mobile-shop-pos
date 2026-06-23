@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Table, Typography, Spin, ConfigProvider, theme, Modal, Tag, Button, Space, App } from 'antd';
+import { Card, Table, Typography, Spin, ConfigProvider, theme, Modal, Tag, Button, Space, App, Form, Radio, Checkbox, Row, Col, DatePicker, Select } from 'antd'; // <--- UPDATED (Select Added)
 import { PrinterOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import DataService from '../DataService';
 import DataExport from './DataExport'; // <--- NAYA IZAFA: Smart Export System
+import VoucherSearchModal from './VoucherSearchModal'; // <--- NAYA IZAFA
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import dayjs from 'dayjs';
@@ -23,17 +24,83 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
   const [modalLoading, setModalLoading] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
 
+  // --- NAYA IZAFA: Voucher Search Modal States ---
+  const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false);
+  const [voucherToSearch, setVoucherToSearch] = useState('');
+
+  // --- NAYA IZAFA: Export Wizard States & Helpers ---
+  const [isExportWizardOpen, setIsExportWizardOpen] = useState(false);
+  const [exportDateRangeType, setExportDateRangeType] = useState('current');
+  const [exportCustomDates, setExportCustomDates] = useState([]);
+  const [selectedColumns, setSelectedColumns] = useState(['sale', 'purchase', 'receipt', 'payment']);
+  const [exportData, setExportData] = useState([]);
+  const [exportLoading, setExportLoading] = useState(false);
+
+  // Jab user wizard mein date badle to back-end se data on-the-fly fetch ho
+  const handleExportRangeChange = async (type, dates) => {
+    setExportLoading(true);
+    try {
+      let targetRange = timeRange;
+      let targetDates = customDates;
+      
+      if (type === 'today') {
+        targetRange = 'today';
+        targetDates = [];
+      } else if (type === 'yesterday') {
+        targetRange = 'custom';
+        const yesterdayStr = dayjs().subtract(1, 'day').startOf('day').toISOString();
+        const yesterdayEndStr = dayjs().subtract(1, 'day').endOf('day').toISOString();
+        targetDates = [yesterdayStr, yesterdayEndStr];
+      } else if (type === 'week') {
+        targetRange = 'week';
+        targetDates = [];
+      } else if (type === 'month') {
+        targetRange = 'month';
+        targetDates = [];
+      } else if (type === 'year') {
+        // Year ke liye smart range: 1st Jan se aaj ke din tak
+        targetRange = 'custom';
+        const startOfYear = dayjs().startOf('year').toISOString();
+        const endOfToday = dayjs().endOf('day').toISOString();
+        targetDates = [startOfYear, endOfToday];
+      } else if (type === 'custom' && dates && dates.length === 2) {
+        targetRange = 'custom';
+        targetDates = [dates[0].toISOString(), dates[1].toISOString()];
+      } else if (type === 'current') {
+        targetRange = timeRange;
+        targetDates = customDates;
+      }
+      
+      const summaryData = await DataService.getDailyFinancialSummary(targetRange, targetDates);
+      setExportData(summaryData);
+    } catch (error) {
+      console.error("Export range fetch error:", error);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Checkboxes ke mutabiq dynamic columns banana
+  const dynamicExportColumns = [
+    { title: 'Date', dataIndex: 'formattedDate' },
+    ...(selectedColumns.includes('sale') ? [{ title: 'Daily Sale', dataIndex: 'sale' }] : []),
+    ...(selectedColumns.includes('purchase') ? [{ title: 'Daily Purchase', dataIndex: 'purchase' }] : []),
+    ...(selectedColumns.includes('receipt') ? [{ title: 'Daily Receipt', dataIndex: 'receipt' }] : []),
+    ...(selectedColumns.includes('payment') ? [{ title: 'Daily Payment', dataIndex: 'payment' }] : []),
+  ];
+
   const loadData = useCallback(async () => {
     if (data.length === 0) setLoading(true);
     try {
-      const summaryData = await DataService.getDailyFinancialSummary(timeRange, customDates);
+      // FIX: Dashboard ke top filter se aazaad kar ke hamesha pichle 7 din ('last_7_days') ka data load karein
+      const summaryData = await DataService.getDailyFinancialSummary('last_7_days');
       setData(summaryData);
     } catch (error) {
       console.error("Error loading daily financial summary:", error);
     } finally {
       setLoading(false);
     }
-  }, [timeRange, customDates, data.length]);
+  }, [data.length]);
 
   useEffect(() => {
     loadData();
@@ -136,16 +203,18 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       dataIndex: 'ref_no', 
       key: 'ref_no', 
       width: 130, // FIX: Width set ki
-      render: (text, record) => {
-        if (record.link) {
-          return (
-            <Link to={record.link}>
-              <Text code style={{ color: token.colorPrimary, cursor: 'pointer' }}>{text}</Text>
-            </Link>
-          );
-        }
-        return <Text code>{text}</Text>;
-      } 
+      render: (text) => (
+        <Text 
+          code 
+          style={{ color: token.colorPrimary, cursor: 'pointer' }}
+          onClick={() => {
+            setVoucherToSearch(text);
+            setIsVoucherModalOpen(true);
+          }}
+        >
+          {text}
+        </Text>
+      )
     },
     { title: 'Party / Category', dataIndex: 'party_name', key: 'party_name', width: 180, render: (text) => <Text strong>{text}</Text> }, // FIX: Width set ki
     { 
@@ -182,15 +251,18 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       <Card 
         title={<Text strong style={{ fontSize: '16px' }}>Daily Financial Summary (Day Book)</Text>} 
         extra={
-          <DataExport 
-            data={data.map(item => ({
-              ...item,
-              formattedDate: dayjs(item.date).format('DD-MMM-YYYY')
-            }))} 
-            exportColumns={summaryExportColumns} 
-            fileName="Daily_Financial_Summary" 
-            reportTitle="Daily Financial Summary (Day Book)" 
-          />
+          <Button 
+            type="primary" 
+            ghost 
+            size="small" 
+            icon={<FileExcelOutlined />} 
+            onClick={() => {
+              setIsExportWizardOpen(true);
+              setExportData(data); // Shuruat mein current loaded data select ho
+            }}
+          >
+            Export Options
+          </Button>
         }
         style={{ ...reportCardStyle, marginTop: 16 }}
         styles={{ body: { padding: 0 } }}
@@ -252,6 +324,148 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
             }}
           />
         )}
+      </Modal>
+
+      {/* --- NAYA IZAFA: Voucher Search Modal --- */}
+      <VoucherSearchModal 
+        open={isVoucherModalOpen} 
+        onClose={() => {
+          setIsVoucherModalOpen(false);
+          setVoucherToSearch('');
+        }} 
+        autoSearchQuery={voucherToSearch}
+      />
+
+      {/* --- NAYA IZAFA: Export & Print Wizard Modal --- */}
+      <Modal
+        title="Export & Print Wizard (Day Book)"
+        open={isExportWizardOpen}
+        onCancel={() => {
+          setIsExportWizardOpen(false);
+          setExportDateRangeType('current');
+          setExportCustomDates([]);
+          setSelectedColumns(['sale', 'purchase', 'receipt', 'payment']);
+        }}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text type="secondary" style={{ fontSize: '11px' }}>
+              {exportLoading ? 'Loading data...' : `${exportData.length} Days Selected`}
+            </Text>
+            <Space>
+              {exportData.length > 0 && !exportLoading && (
+                <DataExport
+                  data={exportData.map(item => ({
+                    ...item,
+                    formattedDate: dayjs(item.date).format('DD-MMM-YYYY')
+                  }))}
+                  exportColumns={dynamicExportColumns} // <--- Dynamic columns automatically apply
+                  fileName="Daily_Financial_Summary"
+                  reportTitle="Daily Financial Summary (Day Book)"
+                />
+              )}
+              <Button onClick={() => {
+                setIsExportWizardOpen(false);
+                setExportDateRangeType('current');
+                setExportCustomDates([]);
+                setSelectedColumns(['sale', 'purchase', 'receipt', 'payment']);
+              }}>Close</Button>
+            </Space>
+          </div>
+        }
+        centered
+        width="65%" // <--- NAYA IZAFA: Pop-up width is set to 65% of screen
+      >
+        <Form layout="vertical" style={{ marginTop: '16px' }}>
+          {/* 1. Date Range Configuration (Dynamic Dropdown Layout) */}
+          <Form.Item label={<Text strong>1. Select Date Range</Text>}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', flexWrap: 'wrap' }}>
+              {/* Button 1: Active Filter */}
+              <Button 
+                type={exportDateRangeType === 'current' ? 'primary' : 'default'} 
+                onClick={() => {
+                  setExportDateRangeType('current');
+                  handleExportRangeChange('current');
+                }}
+                style={{ flex: 1, minWidth: '110px' }}
+              >
+                Active Filter
+              </Button>
+              
+              {/* Dropdown: Presets */}
+              <Select
+                value={['today', 'yesterday', 'week', 'month', 'year'].includes(exportDateRangeType) ? exportDateRangeType : undefined}
+                onChange={(val) => {
+                  setExportDateRangeType(val);
+                  handleExportRangeChange(val);
+                }}
+                style={{ flex: 1.5, minWidth: '160px' }}
+                placeholder="Choose Preset Range"
+                styles={{ popup: { root: { zIndex: 2000 } } }} // FIX: Deprecated dropdownStyle replaced with styles.popup.root
+                allowClear={false}
+              >
+                <Select.Option value="today">Today Only</Select.Option>
+                <Select.Option value="yesterday">Yesterday</Select.Option>
+                <Select.Option value="week">This Week</Select.Option>
+                <Select.Option value="month">This Month</Select.Option>
+                <Select.Option value="year">This Year</Select.Option>
+              </Select>
+
+              {/* Button 2: Custom Range Calendar */}
+              <Button 
+                type={exportDateRangeType === 'custom' ? 'primary' : 'default'} 
+                onClick={() => {
+                  setExportDateRangeType('custom');
+                  handleExportRangeChange('custom', exportCustomDates);
+                }}
+                style={{ flex: 1, minWidth: '110px' }}
+              >
+                Custom Range
+              </Button>
+            </div>
+          </Form.Item>
+
+          {/* Custom Date Range Datepicker */}
+          {exportDateRangeType === 'custom' && (
+            <Form.Item label="Select Custom Range" required>
+              <DatePicker.RangePicker
+                format="DD/MM/YYYY"
+                value={exportCustomDates.length === 2 ? [dayjs(exportCustomDates[0]), dayjs(exportCustomDates[1])] : null}
+                onChange={(dates) => {
+                  if (dates) {
+                    const formatted = [dates[0].toISOString(), dates[1].toISOString()];
+                    setExportCustomDates(formatted);
+                    handleExportRangeChange('custom', dates);
+                  } else {
+                    setExportCustomDates([]);
+                  }
+                }}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+          )}
+
+          {/* 2. Columns Selection */}
+          <Form.Item label={<Text strong>2. Select Columns to Include</Text>}>
+            <Checkbox.Group
+              value={selectedColumns}
+              onChange={(vals) => {
+                if (vals.length > 0) {
+                  setSelectedColumns(vals);
+                } else {
+                  message.warning('At least one column must be selected.');
+                }
+              }}
+              style={{ width: '100%' }}
+            >
+              <Row gutter={[16, 8]}>
+                <Col span={12}><Checkbox value="sale">Daily Sale</Checkbox></Col>
+                <Col span={12}><Checkbox value="purchase">Daily Purchase</Checkbox></Col>
+                <Col span={12}><Checkbox value="receipt">Daily Receipt</Checkbox></Col>
+                <Col span={12}><Checkbox value="payment">Daily Payment</Checkbox></Col>
+              </Row>
+            </Checkbox.Group>
+          </Form.Item>
+        </Form>
       </Modal>
     </ConfigProvider>
   );

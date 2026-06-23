@@ -2396,6 +2396,10 @@ async addCustomer(customerData) {
     } else if (timeRange === 'week') {
         const day = start.getDay() || 7;
         if (day !== 1) start.setHours(-24 * (day - 1)); else start.setHours(0,0,0,0);
+    } else if (timeRange === 'today') {
+        // FIX: Today ke liye range sirf aaj ke din (00:00:00 se 23:59:59) tak set ki
+        start.setHours(0,0,0,0);
+        end.setHours(23,59,59,999);
     } else {
         start.setDate(start.getDate() - 6); // Default 7 days
         start.setHours(0,0,0,0);

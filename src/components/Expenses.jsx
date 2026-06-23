@@ -201,6 +201,7 @@ const Expenses = () => {
   // --- NAYA IZAFA: Expense Export Columns ---
   const exportColumns = [
     { title: 'Date', dataIndex: 'formattedDate' },
+    { title: 'Voucher No.', dataIndex: 'voucher_no' },
     { title: 'Title / Description', dataIndex: 'title' },
     { title: 'Category', dataIndex: 'categoryName' },
     { title: 'Paid From', dataIndex: 'payment_method' },
@@ -210,6 +211,7 @@ const Expenses = () => {
 
   const columns = [
     { title: 'Date', dataIndex: 'expense_date', key: 'expense_date', render: (date) => dayjs(date).format('DD MMM, YYYY') },
+    { title: 'Voucher No.', dataIndex: 'voucher_no', key: 'voucher_no', render: (text) => <Text code>{text || '-'}</Text> },
     { title: 'Title / Description', dataIndex: 'title', key: 'title' },
     { title: 'Category', dataIndex: 'expense_categories', key: 'category', render: (category) => category ? category.name : 'N/A' },
     { 

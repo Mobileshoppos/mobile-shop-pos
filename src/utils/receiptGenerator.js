@@ -378,10 +378,13 @@ export const generatePaymentReceipt = async (paymentDetails, currency = 'PKR') =
   doc.text(`Receipt #: ${safeString(voucher_no)}`, 14, startY);
   doc.text(`Date: ${dayjs(paymentDate).format('DD-MMM-YYYY hh:mm A')}`, pageWidth - 14, startY, { align: 'right' });
 
+  // --- NAYA IZAFA: Check karein ke paisa AAYA hai ya GAYA hai (isPayout) ---
+  const isPayout = paymentDetails.isPayout === true;
+
   doc.setFont('helvetica', 'bold');
-  doc.text('Received From:', 14, startY + 10);
+  doc.text(isPayout ? 'Paid To:' : 'Received From:', 14, startY + 10);
   doc.setFont('helvetica', 'normal');
-  doc.text(safeString(customerName) || 'Customer', 45, startY + 10);
+  doc.text(safeString(customerName) || 'Customer/Supplier', 45, startY + 10);
 
   doc.setFont('helvetica', 'bold');
   doc.text('Payment Mode:', 14, startY + 18);
@@ -395,7 +398,7 @@ export const generatePaymentReceipt = async (paymentDetails, currency = 'PKR') =
   
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text('Amount Received:', 20, boxY + 13);
+  doc.text(isPayout ? 'Amount Paid:' : 'Amount Received:', 20, boxY + 13);
   
   doc.setFontSize(16);
   doc.setTextColor(35, 120, 4); // Green color for amount
