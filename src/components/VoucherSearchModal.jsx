@@ -115,6 +115,7 @@ const VoucherSearchModal = ({ open, onClose, autoSearchQuery = '' }) => {
 
           setReceiptData({
             shopName: profile?.shop_name || 'My Shop', shopAddress: profile?.address || '', shopPhone: profile?.phone_number || '',
+            shopLogo: profile?.shop_logo || null, // <--- NAYA IZAFA
             paymentDate: payment.created_at, customerName: customer ? customer.name : 'Customer', voucher_no: payment.voucher_no,
             amountPaid: Math.abs(payment.amount_paid), paymentMethod: payment.payment_method || 'Cash', remainingBalance: historicalBalance,
             footerMessage: profile?.warranty_policy, currency: profile?.currency || 'PKR', receipt_format: profile?.receipt_format || 'pdf'
@@ -168,6 +169,7 @@ const VoucherSearchModal = ({ open, onClose, autoSearchQuery = '' }) => {
 
           setReceiptData({
             shopName: profile?.shop_name || 'My Shop', shopAddress: profile?.address || '', shopPhone: profile?.phone_number || '',
+            shopLogo: profile?.shop_logo || null, // <--- NAYA IZAFA
             paymentDate: supPayment.payment_date || supPayment.created_at, customerName: supplier ? supplier.name : 'Supplier',
             voucher_no: supPayment.voucher_no, amountPaid: supPayment.amount, paymentMethod: supPayment.payment_method || 'Cash',
             remainingBalance: historicalBalance, footerMessage: profile?.warranty_policy, currency: profile?.currency || 'PKR',
@@ -202,6 +204,7 @@ const VoucherSearchModal = ({ open, onClose, autoSearchQuery = '' }) => {
 
             setReceiptData({
               shopName: profile?.shop_name || 'My Shop', shopAddress: profile?.address || '', shopPhone: profile?.phone_number || '',
+              shopLogo: profile?.shop_logo || null, // <--- NAYA IZAFA
               paymentDate: custPayout.created_at, customerName: customer ? customer.name : 'Customer', voucher_no: custPayout.voucher_no,
               amountPaid: custPayout.amount_paid, paymentMethod: custPayout.payment_method || 'Cash', remainingBalance: historicalBalance,
               footerMessage: profile?.warranty_policy, currency: profile?.currency || 'PKR', receipt_format: profile?.receipt_format || 'pdf', isPayout: true
@@ -291,6 +294,7 @@ const VoucherSearchModal = ({ open, onClose, autoSearchQuery = '' }) => {
             shopName: profile?.shop_name || 'My Shop',
             shopAddress: profile?.address || '',
             shopPhone: profile?.phone_number || '',
+            shopLogo: profile?.shop_logo || null, // <--- NAYA IZAFA
             saleId: sale.id,
             invoice_id: sale.invoice_id,
             saleDate: sale.sale_date || sale.created_at,

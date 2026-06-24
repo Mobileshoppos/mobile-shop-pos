@@ -217,6 +217,7 @@ const SalesHistory = () => {
           shopName: profile?.shop_name || 'My Shop',
           shopAddress: profile?.address || '',
           shopPhone: profile?.phone_number || '',
+          shopLogo: profile?.shop_logo || null, // <--- NAYA IZAFA: Reprint par Logo ka URL shamil kiya
           saleId: sale.id,
           invoice_id: sale.invoice_id,
           saleDate: sale.created_at || sale.sale_date,

@@ -28,11 +28,11 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
   const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false);
   const [voucherToSearch, setVoucherToSearch] = useState('');
 
-  // --- NAYA IZAFA: Export Wizard States & Helpers ---
+  // --- NAYA IZAFA: Export Wizard States ---
   const [isExportWizardOpen, setIsExportWizardOpen] = useState(false);
   const [exportDateRangeType, setExportDateRangeType] = useState('current');
   const [exportCustomDates, setExportCustomDates] = useState([]);
-  const [selectedColumns, setSelectedColumns] = useState(['sale', 'purchase', 'receipt', 'payment']);
+  const [selectedColumns, setSelectedColumns] = useState(['sale', 'purchase', 'receipt', 'payment', 'net']); // <--- NAYA IZAFA: 'net' added
   const [exportData, setExportData] = useState([]);
   const [exportLoading, setExportLoading] = useState(false);
 
@@ -87,6 +87,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
     ...(selectedColumns.includes('purchase') ? [{ title: 'Daily Purchase', dataIndex: 'purchase' }] : []),
     ...(selectedColumns.includes('receipt') ? [{ title: 'Daily Receipt', dataIndex: 'receipt' }] : []),
     ...(selectedColumns.includes('payment') ? [{ title: 'Daily Payment', dataIndex: 'payment' }] : []),
+    ...(selectedColumns.includes('net') ? [{ title: 'Daily Net', dataIndex: 'net_flow' }] : []), // <--- NAYA IZAFA: 'net' is now conditionally exported
   ];
 
   const loadData = useCallback(async () => {
@@ -194,6 +195,19 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
           {formatCurrency(val, profile?.currency)}
         </a>
       ),
+    },
+    {
+      title: 'Daily Net',
+      key: 'net_balance',
+      align: 'right',
+      render: (_, record) => {
+        const net = (record.receipt || 0) - (record.payment || 0);
+        return (
+          <Text strong style={{ color: net >= 0 ? token.colorSuccess : token.colorError }}>
+            {net >= 0 ? '+' : ''}{formatCurrency(net, profile?.currency)}
+          </Text>
+        );
+      }
     },
   ];
 
@@ -337,41 +351,42 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       />
 
       {/* --- NAYA IZAFA: Export & Print Wizard Modal --- */}
-      <Modal
-        title="Export & Print Wizard (Day Book)"
-        open={isExportWizardOpen}
-        onCancel={() => {
-          setIsExportWizardOpen(false);
-          setExportDateRangeType('current');
-          setExportCustomDates([]);
-          setSelectedColumns(['sale', 'purchase', 'receipt', 'payment']);
-        }}
-        footer={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text type="secondary" style={{ fontSize: '11px' }}>
-              {exportLoading ? 'Loading data...' : `${exportData.length} Days Selected`}
-            </Text>
-            <Space>
-              {exportData.length > 0 && !exportLoading && (
-                <DataExport
-                  data={exportData.map(item => ({
-                    ...item,
-                    formattedDate: dayjs(item.date).format('DD-MMM-YYYY')
-                  }))}
-                  exportColumns={dynamicExportColumns} // <--- Dynamic columns automatically apply
-                  fileName="Daily_Financial_Summary"
-                  reportTitle="Daily Financial Summary (Day Book)"
-                />
-              )}
-              <Button onClick={() => {
-                setIsExportWizardOpen(false);
-                setExportDateRangeType('current');
-                setExportCustomDates([]);
-                setSelectedColumns(['sale', 'purchase', 'receipt', 'payment']);
-              }}>Close</Button>
-            </Space>
-          </div>
-        }
+          <Modal
+            title="Export & Print Wizard (Day Book)"
+            open={isExportWizardOpen}
+            onCancel={() => {
+              setIsExportWizardOpen(false);
+              setExportDateRangeType('current');
+              setExportCustomDates([]);
+              setSelectedColumns(['sale', 'purchase', 'receipt', 'payment', 'net']); // <--- Reset adjusted
+            }}
+            footer={
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: '11px' }}>
+                  {exportLoading ? 'Loading data...' : `${exportData.length} Days Selected`}
+                </Text>
+                <Space>
+                  {exportData.length > 0 && !exportLoading && (
+                    <DataExport
+                      data={exportData.map(item => ({
+                        ...item,
+                        formattedDate: dayjs(item.date).format('DD-MMM-YYYY'),
+                        net_flow: (item.receipt || 0) - (item.payment || 0) // <--- NAYA IZAFA: Calculate net cash flow for export
+                      }))}
+                      exportColumns={dynamicExportColumns} // <--- Dynamic columns automatically apply
+                      fileName="Daily_Financial_Summary"
+                      reportTitle="Daily Financial Summary (Day Book)"
+                    />
+                  )}
+                  <Button onClick={() => {
+                    setIsExportWizardOpen(false);
+                    setExportDateRangeType('current');
+                    setExportCustomDates([]);
+                    setSelectedColumns(['sale', 'purchase', 'receipt', 'payment', 'net']); // <--- Reset adjusted
+                  }}>Close</Button>
+                </Space>
+              </div>
+            }
         centered
         width="65%" // <--- NAYA IZAFA: Pop-up width is set to 65% of screen
       >
@@ -446,25 +461,26 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
 
           {/* 2. Columns Selection */}
           <Form.Item label={<Text strong>2. Select Columns to Include</Text>}>
-            <Checkbox.Group
-              value={selectedColumns}
-              onChange={(vals) => {
-                if (vals.length > 0) {
-                  setSelectedColumns(vals);
-                } else {
-                  message.warning('At least one column must be selected.');
-                }
-              }}
-              style={{ width: '100%' }}
-            >
-              <Row gutter={[16, 8]}>
-                <Col span={12}><Checkbox value="sale">Daily Sale</Checkbox></Col>
-                <Col span={12}><Checkbox value="purchase">Daily Purchase</Checkbox></Col>
-                <Col span={12}><Checkbox value="receipt">Daily Receipt</Checkbox></Col>
-                <Col span={12}><Checkbox value="payment">Daily Payment</Checkbox></Col>
-              </Row>
-            </Checkbox.Group>
-          </Form.Item>
+                <Checkbox.Group
+                  value={selectedColumns}
+                  onChange={(vals) => {
+                    if (vals.length > 0) {
+                      setSelectedColumns(vals);
+                    } else {
+                      message.warning('At least one column must be selected.');
+                    }
+                  }}
+                  style={{ width: '100%' }}
+                >
+                  <Row gutter={[16, 8]}>
+                    <Col span={12}><Checkbox value="sale">Daily Sale</Checkbox></Col>
+                    <Col span={12}><Checkbox value="purchase">Daily Purchase</Checkbox></Col>
+                    <Col span={12}><Checkbox value="receipt">Daily Receipt</Checkbox></Col>
+                    <Col span={12}><Checkbox value="payment">Daily Payment</Checkbox></Col>
+                    <Col span={12}><Checkbox value="net">Daily Net</Checkbox></Col> {/* <--- NAYA CHECKBOX */}
+                  </Row>
+                </Checkbox.Group>
+              </Form.Item>
         </Form>
       </Modal>
     </ConfigProvider>

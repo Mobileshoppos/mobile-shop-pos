@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Form, Input, Button, Card, Typography, Spin, App as AntApp, Divider } from 'antd';
 import { SaveOutlined, LockOutlined, ProfileOutlined } from '@ant-design/icons';
+import ProductImageUpload from '../components/ProductImageUpload'; // <--- NAYA IZAFA: Path check kar lein
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -11,6 +12,14 @@ const { Title, Text } = Typography;
 
 const ProfileForm = ({ initialValues, onSave, saving }) => (
   <Form initialValues={initialValues} layout="vertical" onFinish={onSave}>
+    {/* --- NAYA IZAFA: Shop Logo Upload option --- */}
+    <Form.Item 
+      name="shop_logo" 
+      label="Shop Logo" 
+      tooltip="Upload your shop logo to display on invoices and receipts."
+    >
+      <ProductImageUpload />
+    </Form.Item>
     <Form.Item name="full_name" label="Your Full Name" rules={[{ required: true, message: 'Please enter your full name!' }]}>
       <Input placeholder="e.g., Ali Khan" />
     </Form.Item>

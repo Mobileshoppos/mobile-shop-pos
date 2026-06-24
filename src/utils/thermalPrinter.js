@@ -8,8 +8,8 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
     const {
         shopName, shopAddress, shopPhone, saleId, invoice_id, saleDate, customerName,
         items, subtotal, discount, grandTotal, amountPaid, footerMessage, showQrCode,
-        taxAmount, taxName, taxRate, // <--- NAYA IZAFA
-        fbrInvoiceNumber, fbrFeeApplied // <--- NAYA IZAFA (FBR)
+        taxAmount, taxName, taxRate, 
+        fbrInvoiceNumber, fbrFeeApplied, shopLogo // <--- NAYA IZAFA
     } = saleDetails;
 
     const formatNumber = (num) => Number(num).toFixed(2);
@@ -32,6 +32,8 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
             
             <!-- HEADER -->
             <div style="text-align: center; margin-bottom: 10px;">
+                <!-- NAYA IZAFA: HTML Image Tag for Shop Logo -->
+                ${shopLogo ? `<img src="${shopLogo}" style="display: block; margin: 0 auto 8px auto; max-height: 50px; object-fit: contain;" />` : ''}
                 <h2 style="margin: 0; font-size: 16px; font-weight: bold;">${shopName || 'MY SHOP'}</h2>
                 <p style="margin: 2px 0; font-size: 11px;">${shopAddress || ''}</p>
                 <p style="margin: 2px 0; font-size: 11px;">${shopPhone || ''}</p>
@@ -212,7 +214,8 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
 export const printThermalPaymentReceipt = async (paymentDetails, currency = 'PKR') => {
     const {
         shopName, shopAddress, shopPhone, paymentDate, customerName,
-        voucher_no, amountPaid, paymentMethod, remainingBalance, footerMessage
+        voucher_no, amountPaid, paymentMethod, remainingBalance, footerMessage,
+        shopLogo // <--- NAYA IZAFA
     } = paymentDetails;
 
     const formatMoney = (num) => `${currency} ${Number(num).toFixed(2)}`;
@@ -222,6 +225,8 @@ export const printThermalPaymentReceipt = async (paymentDetails, currency = 'PKR
             
             <!-- HEADER -->
             <div style="text-align: center; margin-bottom: 10px;">
+                <!-- NAYA IZAFA: HTML Image Tag for Shop Logo -->
+                ${shopLogo ? `<img src="${shopLogo}" style="display: block; margin: 0 auto 8px auto; max-height: 50px; object-fit: contain;" />` : ''}
                 <h2 style="margin: 0; font-size: 16px; font-weight: bold;">${shopName || 'MY SHOP'}</h2>
                 <p style="margin: 2px 0; font-size: 11px;">${shopAddress || ''}</p>
                 <p style="margin: 2px 0; font-size: 11px;">${shopPhone || ''}</p>

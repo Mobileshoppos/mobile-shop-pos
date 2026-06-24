@@ -8,6 +8,23 @@ import dayjs from 'dayjs';
 
 const safeString = (value) => String(value || '');
 
+// --- NAYA IZAFA: Cloud Storage se logo fetch karke Base64 mein convert karne ka helper ---
+const getBase64ImageFromUrl = async (imageUrl) => {
+  try {
+    const res = await fetch(imageUrl);
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.addEventListener("load", () => resolve(reader.result), false);
+      reader.onerror = () => reject(new Error("Failed to load image"));
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.error("Error loading logo:", err);
+    return null;
+  }
+};
+
 // Note: Function ab 'async' hai kyunke QR code banne mein waqt lagta hai
 export const generateSaleReceipt = async (saleDetails, currency = 'PKR') => {
   if (!saleDetails) return;
@@ -21,13 +38,40 @@ export const generateSaleReceipt = async (saleDetails, currency = 'PKR') => {
   const {
     shopName, shopAddress, shopPhone, saleId, invoice_id, saleDate, customerName,
     items, subtotal, discount, grandTotal, amountPaid, paymentStatus,
-    footerMessage, showQrCode, taxAmount, taxName, taxRate, // <--- NAYA IZAFA
-    fbrInvoiceNumber, fbrFeeApplied // <--- NAYA IZAFA (FBR)
+    footerMessage, showQrCode, taxAmount, taxName, taxRate, 
+    fbrInvoiceNumber, fbrFeeApplied, shopLogo // <--- NAYA IZAFA
   } = saleDetails;
 
   const pageWidth = doc.internal.pageSize.getWidth();
   
-  // --- QR CODE GENERATION ---
+  // --- NAYA IZAFA: Header Y layout based on Logo ---
+  let currentHeaderY = 20;
+  if (shopLogo) {
+    const base64Logo = await getBase64ImageFromUrl(shopLogo);
+    if (base64Logo) {
+      doc.addImage(base64Logo, 'JPEG', (pageWidth / 2) - 10, 15, 20, 20); // 20x20mm dimensions
+      currentHeaderY = 41; // details shift down if logo exists
+    }
+  }
+
+  // --- 1. HEADER SECTION ---
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(22);
+  doc.setTextColor(40, 40, 40);
+  doc.text(safeString(shopName) || 'MY SHOP', pageWidth / 2, currentHeaderY, { align: 'center' });
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(80, 80, 80);
+  doc.text(safeString(shopAddress) || '', pageWidth / 2, currentHeaderY + 6, { align: 'center' });
+  doc.text(`Phone: ${safeString(shopPhone)}`, pageWidth / 2, currentHeaderY + 11, { align: 'center' });
+
+  // Line Separator
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, currentHeaderY + 16, pageWidth - 10, currentHeaderY + 16);
+
+  // --- 2. INFO SECTION ---
+  const startY = currentHeaderY + 25; // Dynamic spacing applied
   // Hum 'INV:' prefix laga rahe hain taake scanner ko pata chale yeh Invoice hai
   let qrCodeDataUrl = '';
   if (showQrCode) {
@@ -39,25 +83,6 @@ export const generateSaleReceipt = async (saleDetails, currency = 'PKR') => {
           console.error("QR Generation failed", err);
       }
   }
-
-  // --- 1. HEADER SECTION ---
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(22);
-  doc.setTextColor(40, 40, 40);
-  doc.text(safeString(shopName) || 'MY SHOP', pageWidth / 2, 20, { align: 'center' });
-  
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.setTextColor(80, 80, 80);
-  doc.text(safeString(shopAddress) || '', pageWidth / 2, 26, { align: 'center' });
-  doc.text(`Phone: ${safeString(shopPhone)}`, pageWidth / 2, 31, { align: 'center' });
-
-  // Line Separator
-  doc.setDrawColor(200, 200, 200);
-  doc.line(10, 36, pageWidth - 10, 36);
-
-  // --- 2. INFO SECTION ---
-  const startY = 45;
   
   // Left Side: Customer Info
   doc.setFont('helvetica', 'bold');
@@ -342,26 +367,37 @@ export const generatePaymentReceipt = async (paymentDetails, currency = 'PKR') =
 
   const {
     shopName, shopAddress, shopPhone, paymentDate, customerName,
-    voucher_no, amountPaid, paymentMethod, remainingBalance, footerMessage
+    voucher_no, amountPaid, paymentMethod, remainingBalance, footerMessage,
+    shopLogo // <--- NAYA IZAFA
   } = paymentDetails;
 
   const pageWidth = doc.internal.pageSize.getWidth();
+
+  // --- NAYA IZAFA: Header Y layout based on Logo for A5 ---
+  let currentHeaderY = 20;
+  if (shopLogo) {
+    const base64Logo = await getBase64ImageFromUrl(shopLogo);
+    if (base64Logo) {
+      doc.addImage(base64Logo, 'JPEG', (pageWidth / 2) - 8, 10, 16, 16); // 16x16mm for A5
+      currentHeaderY = 32;
+    }
+  }
 
   // --- 1. HEADER SECTION ---
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(20);
   doc.setTextColor(40, 40, 40);
-  doc.text(safeString(shopName) || 'MY SHOP', pageWidth / 2, 20, { align: 'center' });
+  doc.text(safeString(shopName) || 'MY SHOP', pageWidth / 2, currentHeaderY, { align: 'center' });
   
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(80, 80, 80);
-  doc.text(safeString(shopAddress) || '', pageWidth / 2, 26, { align: 'center' });
-  doc.text(`Phone: ${safeString(shopPhone)}`, pageWidth / 2, 31, { align: 'center' });
+  doc.text(safeString(shopAddress) || '', pageWidth / 2, currentHeaderY + 6, { align: 'center' });
+  doc.text(`Phone: ${safeString(shopPhone)}`, pageWidth / 2, currentHeaderY + 11, { align: 'center' });
 
   // Line Separator
   doc.setDrawColor(200, 200, 200);
-  doc.line(10, 36, pageWidth - 10, 36);
+  doc.line(10, currentHeaderY + 16, pageWidth - 10, currentHeaderY + 16);
 
   // --- 2. TITLE ---
   doc.setFont('helvetica', 'bold');

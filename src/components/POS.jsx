@@ -971,6 +971,7 @@ const POS = () => {
                  shopName: profile?.shop_name || 'My Shop',
                  shopAddress: profile?.address || '',
                  shopPhone: profile?.phone_number || '',
+                 shopLogo: profile?.shop_logo || null, // <--- NAYA IZAFA: Logo URL passed
                  saleId: saleDataForReceipt.id,
                  
                  items: receiptItems, 
