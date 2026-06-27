@@ -777,6 +777,42 @@ const Dashboard = () => {
               </Card>
             </Col>
 
+            {/* --- NAYA IZAFA: Expiring Soon Alert Card --- */}
+            {profile?.enable_batch_expiry && (
+            <Col span={24}>
+              <Card 
+                title={<Space><AlertOutlined style={{ color: token.colorWarning }} /> Expiring Soon ({profile?.expiry_alert_days || 30} Days)</Space>} 
+                style={reportCardStyle}
+                styles={{ body: { padding: '0 12px' } }}
+              >
+                <List
+                  itemLayout="horizontal"
+                  dataSource={stats?.expiringSoonItems || []}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <List.Item.Meta
+                        title={item.name}
+                        description={
+                          <Text type="secondary">
+                            {item.brand ? `${item.brand} | ` : ''}B.No: {item.batch || 'N/A'} | Qty: {item.qty}
+                          </Text>
+                        }
+                      />
+                      <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '12px', fontWeight: 'bold', color: item.isExpired ? token.colorError : token.colorWarning }}>
+                              {item.isExpired ? 'EXPIRED' : 'Expiring'}
+                          </div>
+                          <div style={{ fontSize: '11px' }}>{new Date(item.expiry).toLocaleDateString()}</div>
+                      </div>
+                    </List.Item>
+                  )}
+                  locale={{ emptyText: 'No items expiring soon!' }}
+                />
+              </Card>
+            </Col>
+            )}
+            {/* ------------------------------------------- */}
+
             {/* Top Selling Products */}
             <Col span={24}>
               <Card 

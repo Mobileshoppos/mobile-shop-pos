@@ -297,6 +297,9 @@ const SettingsPage = () => {
   const [posDiscountEnabled, setPosDiscountEnabled] = useState(true);
   const [allowCartPriceChange, setAllowCartPriceChange] = useState(true);
   const [wholesalePricingEnabled, setWholesalePricingEnabled] = useState(false);
+  const [enableBatchExpiry, setEnableBatchExpiry] = useState(false);
+  const [blockExpiredSales, setBlockExpiredSales] = useState(false);
+  const [expiryAlertDays, setExpiryAlertDays] = useState(30); // <--- NAYA IZAFA
   const [enableCustomerCreditLimits, setEnableCustomerCreditLimits] = useState(false); // <--- NAYA IZAFA
   const [defaultCreditLimit, setDefaultCreditLimit] = useState(0); // <--- NAYA IZAFA
   const [mobileNavEnabled, setMobileNavEnabled] = useState(true);
@@ -429,6 +432,9 @@ const SettingsPage = () => {
       if (profile.pos_discount_enabled !== undefined) setPosDiscountEnabled(profile.pos_discount_enabled);
       if (profile.allow_cart_price_change !== undefined) setAllowCartPriceChange(profile.allow_cart_price_change);
       if (profile.wholesale_pricing_enabled !== undefined) setWholesalePricingEnabled(profile.wholesale_pricing_enabled);
+      if (profile.enable_batch_expiry !== undefined) setEnableBatchExpiry(profile.enable_batch_expiry);
+      if (profile.block_expired_sales !== undefined) setBlockExpiredSales(profile.block_expired_sales);
+      if (profile.expiry_alert_days !== undefined) setExpiryAlertDays(profile.expiry_alert_days); // <--- NAYA IZAFA
       if (profile.enable_customer_credit_limits !== undefined) setEnableCustomerCreditLimits(profile.enable_customer_credit_limits); // <--- NAYA IZAFA
       if (profile.default_credit_limit !== undefined) setDefaultCreditLimit(profile.default_credit_limit); // <--- NAYA IZAFA
       if (profile.mobile_nav_enabled !== undefined) setMobileNavEnabled(profile.mobile_nav_enabled);
@@ -543,6 +549,9 @@ const SettingsPage = () => {
       pos_discount_enabled: isAdvancedLocked ? false : posDiscountEnabled,
       allow_cart_price_change: allowCartPriceChange,
       wholesale_pricing_enabled: isWholesaleLocked ? false : wholesalePricingEnabled,
+      enable_batch_expiry: enableBatchExpiry,
+      block_expired_sales: blockExpiredSales,
+      expiry_alert_days: expiryAlertDays, // <--- NAYA IZAFA
       enable_customer_credit_limits: isCreditLimitLocked ? false : enableCustomerCreditLimits, // <--- NAYA IZAFA
       default_credit_limit: defaultCreditLimit, // <--- NAYA IZAFA
       mobile_nav_enabled: mobileNavEnabled,
@@ -867,6 +876,52 @@ const SettingsPage = () => {
                     </Col>
                   </Row>
                   <Divider />
+                  <Row align="middle" gutter={[16, 16]}>
+                    <Col xs={24} sm={6}>
+                      <Text strong>Track Batch & Expiry</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>Essential for Pharmacy, Grocery, and FMCG businesses to track expiring stock.</Text>
+                    </Col>
+                    <Col xs={24} sm={18}>
+                      <Switch 
+                        checked={enableBatchExpiry} 
+                        onChange={setEnableBatchExpiry} 
+                      />
+                    </Col>
+                  </Row>
+                  <Divider />
+                  {enableBatchExpiry && (
+                    <>
+                      <Row align="middle" gutter={[16, 16]}>
+                        <Col xs={24} sm={6}>
+                          <Text strong>Block Expired Sales</Text>
+                          <Text type="secondary" style={{ display: 'block' }}>Prevent staff from adding expired items to the POS cart.</Text>
+                        </Col>
+                        <Col xs={24} sm={18}>
+                          <Switch 
+                            checked={blockExpiredSales} 
+                            onChange={setBlockExpiredSales} 
+                          />
+                        </Col>
+                      </Row>
+                      <Divider />
+                      <Row align="middle" gutter={[16, 16]}>
+                        <Col xs={24} sm={6}>
+                          <Text strong>Expiry Alert Days</Text>
+                          <Text type="secondary" style={{ display: 'block' }}>How many days before expiry should the system alert you?</Text>
+                        </Col>
+                        <Col xs={24} sm={18}>
+                          <InputNumber 
+                            min={1} 
+                            max={365} 
+                            value={expiryAlertDays} 
+                            onChange={setExpiryAlertDays} 
+                            addonAfter="Days"
+                          />
+                        </Col>
+                      </Row>
+                      <Divider />
+                    </>
+                  )}
                   <Row align="middle" gutter={[16, 16]}>
                     <Col xs={24} sm={6}>
                       <Text strong>Customer Credit Limits</Text>

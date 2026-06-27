@@ -453,11 +453,16 @@ const DataService = {
 
     // B. Mojooda Stock (Inventory) ki Sale Price update karein (Dexie + Queue)
     for (const invId of inventoryIds) {
-      await db.inventory.update(invId, { sale_price: updates.sale_price, wholesale_price: updates.wholesale_price }); // <--- NAYA IZAFA
+      await db.inventory.update(invId, { 
+        sale_price: updates.sale_price, 
+        wholesale_price: updates.wholesale_price,
+        batch_number: updates.batch_number, // <--- NAYA IZAFA
+        expiry_date: updates.expiry_date    // <--- NAYA IZAFA
+      }); 
       await db.sync_queue.add({ 
         table_name: 'inventory', 
         action: 'update', 
-        data: { id: invId, sale_price: updates.sale_price, wholesale_price: updates.wholesale_price } // <--- NAYA IZAFA
+        data: { id: invId, sale_price: updates.sale_price, wholesale_price: updates.wholesale_price, batch_number: updates.batch_number, expiry_date: updates.expiry_date } // <--- NAYA IZAFA
       });
     }
     return true;
@@ -985,7 +990,9 @@ async addCustomer(customerData) {
       price_at_sale: item.price_at_sale,
       purchase_price: item.purchase_price || 0,
       user_id: salePayload.user_id,
-      warranty_expiry: item.warranty_expiry || null
+      warranty_expiry: item.warranty_expiry || null,
+      batch_number: item.batch_number || null,
+      expiry_date: item.expiry_date || null
     }));
 
     const inventoryUpdates = salePayload.items.map(i => ({
@@ -2101,6 +2108,28 @@ async addCustomer(customerData) {
         return sum + (price * qty);
     }, 0);
 
+    // --- NAYA IZAFA: Expiring Soon Items for Reports ---
+    const userProfile = await db.user_settings.toCollection().first();
+    const alertDays = userProfile?.expiry_alert_days !== undefined ? userProfile.expiry_alert_days : 30;
+    const alertLimitDate = new Date(); alertLimitDate.setDate(alertLimitDate.getDate() + alertDays);
+    const todayZero = new Date(); todayZero.setHours(0,0,0,0);
+    
+    const expiringSoonItems = inventory
+        .filter(i => i.expiry_date && new Date(i.expiry_date) <= alertLimitDate)
+        .map(i => {
+            const prod = productMap[i.product_id];
+            return {
+                ...i,
+                name: prod ? prod.name : 'Unknown',
+                brand: prod ? prod.brand : '',
+                qty: i.available_qty,
+                batch_number: i.batch_number,
+                expiry_date: i.expiry_date,
+                isExpired: new Date(i.expiry_date) < todayZero
+            };
+        })
+        .sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date));
+
     return {
         totalUnits,
         totalAssetValue,
@@ -2110,7 +2139,8 @@ async addCustomer(customerData) {
         brandValuation: Object.values(brandValuation).sort((a, b) => b.value - a.value),
         lowStockItems,
         outOfStockItems,
-        slowMovingItems
+        slowMovingItems,
+        expiringSoonItems // <--- NAYA IZAFA
     };
   },
 
@@ -3049,6 +3079,11 @@ async addCustomer(customerData) {
     const inventoryMap = {}; 
     const stockCounts = {};
     let runningInventoryTotal = 0;
+    const expiringItemsTemp = []; // <--- NAYA IZAFA
+
+    // --- NAYA IZAFA: Profile se alert days nikalna ---
+    const userProfile = await db.user_settings.toCollection().first();
+    const alertDays = userProfile?.expiry_alert_days !== undefined ? userProfile.expiry_alert_days : 30;
 
     await db.inventory.each(item => {
         const qty = Number(item.available_qty) || 0;
@@ -3062,6 +3097,24 @@ async addCustomer(customerData) {
             runningInventoryTotal += (price * qty);
             const pid = item.product_id;
             stockCounts[pid] = (stockCounts[pid] || 0) + qty;
+
+            // --- NAYA IZAFA: Expiry Check (User ke set kiye hue dinon ke mutabiq) ---
+            if (item.expiry_date) {
+                const expDate = new Date(item.expiry_date);
+                const todayZero = new Date(); todayZero.setHours(0,0,0,0);
+                const alertLimitDate = new Date(); alertLimitDate.setDate(alertLimitDate.getDate() + alertDays);
+                
+                if (expDate <= alertLimitDate) {
+                    expiringItemsTemp.push({
+                        product_id: item.product_id,
+                        batch: item.batch_number,
+                        expiry: item.expiry_date,
+                        qty: qty,
+                        isExpired: expDate < todayZero
+                    });
+                }
+            }
+            // ------------------------------------------------------------------
         }
     });
     const totalInventoryValue = precise(runningInventoryTotal);
@@ -3271,6 +3324,20 @@ async addCustomer(customerData) {
         .filter(p => p.quantity <= threshold)
         .slice(0, 5);
 
+    // --- NAYA IZAFA: Expiring Soon Items ko Product Name ke sath map karna ---
+    const productMapForExpiry = {};
+    products.forEach(p => productMapForExpiry[p.id] = p);
+    
+    const expiringSoonItems = expiringItemsTemp.map(item => {
+        const prod = productMapForExpiry[item.product_id];
+        return {
+            ...item,
+            name: prod ? prod.name : 'Unknown',
+            brand: prod ? prod.brand : ''
+        };
+    }).sort((a, b) => new Date(a.expiry) - new Date(b.expiry)).slice(0, 5);
+    // -------------------------------------------------------------------------
+
     // 9. Recent Sales (Optimized Lookup)
     const recentSales = sales
         .sort((a, b) => new Date(b.sale_date || b.created_at) - new Date(a.sale_date || a.created_at))
@@ -3354,6 +3421,7 @@ async addCustomer(customerData) {
         totalStaffPayables, // NAYA: Staff ki raqam alag se bheji 
         
         lowStockItems,
+        expiringSoonItems, // <--- NAYA IZAFA
         totalProducts: products.length,
         recentSales,
         topSellingProducts

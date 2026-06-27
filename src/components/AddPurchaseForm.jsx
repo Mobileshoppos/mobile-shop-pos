@@ -23,6 +23,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
   const { isDarkMode } = useTheme();
   const limits = getPlanLimits(profile?.subscription_tier);
   const isWholesaleActive = profile?.wholesale_pricing_enabled && limits.allow_wholesale_pricing;
+  const isBatchExpiryEnabled = profile?.enable_batch_expiry;
   const { message } = App.useApp(); 
   const [form] = Form.useForm();
   const [imeis, setImeis] = useState(['']);
@@ -42,6 +43,8 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
               quantity: initialValues.quantity || 1,
               barcode: initialValues.barcode,
               warranty_days: initialValues.warranty_days ?? product?.default_warranty_days ?? 0,
+              batch_number: initialValues.batch_number,
+              expiry_date: initialValues.expiry_date,
               ...initialValues.item_attributes
           };
           if (isImeiCategory && initialValues.imei) {
@@ -154,6 +157,8 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
             sale_price: values.sale_price,
             wholesale_price: values.wholesale_price,
             warranty_days: values.warranty_days || 0,
+            batch_number: values.batch_number || null,
+            expiry_date: values.expiry_date || null,
             quantity: 1,
             imei: imei,
             item_attributes: { ...item_attributes, 'Serial / IMEI': imei },
@@ -212,6 +217,8 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
             sale_price: values.sale_price,
             wholesale_price: values.wholesale_price,
             warranty_days: values.warranty_days || 0,
+            batch_number: values.batch_number || null,
+            expiry_date: values.expiry_date || null,
             quantity: values.quantity,
             item_attributes: item_attributes,
             barcode: values.barcode || null
@@ -260,6 +267,21 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         <Col span={8}><Form.Item name="wholesale_price" label="Wholesale Price"><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
                     )}
                     
+                    {isBatchExpiryEnabled && (
+                        <>
+                            <Col span={12}>
+                                <Form.Item name="batch_number" label="Batch / Lot Number" tooltip="Optional: Enter batch number for tracking">
+                                    <Input placeholder="e.g. BATCH-001" />
+                                </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                                <Form.Item name="expiry_date" label="Expiry Date" tooltip="Optional: When does this item expire?">
+                                    <Input type="date" style={{ width: '100%' }} />
+                                </Form.Item>
+                            </Col>
+                        </>
+                    )}
+
                     {/* --- NAYA CODE: IMEI Warranty Check --- */}
                     {profile?.warranty_system_enabled !== false && (
                     <Col span={12}>
@@ -307,6 +329,21 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         <Col span={8}><Form.Item name="wholesale_price" label="Wholesale Price"><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
                     )}
                     
+                    {isBatchExpiryEnabled && (
+                        <>
+                            <Col span={12}>
+                                <Form.Item name="batch_number" label="Batch / Lot Number" tooltip="Optional: Enter batch number for tracking">
+                                    <Input placeholder="e.g. BATCH-001" />
+                                </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                                <Form.Item name="expiry_date" label="Expiry Date" tooltip="Optional: When does this item expire?">
+                                    <Input type="date" style={{ width: '100%' }} />
+                                </Form.Item>
+                            </Col>
+                        </>
+                    )}
+
                     {/* --- NAYA CODE: Bulk Warranty Check --- */}
                     {profile?.warranty_system_enabled !== false && (
                     <Col span={12}>

@@ -10,7 +10,7 @@ import { db } from '../db';
 const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
     const { profile } = useAuth();
     const limits = getPlanLimits(profile?.subscription_tier); // <--- NAYA IZAFA
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp(); // <--- NAYA IZAFA: modal ko add kiya
     const [variants, setVariants] = useState([]);
     const [loading, setLoading] = useState(false);
     const [selectedVariants, setSelectedVariants] = useState([]);
@@ -35,7 +35,7 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
                         // NAYA IZAFA: Agar IMEI hai to har item ki alag row banegi, warna bulk items group ho jayenge
                         const key = item.imei 
                             ? `${item.product_id}-${item.imei}` 
-                            : `${item.product_id}-${attributesKey}-${item.sale_price}-${item.wholesale_price}`;
+                            : `${item.product_id}-${attributesKey}-${item.sale_price}-${item.wholesale_price}-${item.batch_number || 'nobatch'}-${item.expiry_date || 'noexp'}`;
 
                         if (!grouped[key]) {
                             grouped[key] = { ...item, inventory_ids: [], stock: 0, key: key };
@@ -44,7 +44,14 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
                         grouped[key].stock += (item.available_qty || 0);
                         grouped[key].inventory_ids.push(item.id);
                     });
-                    setVariants(Object.values(grouped));
+                    const finalVariants = Object.values(grouped);
+                    // FEFO Sort: Jo pehle expire hoga wo list mein sab se upar aayega
+                    finalVariants.sort((a, b) => {
+                        if (!a.expiry_date) return 1; 
+                        if (!b.expiry_date) return -1;
+                        return new Date(a.expiry_date) - new Date(b.expiry_date); 
+                    });
+                    setVariants(finalVariants);
 
                 } catch (error) {
                     message.error("Failed to fetch stock variants: " + error.message);
@@ -58,9 +65,16 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
 
     const handleOk = () => {
         const itemsToAdd = [];
+        let hasExpiredItem = false; // <--- NAYA IZAFA: Nishani ke liye
+
         selectedVariants.forEach(selection => {
             const variant = variants.find(v => v.key === selection.key);
             
+            // Check karein ke kya select kiye hue items mein koi expire to nahi?
+            if (variant.expiry_date && new Date(variant.expiry_date) < new Date(new Date().setHours(0,0,0,0))) {
+                hasExpiredItem = true;
+            }
+
             if (variant.imei) {
                 // CASE 1: IMEI Item (Har mobile ki alag entry)
                 const inventoryIdsToSell = variant.inventory_ids.slice(0, selection.quantity);
@@ -79,11 +93,25 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
                     product_name: product.name,
                     inventory_id: variant.inventory_ids[0], // POS FIFO logic khud baqi batches sambhal lega
                     quantity: selection.quantity,
+                    batch_number: variant.batch_number, // NAYA IZAFA
+                    expiry_date: variant.expiry_date    // NAYA IZAFA
                 });
             }
         });
         
-        onOk(itemsToAdd);
+        // --- NAYA IZAFA: Sakht Pop-up Modal ---
+        if (hasExpiredItem && !profile?.block_expired_sales) {
+            modal.confirm({
+                title: 'Expired Items Selected!',
+                content: 'You have selected items that are already expired. Are you sure you want to add them to the bill?',
+                okText: 'Yes, Add them',
+                okType: 'danger',
+                cancelText: 'No, Cancel',
+                onOk: () => onOk(itemsToAdd) // Agar user Yes dabaye, to add karo
+            });
+        } else {
+            onOk(itemsToAdd); // Agar expire nahi hain to aam tareeqe se add karo
+        }
     };
 
     const handleQuantityChange = (key, quantity) => {
@@ -130,6 +158,14 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
                         
                         {/* 3. IMEI ko alag se pehchan ke liye tag mein hi rakhein */}
                         {record.imei && <Tag color="purple" style={{ margin: 0 }}>{record.imei}</Tag>}
+                        
+                        {/* NAYA IZAFA: Batch aur Expiry dikhayein */}
+                        {record.batch_number && <Tag color="blue" style={{ margin: 0 }}>Batch: {record.batch_number}</Tag>}
+                        {record.expiry_date && (
+                            <Tag color={new Date(record.expiry_date) < new Date() ? "red" : "orange"} style={{ margin: 0 }}>
+                                Exp: {new Date(record.expiry_date).toLocaleDateString()}
+                            </Tag>
+                        )}
                     </div>
                 );
             }
@@ -142,6 +178,15 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
             align: 'center',
             width: 120,
             render: (_, record) => {
+                // --- NAYA IZAFA: Expiry Check ---
+                const isExpired = record.expiry_date && new Date(record.expiry_date) < new Date(new Date().setHours(0,0,0,0));
+                const isBlocked = profile?.block_expired_sales && isExpired;
+
+                if (isBlocked) {
+                    return <Tag color="red" style={{ margin: 0 }}>Expired - Blocked</Tag>;
+                }
+                // --------------------------------
+
                 // 1. Check karein ke kya yeh item abhi Modal mein select hua hai?
                 const isSelectedNow = selectedVariants.some(v => v.key === record.key);
                 

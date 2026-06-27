@@ -204,7 +204,8 @@ const POS = () => {
         const itemsMap = new Map();
         for (const variant of product.variants) {
           const attributesKey = createStableAttributeKey(variant.item_attributes);
-          const key = `${attributesKey}-${variant.sale_price}`; 
+          // NAYA IZAFA: Batch aur Expiry ko key mein shamil kiya
+          const key = `${attributesKey}-${variant.sale_price}-${variant.batch_number || 'nobatch'}-${variant.expiry_date || 'noexp'}`; 
 
           if (itemsMap.has(key)) {
             const existing = itemsMap.get(key);
@@ -219,7 +220,7 @@ const POS = () => {
               imeis: variant.imei ? [variant.imei] : [],
               product_id: product.id,
               product_name: product.name,
-              variant_id: variant.id 
+              variant_id: variant.variant_id || variant.id 
             });
           }
         }
@@ -237,19 +238,41 @@ const POS = () => {
 
   // --- QUICK ADD HANDLER (SMART LOGIC) ---
   const handleVariantQuickAdd = (variantItem) => {
-    const isImeiItem = variantItem.category_is_imei_based || (variantItem.imeis && variantItem.imeis.length > 0);
+    const isExpired = variantItem.expiry_date && new Date(variantItem.expiry_date) < new Date(new Date().setHours(0,0,0,0));
 
-    if (isImeiItem) {
-        
-        const parentProduct = allProducts.find(p => p.id === variantItem.product_id);
-        
-        if (parentProduct) {
-            setProductForVariantSelection(parentProduct);
-            setIsVariantModalOpen(true);
+    // Ek chota function jo item add karne ka asal kaam karega
+    const proceedWithAdd = () => {
+        const isImeiItem = variantItem.category_is_imei_based || (variantItem.imeis && variantItem.imeis.length > 0);
+        if (isImeiItem) {
+            const parentProduct = allProducts.find(p => p.id === variantItem.product_id);
+            if (parentProduct) {
+                setProductForVariantSelection(parentProduct);
+                setIsVariantModalOpen(true);
+            }
+        } else {
+            handleVariantsSelected([{ ...variantItem, quantity: 1 }]);
         }
-    } else {
-        handleVariantsSelected([variantItem]);
+    };
+
+    if (isExpired) {
+        if (profile?.block_expired_sales) {
+            message.error("Cannot add to cart. This item is expired!");
+            return;
+        } else {
+            // --- NAYA IZAFA: Sakht Pop-up Modal ---
+            modal.confirm({
+                title: 'Expired Item Alert!',
+                content: 'This item has expired. Are you sure you want to add it to the bill?',
+                okText: 'Yes, Add it',
+                okType: 'danger',
+                cancelText: 'No, Cancel',
+                onOk: proceedWithAdd // Agar user Yes dabaye, to add karo
+            });
+            return; // Yahan ruk jao aur user ke jawab ka intezar karo
+        }
     }
+
+    proceedWithAdd(); // Agar expire nahi hai to aam tareeqe se add karo
   };
 
   useEffect(() => {
@@ -458,16 +481,19 @@ const POS = () => {
       });
 
       // 2. Quantity Items (Yahan Stock Check Lagana Hai - ATTRIBUTE BASED)
-      const groupedQuantityItems = {};
-      quantityItemsToAdd.forEach(item => {
-        if (!groupedQuantityItems[item.variant_id]) {
-          groupedQuantityItems[item.variant_id] = { item: item, count: 0 };
-        }
-        groupedQuantityItems[item.variant_id].count++;
-      });
+          const groupedQuantityItems = {};
+          quantityItemsToAdd.forEach(item => {
+            // NAYA IZAFA: Batch aur Expiry ko key mein shamil kiya taake alag alag count hon
+            const uniqueKey = `${item.variant_id}-${item.batch_number || 'nobatch'}-${item.expiry_date || 'noexp'}`;
+            if (!groupedQuantityItems[uniqueKey]) {
+              groupedQuantityItems[uniqueKey] = { item: item, count: 0 };
+            }
+            // FIX: Modal se aane wali asal quantity jama karein (count++ ke bajaye)
+            groupedQuantityItems[uniqueKey].count += (item.quantity || 1);
+          });
 
-      for (const variantId in groupedQuantityItems) {
-        const { item, count } = groupedQuantityItems[variantId];
+          for (const uniqueKey in groupedQuantityItems) {
+            const { item, count } = groupedQuantityItems[uniqueKey];
         
         // --- STOCK CHECK LOGIC (FIXED) ---
         const parentProduct = allProducts.find(p => p.id === item.product_id);
@@ -476,12 +502,19 @@ const POS = () => {
                 .filter(v => 
                     JSON.stringify(v.item_attributes || {}) === JSON.stringify(item.item_attributes || {}) &&
                     (v.sale_price === item.sale_price || v.sale_price === item.retail_price) &&
-                    (v.status || 'available').toLowerCase() === 'available'
+                    (v.status || 'available').toLowerCase() === 'available' &&
+                    (v.batch_number || null) === (item.batch_number || null) &&
+                    (v.expiry_date || null) === (item.expiry_date || null)
                 )
                 .reduce((sum, v) => sum + (v.available_qty || 0), 0) 
             : 0;
 
-        const existingIndex = updatedCart.findIndex(ci => ci.variant_id === item.variant_id);
+        // NAYA IZAFA: Cart mein pehle se mojood item dhoondte waqt Batch aur Expiry bhi match karein
+            const existingIndex = updatedCart.findIndex(ci => 
+                ci.variant_id === item.variant_id &&
+                (ci.batch_number || null) === (item.batch_number || null) &&
+                (ci.expiry_date || null) === (item.expiry_date || null)
+            );
 
         if (existingIndex > -1) {
           const existingItem = updatedCart[existingIndex];
@@ -598,9 +631,9 @@ const POS = () => {
     setSearchTerm(value || ''); 
   };
 
-  const handleCartItemUpdate = (variantId, field, value) => {
+  const handleCartItemUpdate = (itemToUpdate, field, value) => {
     setCart(cart.map(item => {
-      if (item.variant_id === variantId) {
+      if (item.variant_id === itemToUpdate.variant_id && (item.batch_number || null) === (itemToUpdate.batch_number || null) && (item.expiry_date || null) === (itemToUpdate.expiry_date || null)) {
         if (field === 'quantity') {
           const parentProduct = allProducts.find(p => p.id === item.product_id);
           const realStockCount = parentProduct 
@@ -608,7 +641,9 @@ const POS = () => {
                   .filter(v => 
                       JSON.stringify(v.item_attributes || {}) === JSON.stringify(item.item_attributes || {}) &&
                       (v.sale_price === item.sale_price || v.sale_price === item.retail_price) &&
-                      (v.status || 'available').toLowerCase() === 'available'
+                      (v.status || 'available').toLowerCase() === 'available' &&
+                      (v.batch_number || null) === (item.batch_number || null) &&
+                      (v.expiry_date || null) === (item.expiry_date || null)
                   )
                   .reduce((sum, v) => sum + (v.available_qty || 0), 0) 
               : 0;
@@ -805,15 +840,25 @@ const POS = () => {
                 // --- FIFO LOGIC START (Updated for Multi-Batch Sales) ---
                 let qtyNeeded = cartItem.quantity;
 
-                // 1. Saare available batches dhoondein (Purane se naye ki taraf sorted)
-                const allBatches = await db.inventory
+                // 1. Saare available batches dhoondein (Smart FEFO/FIFO Logic)
+                const allBatchesRaw = await db.inventory
                     .where('product_id').equals(cartItem.product_id)
                     .filter(item => 
                         (item.status || '').toLowerCase() === 'available' && 
                         (item.available_qty || 0) > 0 &&
-                        JSON.stringify(item.item_attributes || {}) === JSON.stringify(cartItem.item_attributes || {})
+                        JSON.stringify(item.item_attributes || {}) === JSON.stringify(cartItem.item_attributes || {}) &&
+                        (item.batch_number || null) === (cartItem.batch_number || null) &&
+                        (item.expiry_date || null) === (cartItem.expiry_date || null)
                     )
-                    .sortBy('created_at'); // FIFO: Oldest first
+                    .toArray();
+
+                // Sort karein: Agar expiry hai to FEFO (Pehle expire hone wala pehle), warna FIFO (Pehle khareeda hua pehle)
+                const allBatches = allBatchesRaw.sort((a, b) => {
+                    if (a.expiry_date && b.expiry_date) return new Date(a.expiry_date) - new Date(b.expiry_date);
+                    if (a.expiry_date) return -1;
+                    if (b.expiry_date) return 1;
+                    return new Date(a.created_at) - new Date(b.created_at);
+                });
 
                 // 2. Check: Kya total stock kaafi hai?
                 const totalAvailable = allBatches.reduce((sum, b) => sum + (b.available_qty || 0), 0);
@@ -1153,8 +1198,8 @@ const POS = () => {
     }
   };
   
-  const handleFullRemoveFromCart = (variantId) => {
-    setCart(cart.filter(item => item.variant_id !== variantId));
+  const handleFullRemoveFromCart = (itemToRemove) => {
+    setCart(cart.filter(item => !(item.variant_id === itemToRemove.variant_id && (item.batch_number || null) === (itemToRemove.batch_number || null) && (item.expiry_date || null) === (itemToRemove.expiry_date || null))));
   };
 
   const handleResetCart = () => { modal.confirm({ title: 'Reset Bill?', content: 'Are you sure you want to remove all items from the current bill?', okText: 'Yes, Reset', cancelText: 'No', onOk: async () => { setCart([]); setDiscount(0); setAmountPaid(0); setSelectedCustomer(null); await DataService.clearActiveCart(); message.success('Bill has been reset.'); } }); };
@@ -1637,6 +1682,10 @@ const POS = () => {
                               
                               {/* Attributes (RAM/ROM etc) */}
                               <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                {/* NAYA IZAFA: Batch aur Expiry Tags in POS List View */}
+                                {variant.batch_number && <Tag color="blue" style={{ margin: 0, fontSize: '12px', padding: '0 4px', border: 'none' }}>{variant.batch_number}</Tag>}
+                                {variant.expiry_date && <Tag color={new Date(variant.expiry_date) < new Date() ? "error" : "warning"} style={{ margin: 0, fontSize: '12px', padding: '0 4px', border: 'none' }}>Exp: {new Date(variant.expiry_date).toLocaleDateString()}</Tag>}
+                                
                                 {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
                                   if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) return null;
                                   return (
@@ -1655,14 +1704,36 @@ const POS = () => {
                           </div>
 
                           {/* ADD TO CART BUTTON (Direct) */}
-                          <Button 
-                            type="primary" 
-                            shape="circle" 
-                            icon={<PlusOutlined />} 
-                            size="small" 
-                            disabled={variant.display_quantity <= 0}
-                            onClick={() => handleVariantQuickAdd(variant)}
-                          />
+                          {(() => {
+                              const isExpired = variant.expiry_date && new Date(variant.expiry_date) < new Date(new Date().setHours(0,0,0,0));
+                              const isBlocked = profile?.block_expired_sales && isExpired;
+                              
+                              if (isBlocked) {
+                                  return (
+                                      <Tooltip title="Expired - Sale Blocked">
+                                          <Button 
+                                              type="primary" 
+                                              shape="circle" 
+                                              icon={<LockOutlined />} 
+                                              size="small" 
+                                              danger
+                                              onClick={() => message.error("Cannot add to cart. This item is expired!")}
+                                          />
+                                      </Tooltip>
+                                  );
+                              }
+
+                              return (
+                                  <Button 
+                                    type="primary" 
+                                    shape="circle" 
+                                    icon={<PlusOutlined />} 
+                                    size="small" 
+                                    disabled={variant.display_quantity <= 0}
+                                    onClick={() => handleVariantQuickAdd(variant)}
+                                  />
+                              );
+                          })()}
                         </div>
                       ))}
 
@@ -1808,7 +1879,7 @@ const POS = () => {
                             {/* Unit Price (Moved to 1st Row) */}
                             <div style={{ display: 'flex', alignItems: 'center' }}>
                               {profile?.allow_cart_price_change !== false ? (
-                                <InputNumber size="small" variant="borderless" style={{ width: '85px', background: token.colorBgContainer, borderRadius: '4px' }} prefix={profile?.currency ? `${profile.currency} ` : ''} value={item.sale_price} onChange={(value) => handleCartItemUpdate(item.variant_id, 'sale_price', value || 0)} min={0} />
+                                <InputNumber size="small" variant="borderless" style={{ width: '85px', background: token.colorBgContainer, borderRadius: '4px' }} prefix={profile?.currency ? `${profile.currency} ` : ''} value={item.sale_price} onChange={(value) => handleCartItemUpdate(item, 'sale_price', value || 0)} min={0} />
                               ) : (
                                 <Text type="secondary" style={{ fontSize: '13px' }}>{formatCurrency(item.sale_price, profile?.currency)}</Text>
                               )}
@@ -1825,7 +1896,7 @@ const POS = () => {
                             <Text strong style={{ fontSize: '17px' }}>
                               {formatCurrency(item.sale_price * item.quantity, profile?.currency)}
                             </Text>
-                            <Button type="text" danger icon={<DeleteOutlined />} size="small" onClick={() => handleFullRemoveFromCart(item.variant_id)} style={{ height: '26px', width: '26px' }} />
+                            <Button type="text" danger icon={<DeleteOutlined />} size="small" onClick={() => handleFullRemoveFromCart(item)} style={{ height: '26px', width: '26px' }} />
                           </div>
                         </div>
                         
@@ -1849,6 +1920,8 @@ const POS = () => {
                                 ) : null;
                               })()}
                               {item.imei && <Tag color="default" key="imei" style={{ margin: 0, fontSize: '11px', border: 'none', background: token.colorFillTertiary, padding: '0 4px' }}>{item.imei}</Tag>}
+                              {item.batch_number && <Tag color="blue" key="batch" style={{ margin: 0, fontSize: '11px', border: 'none', padding: '0 4px' }}>Batch: {item.batch_number}</Tag>}
+                              {item.expiry_date && <Tag color="orange" key="exp" style={{ margin: 0, fontSize: '11px', border: 'none', padding: '0 4px' }}>Exp: {new Date(item.expiry_date).toLocaleDateString()}</Tag>}
                               
                               {profile?.warranty_system_enabled !== false && item.warranty_days > 0 && (
                                 (() => {
@@ -1861,7 +1934,7 @@ const POS = () => {
                                         <span style={{ cursor: 'pointer' }}><Badge status={isExpired ? "error" : "success"} /></span>
                                       </Tooltip>
                                       <Tooltip title="No Warranty">
-                                        <Checkbox checked={item.no_warranty} onChange={(e) => handleCartItemUpdate(item.variant_id, 'no_warranty', e.target.checked)} style={{ marginLeft: '4px' }} />
+                                        <Checkbox checked={item.no_warranty} onChange={(e) => handleCartItemUpdate(item, 'no_warranty', e.target.checked)} style={{ marginLeft: '4px' }} />
                                       </Tooltip>
                                     </Space>
                                   );
@@ -1875,7 +1948,7 @@ const POS = () => {
                             {!(item.category_is_imei_based || item.imei) && (
                               <div style={{ display: 'flex', alignItems: 'center', background: token.colorBgContainer, borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }}>
                                 <div 
-                                  onClick={() => handleCartItemUpdate(item.variant_id, 'quantity', Math.max(1, item.quantity - 1))} 
+                                  onClick={() => handleCartItemUpdate(item, 'quantity', Math.max(1, item.quantity - 1))} 
                                   style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '16px', color: item.quantity <= 1 ? token.colorTextDisabled : token.colorText }}
                                 >
                                   -
@@ -1885,7 +1958,7 @@ const POS = () => {
   variant="borderless"
   controls={false} // Default up/down arrows hata diye
   value={item.quantity}
-  onChange={(val) => handleCartItemUpdate(item.variant_id, 'quantity', val || 1)}
+  onChange={(val) => handleCartItemUpdate(item, 'quantity', val || 1)}
   onFocus={(e) => e.target.select()} // Click karte hi text select ho jaye taake foran type ho sakay
   style={{ 
     width: '45px', 
@@ -1902,7 +1975,7 @@ const POS = () => {
                                 <div 
                                   onClick={() => {
                                     const maxQty = allProducts.find(p => p.id === item.product_id)?.quantity || item.quantity;
-                                    if(item.quantity < maxQty) handleCartItemUpdate(item.variant_id, 'quantity', item.quantity + 1);
+                                    if(item.quantity < maxQty) handleCartItemUpdate(item, 'quantity', item.quantity + 1);
                                   }} 
                                   style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '16px', color: item.quantity >= (allProducts.find(p => p.id === item.product_id)?.quantity || item.quantity) ? token.colorTextDisabled : token.colorText }}
                                 >

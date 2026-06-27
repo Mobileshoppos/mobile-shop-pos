@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useLocation, Link } from 'react-router-dom';
-import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme } from 'antd';
+import dayjs from 'dayjs';
+import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme, DatePicker } from 'antd';
 import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined, LockOutlined, PrinterOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -83,7 +84,8 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
 
       for (const variant of variants) {
         const attributesKey = createStableAttributeKey(variant.item_attributes);
-        const key = `${attributesKey}-${variant.sale_price}-${variant.purchase_price}`;
+        // NAYA IZAFA: Batch aur Expiry ko key mein shamil kiya taake alag alag rows banein
+        const key = `${attributesKey}-${variant.sale_price}-${variant.purchase_price}-${variant.batch_number || 'nobatch'}-${variant.expiry_date || 'noexp'}`;
 
         if (itemsMap.has(key)) {
           const existing = itemsMap.get(key);
@@ -254,6 +256,10 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
 
                       {/* ATTRIBUTES - FONT INCREASED TO 14px */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {/* NAYA IZAFA: Batch aur Expiry Tags */}
+                        {variant.batch_number && <Tag color="blue" style={{ margin: 0, fontSize: '14px', padding: '4px 8px' }}>Batch: {variant.batch_number}</Tag>}
+                        {variant.expiry_date && <Tag color={new Date(variant.expiry_date) < new Date() ? "red" : "orange"} style={{ margin: 0, fontSize: '14px', padding: '4px 8px' }}>Exp: {new Date(variant.expiry_date).toLocaleDateString()}</Tag>}
+                        
                         {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
                           if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) return null;
                           return <Tag key={key} style={{ margin: 0, opacity: 0.8, fontSize: '14px', padding: '4px 8px' }}>{value}</Tag>;
@@ -842,7 +848,9 @@ const Inventory = () => {
       editForm.setFieldsValue({
           barcode: variant.barcode || '', 
           sale_price: variant.sale_price,
-          wholesale_price: variant.wholesale_price // <--- NAYA IZAFA
+          wholesale_price: variant.wholesale_price, // <--- NAYA IZAFA
+          batch_number: variant.batch_number,       // <--- NAYA IZAFA
+          expiry_date: variant.expiry_date ? dayjs(variant.expiry_date) : null // <--- NAYA IZAFA
       });
 
       // 3. ASAL DATA: Local Database se confirm karein (Taake 100% sahi Barcode nazar aaye)
@@ -907,7 +915,9 @@ const Inventory = () => {
       await DataService.updateQuickEdit(variantId, editingItem.ids, {
         barcode: values.barcode || null,
         sale_price: values.sale_price,
-        wholesale_price: values.wholesale_price // <--- NAYA IZAFA
+        wholesale_price: values.wholesale_price, // <--- NAYA IZAFA
+        batch_number: values.batch_number || null,                                      // <--- NAYA IZAFA
+        expiry_date: values.expiry_date ? values.expiry_date.format('YYYY-MM-DD') : null // <--- NAYA IZAFA
       });
 
       // 4. UI SUCCESS
@@ -1382,6 +1392,22 @@ const Inventory = () => {
         >
             <InputNumber style={{ width: '100%' }} />
         </Form.Item>
+    )}
+    
+    {/* --- NAYA IZAFA: Batch & Expiry in Quick Edit --- */}
+    {profile?.enable_batch_expiry && (
+        <Row gutter={16}>
+            <Col span={12}>
+                <Form.Item name="batch_number" label="Batch Number">
+                    <Input placeholder="e.g. BAT-001" />
+                </Form.Item>
+            </Col>
+            <Col span={12}>
+                <Form.Item name="expiry_date" label="Expiry Date">
+                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                </Form.Item>
+            </Col>
+        </Row>
     )}
   </Form>
 </Modal>

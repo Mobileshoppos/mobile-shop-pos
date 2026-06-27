@@ -21,6 +21,8 @@ const BarcodePrinter = ({ visible, onClose, product, variant, bulkItems }) => {
   const [showPrice, setShowPrice] = useState(false);
   const [showDate, setShowDate] = useState(false);
   const [showWarranty, setShowWarranty] = useState(false);
+  const [showBatch, setShowBatch] = useState(false); // <--- NAYA IZAFA
+  const [showExpiry, setShowExpiry] = useState(false); // <--- NAYA IZAFA
   const [stickerSize, setStickerSize] = useState('50x25');
 
   // Bulk State
@@ -169,7 +171,7 @@ const BarcodePrinter = ({ visible, onClose, product, variant, bulkItems }) => {
   };
 
   // Sticker ka design jo hidden container mein render hoga
-  const renderStickerContent = (itemName, itemBrand, itemBarcode, itemPrice, itemWarranty) => (
+  const renderStickerContent = (itemName, itemBrand, itemBarcode, itemPrice, itemWarranty, itemBatch, itemExpiry) => (
       <div style={{ textAlign: 'center' }}>
           {showShopName && (
               <div className="shop-name" style={{ fontSize: '13px', fontWeight: 900, color: 'black', textTransform: 'uppercase', marginBottom: '2px' }}>
@@ -192,7 +194,7 @@ const BarcodePrinter = ({ visible, onClose, product, variant, bulkItems }) => {
                 lineColor="black"
               />
           </div>
-          {/* NAYA IZAFA: Price, Date, Warranty ko ek line mein dikhana */}
+          {/* NAYA IZAFA: Price, Date, Warranty, Batch, Expiry ko dikhana */}
           <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
               {showPrice && (
                   <div className="price" style={{ fontSize: '12px', fontWeight: 'bold', color: 'black' }}>
@@ -207,6 +209,16 @@ const BarcodePrinter = ({ visible, onClose, product, variant, bulkItems }) => {
               {showWarranty && itemWarranty > 0 && (
                   <div style={{ fontSize: '10px', fontWeight: 'bold', color: 'black', alignSelf: 'center' }}>
                       W: {itemWarranty} Days
+                  </div>
+              )}
+              {showBatch && itemBatch && (
+                  <div style={{ fontSize: '10px', fontWeight: 'bold', color: 'black', alignSelf: 'center' }}>
+                      B: {itemBatch}
+                  </div>
+              )}
+              {showExpiry && itemExpiry && (
+                  <div style={{ fontSize: '10px', fontWeight: 'bold', color: 'black', alignSelf: 'center' }}>
+                      Exp: {dayjs(itemExpiry).format('MM/YY')}
                   </div>
               )}
           </div>
@@ -260,6 +272,19 @@ const BarcodePrinter = ({ visible, onClose, product, variant, bulkItems }) => {
                 <Switch checked={showWarranty} onChange={setShowWarranty} size="small" />
               </div>
 
+              {profile?.enable_batch_expiry && (
+                  <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text>Show Batch No:</Text>
+                        <Switch checked={showBatch} onChange={setShowBatch} size="small" />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text>Show Expiry Date:</Text>
+                        <Switch checked={showExpiry} onChange={setShowExpiry} size="small" />
+                      </div>
+                  </>
+              )}
+
               <div>
                 <Text style={{ display: 'block', marginBottom: '4px' }}>Sticker/Page Size:</Text>
                 <Select value={stickerSize} onChange={setStickerSize} style={{ width: '100%' }} size="small">
@@ -291,7 +316,7 @@ const BarcodePrinter = ({ visible, onClose, product, variant, bulkItems }) => {
                         boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                         transform: 'scale(0.9)' /* Thora chota kar diya taake jagah kam gheray */
                     }}>
-                        {renderStickerContent(bulkList[0].product_name, bulkList[0].product_brand, bulkList[0].barcode, bulkList[0].sale_price, bulkList[0].warranty_days || 0)}
+                        {renderStickerContent(bulkList[0].product_name, bulkList[0].product_brand, bulkList[0].barcode, bulkList[0].sale_price, bulkList[0].warranty_days || 0, bulkList[0].batch_number, bulkList[0].expiry_date)}
                     </div>
                 </div>
             )}
@@ -347,7 +372,7 @@ const BarcodePrinter = ({ visible, onClose, product, variant, bulkItems }) => {
                       backgroundColor: 'white',
                       boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                   }}>
-                      {renderStickerContent(product?.name, product?.brand, variant?.barcode, variant?.sale_price, variant?.warranty_days || product?.default_warranty_days || 0)}
+                      {renderStickerContent(product?.name, product?.brand, variant?.barcode, variant?.sale_price, variant?.warranty_days || product?.default_warranty_days || 0, variant?.batch_number, variant?.expiry_date)}
                   </div>
               </div>
           )}
@@ -360,14 +385,14 @@ const BarcodePrinter = ({ visible, onClose, product, variant, bulkItems }) => {
              bulkList.filter(item => item.selected && item.printQty > 0 && item.barcode).map((item, idx) => (
                  Array(item.printQty).fill(0).map((_, copyIdx) => (
                      <div className="sticker" key={`bulk-${idx}-${copyIdx}`}>
-                         {renderStickerContent(item.product_name, item.product_brand, item.barcode, item.sale_price, item.warranty_days || 0)}
+                         {renderStickerContent(item.product_name, item.product_brand, item.barcode, item.sale_price, item.warranty_days || 0, item.batch_number, item.expiry_date)}
                      </div>
                  ))
              ))
          ) : (
              Array(copies).fill(0).map((_, copyIdx) => (
                  <div className="sticker" key={`single-${copyIdx}`}>
-                     {renderStickerContent(product?.name, product?.brand, variant?.barcode, variant?.sale_price, variant?.warranty_days || product?.default_warranty_days || 0)}
+                     {renderStickerContent(product?.name, product?.brand, variant?.barcode, variant?.sale_price, variant?.warranty_days || product?.default_warranty_days || 0, variant?.batch_number, variant?.expiry_date)}
                  </div>
              ))
          )}

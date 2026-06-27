@@ -1489,6 +1489,22 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                       { title: 'In Stock', dataIndex: 'qty', align: 'right' }
                     ]} />
                   )
+                },
+                {
+                  key: 'expiry',
+                  label: <Badge count={inventoryData.expiringSoonItems?.filter(i => i.isExpired)?.length} offset={[10, 0]} size="small"><Text type="danger">Expiry</Text></Badge>,
+                  children: (
+                    <Table dataSource={inventoryData.expiringSoonItems} rowKey="id" pagination={{ pageSize: 5 }} size="small" columns={[
+                      { title: 'Product', key: 'p', render: (_, r) => `${r.brand} ${r.name}` },
+                      { title: 'Batch', dataIndex: 'batch_number', key: 'b' },
+                      { title: 'Exp. Date', key: 'exp', render: (_, r) => (
+                        <Text type={r.isExpired ? 'danger' : 'warning'}>
+                          {new Date(r.expiry_date).toLocaleDateString()} {r.isExpired ? '(Expired)' : ''}
+                        </Text>
+                      )},
+                      { title: 'Qty', dataIndex: 'qty', align: 'right' }
+                    ]} locale={{ emptyText: 'No items expiring soon!' }} />
+                  )
                 }
               ]} />
             </Card>
