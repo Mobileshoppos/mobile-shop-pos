@@ -24,7 +24,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
   const limits = getPlanLimits(profile?.subscription_tier);
   const isWholesaleActive = profile?.wholesale_pricing_enabled && limits.allow_wholesale_pricing;
   const isBatchExpiryEnabled = profile?.enable_batch_expiry;
-  const { message } = App.useApp(); 
+  const { message, modal } = App.useApp(); // NAYA IZAFA: modal shamil kiya gaya
   const [form] = Form.useForm();
   const [imeis, setImeis] = useState(['']);
   const imeiInputRefs = useRef([]);
@@ -112,121 +112,146 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
-      let finalItemsData = [];
 
-      const item_attributes = {};
-      attributes.forEach(attr => {
-          if (values[attr.attribute_name] !== undefined) {
-              item_attributes[attr.attribute_name] = values[attr.attribute_name];
-          }
-      });
-      
-      if (isImeiCategory) {
-        const finalImeis = imeis.map(imei => imei.trim()).filter(imei => imei);
-        if (finalImeis.length === 0) throw new Error("Please enter at least one IMEI/Serial.");
+      // NAYA IZAFA: Asal kaam ko ek alag function mein daal diya taake aage use kar sakein
+      const proceedWithAdd = async () => {
+        try {
+          let finalItemsData = [];
 
-        // --- SMART DOUBLE-LOCK CHECK ---
-        for (const imei of finalImeis) {
-            const lowerImei = imei.toLowerCase();
-
-            // 1. Check in Current Bill (Jo screen par list hai)
-            const duplicateInList = existingItems?.some((item, idx) => 
-                item.imei?.toLowerCase() === lowerImei && idx !== editingItemIndex
-            );
-
-            // 2. Check in Database (Jo pehle se dukan mein hai)
-            const existingInDb = await db.inventory
-                .filter(item => item.imei?.toLowerCase() === lowerImei && item.id !== initialValues?.id)
-                .first();
-
-            if (duplicateInList || existingInDb) {
-                message.error(`IMEI/Serial "${imei}" is already in this bill or in stock!`);
+          const item_attributes = {};
+          attributes.forEach(attr => {
+              if (values[attr.attribute_name] !== undefined) {
+                  item_attributes[attr.attribute_name] = values[attr.attribute_name];
+              }
+          });
+          
+          if (isImeiCategory) {
+            const finalImeis = imeis.map(imei => imei.trim()).filter(imei => imei);
+            if (finalImeis.length === 0) {
+                message.error("Please enter at least one IMEI/Serial.");
                 return;
             }
-        }
-        // --- CHECK KHATAM ---
 
-        finalItemsData = finalImeis.map(imei => ({
-            // Agar edit kar rahe hain to purani ID, warna NAYI ID
-            id: initialValues?.id || crypto.randomUUID(), 
-            status: initialValues?.status || 'Available',
-            temp_id: crypto.randomUUID(),
-            product_id: product.id,
-            name: product.name,
-            purchase_price: values.purchase_price,
-            sale_price: values.sale_price,
-            wholesale_price: values.wholesale_price,
-            warranty_days: values.warranty_days || 0,
-            batch_number: values.batch_number || null,
-            expiry_date: values.expiry_date || null,
-            quantity: 1,
-            imei: imei,
-            item_attributes: { ...item_attributes, 'Serial / IMEI': imei },
-            barcode: null
-        }));
+            // --- SMART DOUBLE-LOCK CHECK ---
+            for (const imei of finalImeis) {
+                const lowerImei = imei.toLowerCase();
 
-      } else {
-        // --- PERFECT VARIANT IDENTITY CHECK (Barcode) ---
-        if (values.barcode) {
-            const lowerBarcode = values.barcode.toLowerCase();
-            
-            // Attributes ko sort karke string banana taake comparison sahi ho
-            const currentAttrsJson = JSON.stringify(Object.entries(item_attributes).sort());
+                // 1. Check in Current Bill (Jo screen par list hai)
+                const duplicateInList = existingItems?.some((item, idx) => 
+                    item.imei?.toLowerCase() === lowerImei && idx !== editingItemIndex
+                );
 
-            // 1. Check in Database (Existing Products)
-            const variantInDb = await db.product_variants
-                .filter(v => v.barcode?.toLowerCase() === lowerBarcode)
-                .first();
+                // 2. Check in Database (Jo pehle se dukan mein hai)
+                const existingInDb = await db.inventory
+                    .filter(item => item.imei?.toLowerCase() === lowerImei && item.id !== initialValues?.id)
+                    .first();
 
-            if (variantInDb) {
-                const dbAttrsJson = JSON.stringify(Object.entries(variantInDb.attributes || {}).sort());
+                if (duplicateInList || existingInDb) {
+                    message.error(`IMEI/Serial "${imei}" is already in this bill or in stock!`);
+                    return;
+                }
+            }
+            // --- CHECK KHATAM ---
+
+            finalItemsData = finalImeis.map(imei => ({
+                // Agar edit kar rahe hain to purani ID, warna NAYI ID
+                id: initialValues?.id || crypto.randomUUID(), 
+                status: initialValues?.status || 'Available',
+                temp_id: crypto.randomUUID(),
+                product_id: product.id,
+                name: product.name,
+                purchase_price: values.purchase_price,
+                sale_price: values.sale_price,
+                wholesale_price: values.wholesale_price,
+                warranty_days: values.warranty_days || 0,
+                batch_number: values.batch_number || null,
+                expiry_date: values.expiry_date || null,
+                quantity: 1,
+                imei: imei,
+                item_attributes: { ...item_attributes, 'Serial / IMEI': imei },
+                barcode: null
+            }));
+
+          } else {
+            // --- PERFECT VARIANT IDENTITY CHECK (Barcode) ---
+            if (values.barcode) {
+                const lowerBarcode = values.barcode.toLowerCase();
                 
-                // Agar Product ID mukhtalif hai YA Attributes mukhtalif hain, to yeh Duplicate hai
-                const isExactMatch = variantInDb.product_id === product.id && dbAttrsJson === currentAttrsJson;
+                // Attributes ko sort karke string banana taake comparison sahi ho
+                const currentAttrsJson = JSON.stringify(Object.entries(item_attributes).sort());
 
-                if (!isExactMatch) {
-                    message.error(`Barcode "${values.barcode}" is already owned by a different product or variant. Each variant must have a unique barcode.`);
-                    return;
+                // 1. Check in Database (Existing Products)
+                const variantInDb = await db.product_variants
+                    .filter(v => v.barcode?.toLowerCase() === lowerBarcode)
+                    .first();
+
+                if (variantInDb) {
+                    const dbAttrsJson = JSON.stringify(Object.entries(variantInDb.attributes || {}).sort());
+                    
+                    // Agar Product ID mukhtalif hai YA Attributes mukhtalif hain, to yeh Duplicate hai
+                    const isExactMatch = variantInDb.product_id === product.id && dbAttrsJson === currentAttrsJson;
+
+                    if (!isExactMatch) {
+                        message.error(`Barcode "${values.barcode}" is already owned by a different product or variant. Each variant must have a unique barcode.`);
+                        return;
+                    }
+                }
+
+                // 2. Check in Current Bill (List)
+                const itemInList = existingItems?.find((item, idx) => 
+                    item.barcode?.toLowerCase() === lowerBarcode && idx !== editingItemIndex
+                );
+
+                if (itemInList) {
+                    const listAttrsJson = JSON.stringify(Object.entries(item_list?.item_attributes || {}).sort());
+                    const isExactMatchInList = itemInList.product_id === product.id && listAttrsJson === currentAttrsJson;
+
+                    if (!isExactMatchInList) {
+                        message.error(`Barcode "${values.barcode}" is being used by a different variant in this bill.`);
+                        return;
+                    }
                 }
             }
+            // --- CHECK KHATAM ---
 
-            // 2. Check in Current Bill (List)
-            const itemInList = existingItems?.find((item, idx) => 
-                item.barcode?.toLowerCase() === lowerBarcode && idx !== editingItemIndex
-            );
-
-            if (itemInList) {
-                const listAttrsJson = JSON.stringify(Object.entries(item_list?.item_attributes || {}).sort());
-                const isExactMatchInList = itemInList.product_id === product.id && listAttrsJson === currentAttrsJson;
-
-                if (!isExactMatchInList) {
-                    message.error(`Barcode "${values.barcode}" is being used by a different variant in this bill.`);
-                    return;
-                }
-            }
+            finalItemsData = [{
+                id: initialValues?.id || crypto.randomUUID(),
+                status: initialValues?.status || 'Available',
+                temp_id: crypto.randomUUID(),
+                product_id: product.id,
+                name: product.name,
+                purchase_price: values.purchase_price,
+                sale_price: values.sale_price,
+                wholesale_price: values.wholesale_price,
+                warranty_days: values.warranty_days || 0,
+                batch_number: values.batch_number || null,
+                expiry_date: values.expiry_date || null,
+                quantity: values.quantity,
+                item_attributes: item_attributes,
+                barcode: values.barcode || null
+            }];
+          }
+          
+          onOk(finalItemsData);
+          form.resetFields();
+        } catch (err) {
+          console.error(err);
+          message.error(err.message || "An error occurred.");
         }
-        // --- CHECK KHATAM ---
+      };
 
-        finalItemsData = [{
-            id: initialValues?.id || crypto.randomUUID(),
-            status: initialValues?.status || 'Available',
-            temp_id: crypto.randomUUID(),
-            product_id: product.id,
-            name: product.name,
-            purchase_price: values.purchase_price,
-            sale_price: values.sale_price,
-            wholesale_price: values.wholesale_price,
-            warranty_days: values.warranty_days || 0,
-            batch_number: values.batch_number || null,
-            expiry_date: values.expiry_date || null,
-            quantity: values.quantity,
-            item_attributes: item_attributes,
-            barcode: values.barcode || null
-        }];
+      // NAYA IZAFA: Soft Warning Check
+      if (isBatchExpiryEnabled && !values.expiry_date) {
+          modal.confirm({
+              title: 'Missing Expiry Date',
+              content: 'You have not entered an Expiry Date for this item. Are you sure you want to save it without an expiry date?',
+              okText: 'Yes, I Understand',
+              cancelText: 'Cancel',
+              onOk: proceedWithAdd
+          });
+      } else {
+          proceedWithAdd();
       }
-      
-      onOk(finalItemsData);
-      form.resetFields();
 
     } catch (error) {
       console.error("Validation Error:", error);
@@ -777,6 +802,11 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
             }
         });
     }
+    
+    // --- NAYA IZAFA: Batch aur Expiry ko naam ke sath dikhana ---
+    if (record.batch_number) details.push(`Batch: ${record.batch_number}`);
+    if (record.expiry_date) details.push(`Exp: ${new Date(record.expiry_date).toLocaleDateString()}`);
+    
     // IMEI ko aakhir mein alag se add karein agar mojood ho
     if (record.imei) details.push(record.imei);
     

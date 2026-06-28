@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Table, Tag, Typography, Button, App as AntApp, Flex, List, Card, Row, Col, theme, Input } from 'antd';
 import { FileTextOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import DataService from '../DataService';
 import DataExport from '../components/DataExport'; // <--- NAYA IZAFA
 import AddPurchaseForm from './AddPurchaseForm';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
+import { db } from '../db'; // <--- NAYA IZAFA: Database ko import kiya
 
 const { Title, Text } = Typography;
 
@@ -23,6 +24,8 @@ const Purchases = () => {
     };
     const { profile } = useAuth();
     const [purchases, setPurchases] = useState([]);
+    const [searchParams, setSearchParams] = useSearchParams(); // <--- NAYA IZAFA
+    const navigate = useNavigate(); // <--- NAYA IZAFA
     const [loading, setLoading] = useState(true);
     const { notification } = AntApp.useApp();
     
@@ -54,6 +57,33 @@ const Purchases = () => {
     useEffect(() => {
         fetchPurchases();
     }, [fetchPurchases]);
+
+    // --- NAYA IZAFA: Auto-Redirect for Return ---
+    useEffect(() => {
+        const action = searchParams.get('action');
+        const inventoryId = searchParams.get('inventory_id');
+        
+        // Agar URL mein return ki request aayi hai
+        if (action === 'return' && inventoryId) {
+            const findPurchaseAndRedirect = async () => {
+                try {
+                    // Database se check karein ke yeh item kis bill (purchase) ka hai
+                    const item = await db.inventory.get(inventoryId);
+                    if (item && item.purchase_id) {
+                        // Us bill ki details page par bhej dein
+                        navigate(`/purchases/${item.purchase_id}?action=return&inventory_id=${inventoryId}`);
+                    } else {
+                        notification.error({ message: 'Item not found in any purchase.' });
+                        setSearchParams({}); // URL saaf kar dein
+                    }
+                } catch (err) {
+                    console.error("Error finding item:", err);
+                }
+            };
+            findPurchaseAndRedirect();
+        }
+    }, [searchParams, navigate, notification, setSearchParams]);
+    // --------------------------------------------
     
     const handlePurchaseCreated = () => {
         setIsAddModalVisible(false);

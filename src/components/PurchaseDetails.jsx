@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Typography, Breadcrumb, Button, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Modal, Form, InputNumber, DatePicker, Select, Input, Space, Popconfirm, Radio, Checkbox, theme, Tooltip } from 'antd';
 import { FileTextOutlined, ArrowLeftOutlined, DollarCircleOutlined, EditOutlined, RollbackOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
@@ -34,6 +34,8 @@ const PurchaseDetails = () => {
     const { activeStaff } = useStaff(); // <--- NAYA IZAFA
     const { processSyncQueue, isSyncing } = useSync();
     const { id } = useParams();
+    const [searchParams, setSearchParams] = useSearchParams(); // <--- NAYA IZAFA
+    const navigate = useNavigate(); // <--- NAYA IZAFA
     const isMobile = useMediaQuery('(max-width: 768px)');
     const { notification } = AntApp.useApp();
     const [purchase, setPurchase] = useState(null);
@@ -78,6 +80,40 @@ const PurchaseDetails = () => {
         }
     }, [id, notification, isSyncing]); // <--- isSyncing dependency mein add kiya
 
+    // --- NAYA IZAFA: Auto-Open Return Modal ---
+    useEffect(() => {
+        const action = searchParams.get('action');
+        const inventoryId = searchParams.get('inventory_id');
+
+        // Agar items load ho chuke hain aur action return ka hai
+        if (action === 'return' && inventoryId && items.length > 0) {
+            const itemToReturn = items.find(i => i.id === inventoryId);
+            
+            if (itemToReturn && itemToReturn.status !== 'Returned' && itemToReturn.available_qty > 0) {
+                // Modal kholne se pehle form reset karein aur note likh dein
+                returnForm.setFieldsValue({ return_date: dayjs(), notes: 'Returned from Expiring Soon Alert' });
+                
+                // Item ko khud-ba-khud select karein (Quantity 1 ke sath)
+                setSelectedReturnItems([{ 
+                    inventory_id: itemToReturn.id, 
+                    qty: 1, 
+                    price: itemToReturn.purchase_price, 
+                    product_id: itemToReturn.product_id 
+                }]);
+
+                // Modal khol dein
+                setIsReturnModalVisible(true);
+                
+                // URL saaf kar dein taake page refresh karne par modal dobara na khule
+                setSearchParams({});
+            } else if (itemToReturn && (itemToReturn.status === 'Returned' || itemToReturn.available_qty <= 0)) {
+                notification.warning({ message: 'Item already returned or sold out.' });
+                setSearchParams({});
+            }
+        }
+    }, [items, searchParams, setSearchParams, notification, returnForm]);
+    // ------------------------------------------
+
     // --- CHANGE 1 START: Items ko Active aur Returned mein taqseem karna ---
     const { activeDisplayItems, returnedDisplayItems, totalReturnedAmount } = useMemo(() => {
         const activeGrouped = {};
@@ -91,7 +127,8 @@ const PurchaseDetails = () => {
             delete tempAttributes['Serial / IMEI'];
             delete tempAttributes['Serial Number'];
             const attributesKey = JSON.stringify(tempAttributes);
-            const key = `${item.product_id}-${attributesKey}-${item.purchase_price}`;
+            // --- NAYA IZAFA: Batch aur Expiry ko key mein shamil kiya taake alag rows banein ---
+            const key = `${item.product_id}-${attributesKey}-${item.purchase_price}-${item.batch_number || 'nobatch'}-${item.expiry_date || 'noexp'}`;
 
             // Bulk System Display Logic
             // 1. Agar item bacha hua hai ya bik gaya hai (Active)
@@ -264,6 +301,10 @@ const PurchaseDetails = () => {
             key: 'details',
             render: (_, record) => (
                 <Space wrap>
+                    {/* --- NAYA IZAFA: Batch aur Expiry yahan dikhayein --- */}
+                    {record.batch_number && <Tag color="blue">Batch: {record.batch_number}</Tag>}
+                    {record.expiry_date && <Tag color="orange">Exp: {new Date(record.expiry_date).toLocaleDateString()}</Tag>}
+                    
                     {record.item_attributes && Object.entries(record.item_attributes).map(([key, value]) => {
                         if (!value || ['IMEI', 'Serial / IMEI', 'Serial Number'].includes(key)) return null;
                         return <Tag key={key}>{`${key}: ${value}`}</Tag>;
@@ -493,6 +534,17 @@ const showEditModal = () => {
     size="small"
     columns={[
         { title: 'Product', dataIndex: 'product_name' },
+        { 
+            // --- NAYA IZAFA: Batch aur Expiry ka column ---
+            title: 'Batch / Expiry', 
+            key: 'batch_expiry', 
+            render: (_, record) => (
+                <Space direction="vertical" size={0}>
+                    {record.batch_number ? <Text style={{fontSize: '12px'}}>Batch: {record.batch_number}</Text> : <Text type="secondary" style={{fontSize: '12px'}}>-</Text>}
+                    {record.expiry_date && <Text type="warning" style={{fontSize: '12px'}}>Exp: {new Date(record.expiry_date).toLocaleDateString()}</Text>}
+                </Space>
+            )
+        },
         { 
             title: 'IMEI/Serial', 
             dataIndex: 'imei', 

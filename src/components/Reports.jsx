@@ -58,7 +58,8 @@ import {
   HistoryOutlined,
   ShopOutlined,
   UserOutlined,
-  PrinterOutlined
+  PrinterOutlined,
+  RollbackOutlined
 } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf'; // <--- NAYA IZAFA
@@ -1502,7 +1503,18 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                           {new Date(r.expiry_date).toLocaleDateString()} {r.isExpired ? '(Expired)' : ''}
                         </Text>
                       )},
-                      { title: 'Qty', dataIndex: 'qty', align: 'right' }
+                      { title: 'Qty', dataIndex: 'qty', align: 'right' },
+                      { title: 'Action', key: 'action', align: 'center', render: (_, r) => (
+                          <Tooltip title="Return to Supplier">
+                              <Button 
+                                  type="primary" 
+                                  danger 
+                                  size="small" 
+                                  icon={<RollbackOutlined />} 
+                                  onClick={() => navigate(`/purchases?action=return&inventory_id=${r.id}`)}
+                              />
+                          </Tooltip>
+                      )}
                     ]} locale={{ emptyText: 'No items expiring soon!' }} />
                   )
                 }

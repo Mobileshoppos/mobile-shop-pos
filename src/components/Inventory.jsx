@@ -15,6 +15,7 @@ import { useTheme } from '../context/ThemeContext';
 import AddPurchaseForm from './AddPurchaseForm';
 import ProductImageUpload from '../components/ProductImageUpload';
 import BarcodePrinter from '../components/BarcodePrinter';
+import ProductLedgerModal from '../components/ProductLedgerModal';
 import { getPlanLimits } from '../config/subscriptionPlans';
 
 const { Title, Text } = Typography;
@@ -51,7 +52,7 @@ const formatPriceRange = (min, max, currency) => {
   return `${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`;
 };
 
-const ProductList = ({ showArchived, products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged, refFirstStock, onPrintBarcode }) => {
+const ProductList = ({ showArchived, products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged, refFirstStock, onPrintBarcode, onViewLedger }) => {
   const { token } = theme.useToken(); // Control Center Connection
   const { profile } = useAuth();
   const limits = getPlanLimits(profile?.subscription_tier); // <--- NAYA IZAFA: Yahan limits ko define kar diya
@@ -147,9 +148,13 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                   {product.image_url && (
                     <img src={product.image_url} alt={product.name} style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: `1px solid ${token.colorBorder}` }} />
                   )}
-                  <Text strong style={{ fontSize: '18px', lineHeight: 1 }}>
+                  {/* NAYA IZAFA: Name ko clickable link bana diya */}
+                  <a 
+                    onClick={() => onViewLedger(product)} 
+                    style={{ fontSize: '18px', lineHeight: 1, fontWeight: 'bold' }}
+                  >
                     {product.name}
-                  </Text>
+                  </a>
                   <Tag color="cyan" style={{ margin: 0, fontSize: '11px', padding: '2px 6px' }}>
                     {product.category_name}
                   </Tag>
@@ -232,9 +237,9 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                       <div style={{ marginRight: '12px', flexShrink: 0 }}>
                         <Tag 
                           color={variant.display_quantity > 0 ? "processing" : "error"}
-                          style={{ margin: 0, fontSize: '15px', padding: '4px 10px' }}
+                          style={{ margin: 0, fontSize: '15px', padding: '4px 10px', color: token.colorText }}
                         >
-                          {variant.display_quantity} Stock
+                          {variant.display_quantity}
                         </Tag>
                       </div>
                       </div>
@@ -257,8 +262,8 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
                       {/* ATTRIBUTES - FONT INCREASED TO 14px */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {/* NAYA IZAFA: Batch aur Expiry Tags */}
-                        {variant.batch_number && <Tag color="blue" style={{ margin: 0, fontSize: '14px', padding: '4px 8px' }}>Batch: {variant.batch_number}</Tag>}
-                        {variant.expiry_date && <Tag color={new Date(variant.expiry_date) < new Date() ? "red" : "orange"} style={{ margin: 0, fontSize: '14px', padding: '4px 8px' }}>Exp: {new Date(variant.expiry_date).toLocaleDateString()}</Tag>}
+                        {variant.batch_number && <Tag color="blue" style={{ margin: 0, fontSize: '14px', padding: '4px 8px', color: token.colorText }}>B.No: {variant.batch_number}</Tag>}
+                        {variant.expiry_date && <Tag color={new Date(variant.expiry_date) < new Date() ? "red" : "orange"} style={{ margin: 0, fontSize: '14px', padding: '4px 8px', color: token.colorText }}>Exp: {new Date(variant.expiry_date).toLocaleDateString()}</Tag>}
                         
                         {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
                           if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) return null;
@@ -448,6 +453,10 @@ const Inventory = () => {
   const [isBarcodePrinterOpen, setIsBarcodePrinterOpen] = useState(false);
   const [barcodeProduct, setBarcodeProduct] = useState(null);
   const [barcodeVariant, setBarcodeVariant] = useState(null);
+
+  // --- NAYA IZAFA: Ledger Modal State ---
+  const [isLedgerModalOpen, setIsLedgerModalOpen] = useState(false);
+  const [selectedProductForLedger, setSelectedProductForLedger] = useState(null);
   
   // --- NAYE MODALS KI STATE ---
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -593,9 +602,15 @@ const Inventory = () => {
             
             if (mainMatch) return true;
 
-            // 3. Variants Tags Check (A10, Silicone etc.)
+            // 3. Variants Tags, Batch, aur Expiry Check
             if (p.variants && p.variants.length > 0) {
                 return p.variants.some(v => {
+                    // NAYA IZAFA: Batch Number se dhoondna
+                    if (isSmartMatch(v.batch_number, searchText)) return true;
+                    
+                    // NAYA IZAFA: Expiry Date se dhoondna (e.g. "2026" ya "07/")
+                    if (v.expiry_date && isSmartMatch(new Date(v.expiry_date).toLocaleDateString(), searchText)) return true;
+
                     return v.item_attributes && Object.values(v.item_attributes).some(val => 
                         isSmartMatch(val, searchText)
                     );
@@ -1195,6 +1210,10 @@ const Inventory = () => {
         }}
         refFirstStock={refFirstStock}
         showArchived={showArchived}
+        onViewLedger={(product) => {
+            setSelectedProductForLedger(product);
+            setIsLedgerModalOpen(true);
+        }}
         onPrintBarcode={async (product, variant) => {
             let fetchedBarcode = variant.barcode;
             
@@ -1543,6 +1562,13 @@ const Inventory = () => {
         onClose={() => setIsBarcodePrinterOpen(false)}
         product={barcodeProduct}
         variant={barcodeVariant}
+      />
+
+      {/* NAYA IZAFA: Product Ledger Modal */}
+      <ProductLedgerModal 
+        visible={isLedgerModalOpen}
+        onClose={() => setIsLedgerModalOpen(false)}
+        product={selectedProductForLedger}
       />
 
     </div>

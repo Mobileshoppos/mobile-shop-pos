@@ -20,7 +20,8 @@ import {
   UserOutlined, 
   TransactionOutlined,
   ShoppingCartOutlined,
-  LockOutlined // <-- Naya Icon
+  LockOutlined, // <-- Naya Icon
+  RollbackOutlined
 } from '@ant-design/icons';
 import { getPlanLimits } from '../config/subscriptionPlans'; // <-- Control Center Import
 import { Area, Pie } from '@ant-design/charts'; 
@@ -782,6 +783,8 @@ const Dashboard = () => {
             <Col span={24}>
               <Card 
                 title={<Space><AlertOutlined style={{ color: token.colorWarning }} /> Expiring Soon ({profile?.expiry_alert_days || 30} Days)</Space>} 
+                // --- NAYA IZAFA: View All Button ---
+                extra={<Button type="link" onClick={() => navigate('/reports?tab=inventory')}>View All</Button>}
                 style={reportCardStyle}
                 styles={{ body: { padding: '0 12px' } }}
               >
@@ -798,11 +801,22 @@ const Dashboard = () => {
                           </Text>
                         }
                       />
-                      <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '12px', fontWeight: 'bold', color: item.isExpired ? token.colorError : token.colorWarning }}>
-                              {item.isExpired ? 'EXPIRED' : 'Expiring'}
+                      <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: '12px', fontWeight: 'bold', color: item.isExpired ? token.colorError : token.colorWarning }}>
+                                  {item.isExpired ? 'EXPIRED' : 'Expiring'}
+                              </div>
+                              <div style={{ fontSize: '11px' }}>{new Date(item.expiry).toLocaleDateString()}</div>
                           </div>
-                          <div style={{ fontSize: '11px' }}>{new Date(item.expiry).toLocaleDateString()}</div>
+                          <Tooltip title="Return to Supplier">
+                              <Button 
+                                  type="primary" 
+                                  danger 
+                                  size="small" 
+                                  icon={<RollbackOutlined />} 
+                                  onClick={() => navigate(`/purchases?action=return&inventory_id=${item.id}`)}
+                              />
+                          </Tooltip>
                       </div>
                     </List.Item>
                   )}

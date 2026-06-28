@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip, Badge, Tag, Checkbox, theme
 } from 'antd';
-import { ShoppingCartOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined, WalletOutlined, BankOutlined, ClockCircleOutlined, PauseCircleOutlined, LockOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { ShoppingCartOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined, WalletOutlined, BankOutlined, ClockCircleOutlined, PauseCircleOutlined, LockOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined, CalendarOutlined, WarningOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -379,9 +379,15 @@ const POS = () => {
         
         if (mainMatch) return true;
 
-        // 2. Agar wahan nahi mila, to Variants ke Tags (Attributes) check karein
+        // 2. Agar wahan nahi mila, to Variants ke Tags, Batch, aur Expiry check karein
         if (p.variants && p.variants.length > 0) {
             return p.variants.some(v => {
+                // NAYA IZAFA: Batch Number se dhoondna
+                if (isSmartMatch(v.batch_number, searchTerm)) return true;
+                
+                // NAYA IZAFA: Expiry Date se dhoondna
+                if (v.expiry_date && isSmartMatch(new Date(v.expiry_date).toLocaleDateString(), searchTerm)) return true;
+
                 if (!v.item_attributes) return false;
                 return Object.values(v.item_attributes).some(val => 
                     isSmartMatch(val, searchTerm)
@@ -582,8 +588,9 @@ const POS = () => {
                         product_name: parentProduct.name,
                         variant_id: inventoryItem.variant_id,
                         sale_price: inventoryItem.sale_price || parentProduct.sale_price,
-                        wholesale_price: inventoryItem.wholesale_price, // <--- NAYA IZAFA
+                        wholesale_price: inventoryItem.wholesale_price, 
                         purchase_price: inventoryItem.purchase_price,
+                        quantity: 1 // <--- FIX: Barcode scan karne par hamesha 1 add hoga
                     };
                     handleVariantsSelected([itemToAdd]);
                     setSearchTerm('');
@@ -607,9 +614,10 @@ const POS = () => {
                      product_name: parentProduct.name,
                      variant_id: inventoryItem.variant_id || inventoryItem.id,
                      sale_price: inventoryItem.sale_price || parentProduct.sale_price,
-                     wholesale_price: inventoryItem.wholesale_price, // <--- NAYA IZAFA
+                     wholesale_price: inventoryItem.wholesale_price, 
                      purchase_price: inventoryItem.purchase_price,
-                     imei: trimmedValue 
+                     imei: trimmedValue,
+                     quantity: 1 // <--- FIX: IMEI scan karne par hamesha 1 add hoga
                  };
                  handleVariantsSelected([itemToAdd]);
                  setSearchTerm('');
@@ -1632,8 +1640,8 @@ const POS = () => {
 
                     <Divider style={{ margin: '8px 0', borderColor: token.colorBorderSecondary }} />
 
-                    {/* === VARIANTS LIST (Scrollable) === */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '150px', overflowY: 'auto' }} className="hide-scrollbar">
+                    {/* === VARIANTS LIST (Full Height - No Scroll) === */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {product.groupedVariants.map((variant, index) => (
                         <div key={index} 
                           style={{ 
@@ -1684,7 +1692,34 @@ const POS = () => {
                               <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                 {/* NAYA IZAFA: Batch aur Expiry Tags in POS List View */}
                                 {variant.batch_number && <Tag color="blue" style={{ margin: 0, fontSize: '12px', padding: '0 4px', border: 'none' }}>{variant.batch_number}</Tag>}
-                                {variant.expiry_date && <Tag color={new Date(variant.expiry_date) < new Date() ? "error" : "warning"} style={{ margin: 0, fontSize: '12px', padding: '0 4px', border: 'none' }}>Exp: {new Date(variant.expiry_date).toLocaleDateString()}</Tag>}
+                                {variant.expiry_date && (() => {
+                                    const expDate = new Date(variant.expiry_date);
+                                    const todayZero = new Date(); todayZero.setHours(0,0,0,0);
+                                    const alertDays = profile?.expiry_alert_days || 30;
+                                    const alertLimitDate = new Date(); alertLimitDate.setDate(alertLimitDate.getDate() + alertDays);
+                                    
+                                    let iconColor = token.colorTextSecondary; // Normal color
+                                    let tooltipText = "Valid Expiry";
+                                    let Icon = CalendarOutlined;
+
+                                    if (expDate < todayZero) {
+                                        iconColor = token.colorError; // Lal rang
+                                        tooltipText = "EXPIRED";
+                                        Icon = WarningOutlined;
+                                    } else if (expDate <= alertLimitDate) {
+                                        iconColor = token.colorWarning; // Peela rang
+                                        tooltipText = "Expiring Soon";
+                                        Icon = WarningOutlined;
+                                    }
+
+                                    return (
+                                        <Tooltip title={tooltipText}>
+                                            <Tag style={{ margin: 0, fontSize: '12px', padding: '0 4px', border: 'none', background: 'transparent', color: iconColor, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <Icon /> {expDate.toLocaleDateString()}
+                                            </Tag>
+                                        </Tooltip>
+                                    );
+                                })()}
                                 
                                 {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
                                   if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) return null;
@@ -1921,7 +1956,34 @@ const POS = () => {
                               })()}
                               {item.imei && <Tag color="default" key="imei" style={{ margin: 0, fontSize: '11px', border: 'none', background: token.colorFillTertiary, padding: '0 4px' }}>{item.imei}</Tag>}
                               {item.batch_number && <Tag color="blue" key="batch" style={{ margin: 0, fontSize: '11px', border: 'none', padding: '0 4px' }}>Batch: {item.batch_number}</Tag>}
-                              {item.expiry_date && <Tag color="orange" key="exp" style={{ margin: 0, fontSize: '11px', border: 'none', padding: '0 4px' }}>Exp: {new Date(item.expiry_date).toLocaleDateString()}</Tag>}
+                              {item.expiry_date && (() => {
+                                  const expDate = new Date(item.expiry_date);
+                                  const todayZero = new Date(); todayZero.setHours(0,0,0,0);
+                                  const alertDays = profile?.expiry_alert_days || 30;
+                                  const alertLimitDate = new Date(); alertLimitDate.setDate(alertLimitDate.getDate() + alertDays);
+                                  
+                                  let iconColor = token.colorTextSecondary;
+                                  let tooltipText = "Valid Expiry";
+                                  let Icon = CalendarOutlined;
+
+                                  if (expDate < todayZero) {
+                                      iconColor = token.colorError;
+                                      tooltipText = "EXPIRED";
+                                      Icon = WarningOutlined;
+                                  } else if (expDate <= alertLimitDate) {
+                                      iconColor = token.colorWarning;
+                                      tooltipText = "Expiring Soon";
+                                      Icon = WarningOutlined;
+                                  }
+                                  
+                                  return (
+                                      <Tooltip title={tooltipText} key="exp">
+                                          <Tag style={{ margin: 0, fontSize: '11px', border: 'none', background: 'transparent', color: iconColor, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                              <Icon /> {expDate.toLocaleDateString()}
+                                          </Tag>
+                                      </Tooltip>
+                                  );
+                              })()}
                               
                               {profile?.warranty_system_enabled !== false && item.warranty_days > 0 && (
                                 (() => {

@@ -3106,6 +3106,7 @@ async addCustomer(customerData) {
                 
                 if (expDate <= alertLimitDate) {
                     expiringItemsTemp.push({
+                        id: item.id, // <--- NAYA IZAFA: Item ki ID bhejni zaroori hai
                         product_id: item.product_id,
                         batch: item.batch_number,
                         expiry: item.expiry_date,
