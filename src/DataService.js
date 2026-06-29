@@ -2081,10 +2081,15 @@ async addCustomer(customerData) {
         productStock[prod.id] = (productStock[prod.id] || 0) + qty;
     });
 
+    // --- NAYA IZAFA: Global Threshold layein ---
+    const userProfileForLimit = await db.user_settings.toCollection().first();
+    const globalThreshold = userProfileForLimit?.low_stock_threshold || 5;
+
     // 4. Alerts & Lists
     const lowStockItems = products
-        .filter(p => (productStock[p.id] || 0) > 0 && (productStock[p.id] || 0) <= 5)
-        .map(p => ({ name: p.name, brand: p.brand, qty: productStock[p.id] }));
+        // NAYA IZAFA: Per-product limit check
+        .filter(p => (productStock[p.id] || 0) > 0 && (productStock[p.id] || 0) <= (p.low_stock_threshold || globalThreshold))
+        .map(p => ({ name: p.name, brand: p.brand, qty: productStock[p.id], current_qty: productStock[p.id] })); // current_qty added for reports export
 
     const outOfStockItems = products
         .filter(p => p.is_active !== false && (productStock[p.id] || 0) === 0)
@@ -3322,7 +3327,8 @@ async addCustomer(customerData) {
             ...product,
             quantity: stockCounts[product.id] || 0 
         }))
-        .filter(p => p.quantity <= threshold)
+        // NAYA IZAFA: Per-product threshold check
+        .filter(p => p.quantity <= (p.low_stock_threshold || threshold))
         .slice(0, 5);
 
     // --- NAYA IZAFA: Expiring Soon Items ko Product Name ke sath map karna ---

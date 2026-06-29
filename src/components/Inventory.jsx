@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useLocation, Link } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme, DatePicker } from 'antd';
-import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined, LockOutlined, PrinterOutlined } from '@ant-design/icons';
+import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme, DatePicker, Tooltip } from 'antd';
+import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined, LockOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -16,6 +16,7 @@ import AddPurchaseForm from './AddPurchaseForm';
 import ProductImageUpload from '../components/ProductImageUpload';
 import BarcodePrinter from '../components/BarcodePrinter';
 import ProductLedgerModal from '../components/ProductLedgerModal';
+import DataExport from '../components/DataExport';
 import { getPlanLimits } from '../config/subscriptionPlans';
 
 const { Title, Text } = Typography;
@@ -52,7 +53,7 @@ const formatPriceRange = (min, max, currency) => {
   return `${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`;
 };
 
-const ProductList = ({ showArchived, products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged, refFirstStock, onPrintBarcode, onViewLedger }) => {
+const ProductList = ({ isSingleColumn, showArchived, products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged, refFirstStock, onPrintBarcode, onViewLedger }) => {
   const { token } = theme.useToken(); // Control Center Connection
   const { profile } = useAuth();
   const limits = getPlanLimits(profile?.subscription_tier); // <--- NAYA IZAFA: Yahan limits ko define kar diya
@@ -123,7 +124,7 @@ const ProductList = ({ showArchived, products, categories, loading, onDelete, on
       <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
 
       <List
-        grid={{ gutter: 16, xs: 1, sm: 1, md: 2, lg: 2, xl: 2 }}
+        grid={isSingleColumn ? { gutter: 16, xs: 1, sm: 1, md: 1, lg: 1, xl: 1 } : { gutter: 16, xs: 1, sm: 1, md: 2, lg: 2, xl: 2 }}
         dataSource={memoizedProducts}
         rowKey="id"
         renderItem={(product) => (
@@ -362,6 +363,7 @@ const Inventory = () => {
   const refArchive = useRef(null);
   const refFirstStock = useRef(null); 
   const [showArchived, setShowArchived] = useState(false);
+  const [isSingleColumn, setIsSingleColumn] = useState(false); // <--- NAYA IZAFA: View Toggle State
   const searchInputRef = useRef(null);
   const productNameInputRef = useRef(null);
 
@@ -418,7 +420,8 @@ const Inventory = () => {
               hs_code: values.hs_code, // NAYA IZAFA: FBR
               uom: values.uom, // NAYA IZAFA: FBR
               image_url: values.image_url, // NAYA IZAFA: Image
-              rack_location: values.rack_location // <--- NAYA IZAFA: Location
+              rack_location: values.rack_location, // <--- NAYA IZAFA: Location
+              low_stock_threshold: values.low_stock_threshold || null // <--- NAYA IZAFA: Har product ki apni limit
           };
 
           // Professional Way: DataService ka function use karein jo local DB + Sync Queue dono handle karta hai
@@ -787,7 +790,8 @@ const Inventory = () => {
         barcode: values.barcode || null,
         min_sale_price: values.sale_price,
         max_sale_price: values.sale_price,
-        default_warranty_days: values.default_warranty_days || 0
+        default_warranty_days: values.default_warranty_days || 0,
+        low_stock_threshold: values.low_stock_threshold || null // <--- NAYA IZAFA: Har product ki apni limit
       };
 
       if (editingProduct) {
@@ -1070,36 +1074,126 @@ const Inventory = () => {
           </Col>
 
           {/* 4. Action Buttons (Filter Toggle & Reset) */}
-          <Col xs={24} sm={4} md={7} style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <Col xs={24} sm={4} md={7} style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
           
+             {/* Reset Button */}
+             <Tooltip title="Reset All Filters">
+               <Button 
+                  id="inv-reset-btn"
+                  icon={<ReloadOutlined />} 
+                  onClick={handleResetFilters} 
+                  type="text"
+                  size="small"
+                  style={{ color: token.colorTextSecondary }}
+               />
+             </Tooltip>
              
              {/* Filter Toggle Button */}
-             <Button 
-               ref={refFilters}
-               icon={<FilterOutlined />} 
-               onClick={() => setShowFilters(!showFilters)} 
-               type={showFilters ? 'primary' : 'default'}
-               title="More Filters" // Mouse rakhne par naam aayega
+             <Tooltip title="More Filters">
+               <Button 
+                 ref={refFilters}
+                 icon={<FilterOutlined />} 
+                 onClick={() => setShowFilters(!showFilters)} 
+                 type={showFilters ? 'primary' : 'text'}
+                 size="small"
+                 style={{ color: showFilters ? undefined : token.colorTextSecondary }}
+               />
+             </Tooltip>
+
+             {/* Archive Toggle Button */}
+             <Tooltip title={showArchived ? 'Back to Active Items' : 'View Archived Items'}>
+               <Button 
+                 ref={refArchive}
+                 icon={showArchived ? <RollbackOutlined /> : <InboxOutlined />} 
+                 onClick={() => setShowArchived(!showArchived)} 
+                 type={showArchived ? 'primary' : 'text'}
+                 danger={showArchived}
+                 size="small"
+                 style={{ color: showArchived ? undefined : token.colorTextSecondary }}
+               />
+             </Tooltip>
+
+             {/* View Mode Toggle Button */}
+             {!isMobile && (
+               <Tooltip title={isSingleColumn ? 'Grid View (2 Columns)' : 'List View (1 Column)'}>
+                 <Button 
+                   icon={isSingleColumn ? <AppstoreOutlined /> : <UnorderedListOutlined />} 
+                   onClick={() => setIsSingleColumn(!isSingleColumn)} 
+                   type="text"
+                   size="small"
+                   style={{ color: token.colorTextSecondary }}
+                 />
+               </Tooltip>
+             )}
+
+             {/* --- NAYA IZAFA: Inventory Export/Print Button --- */}
+             <DataExport 
+                data={(() => {
+                    const exportList = [];
+                    products.forEach(p => {
+                        // NAYA: Hum yahan p.variants ko use karenge aur khud group karenge
+                        if (p.variants && p.variants.length > 0) {
+                            const itemsMap = new Map();
+                            
+                            p.variants.forEach(v => {
+                                // Attributes ko ikatha karna
+                                let attrStr = '';
+                                if (v.item_attributes) {
+                                    const attrs = Object.entries(v.item_attributes)
+                                        .filter(([k, val]) => val && !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial'))
+                                        .map(([k, val]) => val);
+                                    attrStr = attrs.sort().join(', ');
+                                }
+                                
+                                // Grouping Key (Taake same batch aur variant jama ho jayein)
+                                const key = `${attrStr}-${v.sale_price}-${v.batch_number || 'nobatch'}-${v.expiry_date || 'noexp'}`;
+
+                                if (itemsMap.has(key)) {
+                                    const existing = itemsMap.get(key);
+                                    existing.stock += (v.available_qty || 0);
+                                } else {
+                                    itemsMap.set(key, {
+                                        name: p.name,
+                                        brand: p.brand || '-',
+                                        variant: attrStr || 'Standard',
+                                        batch: v.batch_number || '-',
+                                        expiry: v.expiry_date ? new Date(v.expiry_date).toLocaleDateString() : '-',
+                                        stock: v.available_qty || 0,
+                                        price: v.sale_price
+                                    });
+                                }
+                            });
+                            
+                            // Map se nikaal kar list mein daalna
+                            itemsMap.forEach(value => exportList.push(value));
+                        } else {
+                            // Agar stock 0 hai
+                            exportList.push({
+                                name: p.name,
+                                brand: p.brand || '-',
+                                variant: '-',
+                                batch: '-',
+                                expiry: '-',
+                                stock: 0,
+                                price: p.sale_price || '-'
+                            });
+                        }
+                    });
+                    return exportList;
+                })()} 
+                exportColumns={[
+                    { title: 'Product Name', dataIndex: 'name' },
+                    { title: 'Brand', dataIndex: 'brand' },
+                    { title: 'Details / Variant', dataIndex: 'variant' },
+                    { title: 'Batch No.', dataIndex: 'batch' },
+                    { title: 'Expiry', dataIndex: 'expiry' },
+                    { title: 'In Stock', dataIndex: 'stock' },
+                    { title: 'Sale Price', dataIndex: 'price' }
+                ]} 
+                fileName="Inventory_Physical_Stock" 
+                reportTitle="Physical Stock Audit Report" 
              />
 
-             {/* Archive Toggle Button (Icon Only) */}
-             <Button 
-               ref={refArchive}
-               icon={showArchived ? <RollbackOutlined /> : <InboxOutlined />} 
-               onClick={() => setShowArchived(!showArchived)} 
-               type={showArchived ? 'primary' : 'default'}
-               danger={showArchived}
-               // Tooltip: Taake user ko pata chale yeh button kya karta hai
-               title={showArchived ? 'Back to Active Items' : 'View Archived Items'}
-             />
-
-             {/* Reset Button (Icon Only) */}
-             <Button 
-                id="inv-reset-btn"
-                icon={<ReloadOutlined />} 
-                onClick={handleResetFilters} 
-                title="Reset All Filters" 
-             />
              {(() => {
                const limits = getPlanLimits(profile?.subscription_tier);
                const currentModelCount = totalModelCount; // <--- NAYA: Ab yeh Total ginega
@@ -1196,6 +1290,7 @@ const Inventory = () => {
       </div>
 
       <ProductList 
+        isSingleColumn={isSingleColumn} // <--- NAYA IZAFA
         products={products} 
         categories={categories}
         loading={loading} 
@@ -1254,24 +1349,34 @@ const Inventory = () => {
         onCancel={handleProductModalCancel} 
         okText={isImageUploading ? "Uploading..." : "Save Model"}
         okButtonProps={{ disabled: isImageUploading }}
+        width="70%" // <--- NAYA IZAFA: Pop-up ki churai 70% kar di
       >
         <Form form={productForm} layout="vertical" onFinish={handleProductOk} style={{marginTop: '24px'}}>
           {/* NAYA IZAFA: Hidden submit button taake Enter dabane se form save ho jaye */}
           <button type="submit" style={{ display: 'none' }} />
-          <Form.Item name="name" label="Product Name" rules={[{ required: true }]}>
-            <Input 
-              ref={productNameInputRef} 
-              placeholder="e.g. Apple 17" 
-            />
-          </Form.Item>
-          <Form.Item 
-            name="category_id" 
-            label="Category" 
-            rules={[{ required: true }]}
-            extra={<span>Can't find your category? <Link to="/categories">Create a new one here</Link></span>}
-          >
-            <Select placeholder="Select...">{categories.map(c => (<Option key={c.id} value={c.id}>{c.name}</Option>))}</Select>
-          </Form.Item>
+          
+          {/* NAYA IZAFA: Product Name aur Category ko ek hi row mein kar diya */}
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="name" label="Product Name" rules={[{ required: true }]}>
+                <Input 
+                  ref={productNameInputRef} 
+                  placeholder="e.g. Apple 17" 
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item 
+                name="category_id" 
+                label="Category" 
+                rules={[{ required: true }]}
+                extra={<span>Can't find your category? <Link to="/categories">Create a new one here</Link></span>}
+              >
+                <Select placeholder="Select...">{categories.map(c => (<Option key={c.id} value={c.id}>{c.name}</Option>))}</Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="brand" label="Brand" rules={[{ required: true }]}><Input /></Form.Item>
@@ -1332,12 +1437,21 @@ const Inventory = () => {
                 </Form.Item>
             </Col>
             {profile?.warranty_system_enabled !== false && (
-                <Col span={24}>
+                <Col span={12}>
                     <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)" tooltip="How many days warranty do you usually give to customers for this product?">
-                        <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330 (for 11 months)" />
+                        <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
                     </Form.Item>
                 </Col>
             )}
+            <Col span={profile?.warranty_system_enabled !== false ? 12 : 24}>
+                <Form.Item 
+                    name="low_stock_threshold" 
+                    label="Low Stock Warning At" 
+                    tooltip="If set, this will override the global low stock limit from Settings for this specific product. Leave empty to use global settings."
+                >
+                    <InputNumber style={{ width: '100%' }} min={1} placeholder={`Default: ${profile?.low_stock_threshold || 5}`} />
+                </Form.Item>
+            </Col>
           </Row>
 
           <Form.Item name="image_url" label="Product Image">
@@ -1491,11 +1605,24 @@ const Inventory = () => {
             </Row>
           )}
 
-          {profile?.warranty_system_enabled !== false && (
-              <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)">
-                <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
-              </Form.Item>
-          )}
+          <Row gutter={16}>
+            {profile?.warranty_system_enabled !== false && (
+                <Col span={12}>
+                  <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)">
+                    <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
+                  </Form.Item>
+                </Col>
+            )}
+            <Col span={profile?.warranty_system_enabled !== false ? 12 : 24}>
+                <Form.Item 
+                    name="low_stock_threshold" 
+                    label="Low Stock Warning At" 
+                    tooltip="If set, this will override the global low stock limit from Settings for this specific product. Leave empty to use global settings."
+                >
+                    <InputNumber style={{ width: '100%' }} min={1} placeholder={`Default: ${profile?.low_stock_threshold || 5}`} />
+                </Form.Item>
+            </Col>
+          </Row>
 
           <Form.Item name="image_url" label="Product Image">
             <ProductImageUpload onUploading={setIsImageUploading} />

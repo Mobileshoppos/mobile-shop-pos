@@ -4,6 +4,7 @@ import { db } from '../db';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { useAuth } from '../context/AuthContext';
 import dayjs from 'dayjs';
+import DataExport from './DataExport'; // <--- NAYA IZAFA
 
 const { Text, Title } = Typography;
 
@@ -120,9 +121,30 @@ const ProductLedgerModal = ({ visible, onClose, product }) => {
         }
     ];
 
+    // --- NAYA IZAFA: Export Columns define kiye ---
+    const exportColumns = [
+        { title: 'Date', dataIndex: 'date' },
+        { title: 'Type', dataIndex: 'type' },
+        { title: 'Quantity', dataIndex: 'qty' },
+        { title: 'Details', dataIndex: 'details' }
+    ];
+
     return (
         <Modal
-            title={<Title level={4} style={{ margin: 0 }}>Item Ledger / Overview</Title>}
+            title={
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '24px' }}>
+                    <Title level={4} style={{ margin: 0 }}>Item Ledger / Overview</Title>
+                    <DataExport 
+                        data={historyData.map(item => ({
+                            ...item,
+                            date: dayjs(item.date).format('DD MMM YYYY, hh:mm A')
+                        }))} 
+                        exportColumns={exportColumns} 
+                        fileName={`Ledger_${product?.name}`} 
+                        reportTitle={`Item Ledger: ${product?.name}`} 
+                    />
+                </div>
+            }
             open={visible}
             onCancel={onClose}
             footer={null}
