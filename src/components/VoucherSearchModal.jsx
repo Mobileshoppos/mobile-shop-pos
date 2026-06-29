@@ -318,7 +318,29 @@ const VoucherSearchModal = ({ open, onClose, autoSearchQuery = '' }) => {
           });
 
         } else {
-          setErrorMessage('System currently supports searching for EXP-, RCPT-, PAY-, RET-, ADJ-, PUR-, and Sale Invoices (e.g., F3935 or INV-F3935).');
+          // --- NAYA IZAFA: Agar Sale Invoice nahi mili, to Custom Purchase Invoice check karein ---
+          const customPurchase = await db.purchases.filter(p => (p.invoice_id || '').toUpperCase() === cleanQuery).first();
+          
+          if (customPurchase) {
+            const supplier = customPurchase.supplier_id ? await db.suppliers.get(customPurchase.supplier_id) : null;
+            const staff = customPurchase.staff_id ? await db.staff_members.get(customPurchase.staff_id) : null;
+            
+            setSearchedData({
+              id: customPurchase.id, 
+              type: 'Purchase Invoice', 
+              voucherNo: customPurchase.invoice_id, 
+              title: customPurchase.notes || 'Purchase Bill',
+              amount: customPurchase.total_amount, 
+              date: customPurchase.purchase_date || customPurchase.created_at, 
+              paymentMethod: customPurchase.amount_paid > 0 ? 'Cash/Bank' : 'Unpaid',
+              categoryName: supplier ? supplier.name : 'Unknown Supplier', 
+              staffName: staff ? staff.name : 'Owner / Admin', 
+              status: customPurchase.status.replace('_', ' ').toUpperCase() 
+            });
+          } else {
+            // Agar dono jagah nahi mila tab error dikhayein
+            setErrorMessage('Voucher not found! Try searching with exact prefixes (EXP-, RCPT-, PAY-, PUR-) or the exact custom Invoice Number.');
+          }
         }
       }
     } catch (error) {
