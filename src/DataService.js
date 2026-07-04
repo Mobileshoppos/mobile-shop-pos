@@ -2569,6 +2569,7 @@ async addCustomer(customerData) {
         }).forEach(s => {
             results.push({
                 id: s.id,
+                exact_time: s.sale_date || s.created_at, // <--- NAYA IZAFA: Waqt mehfooz kiya
                 ref_no: s.invoice_id || s.id.split('-')[0].toUpperCase(),
                 party_name: custMap[s.customer_id] || 'Walk-in Customer',
                 // FIX: toLowerCase() lagaya taake 'Paid' aur 'paid' dono ko sahi pakre
@@ -2590,6 +2591,7 @@ async addCustomer(customerData) {
         }).forEach(p => {
             results.push({
                 id: p.id,
+                exact_time: p.purchase_date || p.created_at, // <--- NAYA IZAFA
                 ref_no: p.invoice_id || p.id.split('-')[0].toUpperCase(),
                 party_name: suppMap[p.supplier_id] || 'Unknown Supplier',
                 description: p.status === 'paid' ? 'Cash Purchase' : 'Credit Purchase',
@@ -2611,6 +2613,7 @@ async addCustomer(customerData) {
         }).forEach(s => {
             results.push({
                 id: s.id,
+                exact_time: s.sale_date || s.created_at, // <--- NAYA IZAFA
                 ref_no: s.invoice_id || s.id.split('-')[0].toUpperCase(),
                 party_name: custMap[s.customer_id] || 'Walk-in Customer',
                 description: 'Cash Sale Receipt',
@@ -2635,6 +2638,7 @@ async addCustomer(customerData) {
 
             results.push({
                 id: p.id,
+                exact_time: p.created_at, // <--- NAYA IZAFA
                 ref_no: finalRefNo, 
                 party_name: custMap[p.customer_id] || 'Customer',
                 description: isReturn ? 'Sale Return' : 'Customer Payment', 
@@ -2656,6 +2660,7 @@ async addCustomer(customerData) {
         }).forEach(a => {
             results.push({
                 id: a.id,
+                exact_time: a.created_at, // <--- NAYA IZAFA
                 ref_no: a.voucher_no || ('ADJ-' + a.id.split('-')[0].toUpperCase()),
                 party_name: 'Internal',
                 description: a.notes || 'Manual Cash In',
@@ -2671,6 +2676,7 @@ async addCustomer(customerData) {
         }).forEach(r => {
             results.push({
                 id: r.id,
+                exact_time: r.refund_date || r.created_at, // <--- NAYA IZAFA
                 ref_no: r.voucher_no || ('RCPT-' + r.id.split('-')[0].toUpperCase()),
                 party_name: supMap[r.supplier_id] || 'Supplier',
                 description: r.notes || 'Supplier Refund',
@@ -2698,6 +2704,7 @@ async addCustomer(customerData) {
         }).forEach(p => {
             results.push({
                 id: p.id,
+                exact_time: p.payment_date || p.created_at, // <--- NAYA IZAFA
                 ref_no: p.voucher_no || ('PAY-' + p.id.split('-')[0].toUpperCase()), 
                 party_name: suppMap[p.supplier_id] || 'Supplier',
                 description: 'Supplier Payment',
@@ -2713,6 +2720,7 @@ async addCustomer(customerData) {
         }).forEach(e => {
             results.push({
                 id: e.id,
+                exact_time: e.expense_date || e.created_at, // <--- NAYA IZAFA
                 ref_no: e.voucher_no || ('EXP-' + e.id.split('-')[0].toUpperCase()), 
                 party_name: expMap[e.category_id] || 'Business Expense',
                 description: e.title || 'Operating Expense',
@@ -2734,6 +2742,7 @@ async addCustomer(customerData) {
         }).forEach(a => {
             results.push({
                 id: a.id,
+                exact_time: a.created_at, // <--- NAYA IZAFA
                 ref_no: a.voucher_no || ('ADJ-' + a.id.split('-')[0].toUpperCase()),
                 party_name: 'Internal',
                 description: a.notes || 'Manual Cash Out',
@@ -2755,6 +2764,7 @@ async addCustomer(customerData) {
 
             results.push({
                 id: p.id,
+                exact_time: p.created_at, // <--- NAYA IZAFA
                 ref_no: p.voucher_no || ('PAY-' + p.id.split('-')[0].toUpperCase()),
                 party_name: custMap[p.customer_id] || 'Customer',
                 description: desc,
@@ -2765,7 +2775,8 @@ async addCustomer(customerData) {
         });
     }
 
-    return results.sort((a, b) => b.amount - a.amount);
+    // NAYA IZAFA: Waqt ke hisaab se tarteeb (Nayi transaction oopar, Purani neeche)
+    return results.sort((a, b) => new Date(b.exact_time) - new Date(a.exact_time));
   },
 
 // --- EXPENSES SECTION ---

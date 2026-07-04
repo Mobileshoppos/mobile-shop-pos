@@ -99,20 +99,20 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
           
           if (selectedColumns.includes('sale') && row.sale > 0) {
             const res = await DataService.getDrillDownData(dateStr, 'sale');
-            allDetails.push(...res.map(r => ({ ...r, date: formattedDate, entry_type: 'Daily Sale' })));
+            allDetails.push(...res.map(r => ({ ...r, date_time: `${formattedDate}\n${dayjs(r.exact_time).format('hh:mm A')}`, entry_type: 'Daily Sale' })));
           }
           if (selectedColumns.includes('purchase') && row.purchase > 0) {
             const res = await DataService.getDrillDownData(dateStr, 'purchase');
-            allDetails.push(...res.map(r => ({ ...r, date: formattedDate, entry_type: 'Daily Purchase' })));
+            allDetails.push(...res.map(r => ({ ...r, date_time: `${formattedDate}\n${dayjs(r.exact_time).format('hh:mm A')}`, entry_type: 'Daily Purchase' })));
           }
           if (selectedColumns.includes('receipt') && row.receipt > 0) {
             const res = await DataService.getDrillDownData(dateStr, 'receipt');
-            allDetails.push(...res.map(r => ({ ...r, date: formattedDate, entry_type: 'Daily Receipt' })));
+            allDetails.push(...res.map(r => ({ ...r, date_time: `${formattedDate}\n${dayjs(r.exact_time).format('hh:mm A')}`, entry_type: 'Daily Receipt' })));
             totalReceipts += row.receipt;
           }
           if (selectedColumns.includes('payment') && row.payment > 0) {
             const res = await DataService.getDrillDownData(dateStr, 'payment');
-            allDetails.push(...res.map(r => ({ ...r, date: formattedDate, entry_type: 'Daily Payment' })));
+            allDetails.push(...res.map(r => ({ ...r, date_time: `${formattedDate}\n${dayjs(r.exact_time).format('hh:mm A')}`, entry_type: 'Daily Payment' })));
             totalPayments += row.payment;
           }
         }
@@ -140,7 +140,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
   }, [exportData, selectedColumns, exportFormat, isExportWizardOpen]);
 
   const detailedExportColumns = [
-    { title: 'Date', dataIndex: 'date' },
+    { title: 'Date & Time', dataIndex: 'date_time' },
     { title: 'Entry Type', dataIndex: 'entry_type' },
     { title: 'Ref No.', dataIndex: 'ref_no' },
     { title: 'Party / Category', dataIndex: 'party_name' },
@@ -208,6 +208,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
   ];
 
   const modalExportColumns = [
+    { title: 'Time', dataIndex: 'time_formatted' },
     { title: 'Ref No.', dataIndex: 'ref_no' },
     { title: 'Party / Category', dataIndex: 'party_name' },
     { title: 'Description', dataIndex: 'description' },
@@ -282,6 +283,13 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
   ];
 
   const modalColumns = [
+    { 
+      title: 'Time', 
+      dataIndex: 'exact_time', 
+      key: 'time', 
+      width: 100, 
+      render: (text) => <Text type="secondary">{dayjs(text).format('hh:mm A')}</Text> 
+    },
     { 
       title: 'Ref No.', 
       dataIndex: 'ref_no', 
@@ -372,6 +380,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
             <DataExport 
               data={modalData.map(item => ({
                 ...item,
+                time_formatted: dayjs(item.exact_time).format('hh:mm A'),
                 payment_mode: item.payment_mode || 'Cash'
               }))} 
               exportColumns={modalExportColumns} 
@@ -383,7 +392,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
         open={isModalVisible}
         onCancel={() => setIsModalVisible(false)}
         footer={null}
-        width={900} // FIX: Width barha kar 900 kar di
+        width={1050} // FIX: Width aur barha di taake scrollbar na aaye
         centered
       >
         {modalLoading ? (
@@ -401,7 +410,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
               pageData.forEach(({ amount }) => { totalAmount += amount; });
               return (
                 <Table.Summary.Row style={{ background: token.colorFillAlter }}>
-                  <Table.Summary.Cell index={0} colSpan={4}><Text strong>Total</Text></Table.Summary.Cell>
+                  <Table.Summary.Cell index={0} colSpan={5}><Text strong>Total</Text></Table.Summary.Cell>
                   <Table.Summary.Cell index={1} align="right"><Text strong style={{ fontSize: '16px', color: token.colorPrimary }}>{formatCurrency(totalAmount, profile?.currency)}</Text></Table.Summary.Cell>
                 </Table.Summary.Row>
               );
