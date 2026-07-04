@@ -35,6 +35,8 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
   const [selectedColumns, setSelectedColumns] = useState(['sale', 'purchase', 'receipt', 'payment', 'net']); // <--- NAYA IZAFA: 'net' added
   const [exportData, setExportData] = useState([]);
   const [exportLoading, setExportLoading] = useState(false);
+  const [exportFormat, setExportFormat] = useState('summary'); // <--- NAYA IZAFA: Format State
+  const [detailedExportData, setDetailedExportData] = useState([]); // <--- NAYA IZAFA: Detailed Data State
 
   // Jab user wizard mein date badle to back-end se data on-the-fly fetch ho
   const handleExportRangeChange = async (type, dates) => {
@@ -79,6 +81,74 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       setExportLoading(false);
     }
   };
+
+  // --- NAYA IZAFA: Detailed Data Fetching Logic ---
+  useEffect(() => {
+    const fetchDetailedData = async () => {
+      if (!isExportWizardOpen || exportFormat !== 'detailed' || exportData.length === 0) return;
+      
+      setExportLoading(true);
+      try {
+        let allDetails = [];
+        let totalReceipts = 0;
+        let totalPayments = 0;
+
+        for (const row of exportData) {
+          const dateStr = row.date;
+          const formattedDate = dayjs(dateStr).format('DD-MMM-YYYY');
+          
+          if (selectedColumns.includes('sale') && row.sale > 0) {
+            const res = await DataService.getDrillDownData(dateStr, 'sale');
+            allDetails.push(...res.map(r => ({ ...r, date: formattedDate, entry_type: 'Daily Sale' })));
+          }
+          if (selectedColumns.includes('purchase') && row.purchase > 0) {
+            const res = await DataService.getDrillDownData(dateStr, 'purchase');
+            allDetails.push(...res.map(r => ({ ...r, date: formattedDate, entry_type: 'Daily Purchase' })));
+          }
+          if (selectedColumns.includes('receipt') && row.receipt > 0) {
+            const res = await DataService.getDrillDownData(dateStr, 'receipt');
+            allDetails.push(...res.map(r => ({ ...r, date: formattedDate, entry_type: 'Daily Receipt' })));
+            totalReceipts += row.receipt;
+          }
+          if (selectedColumns.includes('payment') && row.payment > 0) {
+            const res = await DataService.getDrillDownData(dateStr, 'payment');
+            allDetails.push(...res.map(r => ({ ...r, date: formattedDate, entry_type: 'Daily Payment' })));
+            totalPayments += row.payment;
+          }
+        }
+
+        // --- NAYA IZAFA: Totals at the bottom of the report ---
+        if (allDetails.length > 0) {
+            allDetails.push({ date: '', entry_type: '', ref_no: '', party_name: '', description: '-------------------------', payment_mode: '', amount: '----------' });
+            allDetails.push({ date: '', entry_type: '', ref_no: '', party_name: '', description: 'TOTAL RECEIPTS:', payment_mode: '', amount: totalReceipts });
+            allDetails.push({ date: '', entry_type: '', ref_no: '', party_name: '', description: 'TOTAL PAYMENTS:', payment_mode: '', amount: totalPayments });
+            
+            const netFlow = totalReceipts - totalPayments;
+            const netText = netFlow >= 0 ? `+${netFlow}` : `${netFlow}`;
+            allDetails.push({ date: '', entry_type: '', ref_no: '', party_name: '', description: 'NET CASH FLOW (DAILY NET):', payment_mode: '', amount: netText });
+        }
+
+        setDetailedExportData(allDetails);
+      } catch (error) {
+        console.error("Error fetching detailed data:", error);
+      } finally {
+        setExportLoading(false);
+      }
+    };
+
+    fetchDetailedData();
+  }, [exportData, selectedColumns, exportFormat, isExportWizardOpen]);
+
+  const detailedExportColumns = [
+    { title: 'Date', dataIndex: 'date' },
+    { title: 'Entry Type', dataIndex: 'entry_type' },
+    { title: 'Ref No.', dataIndex: 'ref_no' },
+    { title: 'Party / Category', dataIndex: 'party_name' },
+    { title: 'Description', dataIndex: 'description' },
+    { title: 'Mode', dataIndex: 'payment_mode' },
+    { title: 'Amount', dataIndex: 'amount' }
+  ];
+  // ------------------------------------------------
 
   // Checkboxes ke mutabiq dynamic columns banana
   const dynamicExportColumns = [
@@ -359,23 +429,28 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
               setExportDateRangeType('current');
               setExportCustomDates([]);
               setSelectedColumns(['sale', 'purchase', 'receipt', 'payment', 'net']); // <--- Reset adjusted
+              setExportFormat('summary'); // <--- NAYA IZAFA
+              setDetailedExportData([]); // <--- NAYA IZAFA
             }}
             footer={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text type="secondary" style={{ fontSize: '11px' }}>
-                  {exportLoading ? 'Loading data...' : `${exportData.length} Days Selected`}
+                  {exportLoading ? 'Loading data...' : `${exportData.length} ${exportData.length === 1 ? 'Day' : 'Days'} with Activity`}
                 </Text>
                 <Space>
                   {exportData.length > 0 && !exportLoading && (
                     <DataExport
-                      data={exportData.map(item => ({
-                        ...item,
-                        formattedDate: dayjs(item.date).format('DD-MMM-YYYY'),
-                        net_flow: (item.receipt || 0) - (item.payment || 0) // <--- NAYA IZAFA: Calculate net cash flow for export
-                      }))}
-                      exportColumns={dynamicExportColumns} // <--- Dynamic columns automatically apply
-                      fileName="Daily_Financial_Summary"
-                      reportTitle="Daily Financial Summary (Day Book)"
+                      data={exportFormat === 'detailed' 
+                        ? detailedExportData 
+                        : exportData.map(item => ({
+                            ...item,
+                            formattedDate: dayjs(item.date).format('DD-MMM-YYYY'),
+                            net_flow: (item.receipt || 0) - (item.payment || 0)
+                          }))
+                      }
+                      exportColumns={exportFormat === 'detailed' ? detailedExportColumns : dynamicExportColumns}
+                      fileName={exportFormat === 'detailed' ? "Detailed_Day_Book" : "Daily_Financial_Summary"}
+                      reportTitle={exportFormat === 'detailed' ? "Detailed Day Book Report" : "Daily Financial Summary (Day Book)"}
                     />
                   )}
                   <Button onClick={() => {
@@ -383,6 +458,8 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
                     setExportDateRangeType('current');
                     setExportCustomDates([]);
                     setSelectedColumns(['sale', 'purchase', 'receipt', 'payment', 'net']); // <--- Reset adjusted
+                    setExportFormat('summary'); // <--- NAYA IZAFA
+                    setDetailedExportData([]); // <--- NAYA IZAFA
                   }}>Close</Button>
                 </Space>
               </div>
@@ -459,8 +536,30 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
             </Form.Item>
           )}
 
-          {/* 2. Columns Selection */}
-          <Form.Item label={<Text strong>2. Select Columns to Include</Text>}>
+          {/* --- NAYA IZAFA: Export Format Selection --- */}
+          <Form.Item label={<Text strong>2. Select Export Format</Text>}>
+            <Radio.Group 
+              value={exportFormat} 
+              onChange={(e) => setExportFormat(e.target.value)}
+              buttonStyle="solid"
+              style={{ width: '100%', display: 'flex' }}
+            >
+              <Radio.Button value="summary" style={{ flex: 1, textAlign: 'center' }}>
+                Summary (Totals Only)
+              </Radio.Button>
+              <Radio.Button value="detailed" style={{ flex: 1, textAlign: 'center' }}>
+                Detailed (All Transactions)
+              </Radio.Button>
+            </Radio.Group>
+            {exportFormat === 'detailed' && (
+              <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
+                * Detailed export will combine every single transaction for the selected dates into one master file.
+              </Text>
+            )}
+          </Form.Item>
+
+          {/* 3. Columns Selection */}
+          <Form.Item label={<Text strong>3. Select Columns to Include</Text>}>
                 <Checkbox.Group
                   value={selectedColumns}
                   onChange={(vals) => {

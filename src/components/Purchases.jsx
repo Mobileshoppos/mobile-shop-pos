@@ -91,13 +91,6 @@ const Purchases = () => {
     };
 
     const handleOpenAddModal = () => {
-        if (!navigator.onLine) {
-            notification.error({
-                message: 'Offline',
-                description: 'You need an internet connection to add new stock.',
-            });
-            return;
-        }
         setIsAddModalVisible(true);
     };
 

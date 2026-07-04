@@ -2487,7 +2487,8 @@ async addCustomer(customerData) {
     // 3. Udhaar ki Wusooli (Receipts)
     allReceipts.forEach(r => {
         const t = new Date(r.created_at).getTime();
-        if (t >= startMs && t <= endMs) {
+        // FIX: Negative amount (returns) ko ignore karein taake double counting na ho
+        if (t >= startMs && t <= endMs && (r.amount_paid || 0) > 0) {
             const dateStr = new Date(t).toISOString().split('T')[0];
             initDate(dateStr);
             summaryMap[dateStr].receipt += (r.amount_paid || 0);
@@ -2621,7 +2622,8 @@ async addCustomer(customerData) {
 
         payments.filter(p => {
             const t = new Date(p.created_at).getTime();
-            return t >= startMs && t <= endMs;
+            // FIX: Sirf aisi payments jo 0 se zyada hon (Negative returns ko ignore karein)
+            return t >= startMs && t <= endMs && (p.amount_paid || 0) > 0;
         }).forEach(p => {
             const isReturn = p.amount_paid < 0;
             let finalRefNo = p.voucher_no || ((isReturn ? 'RET-' : 'RCPT-') + p.id.split('-')[0].toUpperCase());
@@ -2635,7 +2637,7 @@ async addCustomer(customerData) {
                 id: p.id,
                 ref_no: finalRefNo, 
                 party_name: custMap[p.customer_id] || 'Customer',
-                description: isReturn ? 'Sale Return' : 'Customer Payment', // <--- FIX: Description theek ho gayi
+                description: isReturn ? 'Sale Return' : 'Customer Payment', 
                 amount: p.amount_paid,
                 payment_mode: p.payment_method || 'Cash', 
                 link: '/customers' 
