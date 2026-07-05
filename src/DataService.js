@@ -2356,6 +2356,64 @@ async addCustomer(customerData) {
     };
   },
 
+  // --- NAYA IZAFA: BALANCE SHEET DATA ---
+  async getBalanceSheetData() {
+    // 1. Udhaar aur Wajibat (Ledger Data)
+    const ledger = await this.getLedgerReport();
+    
+    // 2. Dukan ka Maal (Inventory Value)
+    const inventory = await this.getInventoryReport();
+    
+    // 3. Cash aur Bank Balances
+    const allRegs = await db.registers.toArray();
+    let totalCash = 0;
+    for (const reg of allRegs) {
+        totalCash += await this.getRegisterCurrentCash(reg.id);
+    }
+    
+    let totalBank = 0;
+    const accounts = await db.payment_accounts.toArray();
+    for (const acc of accounts) {
+        if (acc.type !== 'Cash') {
+            const accLedger = await this.getBankAccountLedger(acc.name);
+            let bal = Number(acc.opening_balance) || 0;
+            accLedger.forEach(tx => {
+                if (tx.type === 'Credit (In)') bal += Number(tx.amount);
+                if (tx.type === 'Debit (Out)') bal -= Number(tx.amount);
+            });
+            totalBank += bal;
+        }
+    }
+
+    // 4. Assets (Aasaasay)
+    const assets = {
+        cash: totalCash,
+        bank: totalBank,
+        receivables: ledger.grandTotalReceivable, // Customers + Staff Advances
+        inventory: inventory.totalAssetValue
+    };
+    const totalAssets = assets.cash + assets.bank + assets.receivables + assets.inventory;
+    
+    // 5. Liabilities (Wajibat)
+    const liabilities = {
+        payables: ledger.grandTotalPayable, // Suppliers + Staff Salaries Due + Customer Credits
+    };
+    const totalLiabilities = liabilities.payables;
+    
+    // 6. Equity (Sarmaya / Net Worth) = Assets - Liabilities
+    const equity = totalAssets - totalLiabilities;
+
+    return {
+        date: new Date().toISOString(),
+        assets,
+        totalAssets,
+        liabilities,
+        totalLiabilities,
+        equity,
+        totalLiabilitiesAndEquity: totalLiabilities + equity
+    };
+  },
+
   // 4. Chart Data (Graph ke liye)
   async getDashboardCharts(startDateStr, endDateStr) {
     const start = new Date(startDateStr).getTime();

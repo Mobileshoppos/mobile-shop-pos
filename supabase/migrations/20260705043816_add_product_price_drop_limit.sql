@@ -1,0 +1,1 @@
+ALTER TABLE public.products ADD COLUMN price_drop_limit numeric;

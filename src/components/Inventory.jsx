@@ -404,7 +404,8 @@ const Inventory = () => {
           hs_code: product.hs_code, // NAYA IZAFA: FBR
           uom: product.uom, // NAYA IZAFA: FBR
           image_url: product.image_url, // NAYA IZAFA: Image
-          rack_location: product.rack_location // <--- NAYA IZAFA: Location
+          rack_location: product.rack_location, // <--- NAYA IZAFA: Location
+          price_drop_limit: product.price_drop_limit // <--- NAYA IZAFA: Product Level Limit
       });
       setIsProductEditModalOpen(true);
   };
@@ -421,7 +422,8 @@ const Inventory = () => {
               uom: values.uom, // NAYA IZAFA: FBR
               image_url: values.image_url, // NAYA IZAFA: Image
               rack_location: values.rack_location, // <--- NAYA IZAFA: Location
-              low_stock_threshold: values.low_stock_threshold || null // <--- NAYA IZAFA: Har product ki apni limit
+              low_stock_threshold: values.low_stock_threshold ?? null,
+              price_drop_limit: values.price_drop_limit ?? null
           };
 
           // Professional Way: DataService ka function use karein jo local DB + Sync Queue dono handle karta hai
@@ -728,7 +730,8 @@ const Inventory = () => {
           hs_code: product.hs_code, // NAYA IZAFA: FBR
           uom: product.uom, // NAYA IZAFA: FBR
           image_url: product.image_url, // NAYA IZAFA: Image
-          rack_location: product.rack_location // <--- NAYA IZAFA: Location
+          rack_location: product.rack_location, // <--- NAYA IZAFA: Location
+          price_drop_limit: product.price_drop_limit // <--- NAYA IZAFA: Product Level Limit
       });
       setIsProductModalOpen(true);
   };
@@ -791,7 +794,8 @@ const Inventory = () => {
         min_sale_price: values.sale_price,
         max_sale_price: values.sale_price,
         default_warranty_days: values.default_warranty_days || 0,
-        low_stock_threshold: values.low_stock_threshold || null // <--- NAYA IZAFA: Har product ki apni limit
+        low_stock_threshold: values.low_stock_threshold ?? null,
+        price_drop_limit: values.price_drop_limit ?? null
       };
 
       if (editingProduct) {
@@ -1454,6 +1458,19 @@ const Inventory = () => {
             </Col>
           </Row>
 
+          {/* NAYA IZAFA: Product Level Price Drop Limit */}
+          <Row gutter={16}>
+            <Col span={24}>
+                <Form.Item 
+                    name="price_drop_limit" 
+                    label="Max Price Drop Limit (%)" 
+                    tooltip="Override the global price drop limit for this specific product. E.g., put 0 to block any discount, or 50 for clearance items."
+                >
+                    <InputNumber style={{ width: '100%' }} min={0} max={100} addonAfter="%" placeholder={`Default: ${profile?.price_drop_limit || 5}%`} />
+                </Form.Item>
+            </Col>
+          </Row>
+
           <Form.Item name="image_url" label="Product Image">
             <ProductImageUpload onUploading={setIsImageUploading} />
           </Form.Item>
@@ -1620,6 +1637,19 @@ const Inventory = () => {
                     tooltip="If set, this will override the global low stock limit from Settings for this specific product. Leave empty to use global settings."
                 >
                     <InputNumber style={{ width: '100%' }} min={1} placeholder={`Default: ${profile?.low_stock_threshold || 5}`} />
+                </Form.Item>
+            </Col>
+          </Row>
+
+          {/* NAYA IZAFA: Product Level Price Drop Limit */}
+          <Row gutter={16}>
+            <Col span={24}>
+                <Form.Item 
+                    name="price_drop_limit" 
+                    label="Max Price Drop Limit (%)" 
+                    tooltip="Override the global price drop limit for this specific product. E.g., put 0 to block any discount, or 50 for clearance items."
+                >
+                    <InputNumber style={{ width: '100%' }} min={0} max={100} addonAfter="%" placeholder={`Default: ${profile?.price_drop_limit || 5}%`} />
                 </Form.Item>
             </Col>
           </Row>

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import DataService from '../DataService';
+import BalanceSheet from '../components/BalanceSheet'; // <--- NAYA IZAFA
 import { db } from '../db';
 import dayjs from 'dayjs';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -40,6 +41,7 @@ ChartJS.register(
 import {
   DashboardOutlined,
   LineChartOutlined,
+  TableOutlined, // <--- NAYA IZAFA
   DollarOutlined,
   InboxOutlined,
   BookOutlined,
@@ -2058,6 +2060,11 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
       key: 'vault_flow',
       label: <span><ShopOutlined /> Account Ledgers</span>,
       children: renderVaultFlowTab(),
+    },
+    {
+      key: 'balance_sheet',
+      label: <span><TableOutlined /> Balance Sheet</span>,
+      children: <BalanceSheet />, // <--- NAYA IZAFA
     },
   ];
 

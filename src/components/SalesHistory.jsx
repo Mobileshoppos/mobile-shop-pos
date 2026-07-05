@@ -133,6 +133,7 @@ const SalesHistory = () => {
                 // Agar staff_id hai toh uska naam dikhao, warna 'Owner'
                 salesperson_name: staffMap[sale.staff_id] || 'Owner', 
                 payment_method: sale.payment_method || 'Cash',
+                notes: sale.notes, // <--- NAYA IZAFA
                 sync_status: status,
                 sync_error: errorMsg
             };
@@ -273,7 +274,8 @@ const SalesHistory = () => {
     { title: 'Method', dataIndex: 'payment_method' },
     { title: 'Total Amount', dataIndex: 'total_amount' },
     { title: 'Payment Status', dataIndex: 'payment_status' },
-    { title: 'Salesperson', dataIndex: 'salesperson_name' }
+    { title: 'Salesperson', dataIndex: 'salesperson_name' },
+    { title: 'Audit Remarks', dataIndex: 'notes' } // <--- NAYA IZAFA
   ];
 
   const columns = [
@@ -383,6 +385,18 @@ const SalesHistory = () => {
       dataIndex: 'salesperson_name',
       key: 'salesperson_name',
       width: 110,
+    },
+    {
+      title: 'Audit / Note',
+      dataIndex: 'notes',
+      key: 'notes',
+      width: 120,
+      align: 'center',
+      render: (notes) => notes ? (
+        <Tooltip title={notes}>
+          <Tag color="purple" style={{ cursor: 'pointer', margin: 0 }}>View Audit</Tag>
+        </Tooltip>
+      ) : <Text type="secondary">-</Text>
     },
     {
       title: 'Actions',

@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN price_drop_limit numeric DEFAULT 100;

@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN show_live_profit_pos boolean DEFAULT false;

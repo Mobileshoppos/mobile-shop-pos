@@ -106,8 +106,11 @@ const POS = () => {
   const [isMasterPinModalVisible, setIsMasterPinModalVisible] = useState(false);
   const [pendingDiscountValue, setPendingDiscountValue] = useState(0);
   const [masterPinInput, setMasterPinInput] = useState('');
-  const [masterPinAction, setMasterPinAction] = useState(null); // <--- NAYA IZAFA (Pehchanne ke liye ke PIN kis kaam ke liye hai)
+  const [masterPinAction, setMasterPinAction] = useState(null); 
+  const [auditRemark, setAuditRemark] = useState(''); // <--- NAYA IZAFA: Wajah likhne ke liye
+  const [saleNotes, setSaleNotes] = useState(''); // <--- NAYA IZAFA: Bill ke sath save karne ke liye
   const [pendingCustomerValues, setPendingCustomerValues] = useState(null); // <--- NAYA IZAFA
+  const [pendingPriceChange, setPendingPriceChange] = useState(null); // <--- NAYA IZAFA
   const [lastSaleData, setLastSaleData] = useState(null);
   const searchInputRef = useRef(null);
   const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
@@ -639,6 +642,34 @@ const POS = () => {
     setSearchTerm(value || ''); 
   };
 
+  const validatePriceDrop = (item) => {
+    const originalPrice = item.retail_price || item.sale_price;
+    
+    // 1. Pehle Product ki apni limit check karein, warna Global limit
+    const parentProduct = allProducts.find(p => p.id === item.product_id);
+    const dropLimitPercent = (parentProduct?.price_drop_limit !== undefined && parentProduct?.price_drop_limit !== null)
+                             ? parentProduct.price_drop_limit 
+                             : (profile?.price_drop_limit !== undefined ? profile.price_drop_limit : 5);
+    
+    let minAllowedPrice = originalPrice - (originalPrice * dropLimitPercent / 100);
+
+    // 2. ULTIMATE SAFETY: Khareed Qeemat (Purchase Price) se neechay kabhi na jaye!
+    const purchasePrice = item.purchase_price || 0;
+    if (minAllowedPrice < purchasePrice) {
+        minAllowedPrice = purchasePrice; // Nuqsan se bachne ke liye limit ko purchase price par set kar diya
+    }
+
+    // Owner ho ya Staff, dono ke liye check taake typo se bacha ja sake
+    if (item.sale_price < minAllowedPrice && !item.is_price_authorized) {
+      setPendingPriceChange({ item, originalPrice }); // originalPrice save kar rahe hain taake cancel hone par wapis la sakein
+      setMasterPinAction('price_drop');
+      setIsMasterPinModalVisible(true);
+    } else if (item.sale_price >= minAllowedPrice) {
+      // Agar price theek kar di gayi hai, to authorization hata dein
+      handleCartItemUpdate(item, 'is_price_authorized', false);
+    }
+  };
+
   const handleCartItemUpdate = (itemToUpdate, field, value) => {
     setCart(cart.map(item => {
       if (item.variant_id === itemToUpdate.variant_id && (item.batch_number || null) === (itemToUpdate.batch_number || null) && (item.expiry_date || null) === (itemToUpdate.expiry_date || null)) {
@@ -683,6 +714,51 @@ const POS = () => {
     if (paymentMethod === 'Unpaid' && !selectedCustomer) { message.error('Please select a customer for a credit (Pay Later) sale.'); return; }
     if (paymentMethod === 'Unpaid' && amountPaid > grandTotal) { message.error('Amount paid cannot be greater than the grand total.'); return; }
     
+    // --- NAYA IZAFA: Final Price Drop Check on Checkout ---
+    const unauthorizedItem = cart.find(item => {
+        const originalPrice = item.retail_price || item.sale_price;
+        
+        const parentProduct = allProducts.find(p => p.id === item.product_id);
+        const dropLimitPercent = (parentProduct?.price_drop_limit !== undefined && parentProduct?.price_drop_limit !== null)
+                                 ? parentProduct.price_drop_limit 
+                                 : (profile?.price_drop_limit !== undefined ? profile.price_drop_limit : 5);
+        
+        let minAllowedPrice = originalPrice - (originalPrice * dropLimitPercent / 100);
+        
+        const purchasePrice = item.purchase_price || 0;
+        if (minAllowedPrice < purchasePrice) {
+            minAllowedPrice = purchasePrice;
+        }
+
+        return item.sale_price < minAllowedPrice && !item.is_price_authorized;
+    });
+
+    if (unauthorizedItem) {
+        const originalPrice = unauthorizedItem.retail_price || unauthorizedItem.sale_price;
+        setPendingPriceChange({ item: unauthorizedItem, originalPrice });
+        setMasterPinAction('price_drop');
+        setIsMasterPinModalVisible(true);
+        return; // Sale yahin rok dein, modal khul jayega
+    }
+
+    // --- NAYA IZAFA: Grand Audit Check for Bill Discount & Loss ---
+    if (discount > 0 && !window.isDiscountAuthorized) {
+        const totalCartCost = cart.reduce((sum, item) => sum + ((item.purchase_price || 0) * item.quantity), 0);
+        const isBelowCost = totalAfterDiscount < totalCartCost;
+
+        const limit = profile?.staff_discount_limit || 10;
+        let finalDiscountPercent = discountType === 'Percentage' ? discount : (subtotal > 0 ? (discount / subtotal) * 100 : 0);
+        const exceedsStaffLimit = activeStaff && finalDiscountPercent > limit;
+
+        if (isBelowCost || exceedsStaffLimit) {
+            setPendingDiscountValue(discount);
+            setMasterPinAction(isBelowCost ? 'below_cost_bill' : 'discount');
+            setIsMasterPinModalVisible(true);
+            return; // Sale yahin rok dein
+        }
+    }
+    // --------------------------------------------------------------
+
     const udhaarAmount = grandTotal - amountPaid;
     
     // --- NAYA IZAFA: Customer Credit Limit Check ---
@@ -810,7 +886,8 @@ const POS = () => {
               created_at: saleDate,
               // --- NAYA IZAFA: FBR Data ---
               fbr_invoice_number: fbrInvoiceNumber,
-              fbr_fee_applied: profile?.fbr_integration_enabled ? (profile?.fbr_fee || 1) : 0
+              fbr_fee_applied: profile?.fbr_integration_enabled ? (profile?.fbr_fee || 1) : 0,
+              notes: saleNotes // <--- NAYA IZAFA: Bill ke sath wajah save karein
               // ----------------------------
           };
 
@@ -1065,6 +1142,7 @@ const POS = () => {
         setAmountPaid(0);
         setDiscount(0);
         setDiscountType('Amount');
+        setSaleNotes(''); // <--- NAYA IZAFA: Agli sale ke liye saaf kar dein
         await DataService.clearActiveCart(); // Persistence saaf karein
         
         const { productsData } = await DataService.getInventoryData();
@@ -1213,34 +1291,39 @@ const POS = () => {
   const handleResetCart = () => { modal.confirm({ title: 'Reset Bill?', content: 'Are you sure you want to remove all items from the current bill?', okText: 'Yes, Reset', cancelText: 'No', onOk: async () => { setCart([]); setDiscount(0); setAmountPaid(0); setSelectedCustomer(null); await DataService.clearActiveCart(); message.success('Bill has been reset.'); } }); };
 
   const onDiscountChange = (value) => {
+    setDiscount(value || 0);
+    window.isDiscountAuthorized = false; // Value change hone par authorization reset karein
+  };
+
+  const validateBillDiscount = () => {
+    if (cart.length === 0 || discount === 0) return;
+
+    // 1. Check Total Cost vs Final Amount (Nuqsan se bachne ke liye)
+    const totalCartCost = cart.reduce((sum, item) => sum + ((item.purchase_price || 0) * item.quantity), 0);
+    let discountAmountCalc = discountType === 'Amount' ? discount : (subtotal * discount) / 100;
+    const totalAfterDiscountCalc = Math.max(0, subtotal - discountAmountCalc);
+
+    const isBelowCost = totalAfterDiscountCalc < totalCartCost;
+
+    // 2. Check Staff Discount Limit
     const limit = profile?.staff_discount_limit || 10;
-    
-    // Agar Owner hai (activeStaff null hai), to koi limit nahi
-    if (!activeStaff) {
-      setDiscount(value || 0);
-      return;
-    }
+    let finalDiscountPercent = discountType === 'Percentage' ? discount : (subtotal > 0 ? (discount / subtotal) * 100 : 0);
+    const exceedsStaffLimit = activeStaff && finalDiscountPercent > limit; // Staff limit sirf staff par lagti hai
 
-    // Calculation: % mein kitna discount ban raha hai?
-    let discountPercent = 0;
-    if (discountType === 'Percentage') {
-      discountPercent = value;
+    // Owner aur Staff dono ko nuqsan (below cost) par warning aayegi taake ghalti se bacha ja sake
+    if (isBelowCost || exceedsStaffLimit) {
+        setPendingDiscountValue(discount);
+        setMasterPinAction(isBelowCost ? 'below_cost_bill' : 'discount');
+        setIsMasterPinModalVisible(true);
     } else {
-      discountPercent = subtotal > 0 ? ((value || 0) / subtotal) * 100 : 0;
-    }
-
-    // Check: Kya limit cross ho rahi hai?
-    if (discountPercent > limit) {
-      setPendingDiscountValue(value || 0);
-      setMasterPinAction('discount'); // <--- NAYA IZAFA
-      setIsMasterPinModalVisible(true); // PIN Modal khol dein
-    } else {
-      setDiscount(value || 0);
+        window.isDiscountAuthorized = true; // Agar sab theek hai to pass kar dein
     }
   };
 
   const handleMasterPinVerify = () => {
     if (verifyMasterPin(masterPinInput)) {
+      let newNote = ''; // <--- NAYA IZAFA
+
       if (masterPinAction === 'credit_limit') {
           window.creditLimitAuthorizedForThisSale = true;
           setIsMasterPinModalVisible(false);
@@ -1255,12 +1338,36 @@ const POS = () => {
           setMasterPinAction(null);
           message.success("Customer credit limit approved by Admin.");
           processSaveCustomer(pendingCustomerValues);
+      } else if (masterPinAction === 'price_drop') {
+          newNote = `[Price Drop on ${pendingPriceChange.item.product_name || 'Item'}: ${auditRemark || 'Approved by Admin'}]`;
+          handleCartItemUpdate(pendingPriceChange.item, 'is_price_authorized', true);
+          setIsMasterPinModalVisible(false);
+          setMasterPinInput('');
+          setAuditRemark('');
+          setMasterPinAction(null);
+          setPendingPriceChange(null);
+          message.success("Price drop approved by Admin.");
+      } else if (masterPinAction === 'below_cost_bill' || masterPinAction === 'discount') {
+          newNote = `[Bill Discount: ${auditRemark || 'Approved by Admin'}]`;
+          setDiscount(pendingDiscountValue);
+          window.isDiscountAuthorized = true; 
+          setIsMasterPinModalVisible(false);
+          setMasterPinInput('');
+          setAuditRemark('');
+          setMasterPinAction(null);
+          message.success("Bill discount approved by Admin.");
       } else {
           setDiscount(pendingDiscountValue);
           setIsMasterPinModalVisible(false);
           setMasterPinInput('');
+          setAuditRemark('');
           setMasterPinAction(null);
-          message.success("Discount approved by Admin.");
+          message.success("Approved by Admin.");
+      }
+
+      // NAYA IZAFA: Sale Notes mein wajah add karein
+      if (newNote) {
+          setSaleNotes(prev => prev ? `${prev} | ${newNote}` : newNote);
       }
     } else {
       message.error("Invalid Master PIN!");
@@ -1372,7 +1479,7 @@ const POS = () => {
         </Title>
       )}
       <Row gutter={16}>
-        <Col xs={24} md={14}>
+        <Col xs={24} md={13}>
           <Card variant="borderless" style={{ background: 'transparent', boxShadow: 'none' }} styles={{ body: { padding: isMobile ? '8px 0' : '0 0px 0 0', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 110px)' } }}>
             {/* === ROW 1: SEARCH, CATEGORY, BUTTONS === */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
@@ -1786,7 +1893,7 @@ const POS = () => {
             />
           </Card>
         </Col>
-        <Col xs={24} md={10}>
+        <Col xs={24} md={11}>
           <Card variant="borderless" style={{ background: 'transparent', boxShadow: 'none' }} styles={{ body: { padding: isMobile ? '16px 0 0 0' : '0 0 0 16px', borderLeft: isMobile ? 'none' : `1px solid ${token.colorBorderSecondary}`, borderTop: isMobile ? `1px solid ${token.colorBorderSecondary}` : 'none', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 110px)' } }}>
             {/* --- TOP ROW: Current Bill, Customer Select & Reset --- */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
@@ -1914,7 +2021,16 @@ const POS = () => {
                             {/* Unit Price (Moved to 1st Row) */}
                             <div style={{ display: 'flex', alignItems: 'center' }}>
                               {profile?.allow_cart_price_change !== false ? (
-                                <InputNumber size="small" variant="borderless" style={{ width: '85px', background: token.colorBgContainer, borderRadius: '4px' }} prefix={profile?.currency ? `${profile.currency} ` : ''} value={item.sale_price} onChange={(value) => handleCartItemUpdate(item, 'sale_price', value || 0)} min={0} />
+                                <InputNumber 
+                                  size="small" 
+                                  variant="borderless" 
+                                  style={{ width: '85px', background: token.colorBgContainer, borderRadius: '4px' }} 
+                                  prefix={profile?.currency ? `${profile.currency} ` : ''} 
+                                  value={item.sale_price} 
+                                  onChange={(value) => handleCartItemUpdate(item, 'sale_price', value || 0)} 
+                                  onBlur={() => validatePriceDrop(item)} 
+                                  min={0} 
+                                />
                               ) : (
                                 <Text type="secondary" style={{ fontSize: '13px' }}>{formatCurrency(item.sale_price, profile?.currency)}</Text>
                               )}
@@ -1926,8 +2042,25 @@ const POS = () => {
                             )}
                           </div>
                           
-                          {/* Total Price & Delete Button (Moved to 1st Row) */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                          {/* Total Price, Profit Tag & Delete Button (Single Row) */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                            {/* NAYA IZAFA: Live Profit Indicator (Item Level - Moved to same row) */}
+                            {!activeStaff && profile?.show_live_profit_pos && (
+                               (() => {
+                                   const cost = (item.purchase_price || 0) * item.quantity;
+                                   const revenue = item.sale_price * item.quantity;
+                                   const profit = revenue - cost;
+                                   const isLoss = profit < 0;
+                                   return (
+                                       <div style={{ backgroundColor: isLoss ? `${token.colorError}1A` : `${token.colorSuccess}1A`, padding: '2px 6px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}>
+                                           <Text style={{ fontSize: '11px', color: isLoss ? token.colorError : token.colorSuccess, fontWeight: 600 }}>
+                                               {isLoss ? 'Loss:' : 'Profit:'} {formatCurrency(Math.abs(profit), profile?.currency)}
+                                           </Text>
+                                       </div>
+                                   );
+                               })()
+                            )}
+
                             <Text strong style={{ fontSize: '17px' }}>
                               {formatCurrency(item.sale_price * item.quantity, profile?.currency)}
                             </Text>
@@ -2075,13 +2208,18 @@ const POS = () => {
   style={{ width: '80px', background: token.colorFillAlter, borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }} 
   placeholder="0" 
   value={discount} 
-  onChange={onDiscountChange} // Naya function
+  onChange={onDiscountChange} 
+  onBlur={validateBillDiscount} // <--- NAYA IZAFA: Bahar click karne par check karega
   min={0} 
 />
                     <Radio.Group 
                       size="small" 
                       value={discountType} 
-                      onChange={(e) => setDiscountType(e.target.value)}
+                      onChange={(e) => { 
+                        setDiscountType(e.target.value); 
+                        window.isDiscountAuthorized = false; 
+                        setTimeout(validateBillDiscount, 100); // Type change hone par bhi check karein
+                      }}
                       buttonStyle="solid"
                     >
                       <Radio.Button value="Amount" style={{ padding: '0 10px', borderRadius: '4px 0 0 4px' }}>{profile?.currency || '$'}</Radio.Button>
@@ -2120,7 +2258,24 @@ const POS = () => {
             <div style={{ marginBottom: '8px' }}>
               <Row justify="space-between" align="middle" style={{ marginBottom: '8px' }}>
                  <Text style={{ fontSize: '18px', fontWeight: 500 }}>Total</Text>
-                 <Text style={{ fontSize: '24px', fontWeight: 'bold' }}>{formatCurrency(grandTotal, profile?.currency)}</Text>
+                 <div style={{ textAlign: 'right' }}>
+                    <Text style={{ fontSize: '24px', fontWeight: 'bold', display: 'block', lineHeight: '1' }}>{formatCurrency(grandTotal, profile?.currency)}</Text>
+                    
+                    {/* NAYA IZAFA: Grand Profit Indicator */}
+                    {!activeStaff && profile?.show_live_profit_pos && cart.length > 0 && (
+                        (() => {
+                            const totalCartCost = cart.reduce((sum, item) => sum + ((item.purchase_price || 0) * item.quantity), 0);
+                            // Profit is calculated on (Total After Discount) - Total Cost. Tax is excluded from profit.
+                            const grandProfit = totalAfterDiscount - totalCartCost;
+                            const isLoss = grandProfit < 0;
+                            return (
+                                <Text style={{ fontSize: '13px', color: isLoss ? token.colorError : token.colorSuccess, fontWeight: 500 }}>
+                                    Net {isLoss ? 'Loss:' : 'Profit:'} {formatCurrency(Math.abs(grandProfit), profile?.currency)}
+                                </Text>
+                            );
+                        })()
+                    )}
+                 </div>
               </Row>
             </div>
 
@@ -2358,7 +2513,19 @@ const POS = () => {
         title="Admin Approval Required"
         open={isMasterPinModalVisible}
         onOk={handleMasterPinVerify}
-        onCancel={() => { setIsMasterPinModalVisible(false); setMasterPinInput(''); setMasterPinAction(null); }}
+        onCancel={() => { 
+          if (masterPinAction === 'price_drop' && pendingPriceChange) {
+            handleCartItemUpdate(pendingPriceChange.item, 'sale_price', pendingPriceChange.originalPrice);
+          } else if (masterPinAction === 'below_cost_bill' || masterPinAction === 'discount') {
+            setDiscount(0); // Cancel karne par discount wapis 0 ho jaye
+            window.isDiscountAuthorized = false;
+          }
+          setIsMasterPinModalVisible(false); 
+          setMasterPinInput(''); 
+          setAuditRemark(''); // <--- NAYA IZAFA
+          setMasterPinAction(null); 
+          setPendingPriceChange(null);
+        }}
         okText="Approve"
         centered
         width={300}
@@ -2370,8 +2537,24 @@ const POS = () => {
               ? "Customer's credit limit exceeded! Please enter Master PIN to override and allow this sale." 
               : masterPinAction === 'customer_create_limit'
               ? `Credit limit exceeds the default allowed (${profile?.default_credit_limit || 0} Rs). Enter Master PIN to authorize.`
+              : masterPinAction === 'price_drop'
+              ? "Price drop exceeds the allowed limit. Please enter Master PIN to authorize."
+              : masterPinAction === 'below_cost_bill'
+              ? "WARNING: The total bill amount is below the purchase cost of these items! Enter Master PIN to authorize this loss-making sale."
               : "Discount exceeds staff limit. Please enter Master PIN to authorize."}
           </p>
+          
+          {/* NAYA IZAFA: Wajah Likhne ka Box */}
+          {(masterPinAction === 'price_drop' || masterPinAction === 'below_cost_bill' || masterPinAction === 'discount') && (
+            <Input.TextArea 
+              placeholder="Reason for discount or price drop (Optional)" 
+              value={auditRemark}
+              onChange={e => setAuditRemark(e.target.value)}
+              style={{ marginBottom: '16px' }}
+              rows={2}
+            />
+          )}
+
           <Input.Password 
             placeholder="Enter Master PIN" 
             value={masterPinInput}

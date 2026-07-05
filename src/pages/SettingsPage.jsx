@@ -296,6 +296,8 @@ const SettingsPage = () => {
   const [warrantySystemEnabled, setWarrantySystemEnabled] = useState(true);
   const [posDiscountEnabled, setPosDiscountEnabled] = useState(true);
   const [allowCartPriceChange, setAllowCartPriceChange] = useState(true);
+  const [showLiveProfitPos, setShowLiveProfitPos] = useState(false); // <--- NAYA IZAFA: Live Profit Toggle
+  const [priceDropLimit, setPriceDropLimit] = useState(5); // <--- NAYA IZAFA (Default 5 kar diya)
   const [wholesalePricingEnabled, setWholesalePricingEnabled] = useState(false);
   const [enableBatchExpiry, setEnableBatchExpiry] = useState(false);
   const [blockExpiredSales, setBlockExpiredSales] = useState(false);
@@ -431,6 +433,8 @@ const SettingsPage = () => {
           setWarrantySystemEnabled(profile.warranty_system_enabled);
       if (profile.pos_discount_enabled !== undefined) setPosDiscountEnabled(profile.pos_discount_enabled);
       if (profile.allow_cart_price_change !== undefined) setAllowCartPriceChange(profile.allow_cart_price_change);
+      if (profile.show_live_profit_pos !== undefined) setShowLiveProfitPos(profile.show_live_profit_pos); // <--- NAYA IZAFA
+      if (profile.price_drop_limit !== undefined) setPriceDropLimit(profile.price_drop_limit); // <--- NAYA IZAFA (Default 5 kar diya)
       if (profile.wholesale_pricing_enabled !== undefined) setWholesalePricingEnabled(profile.wholesale_pricing_enabled);
       if (profile.enable_batch_expiry !== undefined) setEnableBatchExpiry(profile.enable_batch_expiry);
       if (profile.block_expired_sales !== undefined) setBlockExpiredSales(profile.block_expired_sales);
@@ -547,7 +551,9 @@ const SettingsPage = () => {
       qr_code_enabled: isAdvancedLocked ? false : qrCodeEnabled,
       warranty_system_enabled: isWarrantyLocked ? false : warrantySystemEnabled,
       pos_discount_enabled: isAdvancedLocked ? false : posDiscountEnabled,
+      show_live_profit_pos: showLiveProfitPos, // <--- NAYA IZAFA
       allow_cart_price_change: allowCartPriceChange,
+      price_drop_limit: priceDropLimit, // <--- NAYA IZAFA
       wholesale_pricing_enabled: isWholesaleLocked ? false : wholesalePricingEnabled,
       enable_batch_expiry: enableBatchExpiry,
       block_expired_sales: blockExpiredSales,
@@ -785,6 +791,18 @@ const SettingsPage = () => {
                     </Col>
                   </Row>
                   <Divider />
+                  {/* NAYA IZAFA: Live Profit Indicator Toggle */}
+                  <Row align="middle" gutter={[16, 16]}>
+                    <Col xs={24} sm={6}>
+                      <Text strong>Live Profit Indicator (POS)</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>Show live profit/loss margins in the POS cart (Visible to Owner only).</Text>
+                    </Col>
+                    <Col xs={24} sm={18}>
+                      <Switch checked={showLiveProfitPos} onChange={setShowLiveProfitPos} />
+                    </Col>
+                  </Row>
+                  <Divider />
+
                   <Row align="middle" gutter={[16, 16]}>
                     <Col xs={24} sm={6}>
                       <Text strong>Enable POS Discount</Text>
@@ -853,11 +871,26 @@ const SettingsPage = () => {
                       <Text type="secondary" style={{ display: 'block' }}>Allow staff to manually change item prices in the POS cart.</Text>
                     </Col>
                   <Col xs={24} sm={18}>
-                   <Switch 
-                     checked={allowCartPriceChange} 
-                     onChange={setAllowCartPriceChange} 
-                     disabled={isPriceChangeLocked} 
-                  />
+                    <Space wrap>
+                      <Switch 
+                        checked={allowCartPriceChange} 
+                        onChange={setAllowCartPriceChange} 
+                        disabled={isPriceChangeLocked} 
+                      />
+                      {allowCartPriceChange && (
+                        <Tooltip title="Maximum % price can be dropped without Master PIN (e.g. 20%)">
+                          <InputNumber 
+                            min={0} 
+                            max={100} 
+                            value={priceDropLimit} 
+                            onChange={setPriceDropLimit} 
+                            addonAfter="%" 
+                            placeholder="Max Drop Limit"
+                            style={{ width: 160 }}
+                          />
+                        </Tooltip>
+                      )}
+                    </Space>
                     </Col>
                   </Row>
                   <Divider />
@@ -1704,7 +1737,9 @@ const SettingsPage = () => {
                 taxEnabled === (profile.tax_enabled ?? false) &&
                 taxName === (profile.tax_name ?? 'GST') &&
                 taxRate === (profile.tax_rate ?? 0) &&
+                showLiveProfitPos === (profile.show_live_profit_pos ?? false) && // <--- NAYA IZAFA
                 allowCartPriceChange === (profile.allow_cart_price_change ?? true) &&
+                priceDropLimit === (profile.price_drop_limit ?? 5) && // <--- NAYA IZAFA (Default 5 kar diya)
                 wholesalePricingEnabled === (profile.wholesale_pricing_enabled ?? false) &&
                 enableCustomerCreditLimits === (profile.enable_customer_credit_limits ?? false) &&
                 mobileNavEnabled === profile.mobile_nav_enabled &&
