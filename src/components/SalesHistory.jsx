@@ -288,22 +288,6 @@ const SalesHistory = () => {
       render: (text, record) => <Text code strong>{text || record.sale_id.slice(0, 8)}</Text>
     },
     {
-      title: 'Sync',
-      dataIndex: 'sync_status',
-      key: 'sync_status',
-      width: 100,
-      align: 'center',
-      render: (status, record) => {
-        if (status === 'synced') return <Tag color="success">Synced</Tag>;
-        if (status === 'pending') return <Tag color="warning">Pending</Tag>;
-        return (
-          <Tooltip title={record.sync_error || "Sync failed"}>
-            <Tag color="error" style={{ cursor: 'help' }}>Error</Tag>
-          </Tooltip>
-        );
-      }
-    },
-    {
       title: (
         <div>
           <div>Date</div>
@@ -401,23 +385,10 @@ const SalesHistory = () => {
     {
       title: 'Actions',
       key: 'actions',
-      width: 120, // Is ki width thori barha di taake buttons sahi nazar aayein
+      width: 80, 
       align: 'center',
       render: (_, record) => (
         <Space>
-          {/* Agar sync fail hai ya pending hai, to Retry button dikhao */}
-          {(record.sync_status === 'error' || record.sync_status === 'pending') && (
-            <Tooltip title="Retry Sync">
-              <Button 
-                type="primary"
-                danger={record.sync_status === 'error'}
-                icon={<ReloadOutlined />} 
-                size="small"
-                onClick={handleManualRetry}
-              />
-            </Tooltip>
-          )}
-          
           <Tooltip title="Reprint Receipt">
             <Button 
               icon={<PrinterOutlined />} 

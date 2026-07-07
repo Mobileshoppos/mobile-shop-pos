@@ -1,7 +1,7 @@
 // src/App.jsx - MUKAMMAL UPDATED CODE
 
 import React, { useState, useEffect } from 'react';
-import { ConfigProvider, theme, Layout, App as AntApp } from 'antd';
+import { ConfigProvider, theme, Layout, App as AntApp, Alert } from 'antd';
 import { BrowserRouter, Routes, Route, Link, Outlet, useLocation, Navigate } from 'react-router-dom';
 
 import Inventory from './components/Inventory';
@@ -12,6 +12,7 @@ import Categories from './components/Categories';
 import Expenses from './components/Expenses';
 import ExpenseCategories from './components/ExpenseCategories';
 import AppHeader from './components/Header';
+import AppFooter from './components/Footer';
 import Profile from './pages/Profile'; 
 import AuthPage from './pages/AuthPage'; 
 import Purchases from './components/Purchases';
@@ -83,13 +84,24 @@ const SessionGuard = ({ children }) => {
 const { Content } = Layout;
 
 const MainLayout = ({ isDarkMode, toggleTheme }) => {
-  const { syncAllData } = useSync();
+  const { syncAllData, pendingCount, stuckCount } = useSync();
   const { profile } = useAuth();
   const { isAppLocked } = useStaff();
 
   // NAYA FIX: Sync ko lock check se upar rakhein taake locked screen par bhi data download ho sake
   useEffect(() => {
     syncAllData();
+    
+    // --- LAYER 1: Persistent Storage Request (System Hifazat) ---
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().then(granted => {
+        if (granted) {
+          console.log("Storage is persistent. Browser will not auto-clear it.");
+        } else {
+          console.log("Storage is not persistent.");
+        }
+      });
+    }
   }, []); 
   
   const location = useLocation();
@@ -148,12 +160,21 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
             background: token.colorBgContainer,
             minHeight: '100vh',
             paddingTop: 0,
+            display: 'flex', // NAYA IZAFA: Footer ko neechay rakhne ke liye
+            flexDirection: 'column' // NAYA IZAFA
            }}>
             {profile && !profile.is_setup_completed && <WelcomeWizard />}
+            
             <AppHeader collapsed={collapsed} setCollapsed={setCollapsed} isMobile={isMobile} />
-            <div style={{ padding: isMobile ? '0 8px 60px' : '0 12px 24px' }}>
+            
+            {/* flex: 1 ka matlab hai ke yeh darmiyan wala hissa baqi saari jagah le lega */}
+            <div style={{ padding: isMobile ? '0 8px 60px' : '0 12px 24px', flex: 1 }}>
               <Outlet />
             </div>
+
+            {/* NAYA IZAFA: Hamara Naya Footer */}
+            <AppFooter />
+
             {isMobile && profile?.mobile_nav_enabled !== false && (
               <BottomNav setCollapsed={setCollapsed} />
             )}

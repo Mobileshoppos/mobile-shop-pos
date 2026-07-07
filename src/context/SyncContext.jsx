@@ -250,6 +250,58 @@ export const SyncProvider = ({ children }) => {
     });
   };
 
+  // --- NAYA IZAFA: EMERGENCY BACKUP FUNCTIONS ---
+  const exportEmergencyBackup = async () => {
+    try {
+      const queueItems = await db.sync_queue.toArray();
+      if (queueItems.length === 0) {
+        return { success: false, message: "No pending data to backup." };
+      }
+      const dataStr = JSON.stringify(queueItems, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const date = new Date().toISOString().split('T')[0];
+      a.download = `SadaPOS_Emergency_Backup_${date}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return { success: true };
+    } catch (error) {
+      console.error("Emergency Backup Error:", error);
+      return { success: false, message: error.message };
+    }
+  };
+
+  const restoreEmergencyBackup = async (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const items = JSON.parse(e.target.result);
+          if (!Array.isArray(items)) throw new Error("Invalid backup file format.");
+          
+          let restoredCount = 0;
+          for (const item of items) {
+            // Check karein ke kya yeh item pehle se queue mein hai taake double entry na ho
+            const existing = await db.sync_queue.get(item.id);
+            if (!existing) {
+              await db.sync_queue.add(item);
+              restoredCount++;
+            }
+          }
+          resolve({ success: true, count: restoredCount });
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsText(file);
+    });
+  };
+
   // --- UPLOAD FUNCTION (Smart & Light) ---
   const processSyncQueue = async () => {
     // A. Pehle check karein ke kya pehle se sync chal raha hai?
@@ -891,7 +943,7 @@ const retryAll = async () => {
   }, []);
 
   return (
-    <SyncContext.Provider value={{ isOnline, isSyncing, pendingCount, stuckCount, retryAll, syncAllData, processSyncQueue }}>
+    <SyncContext.Provider value={{ isOnline, isSyncing, pendingCount, stuckCount, retryAll, syncAllData, processSyncQueue, exportEmergencyBackup, restoreEmergencyBackup }}>
       {children}
     </SyncContext.Provider>
   );

@@ -23,7 +23,8 @@ import {
   PieChartOutlined,
   TeamOutlined,
   SyncOutlined,
-  LockOutlined
+  LockOutlined,
+  DownloadOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { useStaff } from '../context/StaffContext';
@@ -54,14 +55,8 @@ const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
   const { profile, isPro, stockCount, lowStockCount } = useAuth();
   const { activeStaff, can, activeSession, lockApp } = useStaff();
   const { isDarkMode } = useTheme();
-  const { pendingCount, stuckCount, retryAll, isSyncing, syncAllData, processSyncQueue } = useSync();
+  const { pendingCount, stuckCount, retryAll, isSyncing, syncAllData, processSyncQueue, isOnline, exportEmergencyBackup } = useSync();
   const { message, modal } = App.useApp(); // <--- YEH NAYI LINE HAI
-  // --- LIVE CLOCK LOGIC ---
-  const [currentTime, setCurrentTime] = React.useState(dayjs());
-  React.useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(dayjs()), 60000); // Har 1 minute baad update
-    return () => clearInterval(timer);
-  }, []);
   const [isSyncModalOpen, setIsSyncModalOpen] = React.useState(false);
 
   // NAYA: Manual Sync Function (Upload & Download)
@@ -325,6 +320,28 @@ return (
                     }} 
                   />
                 </Tooltip>
+
+                {/* NAYA: Emergency Backup Icon (Calm UI) */}
+                {(pendingCount > 0 || stuckCount > 0) && (
+                  <Tooltip title={`Download ${pendingCount + stuckCount} Unsynced Items (Backup)`}>
+                    <DownloadOutlined 
+                      onClick={async () => {
+                        const res = await exportEmergencyBackup();
+                        if (res.success) message.success("Emergency Backup Downloaded!");
+                        else message.error(res.message || "Failed to download backup.");
+                      }}
+                      style={{ 
+                        fontSize: '16px', 
+                        color: token.colorWarning, // Theme config se color aa raha hai
+                        cursor: 'pointer',
+                        marginLeft: '8px',
+                        transition: 'color 0.3s'
+                      }} 
+                    />
+                  </Tooltip>
+                )}
+
+                {/* --- LAYER 2 Warning Removed for Cleaner UI --- */}
               </div>
               {/* Page Titles (Left Aligned) */}
               {!isMobile && (
@@ -500,12 +517,7 @@ return (
                         </Tooltip>
                       )}
 
-                      {/* Clock */}
-                      <div style={{ textAlign: 'right', lineHeight: '1.2' }}>
-                        <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorPrimary }}>{currentTime.format('hh:mm A')}</Text>
-                        <Text type="secondary" style={{ fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>{currentTime.format('ddd, DD MMM')}</Text>
                       </div>
-                    </div>
                   )}
                 </>
               )}

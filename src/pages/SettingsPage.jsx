@@ -7,6 +7,7 @@ import { ToolOutlined, LockOutlined, CopyOutlined, ShopOutlined, PlusOutlined, D
 import bcrypt from 'bcryptjs';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useSync } from '../context/SyncContext';
 import { getPlanLimits } from '../config/subscriptionPlans';
 import DataService from '../DataService';
 import { db } from '../db';
@@ -77,6 +78,7 @@ const SettingsPage = () => {
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { message, modal } = App.useApp();
   const { user, profile, updateProfile } = useAuth();
+  const { restoreEmergencyBackup, processSyncQueue } = useSync();
   const limits = getPlanLimits(profile?.subscription_tier);
   const isAdvancedLocked = !limits.allow_advanced_settings;
   const isWarrantyLocked = !limits.allow_warranty_system;
@@ -271,6 +273,7 @@ const SettingsPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isBackupLoading, setIsBackupLoading] = useState(false);
   const [isRestoreLoading, setIsRestoreLoading] = useState(false);
+  const [isEmergencyRestoreLoading, setIsEmergencyRestoreLoading] = useState(false);
   const [receiptFormat, setReceiptFormat] = useState('pdf');
   // --- NAYA IZAFA: FBR States ---
   const [fbrIntegrationEnabled, setFbrIntegrationEnabled] = useState(false);
@@ -516,6 +519,39 @@ const SettingsPage = () => {
       }
     });
     // Input reset karein taake same file dobara select ho sake
+    event.target.value = '';
+  };
+
+  // --- NAYA IZAFA: Emergency Restore Function ---
+  const handleEmergencyRestore = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    modal.confirm({
+      title: 'Restore Emergency Backup?',
+      content: 'This will safely add the unsynced pending data back to your queue without deleting your current data. Do you want to proceed?',
+      okText: 'Yes, Restore Data',
+      cancelText: 'Cancel',
+      onOk: async () => {
+        const hide = message.loading('Restoring emergency data...', 0);
+        try {
+          setIsEmergencyRestoreLoading(true);
+          const result = await restoreEmergencyBackup(file);
+          hide();
+          if (result.success) {
+            message.success(`Successfully restored ${result.count} items to the sync queue!`);
+            // Restore hone ke baad foran sync shuru kar dein
+            processSyncQueue();
+          }
+        } catch (error) {
+          hide();
+          console.error('Emergency Restore failed:', error);
+          message.error('Failed to restore data: Invalid file format.');
+        } finally {
+          setIsEmergencyRestoreLoading(false);
+        }
+      }
+    });
     event.target.value = '';
   };
   // ----------------------------------------------
@@ -1213,7 +1249,7 @@ const SettingsPage = () => {
                         loading={isBackupLoading}
                         block
                       >
-                        Download Backup
+                        Download Full Backup
                       </Button>
                     </Col>
                     <Col xs={24} sm={8}>
@@ -1230,7 +1266,34 @@ const SettingsPage = () => {
                         onClick={() => document.getElementById('restore-upload').click()}
                         block
                       >
-                        Restore Backup
+                        Restore Full Backup
+                      </Button>
+                    </Col>
+                  </Row>
+
+                  <Divider />
+                  
+                  <Title level={4} style={{ fontSize: '16px', color: token.colorWarning }}>Emergency Unsynced Restore</Title>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: '16px' }}>
+                    If you downloaded an "Emergency Unsynced Backup" from the top bar because your internet was down, you can restore it here safely.
+                  </Text>
+                  
+                  <Row gutter={[16, 16]} align="middle">
+                    <Col xs={24} sm={8}>
+                      <input 
+                        type="file" 
+                        id="emergency-restore-upload" 
+                        accept=".json" 
+                        style={{ display: 'none' }} 
+                        onChange={handleEmergencyRestore}
+                      />
+                      <Button 
+                        style={{ borderColor: token.colorWarning, color: token.colorWarning }}
+                        loading={isEmergencyRestoreLoading}
+                        onClick={() => document.getElementById('emergency-restore-upload').click()}
+                        block
+                      >
+                        Restore Emergency Data
                       </Button>
                     </Col>
                   </Row>
