@@ -63,7 +63,7 @@ const formatPriceRange = (min, max, currency) => {
 const POS = () => {
   const { token } = theme.useToken(); // Control Center Connection
   const { isDarkMode } = useTheme();
-  const [viewMode, setViewMode] = useState('grid'); // NAYA IZAFA: Grid View State (Default Grid rakha hai)
+  const [viewMode, setViewMode] = useState('list'); // NAYA IZAFA: Ab Default List View kar diya gaya hai
   const [showFilters, setShowFilters] = useState(false);
   const [priceRange, setPriceRange] = useState([null, null]);
   const [filterAttributes, setFilterAttributes] = useState({});
@@ -1762,86 +1762,80 @@ const POS = () => {
                           <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
                             {/* Stock Count */}
                             <div style={{ marginRight: '8px', flexShrink: 0 }}>
-                              <Space size={4}>
-                                <Tag 
-                                  style={{ margin: 0, fontSize: '17px', padding: '0 6px', fontWeight: 'bold' }}
-                                  color={variant.display_quantity > 0 ? "cyan" : "red"}
-                                >
-                                  {variant.display_quantity}
-                                </Tag>
-                                
-                                {variant.warranty_days > 0 && (
-                                  (() => {
-                                    const purchaseDate = new Date(variant.created_at);
-                                    const expiryDate = new Date(purchaseDate);
-                                    expiryDate.setDate(expiryDate.getDate() + variant.warranty_days);
-                                    const isExpired = new Date() > expiryDate;
-                                    
-                                    return (
-                                      <Tooltip title={`${isExpired ? "Supplier Warranty Expired" : "Supplier Warranty Active"} (Till: ${dayjs(expiryDate).format('DD-MMM-YYYY')})`}>
-                                        <span style={{ marginLeft: '4px', cursor: 'pointer' }}>
-                                          <Badge status={isExpired ? "error" : "success"} />
-                                        </span>
-                                      </Tooltip>
-                                    );
-                                  })()
-                                )}
-                              </Space>
+                              <Tag 
+                                style={{ margin: 0, fontSize: '17px', padding: '0 6px', fontWeight: 'bold' }}
+                                color={variant.display_quantity > 0 ? "cyan" : "red"}
+                              >
+                                {variant.display_quantity}
+                              </Tag>
                             </div>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                              {/* Price */}
-                              <Text strong style={{ color: token.colorSuccess, fontSize: '15px' }}>
-                                 {formatCurrency(variant.sale_price, profile?.currency)}
-                              </Text>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden' }}>
                               
-                              {/* Attributes (RAM/ROM etc) */}
-                              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                {/* NAYA IZAFA: Batch aur Expiry Tags in POS List View */}
-                                {variant.batch_number && <Tag color="blue" style={{ margin: 0, fontSize: '12px', padding: '0 4px', border: 'none' }}>{variant.batch_number}</Tag>}
-                                {variant.expiry_date && (() => {
-                                    const expDate = new Date(variant.expiry_date);
-                                    const todayZero = new Date(); todayZero.setHours(0,0,0,0);
-                                    const alertDays = profile?.expiry_alert_days || 30;
-                                    const alertLimitDate = new Date(); alertLimitDate.setDate(alertLimitDate.getDate() + alertDays);
-                                    
-                                    let iconColor = token.colorTextSecondary; // Normal color
-                                    let tooltipText = "Valid Expiry";
-                                    let Icon = CalendarOutlined;
-
-                                    if (expDate < todayZero) {
-                                        iconColor = token.colorError; // Lal rang
-                                        tooltipText = "EXPIRED";
-                                        Icon = WarningOutlined;
-                                    } else if (expDate <= alertLimitDate) {
-                                        iconColor = token.colorWarning; // Peela rang
-                                        tooltipText = "Expiring Soon";
-                                        Icon = WarningOutlined;
-                                    }
-
-                                    return (
-                                        <Tooltip title={tooltipText}>
-                                            <Tag style={{ margin: 0, fontSize: '12px', padding: '0 4px', border: 'none', background: 'transparent', color: iconColor, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                <Icon /> {expDate.toLocaleDateString()}
-                                            </Tag>
-                                        </Tooltip>
-                                    );
-                                })()}
-                                
-                                {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
-                                  if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) return null;
+                              {/* ROW 1: Price and Item Attributes (Aligned horizontally with Pipe) */}
+                              <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', height: '20px' }}>
+                                <Text strong style={{ color: token.colorSuccess, fontSize: '15px', lineHeight: '1.2', marginRight: '8px' }}>
+                                   {formatCurrency(variant.sale_price, profile?.currency)}
+                                </Text>
+                                {(() => {
+                                  const attrValues = [];
+                                  if (variant.item_attributes) {
+                                    Object.entries(variant.item_attributes).forEach(([key, value]) => {
+                                      if (value && !key.toLowerCase().includes('imei') && !key.toLowerCase().includes('serial')) {
+                                        attrValues.push(value);
+                                      }
+                                    });
+                                  }
+                                  const hasAttributes = attrValues.length > 0;
                                   return (
-                                    <Text key={key} type="secondary" style={{ fontSize: isMobile ? '13px' : '15px' }}>
-                                      {value}
+                                    <Text type="secondary" style={{ fontSize: '14px', lineHeight: '1.2' }}>
+                                      |   {hasAttributes ? attrValues.join('  |  ') : 'Standard'}
                                     </Text>
                                   );
-                                })}
-                                {(!variant.item_attributes || Object.keys(variant.item_attributes).length === 0) && (
-                                  <Text type="secondary" style={{ fontSize: isMobile ? '13px' : '15px' }}>
-                                    Standard
-                                  </Text>
-                                )}
+                                })()}
                               </div>
+                              
+                              {/* ROW 2: Batch, Expiry, Warranty Tags (Scrollable) */}
+                              {(variant.batch_number || variant.expiry_date || (profile?.warranty_system_enabled !== false && variant.warranty_days > 0)) && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', height: '18px' }}>
+                                  {variant.batch_number && <Tag color="blue" style={{ margin: 0, fontSize: '11px', padding: '1px 6px', color: token.colorText, border: 'none', background: token.colorFillAlter, lineHeight: '1.2' }}>B.No: {variant.batch_number}</Tag>}
+                                  
+                                  {variant.expiry_date && (() => {
+                                      const expDate = new Date(variant.expiry_date);
+                                      const todayZero = new Date(); todayZero.setHours(0,0,0,0);
+                                      const alertDays = profile?.expiry_alert_days || 30;
+                                      const alertLimitDate = new Date(); alertLimitDate.setDate(alertLimitDate.getDate() + alertDays);
+                                      
+                                      let iconColor = token.colorTextSecondary; // Normal color
+                                      let tooltipText = "Valid Expiry";
+                                      let Icon = CalendarOutlined;
+
+                                      if (expDate < todayZero) {
+                                          iconColor = token.colorError; // Lal rang
+                                          tooltipText = "EXPIRED";
+                                          Icon = WarningOutlined;
+                                      } else if (expDate <= alertLimitDate) {
+                                          iconColor = token.colorWarning; // Peela rang
+                                          tooltipText = "Expiring Soon";
+                                          Icon = WarningOutlined;
+                                      }
+
+                                      return (
+                                          <Tooltip title={tooltipText}>
+                                              <Tag style={{ margin: 0, fontSize: '11px', padding: '1px 6px', border: 'none', background: token.colorFillAlter, color: iconColor, display: 'flex', alignItems: 'center', gap: '4px', lineHeight: '1.2' }}>
+                                                  <Icon style={{ fontSize: '11px' }} /> {expDate.toLocaleDateString()}
+                                              </Tag>
+                                          </Tooltip>
+                                      );
+                                  })()}
+
+                                  {profile?.warranty_system_enabled !== false && variant.warranty_days > 0 && (
+                                    <Tag color="cyan" style={{ margin: 0, fontSize: '11px', padding: '1px 6px', color: token.colorText, border: 'none', background: token.colorFillAlter, lineHeight: '1.2' }}>
+                                      🛡️ {variant.warranty_days}
+                                    </Tag>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
 
@@ -2126,7 +2120,9 @@ const POS = () => {
                                   return (
                                     <Space size={4} style={{ marginLeft: '4px' }}>
                                       <Tooltip title={`${isExpired ? "Supplier Warranty Expired" : "Supplier Warranty Active"} (Till: ${dayjs(expiry).format('DD-MMM-YYYY')})`}>
-                                        <span style={{ cursor: 'pointer' }}><Badge status={isExpired ? "error" : "success"} /></span>
+                                        <span style={{ cursor: 'pointer', fontSize: '13px', filter: isExpired ? 'grayscale(100%) opacity(0.5)' : 'none' }}>
+                                          🛡️
+                                        </span>
                                       </Tooltip>
                                       <Tooltip title="No Warranty">
                                         <Checkbox checked={item.no_warranty} onChange={(e) => handleCartItemUpdate(item, 'no_warranty', e.target.checked)} style={{ marginLeft: '4px' }} />

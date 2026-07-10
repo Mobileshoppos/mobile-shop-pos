@@ -229,7 +229,28 @@ const VoucherSearchModal = ({ open, onClose, autoSearchQuery = '' }) => {
           setErrorMessage(`No adjustment voucher found matching "${cleanQuery}".`);
         }
       }
-      // 5. Purchase Invoice (PUR-)
+      // 5. Warranty Claim (CLM-)
+      else if (cleanQuery.startsWith('CLM-')) {
+        const claim = await db.warranty_claims.filter(c => c.claim_no === cleanQuery).first();
+        if (claim) {
+          const customer = claim.customer_id ? await db.customers.get(claim.customer_id) : null;
+          setSearchedData({
+            id: claim.id,
+            type: 'Warranty Claim',
+            voucherNo: claim.claim_no || cleanQuery,
+            title: claim.product_name_snapshot || 'Repair Claim',
+            amount: 0, // Claims don't have an amount in this context
+            date: claim.created_at,
+            paymentMethod: 'N/A',
+            categoryName: customer ? customer.name : 'Walk-in Customer',
+            staffName: 'Owner / Admin',
+            status: claim.status.toUpperCase()
+          });
+        } else {
+          setErrorMessage(`No warranty claim found matching "${cleanQuery}".`);
+        }
+      }
+      // 6. Purchase Invoice (PUR-)
       else if (cleanQuery.startsWith('PUR-')) {
         const purchase = await db.purchases.where('invoice_id').equals(cleanQuery).first();
         if (purchase) {

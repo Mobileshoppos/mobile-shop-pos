@@ -7,105 +7,467 @@ import dayjs from 'dayjs';
 import bcrypt from 'bcryptjs';
 import { encryptData, decryptData } from './utils/cryptoUtils'; // <--- NAYA IZAFA
 
-// --- DEFAULT CATEGORIES BLUEPRINT ---
+// --- DEFAULT CATEGORIES BLUEPRINT (Mobile & Electronics) ---
 const DEFAULT_CATEGORIES = [
-  {
-    name: 'Smartphones',
-    is_imei_based: true,
-    attributes: [
-      { attribute_name: 'Condition', attribute_type: 'select', options: 'New,Certified Pre-Owned,Used', is_required: true },
-      { attribute_name: 'Network Status', attribute_type: 'select', options: 'Unlocked,Carrier Locked', is_required: true },
-      { attribute_name: 'Storage', attribute_type: 'select', options: '64GB,128GB,256GB,512GB,1TB', is_required: true },
-      { attribute_name: 'RAM', attribute_type: 'select', options: '4GB,6GB,8GB,12GB,16GB', is_required: true },
-      { attribute_name: 'Color', attribute_type: 'text', options: null, is_required: false }
-    ]
-  },
-  {
-    name: 'Tablets',
-    is_imei_based: true,
-    attributes: [
-      { attribute_name: 'Connectivity', attribute_type: 'select', options: 'Wi-Fi Only,Wi-Fi + Cellular', is_required: true },
-      { attribute_name: 'Storage', attribute_type: 'select', options: '64GB,128GB,256GB,512GB,1TB', is_required: true },
-      { attribute_name: 'Condition', attribute_type: 'select', options: 'New,Used', is_required: true }
-    ]
-  },
-  {
-    name: 'Wearables',
-    is_imei_based: true,
-    attributes: [
-      { attribute_name: 'Type', attribute_type: 'select', options: 'Smartwatch,Fitness Tracker', is_required: true },
-      { attribute_name: 'Case Size', attribute_type: 'text', options: null, is_required: false },
-      { attribute_name: 'Connectivity', attribute_type: 'select', options: 'GPS,GPS + Cellular', is_required: false }
-    ]
-  },
-  {
-    name: 'Audio',
-    is_imei_based: false,
-    attributes: [
-      { attribute_name: 'Type', attribute_type: 'select', options: 'TWS Earbuds,Headphones,Bluetooth Speakers', is_required: true },
-      { attribute_name: 'Warranty', attribute_type: 'text', options: null, is_required: false }
-    ]
-  },
-  {
-    name: 'Power & Cables',
-    is_imei_based: false,
-    attributes: [
-      { attribute_name: 'Type', attribute_type: 'select', options: 'Wall Charger,Power Bank,Wireless Charger,Cable', is_required: true },
-      { attribute_name: 'Interface', attribute_type: 'select', options: 'USB-C,Lightning,Micro-USB', is_required: false }
-    ]
-  },
-  {
-    name: 'Protection & Style',
-    is_imei_based: false,
-    attributes: [
-      { attribute_name: 'Type', attribute_type: 'select', options: 'Protective Case,Screen Protector,Lens Protector', is_required: true }
-    ]
-  }
+  // PARENTS (Main Categories)
+  { name: 'Mobile Phones & Tablets', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Computers & Laptops', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Accessories & Peripherals', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Repair & Spare Parts', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Compatible Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Gaming & Entertainment', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Mobile Phones & Tablets)
+  { name: 'Smartphones', is_imei_based: true, parent_name: 'Mobile Phones & Tablets', attributes: [ { attribute_name: 'Condition', attribute_type: 'select', options: 'New,Certified Pre-Owned,Used', is_required: true }, { attribute_name: 'Network Status', attribute_type: 'select', options: 'Unlocked,Carrier Locked', is_required: true }, { attribute_name: 'Storage', attribute_type: 'select', options: '64GB,128GB,256GB,512GB,1TB', is_required: true }, { attribute_name: 'RAM', attribute_type: 'select', options: '4GB,6GB,8GB,12GB,16GB', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', options: null, is_required: false } ] },
+  { name: 'Tablets & iPads', is_imei_based: true, parent_name: 'Mobile Phones & Tablets', attributes: [ { attribute_name: 'Connectivity', attribute_type: 'select', options: 'Wi-Fi Only,Wi-Fi + Cellular', is_required: true }, { attribute_name: 'Storage', attribute_type: 'select', options: '64GB,128GB,256GB,512GB,1TB,2TB', is_required: true }, { attribute_name: 'Condition', attribute_type: 'select', options: 'New,Used', is_required: true } ] },
+
+  // SUB-CATEGORIES (Computers & Laptops)
+  { name: 'Laptops & MacBooks', is_imei_based: true, parent_name: 'Computers & Laptops', attributes: [ { attribute_name: 'Processor', attribute_type: 'text', is_required: true }, { attribute_name: 'RAM', attribute_type: 'select', options: '4GB,8GB,16GB,32GB,64GB', is_required: true }, { attribute_name: 'Storage', attribute_type: 'select', options: '256GB SSD,512GB SSD,1TB SSD,2TB SSD', is_required: true }, { attribute_name: 'Condition', attribute_type: 'select', options: 'New,Used,Refurbished', is_required: true } ] },
+  { name: 'Desktop Computers', is_imei_based: true, parent_name: 'Computers & Laptops', attributes: [ { attribute_name: 'Processor', attribute_type: 'text', is_required: true }, { attribute_name: 'RAM', attribute_type: 'select', options: '8GB,16GB,32GB,64GB', is_required: true }, { attribute_name: 'Storage', attribute_type: 'text', is_required: true } ] },
+  { name: 'Networking & Wi-Fi', is_imei_based: true, parent_name: 'Computers & Laptops', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Router,Switch,Modem,Range Extender', is_required: true } ] },
+
+  // SUB-CATEGORIES (Accessories & Peripherals)
+  { name: 'Wearables & Smartwatches', is_imei_based: true, parent_name: 'Accessories & Peripherals', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Smartwatch,Fitness Tracker', is_required: true }, { attribute_name: 'Case Size', attribute_type: 'text', is_required: false }, { attribute_name: 'Connectivity', attribute_type: 'select', options: 'GPS,GPS + Cellular', is_required: false } ] },
+  { name: 'Audio & Headphones', is_imei_based: false, parent_name: 'Accessories & Peripherals', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'TWS Earbuds,Headphones,Bluetooth Speakers,Wired Earphones', is_required: true } ] },
+  { name: 'Power & Cables', is_imei_based: false, parent_name: 'Accessories & Peripherals', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Wall Charger,Power Bank,Wireless Charger,Data Cable', is_required: true }, { attribute_name: 'Interface', attribute_type: 'select', options: 'USB-C,Lightning,Micro-USB', is_required: false }, { attribute_name: 'Wattage', attribute_type: 'text', is_required: false } ] },
+  { name: 'Protection & Cases', is_imei_based: false, parent_name: 'Accessories & Peripherals', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Protective Case,Screen Protector,Lens Protector', is_required: true }, { attribute_name: 'Compatible Model', attribute_type: 'text', is_required: true } ] },
+
+  // SUB-CATEGORIES (Repair & Spare Parts)
+  { name: 'Spare Parts & Components', is_imei_based: false, parent_name: 'Repair & Spare Parts', attributes: [ { attribute_name: 'Part Type', attribute_type: 'select', options: 'Display/Screen,Battery,Charging Port,Camera Module,Motherboard/IC', is_required: true }, { attribute_name: 'Compatible Model', attribute_type: 'text', is_required: true }, { attribute_name: 'Quality', attribute_type: 'select', options: 'Original/OEM,High Copy,Aftermarket', is_required: false } ] },
+  { name: 'Repair Tools & Equipment', is_imei_based: false, parent_name: 'Repair & Spare Parts', attributes: [ { attribute_name: 'Tool Type', attribute_type: 'select', options: 'Screwdriver Set,Soldering Iron,Microscope,Multimeter,Heat Gun', is_required: true } ] },
+
+  // SUB-CATEGORIES (Gaming & Entertainment)
+  { name: 'Gaming Consoles', is_imei_based: true, parent_name: 'Gaming & Entertainment', attributes: [ { attribute_name: 'Storage', attribute_type: 'text', is_required: true }, { attribute_name: 'Condition', attribute_type: 'select', options: 'New,Used', is_required: true } ] },
+  { name: 'Gaming Accessories', is_imei_based: false, parent_name: 'Gaming & Entertainment', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Controller/Gamepad,Gaming Headset,Cooling Fan,Mobile Triggers', is_required: true } ] }
 ];
 
 // --- CROCKERY CATEGORIES BLUEPRINT ---
 const CROCKERY_CATEGORIES = [
-  {
-    name: 'Dinnerware',
-    is_imei_based: false,
-    attributes: [
-      { attribute_name: 'Type', attribute_type: 'select', options: 'Dinner Set,Plates,Bowls,Mugs & Cups', is_required: true },
-      { attribute_name: 'Material', attribute_type: 'select', options: 'Bone China,Porcelain,Melamine,Ceramic', is_required: false },
-      { attribute_name: 'Piece Count', attribute_type: 'number', options: null, is_required: false }
-    ]
-  },
-  {
-    name: 'Serveware',
-    is_imei_based: false,
-    attributes: [
-      { attribute_name: 'Type', attribute_type: 'select', options: 'Platters & Trays,Serving Bowls,Hot Pots,Condiment Sets', is_required: true },
-      { attribute_name: 'Material', attribute_type: 'text', options: null, is_required: false }
-    ]
-  },
-  {
-    name: 'Glassware & Drinkware',
-    is_imei_based: false,
-    attributes: [
-      { attribute_name: 'Type', attribute_type: 'select', options: 'Water Glasses,Jugs,Tea & Coffee,Thermos', is_required: true },
-      { attribute_name: 'Material', attribute_type: 'select', options: 'Crystal,Glass,Plastic', is_required: false }
-    ]
-  },
-  {
-    name: 'Cutlery',
-    is_imei_based: false,
-    attributes: [
-      { attribute_name: 'Type', attribute_type: 'select', options: 'Cutlery Sets,Specialty Cutlery,Serving Utensils', is_required: true },
-      { attribute_name: 'Material', attribute_type: 'select', options: 'Stainless Steel,Silver,Plastic', is_required: false }
-    ]
-  },
-  {
-    name: 'Cookware & Bakeware',
-    is_imei_based: false,
-    attributes: [
-      { attribute_name: 'Type', attribute_type: 'select', options: 'Pans,Pots,Baking Dishes', is_required: true },
-      { attribute_name: 'Material', attribute_type: 'select', options: 'Non-stick,Cast Iron,Glass,Steel', is_required: false }
-    ]
-  }
+  // PARENTS (Main Categories)
+  { name: 'Dining & Serving', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Glassware & Drinkware', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Kitchen & Cooking', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Kitchen Appliances', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Storage & Organization', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Dining & Serving)
+  { name: 'Dinnerware', is_imei_based: false, parent_name: 'Dining & Serving', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Dinner Set,Plates,Bowls', is_required: true }, { attribute_name: 'Material', attribute_type: 'select', options: 'Bone China,Porcelain,Melamine,Ceramic,Stoneware', is_required: false }, { attribute_name: 'Piece Count', attribute_type: 'number', options: null, is_required: false } ] },
+  { name: 'Serveware', is_imei_based: false, parent_name: 'Dining & Serving', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Platters & Trays,Serving Bowls,Hot Pots,Condiment Sets', is_required: true }, { attribute_name: 'Material', attribute_type: 'text', options: null, is_required: false } ] },
+  { name: 'Cutlery & Flatware', is_imei_based: false, parent_name: 'Dining & Serving', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Cutlery Sets,Spoons,Forks,Knives,Serving Utensils', is_required: true }, { attribute_name: 'Material', attribute_type: 'select', options: 'Stainless Steel,Silver Plated,Gold Plated,Plastic', is_required: false }, { attribute_name: 'Piece Count', attribute_type: 'number', options: null, is_required: false } ] },
+
+  // SUB-CATEGORIES (Glassware & Drinkware)
+  { name: 'Everyday Glassware', is_imei_based: false, parent_name: 'Glassware & Drinkware', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Water Glasses,Juice Glasses,Jugs & Pitchers', is_required: true }, { attribute_name: 'Material', attribute_type: 'select', options: 'Crystal,Glass,Acrylic,Plastic', is_required: false }, { attribute_name: 'Capacity', attribute_type: 'text', is_required: false } ] },
+  { name: 'Tea & Coffee Sets', is_imei_based: false, parent_name: 'Glassware & Drinkware', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Tea Set,Coffee Set,Mugs,Cups & Saucers,Thermos/Flask', is_required: true }, { attribute_name: 'Material', attribute_type: 'select', options: 'Bone China,Ceramic,Glass,Stainless Steel', is_required: false }, { attribute_name: 'Piece Count', attribute_type: 'number', options: null, is_required: false } ] },
+
+  // SUB-CATEGORIES (Kitchen & Cooking)
+  { name: 'Cookware & Bakeware', is_imei_based: false, parent_name: 'Kitchen & Cooking', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Pots & Pans,Pressure Cookers,Woks,Baking Dishes,Tawas', is_required: true }, { attribute_name: 'Material', attribute_type: 'select', options: 'Non-Stick,Stainless Steel,Cast Iron,Aluminum,Glass', is_required: false }, { attribute_name: 'Size/Diameter', attribute_type: 'text', is_required: false } ] },
+  { name: 'Kitchen Tools & Utensils', is_imei_based: false, parent_name: 'Kitchen & Cooking', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Knives & Choppers,Spatulas & Ladles,Peelers & Graters,Chopping Boards,Strainers', is_required: true }, { attribute_name: 'Material', attribute_type: 'select', options: 'Stainless Steel,Silicone,Wooden,Plastic', is_required: false } ] },
+
+  // SUB-CATEGORIES (Kitchen Appliances)
+  { name: 'Small Kitchen Appliances', is_imei_based: true, parent_name: 'Kitchen Appliances', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Blender & Juicer,Food Processor/Chopper,Microwave Oven,Air Fryer,Toaster,Electric Kettle,Coffee Maker', is_required: true }, { attribute_name: 'Power/Wattage', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Storage & Organization)
+  { name: 'Food Storage & Containers', is_imei_based: false, parent_name: 'Storage & Organization', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Spice Jars,Tupperware,Storage Boxes,Water Coolers,Lunch Boxes', is_required: true }, { attribute_name: 'Material', attribute_type: 'select', options: 'Glass,Plastic,Stainless Steel', is_required: false }, { attribute_name: 'Capacity', attribute_type: 'text', is_required: false } ] }
+];
+
+// --- GROCERY & MINIMART CATEGORIES BLUEPRINT (Global Standard) ---
+const GROCERY_CATEGORIES = [
+  // PARENTS (Main Categories)
+  { name: 'Grocery & Staples', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Beverages', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Snacks & Confectionery', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Dairy & Breakfast', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Personal Care', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Household & Cleaning', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Grocery & Staples)
+  { name: 'Cooking Oil & Ghee', is_imei_based: false, parent_name: 'Grocery & Staples', attributes: [ { attribute_name: 'Volume/Weight', attribute_type: 'select', options: '1 Ltr,1 Kg,3 Ltr,5 Ltr,5 Kg', is_required: false }, { attribute_name: 'Packaging', attribute_type: 'select', options: 'Pouch,Bottle,Tin', is_required: false } ] },
+  { name: 'Flour & Rice', is_imei_based: false, parent_name: 'Grocery & Staples', attributes: [ { attribute_name: 'Weight', attribute_type: 'select', options: '1 Kg,5 Kg,10 Kg,20 Kg', is_required: false } ] },
+  { name: 'Pulses & Grains', is_imei_based: false, parent_name: 'Grocery & Staples', attributes: [ { attribute_name: 'Weight', attribute_type: 'select', options: '500g,1 Kg', is_required: false } ] },
+  { name: 'Spices & Recipe Mixes', is_imei_based: false, parent_name: 'Grocery & Staples', attributes: [ { attribute_name: 'Weight', attribute_type: 'select', options: '50g,100g,200g', is_required: false } ] },
+  { name: 'Sugar & Salt', is_imei_based: false, parent_name: 'Grocery & Staples', attributes: [ { attribute_name: 'Weight', attribute_type: 'select', options: '800g,1 Kg', is_required: false } ] },
+  { name: 'Tea & Coffee', is_imei_based: false, parent_name: 'Grocery & Staples', attributes: [ { attribute_name: 'Weight', attribute_type: 'select', options: '50g,95g,190g,380g,430g,900g', is_required: false } ] },
+
+  // SUB-CATEGORIES (Beverages)
+  { name: 'Soft Drinks & Sodas', is_imei_based: false, parent_name: 'Beverages', attributes: [ { attribute_name: 'Volume', attribute_type: 'select', options: '250ml,300ml Can,500ml,1 Ltr,1.5 Ltr,2.25 Ltr', is_required: false } ] },
+  { name: 'Juices & Energy Drinks', is_imei_based: false, parent_name: 'Beverages', attributes: [ { attribute_name: 'Volume', attribute_type: 'select', options: '200ml,250ml,1 Ltr', is_required: false } ] },
+  { name: 'Mineral Water', is_imei_based: false, parent_name: 'Beverages', attributes: [ { attribute_name: 'Volume', attribute_type: 'select', options: '500ml,1.5 Ltr,5 Ltr,19 Ltr', is_required: false } ] },
+
+  // SUB-CATEGORIES (Snacks)
+  { name: 'Biscuits & Cookies', is_imei_based: false, parent_name: 'Snacks & Confectionery', attributes: [ { attribute_name: 'Packaging', attribute_type: 'select', options: 'Tuck Pack,Half Roll,Family Pack', is_required: false } ] },
+  { name: 'Chips & Crisps', is_imei_based: false, parent_name: 'Snacks & Confectionery', attributes: [ { attribute_name: 'Flavor', attribute_type: 'text', is_required: false } ] },
+  { name: 'Chocolates & Candies', is_imei_based: false, parent_name: 'Snacks & Confectionery', attributes: [] },
+
+  // SUB-CATEGORIES (Dairy)
+  { name: 'Milk (Liquid)', is_imei_based: false, parent_name: 'Dairy & Breakfast', attributes: [ { attribute_name: 'Volume', attribute_type: 'select', options: '250ml,1 Ltr', is_required: false } ] },
+  { name: 'Milk (Powder)', is_imei_based: false, parent_name: 'Dairy & Breakfast', attributes: [ { attribute_name: 'Weight', attribute_type: 'select', options: '390g,900g,1000g', is_required: false } ] },
+  { name: 'Butter, Cheese & Margarine', is_imei_based: false, parent_name: 'Dairy & Breakfast', attributes: [] },
+  { name: 'Bread, Rusk & Eggs', is_imei_based: false, parent_name: 'Dairy & Breakfast', attributes: [] },
+
+  // SUB-CATEGORIES (Personal Care)
+  { name: 'Hair Care', is_imei_based: false, parent_name: 'Personal Care', attributes: [ { attribute_name: 'Volume', attribute_type: 'select', options: '100ml,200ml,400ml', is_required: false } ] },
+  { name: 'Skin Care & Lotions', is_imei_based: false, parent_name: 'Personal Care', attributes: [] },
+  { name: 'Soaps & Body Wash', is_imei_based: false, parent_name: 'Personal Care', attributes: [] },
+  { name: 'Oral Care', is_imei_based: false, parent_name: 'Personal Care', attributes: [] },
+
+  // SUB-CATEGORIES (Household)
+  { name: 'Laundry Detergents', is_imei_based: false, parent_name: 'Household & Cleaning', attributes: [ { attribute_name: 'Weight', attribute_type: 'select', options: '500g,1 Kg,3 Kg', is_required: false } ] },
+  { name: 'Dishwashing Liquids', is_imei_based: false, parent_name: 'Household & Cleaning', attributes: [] },
+  { name: 'Surface Cleaners & Disinfectants', is_imei_based: false, parent_name: 'Household & Cleaning', attributes: [] }
+];
+
+// --- PHARMACY & MEDICAL STORE CATEGORIES BLUEPRINT (Global Standard) ---
+const PHARMACY_CATEGORIES = [
+  // PARENTS (Main Categories)
+  { name: 'Medicines (Rx & OTC)', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Manufacturer/Company', attribute_type: 'text', is_required: false }, { attribute_name: 'Generic Formula (Salt)', attribute_type: 'text', is_required: false }, { attribute_name: 'Power/Strength (mg/ml)', attribute_type: 'text', is_required: false }, { attribute_name: 'Prescription Required', attribute_type: 'select', options: 'Yes,No', is_required: false } ] },
+  { name: 'Surgical & Disposables', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Manufacturer/Company', attribute_type: 'text', is_required: false } ] },
+  // NOTE: Medical Devices mein Serial Number/Warranty hoti hai, is liye isay is_imei_based: true rakha hai
+  { name: 'Medical Devices & Equipment', is_imei_based: true, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] }, 
+  { name: 'Vitamins & Supplements', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Target Audience', attribute_type: 'select', options: 'Men,Women,Kids,Seniors,General', is_required: false } ] },
+  { name: 'Baby & Mother Care', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Personal Care & Hygiene', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Medicines)
+  { name: 'Tablets & Capsules', is_imei_based: false, parent_name: 'Medicines (Rx & OTC)', attributes: [ { attribute_name: 'Pack Size', attribute_type: 'text', is_required: false } ] },
+  { name: 'Syrups & Suspensions', is_imei_based: false, parent_name: 'Medicines (Rx & OTC)', attributes: [ { attribute_name: 'Volume', attribute_type: 'select', options: '30ml,60ml,90ml,120ml,240ml', is_required: false } ] },
+  { name: 'Injections & Drips (IV/IM)', is_imei_based: false, parent_name: 'Medicines (Rx & OTC)', attributes: [ { attribute_name: 'Volume', attribute_type: 'text', is_required: false } ] },
+  { name: 'Creams, Ointments & Gels', is_imei_based: false, parent_name: 'Medicines (Rx & OTC)', attributes: [ { attribute_name: 'Weight', attribute_type: 'select', options: '5g,10g,15g,20g,50g', is_required: false } ] },
+  { name: 'Drops (Eye/Ear/Nasal)', is_imei_based: false, parent_name: 'Medicines (Rx & OTC)', attributes: [ { attribute_name: 'Volume', attribute_type: 'text', is_required: false } ] },
+  { name: 'Inhalers & Sprays', is_imei_based: false, parent_name: 'Medicines (Rx & OTC)', attributes: [ { attribute_name: 'Doses/Puffs', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Surgical & Disposables)
+  { name: 'First Aid & Dressings', is_imei_based: false, parent_name: 'Surgical & Disposables', attributes: [] },
+  { name: 'Syringes & Cannulas', is_imei_based: false, parent_name: 'Surgical & Disposables', attributes: [ { attribute_name: 'Size/Gauge', attribute_type: 'text', is_required: false } ] },
+  { name: 'Supports & Braces', is_imei_based: false, parent_name: 'Surgical & Disposables', attributes: [ { attribute_name: 'Size', attribute_type: 'select', options: 'S,M,L,XL,Universal', is_required: false } ] },
+
+  // SUB-CATEGORIES (Medical Devices - Per Item Tracking)
+  { name: 'Diagnostic Devices (BP/Sugar)', is_imei_based: true, parent_name: 'Medical Devices & Equipment', attributes: [ { attribute_name: 'Device Type', attribute_type: 'select', options: 'BP Monitor,Glucometer,Thermometer,Nebulizer', is_required: false } ] },
+  { name: 'Mobility Aids (Wheelchairs etc)', is_imei_based: true, parent_name: 'Medical Devices & Equipment', attributes: [ { attribute_name: 'Type', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Vitamins & Supplements)
+  { name: 'Multivitamins', is_imei_based: false, parent_name: 'Vitamins & Supplements', attributes: [] },
+  { name: 'Herbal & Homeopathic', is_imei_based: false, parent_name: 'Vitamins & Supplements', attributes: [] },
+
+  // SUB-CATEGORIES (Baby & Mother Care)
+  { name: 'Baby Food & Formula', is_imei_based: false, parent_name: 'Baby & Mother Care', attributes: [ { attribute_name: 'Age Group', attribute_type: 'select', options: '0-6 Months,6-12 Months,1-3 Years', is_required: false }, { attribute_name: 'Weight', attribute_type: 'select', options: '200g,400g,800g,900g', is_required: false } ] },
+  { name: 'Diapers & Wipes', is_imei_based: false, parent_name: 'Baby & Mother Care', attributes: [ { attribute_name: 'Size', attribute_type: 'select', options: 'Newborn,S,M,L,XL,XXL', is_required: false } ] },
+  
+  // SUB-CATEGORIES (Personal Care)
+  { name: 'Skin Care & Derma', is_imei_based: false, parent_name: 'Personal Care & Hygiene', attributes: [] },
+  { name: 'Feminine Hygiene', is_imei_based: false, parent_name: 'Personal Care & Hygiene', attributes: [] }
+];
+
+// --- GARMENTS & BOUTIQUE CATEGORIES BLUEPRINT (Global & Local Market) ---
+const GARMENTS_CATEGORIES = [
+  // PARENTS (Main Categories)
+  { name: 'Men\'s Apparel', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Fabric/Material', attribute_type: 'select', options: 'Cotton,Linen,Silk,Wool,Blended,Denim', is_required: false } ] },
+  { name: 'Women\'s Apparel', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Fabric/Material', attribute_type: 'select', options: 'Cotton,Lawn,Chiffon,Silk,Georgette,Khaddar', is_required: false } ] },
+  { name: 'Kids & Infants', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Unstitched Fabrics', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Fabric/Material', attribute_type: 'select', options: 'Cotton,Lawn,Silk,Khaddar,Linen', is_required: true } ] },
+  { name: 'Accessories', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Men's Apparel)
+  { name: 'Casual Wear', is_imei_based: false, parent_name: 'Men\'s Apparel', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'T-Shirts,Polo Shirts,Jeans,Shorts', is_required: true }, { attribute_name: 'Size', attribute_type: 'select', options: 'S,M,L,XL,XXL', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Formal Wear', is_imei_based: false, parent_name: 'Men\'s Apparel', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Dress Shirts,Trousers,Suits,Blazers', is_required: true }, { attribute_name: 'Size', attribute_type: 'select', options: '38,39,40,41,42,44', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Ethnic & Traditional', is_imei_based: false, parent_name: 'Men\'s Apparel', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Kurta,Traditional Suits,Waistcoats', is_required: true }, { attribute_name: 'Size', attribute_type: 'select', options: 'S,M,L,XL,Custom', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Women's Apparel)
+  { name: 'Western Wear', is_imei_based: false, parent_name: 'Women\'s Apparel', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Tops,Dresses,Jeans,Skirts', is_required: true }, { attribute_name: 'Size', attribute_type: 'select', options: 'XS,S,M,L,XL', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Ethnic & Traditional', is_imei_based: false, parent_name: 'Women\'s Apparel', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Kurtis,2-Piece Suits,3-Piece Suits,Trousers/Bottoms', is_required: true }, { attribute_name: 'Size', attribute_type: 'select', options: 'XS,S,M,L,XL,Free Size', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Sleepwear & Loungewear', is_imei_based: false, parent_name: 'Women\'s Apparel', attributes: [ { attribute_name: 'Size', attribute_type: 'select', options: 'S,M,L,XL', is_required: true } ] },
+
+  // SUB-CATEGORIES (Kids & Infants)
+  { name: 'Boys Clothing', is_imei_based: false, parent_name: 'Kids & Infants', attributes: [ { attribute_name: 'Age Group', attribute_type: 'select', options: '2-4 Yrs,5-7 Yrs,8-10 Yrs,11-14 Yrs', is_required: true } ] },
+  { name: 'Girls Clothing', is_imei_based: false, parent_name: 'Kids & Infants', attributes: [ { attribute_name: 'Age Group', attribute_type: 'select', options: '2-4 Yrs,5-7 Yrs,8-10 Yrs,11-14 Yrs', is_required: true } ] },
+  { name: 'Infants & Toddlers', is_imei_based: false, parent_name: 'Kids & Infants', attributes: [ { attribute_name: 'Age Group', attribute_type: 'select', options: '0-3 Months,3-6 Months,6-12 Months,1-2 Yrs', is_required: true } ] },
+
+  // SUB-CATEGORIES (Unstitched Fabrics)
+  { name: 'Men\'s Unstitched', is_imei_based: false, parent_name: 'Unstitched Fabrics', attributes: [ { attribute_name: 'Length', attribute_type: 'select', options: '4 Meters,4.5 Meters,5 Meters', is_required: false }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Women\'s Unstitched', is_imei_based: false, parent_name: 'Unstitched Fabrics', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: '1-Piece (Shirt),2-Piece,3-Piece', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Accessories)
+  { name: 'Shawls & Scarves', is_imei_based: false, parent_name: 'Accessories', attributes: [ { attribute_name: 'Material', attribute_type: 'select', options: 'Wool,Silk,Pashmina,Cotton', is_required: false } ] },
+  { name: 'Belts, Ties & Caps', is_imei_based: false, parent_name: 'Accessories', attributes: [ { attribute_name: 'Material', attribute_type: 'text', is_required: false } ] }
+];
+
+// --- FOOTWEAR & SHOES CATEGORIES BLUEPRINT ---
+const FOOTWEAR_CATEGORIES = [
+  // PARENTS (Main Categories)
+  { name: 'Men\'s Footwear', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Material', attribute_type: 'select', options: 'Genuine Leather,Synthetic/PU,Suede,Canvas,Mesh', is_required: false } ] },
+  { name: 'Women\'s Footwear', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Material', attribute_type: 'select', options: 'Leather,Synthetic,Fabric,Suede', is_required: false } ] },
+  { name: 'Kids Footwear', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Shoe Care & Accessories', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Men's Footwear)
+  { name: 'Casual & Sneakers', is_imei_based: false, parent_name: 'Men\'s Footwear', attributes: [ { attribute_name: 'Size (EU)', attribute_type: 'select', options: '39,40,41,42,43,44,45', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Formal Shoes', is_imei_based: false, parent_name: 'Men\'s Footwear', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Oxfords,Loafers,Brogues,Derbys', is_required: true }, { attribute_name: 'Size (EU)', attribute_type: 'select', options: '39,40,41,42,43,44,45', is_required: true }, { attribute_name: 'Color', attribute_type: 'select', options: 'Black,Brown,Tan', is_required: false } ] },
+  { name: 'Ethnic Sandals & Slippers', is_imei_based: false, parent_name: 'Men\'s Footwear', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Traditional Sandals,Slippers,Flip Flops', is_required: true }, { attribute_name: 'Size', attribute_type: 'select', options: '39,40,41,42,43,44,45', is_required: true } ] },
+  { name: 'Sports & Activewear', is_imei_based: false, parent_name: 'Men\'s Footwear', attributes: [ { attribute_name: 'Size (EU)', attribute_type: 'select', options: '39,40,41,42,43,44,45', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Women's Footwear)
+  { name: 'Heels & Pumps', is_imei_based: false, parent_name: 'Women\'s Footwear', attributes: [ { attribute_name: 'Size (EU)', attribute_type: 'select', options: '36,37,38,39,40,41', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Flats & Sandals', is_imei_based: false, parent_name: 'Women\'s Footwear', attributes: [ { attribute_name: 'Size (EU)', attribute_type: 'select', options: '36,37,38,39,40,41', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Sneakers & Casuals', is_imei_based: false, parent_name: 'Women\'s Footwear', attributes: [ { attribute_name: 'Size (EU)', attribute_type: 'select', options: '36,37,38,39,40,41', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Ethnic Footwear', is_imei_based: false, parent_name: 'Women\'s Footwear', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Khussa,Traditional Sandals', is_required: true }, { attribute_name: 'Size (EU)', attribute_type: 'select', options: '36,37,38,39,40,41', is_required: true } ] },
+
+  // SUB-CATEGORIES (Kids Footwear)
+  { name: 'Boys Shoes', is_imei_based: false, parent_name: 'Kids Footwear', attributes: [ { attribute_name: 'Age Group', attribute_type: 'select', options: 'Toddler (1-3 Yrs),Kids (4-8 Yrs),Youth (9-14 Yrs)', is_required: true }, { attribute_name: 'Type', attribute_type: 'select', options: 'Sneakers,Sandals,School Shoes', is_required: false } ] },
+  { name: 'Girls Shoes', is_imei_based: false, parent_name: 'Kids Footwear', attributes: [ { attribute_name: 'Age Group', attribute_type: 'select', options: 'Toddler (1-3 Yrs),Kids (4-8 Yrs),Youth (9-14 Yrs)', is_required: true }, { attribute_name: 'Type', attribute_type: 'select', options: 'Sneakers,Sandals,Flats,School Shoes', is_required: false } ] },
+
+  // SUB-CATEGORIES (Shoe Care & Accessories)
+  { name: 'Shoe Polish & Cleaners', is_imei_based: false, parent_name: 'Shoe Care & Accessories', attributes: [ { attribute_name: 'Color', attribute_type: 'select', options: 'Black,Brown,Neutral/Clear', is_required: false } ] },
+  { name: 'Socks & Insoles', is_imei_based: false, parent_name: 'Shoe Care & Accessories', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Men\'s Socks,Women\'s Socks,Kids Socks,Insoles', is_required: true } ] }
+];
+
+// --- HARDWARE & SANITARY CATEGORIES BLUEPRINT ---
+const HARDWARE_CATEGORIES = [
+  // PARENTS (Main Categories)
+  { name: 'Plumbing & Sanitary', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Material', attribute_type: 'select', options: 'PVC,CPVC,Brass,Stainless Steel,Ceramic', is_required: false } ] },
+  { name: 'Electrical & Lighting', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Paints & Chemicals', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Hardware & Fasteners', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Material', attribute_type: 'select', options: 'Iron,Steel,Brass,Aluminum', is_required: false } ] },
+  { name: 'Building Materials', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Plumbing & Sanitary)
+  { name: 'Pipes & Fittings', is_imei_based: false, parent_name: 'Plumbing & Sanitary', attributes: [ { attribute_name: 'Size/Diameter', attribute_type: 'select', options: '1/2 Inch,3/4 Inch,1 Inch,1.5 Inch,2 Inch', is_required: true }, { attribute_name: 'Type', attribute_type: 'select', options: 'Elbow,Tee,Socket,Union,Pipe Roll', is_required: true } ] },
+  { name: 'Taps, Faucets & Mixers', is_imei_based: false, parent_name: 'Plumbing & Sanitary', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Basin Mixer,Sink Mixer,Pillar Tap,Muslim Shower', is_required: true } ] },
+  { name: 'Bathroom Fixtures', is_imei_based: false, parent_name: 'Plumbing & Sanitary', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Commode,Wash Basin,Flush Tank,Shower Head', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Water Pumps & Motors', is_imei_based: true, parent_name: 'Plumbing & Sanitary', attributes: [ { attribute_name: 'Horsepower (HP)', attribute_type: 'select', options: '0.5 HP,1 HP,1.5 HP,2 HP', is_required: true } ] },
+
+  // SUB-CATEGORIES (Electrical & Lighting)
+  { name: 'Cables & Wires', is_imei_based: false, parent_name: 'Electrical & Lighting', attributes: [ { attribute_name: 'Core/Size', attribute_type: 'select', options: '3/0.29,7/0.29,7/0.36,7/0.44', is_required: true }, { attribute_name: 'Coil Length', attribute_type: 'text', is_required: false } ] },
+  { name: 'Switches & Sockets', is_imei_based: false, parent_name: 'Electrical & Lighting', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: '1-Way Switch,2-Way Switch,Universal Socket,Dimmer', is_required: true }, { attribute_name: 'Ampere (A)', attribute_type: 'text', is_required: false } ] },
+  { name: 'Lighting & Bulbs', is_imei_based: false, parent_name: 'Electrical & Lighting', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'LED Bulb,Tube Light,Panel Light,Flood Light', is_required: true }, { attribute_name: 'Wattage (W)', attribute_type: 'text', is_required: true }, { attribute_name: 'Color Temperature', attribute_type: 'select', options: 'Warm White,Cool White,Daylight', is_required: false } ] },
+  { name: 'Circuit Breakers (MCB)', is_imei_based: false, parent_name: 'Electrical & Lighting', attributes: [ { attribute_name: 'Poles', attribute_type: 'select', options: 'Single Pole,Double Pole,Triple Pole', is_required: true }, { attribute_name: 'Ampere (A)', attribute_type: 'text', is_required: true } ] },
+
+  // SUB-CATEGORIES (Paints & Chemicals)
+  { name: 'Interior & Exterior Paints', is_imei_based: false, parent_name: 'Paints & Chemicals', attributes: [ { attribute_name: 'Finish', attribute_type: 'select', options: 'Matt,Gloss,Silk,Weather Shield', is_required: true }, { attribute_name: 'Volume', attribute_type: 'select', options: '1 Ltr,4 Ltr (Gallon),16 Ltr (Drum)', is_required: true }, { attribute_name: 'Color/Shade', attribute_type: 'text', is_required: true } ] },
+  { name: 'Primers, Putty & Thinners', is_imei_based: false, parent_name: 'Paints & Chemicals', attributes: [ { attribute_name: 'Volume/Weight', attribute_type: 'text', is_required: true } ] },
+  { name: 'Brushes & Rollers', is_imei_based: false, parent_name: 'Paints & Chemicals', attributes: [ { attribute_name: 'Size', attribute_type: 'select', options: '1 Inch,2 Inch,3 Inch,4 Inch,Roller Set', is_required: true } ] },
+
+  // SUB-CATEGORIES (Hardware & Fasteners)
+  { name: 'Nuts, Bolts & Screws', is_imei_based: false, parent_name: 'Hardware & Fasteners', attributes: [ { attribute_name: 'Size/Length', attribute_type: 'text', is_required: true }, { attribute_name: 'Packaging', attribute_type: 'select', options: 'Per Piece,Box,Kg', is_required: true } ] },
+  { name: 'Door Locks & Handles', is_imei_based: false, parent_name: 'Hardware & Fasteners', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Mortise Lock,Padlock,Cylinder Lock,Door Handle', is_required: true } ] },
+  { name: 'Hinges & Brackets', is_imei_based: false, parent_name: 'Hardware & Fasteners', attributes: [ { attribute_name: 'Size', attribute_type: 'text', is_required: false } ] }
+];
+
+// --- COSMETICS & BEAUTY CATEGORIES BLUEPRINT ---
+const COSMETICS_CATEGORIES = [
+  // PARENTS (Main Categories)
+  { name: 'Makeup & Cosmetics', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Skin Type', attribute_type: 'select', options: 'All Skin Types,Oily,Dry,Combination,Sensitive', is_required: false } ] },
+  { name: 'Skin Care', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Skin Type', attribute_type: 'select', options: 'All Skin Types,Oily,Dry,Combination,Sensitive', is_required: false } ] },
+  { name: 'Hair Care & Styling', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Fragrances & Perfumes', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Gender', attribute_type: 'select', options: 'Men,Women,Unisex', is_required: false } ] },
+  { name: 'Personal Grooming', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Makeup & Cosmetics)
+  { name: 'Face Makeup', is_imei_based: false, parent_name: 'Makeup & Cosmetics', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Foundation,Face Powder,Concealer,Blush,Primer', is_required: true }, { attribute_name: 'Shade/Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Eye Makeup', is_imei_based: false, parent_name: 'Makeup & Cosmetics', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Mascara,Eyeliner,Eyeshadow Palette,Kajal', is_required: true }, { attribute_name: 'Shade/Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Lip Makeup', is_imei_based: false, parent_name: 'Makeup & Cosmetics', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Lipstick,Lip Gloss,Lip Liner,Lip Balm', is_required: true }, { attribute_name: 'Shade/Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Makeup Tools & Brushes', is_imei_based: false, parent_name: 'Makeup & Cosmetics', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Brush Set,Beauty Blender,Eyelash Curler', is_required: true } ] },
+
+  // SUB-CATEGORIES (Skin Care)
+  { name: 'Cleansers & Face Wash', is_imei_based: false, parent_name: 'Skin Care', attributes: [ { attribute_name: 'Volume', attribute_type: 'select', options: '50ml,100ml,150ml,200ml', is_required: false } ] },
+  { name: 'Moisturizers & Creams', is_imei_based: false, parent_name: 'Skin Care', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Day Cream,Night Cream,Lotion,Whitening Cream', is_required: true }, { attribute_name: 'Volume/Weight', attribute_type: 'text', is_required: false } ] },
+  { name: 'Serums & Treatments', is_imei_based: false, parent_name: 'Skin Care', attributes: [ { attribute_name: 'Concern', attribute_type: 'select', options: 'Anti-Aging,Acne,Brightening,Hydration', is_required: false }, { attribute_name: 'Volume', attribute_type: 'text', is_required: false } ] },
+  { name: 'Sunscreens & Sunblocks', is_imei_based: false, parent_name: 'Skin Care', attributes: [ { attribute_name: 'SPF Rating', attribute_type: 'select', options: 'SPF 30,SPF 40,SPF 50,SPF 60+', is_required: true } ] },
+
+  // SUB-CATEGORIES (Hair Care & Styling)
+  { name: 'Shampoos & Conditioners', is_imei_based: false, parent_name: 'Hair Care & Styling', attributes: [ { attribute_name: 'Hair Type', attribute_type: 'select', options: 'Normal,Dry,Oily,Anti-Dandruff,Hair Fall', is_required: false }, { attribute_name: 'Volume', attribute_type: 'text', is_required: false } ] },
+  { name: 'Hair Colors & Dyes', is_imei_based: false, parent_name: 'Hair Care & Styling', attributes: [ { attribute_name: 'Shade/Color Number', attribute_type: 'text', is_required: true } ] },
+  { name: 'Hair Oils & Serums', is_imei_based: false, parent_name: 'Hair Care & Styling', attributes: [ { attribute_name: 'Volume', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Fragrances & Perfumes)
+  { name: 'Perfumes (EDP/EDT)', is_imei_based: false, parent_name: 'Fragrances & Perfumes', attributes: [ { attribute_name: 'Volume', attribute_type: 'select', options: '30ml,50ml,100ml,150ml', is_required: true } ] },
+  { name: 'Body Sprays & Deodorants', is_imei_based: false, parent_name: 'Fragrances & Perfumes', attributes: [ { attribute_name: 'Volume', attribute_type: 'text', is_required: false } ] },
+  { name: 'Attar & Essential Oils', is_imei_based: false, parent_name: 'Fragrances & Perfumes', attributes: [ { attribute_name: 'Volume', attribute_type: 'select', options: '3ml,6ml,12ml,24ml', is_required: true } ] },
+
+  // SUB-CATEGORIES (Personal Grooming)
+  { name: 'Hair Removal & Shaving', is_imei_based: false, parent_name: 'Personal Grooming', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Razors,Shaving Cream,Wax Strips,Hair Removal Cream', is_required: true } ] },
+  { name: 'Nail Care & Polish', is_imei_based: false, parent_name: 'Personal Grooming', attributes: [ { attribute_name: 'Shade/Color', attribute_type: 'text', is_required: false } ] }
+];
+
+// --- AUTO PARTS & ACCESSORIES CATEGORIES BLUEPRINT ---
+const AUTOPARTS_CATEGORIES = [
+  // PARENTS (Main Categories)
+  { name: 'Engine & Mechanical Parts', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Compatible Make', attribute_type: 'select', options: 'Toyota,Honda,Suzuki,Kia,Hyundai,Universal', is_required: true }, { attribute_name: 'Compatible Model/Year', attribute_type: 'text', is_required: false }, { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Exterior & Body Parts', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Compatible Make', attribute_type: 'select', options: 'Toyota,Honda,Suzuki,Kia,Hyundai,Universal', is_required: true }, { attribute_name: 'Compatible Model/Year', attribute_type: 'text', is_required: false } ] },
+  { name: 'Interior & Accessories', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Oils, Fluids & Lubricants', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Electrical & Lighting', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Compatible Make', attribute_type: 'text', is_required: false }, { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Tires & Wheels', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Engine & Mechanical)
+  { name: 'Filters (Oil, Air, Cabin)', is_imei_based: false, parent_name: 'Engine & Mechanical Parts', attributes: [ { attribute_name: 'Filter Type', attribute_type: 'select', options: 'Oil Filter,Air Filter,Cabin/AC Filter,Fuel Filter', is_required: true }, { attribute_name: 'Quality', attribute_type: 'select', options: 'Genuine/OEM,Aftermarket', is_required: false } ] },
+  { name: 'Belts & Chains', is_imei_based: false, parent_name: 'Engine & Mechanical Parts', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Fan Belt,Timing Belt,Timing Chain', is_required: true } ] },
+  { name: 'Brake Pads & Shoes', is_imei_based: false, parent_name: 'Engine & Mechanical Parts', attributes: [ { attribute_name: 'Position', attribute_type: 'select', options: 'Front,Rear', is_required: true }, { attribute_name: 'Quality', attribute_type: 'select', options: 'Genuine/OEM,Ceramic,Semi-Metallic', is_required: false } ] },
+  { name: 'Spark Plugs & Ignition', is_imei_based: false, parent_name: 'Engine & Mechanical Parts', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Iridium,Platinum,Copper', is_required: false } ] },
+  { name: 'Suspension & Steering', is_imei_based: false, parent_name: 'Engine & Mechanical Parts', attributes: [ { attribute_name: 'Part Type', attribute_type: 'select', options: 'Shock Absorber,Tie Rod,Bushings,Mounts', is_required: true } ] },
+
+  // SUB-CATEGORIES (Exterior & Body)
+  { name: 'Bumpers & Grilles', is_imei_based: false, parent_name: 'Exterior & Body Parts', attributes: [ { attribute_name: 'Position', attribute_type: 'select', options: 'Front,Rear', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Mirrors & Glasses', is_imei_based: false, parent_name: 'Exterior & Body Parts', attributes: [ { attribute_name: 'Position', attribute_type: 'select', options: 'Left Side (Passenger),Right Side (Driver),Rear View', is_required: true } ] },
+  { name: 'Wiper Blades', is_imei_based: false, parent_name: 'Exterior & Body Parts', attributes: [ { attribute_name: 'Size (Inches)', attribute_type: 'text', is_required: true } ] },
+
+  // SUB-CATEGORIES (Interior & Accessories)
+  { name: 'Seat Covers & Mats', is_imei_based: false, parent_name: 'Interior & Accessories', attributes: [ { attribute_name: 'Material', attribute_type: 'select', options: 'Leather,Fabric,Rubber/PVC (Mats),7D/9D Mats', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Car Care & Cleaning', is_imei_based: false, parent_name: 'Interior & Accessories', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Car Wash/Shampoo,Wax & Polish,Microfiber Cloth,Dashboard Polish', is_required: true } ] },
+  { name: 'Audio & Entertainment', is_imei_based: true, parent_name: 'Interior & Accessories', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Android Panel,Speakers,Amplifier,Woofer', is_required: true }, { attribute_name: 'Screen Size', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Oils, Fluids & Lubricants)
+  { name: 'Engine Oils', is_imei_based: false, parent_name: 'Oils, Fluids & Lubricants', attributes: [ { attribute_name: 'Grade/Viscosity', attribute_type: 'select', options: '0W-20,5W-30,10W-40,20W-50', is_required: true }, { attribute_name: 'Volume', attribute_type: 'select', options: '1 Ltr,3 Ltr,4 Ltr', is_required: true }, { attribute_name: 'Type', attribute_type: 'select', options: 'Fully Synthetic,Semi-Synthetic,Mineral', is_required: false } ] },
+  { name: 'Brake Fluids & Coolants', is_imei_based: false, parent_name: 'Oils, Fluids & Lubricants', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Brake Fluid (DOT 3/4),Radiator Coolant,Power Steering Fluid', is_required: true }, { attribute_name: 'Volume', attribute_type: 'text', is_required: true } ] },
+
+  // SUB-CATEGORIES (Electrical & Lighting)
+  { name: 'Batteries', is_imei_based: true, parent_name: 'Electrical & Lighting', attributes: [ { attribute_name: 'Ampere Hours (Ah)', attribute_type: 'text', is_required: true }, { attribute_name: 'Type', attribute_type: 'select', options: 'Dry Battery,Lead-Acid (Liquid)', is_required: false } ] },
+  { name: 'Headlights & Bulbs', is_imei_based: false, parent_name: 'Electrical & Lighting', attributes: [ { attribute_name: 'Bulb Type', attribute_type: 'select', options: 'Halogen,LED,HID,Xenon', is_required: true }, { attribute_name: 'Socket Type', attribute_type: 'select', options: 'H4,H7,H11,9005,9006', is_required: false } ] },
+  { name: 'Horns & Security', is_imei_based: false, parent_name: 'Electrical & Lighting', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Horn,Security Alarm,Tracker', is_required: true } ] },
+
+  // SUB-CATEGORIES (Tires & Wheels)
+  { name: 'Tires', is_imei_based: false, parent_name: 'Tires & Wheels', attributes: [ { attribute_name: 'Size', attribute_type: 'text', is_required: true }, { attribute_name: 'Type', attribute_type: 'select', options: 'Tubeless,Tube Type', is_required: false } ] },
+  { name: 'Alloy Rims & Covers', is_imei_based: false, parent_name: 'Tires & Wheels', attributes: [ { attribute_name: 'Size (Inches)', attribute_type: 'text', is_required: true } ] }
+];
+
+// --- POWER TOOLS & MACHINERY CATEGORIES BLUEPRINT ---
+const TOOLS_CATEGORIES = [
+  // PARENTS (Main Categories)
+  { name: 'Power Tools', is_imei_based: true, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Power Source', attribute_type: 'select', options: 'Corded Electric,Cordless (Battery),Pneumatic', is_required: true } ] },
+  { name: 'Hand Tools', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Material', attribute_type: 'text', is_required: false } ] },
+  { name: 'Measuring & Layout', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Safety Equipment (PPE)', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Welding & Soldering', is_imei_based: true, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Tool Accessories & Bits', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Power Tools)
+  { name: 'Drills & Drivers', is_imei_based: true, parent_name: 'Power Tools', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Impact Drill,Hammer Drill,Screwdriver,Rotary Hammer', is_required: true }, { attribute_name: 'Chuck Size', attribute_type: 'select', options: '10mm,13mm,SDS', is_required: false } ] },
+  { name: 'Grinders & Polishers', is_imei_based: true, parent_name: 'Power Tools', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Angle Grinder,Bench Grinder,Polisher', is_required: true }, { attribute_name: 'Disc Size', attribute_type: 'select', options: '4 Inch,4.5 Inch,5 Inch,7 Inch,9 Inch', is_required: true } ] },
+  { name: 'Saws & Cutters', is_imei_based: true, parent_name: 'Power Tools', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Circular Saw,Jigsaw,Marble Cutter,Chop Saw', is_required: true }, { attribute_name: 'Blade Size', attribute_type: 'text', is_required: false } ] },
+  { name: 'Air Compressors & Blowers', is_imei_based: true, parent_name: 'Power Tools', attributes: [ { attribute_name: 'Capacity/Power', attribute_type: 'text', is_required: true } ] },
+
+  // SUB-CATEGORIES (Hand Tools)
+  { name: 'Wrenches & Spanners', is_imei_based: false, parent_name: 'Hand Tools', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Adjustable Wrench,Ring Spanner,Open End Spanner,Pipe Wrench', is_required: true }, { attribute_name: 'Size', attribute_type: 'text', is_required: true } ] },
+  { name: 'Pliers & Cutters', is_imei_based: false, parent_name: 'Hand Tools', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Combination Plier,Nose Plier,Wire Cutter,Locking Plier', is_required: true }, { attribute_name: 'Size', attribute_type: 'text', is_required: false } ] },
+  { name: 'Screwdrivers & Allen Keys', is_imei_based: false, parent_name: 'Hand Tools', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Flat/Minus,Philips/Plus,Star/Torx,Allen Key Set,Screwdriver Set', is_required: true } ] },
+  { name: 'Hammers & Mallets', is_imei_based: false, parent_name: 'Hand Tools', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Claw Hammer,Ball Peen Hammer,Rubber Mallet,Sledge Hammer', is_required: true }, { attribute_name: 'Weight', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Measuring & Layout)
+  { name: 'Measuring Tapes & Scales', is_imei_based: false, parent_name: 'Measuring & Layout', attributes: [ { attribute_name: 'Length', attribute_type: 'select', options: '3 Meter,5 Meter,10 Meter,30 Meter,50 Meter', is_required: true } ] },
+  { name: 'Levels & Squares', is_imei_based: false, parent_name: 'Measuring & Layout', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Spirit Level,Try Square,Laser Level', is_required: true } ] },
+  { name: 'Calipers & Micrometers', is_imei_based: false, parent_name: 'Measuring & Layout', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Vernier Caliper,Digital Caliper,Micrometer', is_required: true } ] },
+
+  // SUB-CATEGORIES (Safety Equipment)
+  { name: 'Safety Gloves', is_imei_based: false, parent_name: 'Safety Equipment (PPE)', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Cotton,Rubber/Nitrile,Leather,Cut Resistant', is_required: true } ] },
+  { name: 'Helmets & Hard Hats', is_imei_based: false, parent_name: 'Safety Equipment (PPE)', attributes: [ { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Safety Shoes & Boots', is_imei_based: false, parent_name: 'Safety Equipment (PPE)', attributes: [ { attribute_name: 'Size (EU)', attribute_type: 'select', options: '39,40,41,42,43,44,45', is_required: true }, { attribute_name: 'Feature', attribute_type: 'select', options: 'Steel Toe,Non-Slip,Waterproof', is_required: false } ] },
+  { name: 'Goggles & Masks', is_imei_based: false, parent_name: 'Safety Equipment (PPE)', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Safety Glasses,Welding Goggles,Dust Mask,Respirator', is_required: true } ] },
+
+  // SUB-CATEGORIES (Welding & Soldering)
+  { name: 'Welding Machines', is_imei_based: true, parent_name: 'Welding & Soldering', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Inverter Welding,MIG,TIG,Arc', is_required: true }, { attribute_name: 'Ampere (A)', attribute_type: 'text', is_required: true } ] },
+  { name: 'Welding Rods & Accessories', is_imei_based: false, parent_name: 'Welding & Soldering', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Welding Rod,Welding Holder,Earth Clamp', is_required: true }, { attribute_name: 'Size/Gauge', attribute_type: 'text', is_required: false } ] },
+  { name: 'Soldering Irons & Wire', is_imei_based: false, parent_name: 'Welding & Soldering', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Soldering Iron,Soldering Wire,Paste/Flux', is_required: true }, { attribute_name: 'Wattage (W)', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES (Tool Accessories & Bits)
+  { name: 'Drill Bits & Sets', is_imei_based: false, parent_name: 'Tool Accessories & Bits', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Masonry (Concrete),HSS (Metal),Wood,SDS Plus', is_required: true }, { attribute_name: 'Size', attribute_type: 'text', is_required: true } ] },
+  { name: 'Cutting & Grinding Discs', is_imei_based: false, parent_name: 'Tool Accessories & Bits', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Cutting Disc (Metal),Grinding Disc,Marble Blade,Wood Blade,Flap Disc', is_required: true }, { attribute_name: 'Size (Inches)', attribute_type: 'select', options: '4 Inch,4.5 Inch,5 Inch,7 Inch,9 Inch,14 Inch', is_required: true } ] }
+];
+
+// --- BOOKS & STATIONERY CATEGORIES BLUEPRINT ---
+const STATIONERY_CATEGORIES = [
+  // PARENTS (Main Categories)
+  { name: 'Books & Media', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Publisher', attribute_type: 'text', is_required: false }, { attribute_name: 'Language', attribute_type: 'select', options: 'English,Urdu,Arabic,Other', is_required: false } ] },
+  { name: 'Office Stationery', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'School Supplies', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Art & Craft', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES
+  { name: 'Notebooks & Registers', is_imei_based: false, parent_name: 'School Supplies', attributes: [ { attribute_name: 'Pages', attribute_type: 'select', options: '100 Pages,200 Pages,300 Pages', is_required: false }, { attribute_name: 'Binding', attribute_type: 'select', options: 'Softcover,Hardcover,Spiral', is_required: false } ] },
+  { name: 'Writing Instruments', is_imei_based: false, parent_name: 'Office Stationery', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Ballpoint Pen,Gel Pen,Marker,Highlighter,Pencil', is_required: true }, { attribute_name: 'Color', attribute_type: 'select', options: 'Blue,Black,Red,Green', is_required: false } ] },
+  { name: 'Paper & Envelopes', is_imei_based: false, parent_name: 'Office Stationery', attributes: [ { attribute_name: 'Size', attribute_type: 'select', options: 'A4,A5,Letter,Legal', is_required: true }, { attribute_name: 'Weight (GSM)', attribute_type: 'select', options: '70 GSM,80 GSM,100 GSM', is_required: false } ] },
+  { name: 'School Bags & Pouches', is_imei_based: false, parent_name: 'School Supplies', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Backpack,Pencil Pouch,Lunch Bag', is_required: true } ] },
+  { name: 'Paints & Brushes', is_imei_based: false, parent_name: 'Art & Craft', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Acrylic,Watercolors,Oil Paints,Brushes', is_required: true } ] }
+];
+
+// --- TOYS & GAMES CATEGORIES BLUEPRINT ---
+const TOYS_CATEGORIES = [
+  // PARENTS (Main Categories)
+  { name: 'Action Figures & Collectibles', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Educational Toys', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Age Group', attribute_type: 'select', options: '0-3 Yrs,3-5 Yrs,6-8 Yrs,9+ Yrs', is_required: true } ] },
+  { name: 'Board Games & Puzzles', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Dolls & Soft Toys', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Size', attribute_type: 'select', options: 'Small,Medium,Large', is_required: false } ] },
+  { name: 'Remote Control (RC) Toys', is_imei_based: true, parent_name: null, attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'RC Car,RC Helicopter,Drone', is_required: true } ] },
+
+  // SUB-CATEGORIES
+  { name: 'Building Blocks & Lego', is_imei_based: false, parent_name: 'Educational Toys', attributes: [ { attribute_name: 'Pieces', attribute_type: 'text', is_required: false } ] },
+  { name: 'Card Games', is_imei_based: false, parent_name: 'Board Games & Puzzles', attributes: [ { attribute_name: 'Players', attribute_type: 'text', is_required: false } ] },
+  { name: 'Plush Toys', is_imei_based: false, parent_name: 'Dolls & Soft Toys', attributes: [ { attribute_name: 'Character/Animal', attribute_type: 'text', is_required: false } ] }
+];
+
+// --- SPORTS & OUTDOORS CATEGORIES BLUEPRINT ---
+const SPORTS_CATEGORIES = [
+  // PARENTS (Main Categories)
+  { name: 'Cricket Gear', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Football & Soccer', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Racquet Sports', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Fitness & Gym', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES
+  { name: 'Cricket Bats', is_imei_based: false, parent_name: 'Cricket Gear', attributes: [ { attribute_name: 'Material', attribute_type: 'select', options: 'English Willow,Kashmir Willow,Tape Ball/Wood', is_required: true }, { attribute_name: 'Weight', attribute_type: 'text', is_required: false } ] },
+  { name: 'Balls & Accessories', is_imei_based: false, parent_name: 'Cricket Gear', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Hard Ball,Tape Ball,Tennis Ball,Batting Gloves,Pads', is_required: true } ] },
+  { name: 'Footballs', is_imei_based: false, parent_name: 'Football & Soccer', attributes: [ { attribute_name: 'Size', attribute_type: 'select', options: 'Size 3,Size 4,Size 5', is_required: true } ] },
+  { name: 'Tennis & Badminton', is_imei_based: false, parent_name: 'Racquet Sports', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Tennis Racquet,Badminton Racquet,Shuttlecocks,Tennis Balls', is_required: true } ] },
+  { name: 'Gym Equipment', is_imei_based: true, parent_name: 'Fitness & Gym', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Treadmill,Exercise Bike,Dumbbells,Weight Plates', is_required: true } ] },
+  { name: 'Fitness Accessories', is_imei_based: false, parent_name: 'Fitness & Gym', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Yoga Mat,Resistance Bands,Skipping Rope,Gloves', is_required: true } ] }
+];
+
+// --- FURNITURE & HOME DECOR CATEGORIES BLUEPRINT ---
+const FURNITURE_CATEGORIES = [
+  // PARENTS (Main Categories)
+  { name: 'Living Room Furniture', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Material', attribute_type: 'select', options: 'Wood,Metal,Glass,Fabric,Leather', is_required: false } ] },
+  { name: 'Bedroom Furniture', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Material', attribute_type: 'text', is_required: false } ] },
+  { name: 'Office Furniture', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Home Decor', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Bedding & Bath', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES
+  { name: 'Sofas & Couches', is_imei_based: false, parent_name: 'Living Room Furniture', attributes: [ { attribute_name: 'Seating Capacity', attribute_type: 'select', options: '1 Seater,2 Seater,3 Seater,L-Shape,Sofa Set', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', is_required: false } ] },
+  { name: 'Tables & Centers', is_imei_based: false, parent_name: 'Living Room Furniture', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Center Table,Side Table,Console Table', is_required: true } ] },
+  { name: 'Beds & Mattresses', is_imei_based: false, parent_name: 'Bedroom Furniture', attributes: [ { attribute_name: 'Size', attribute_type: 'select', options: 'Single,Double,Queen,King,King XL', is_required: true } ] },
+  { name: 'Wardrobes & Cabinets', is_imei_based: false, parent_name: 'Bedroom Furniture', attributes: [ { attribute_name: 'Doors', attribute_type: 'select', options: '2 Doors,3 Doors,4 Doors,Sliding', is_required: true } ] },
+  { name: 'Chairs & Desks', is_imei_based: false, parent_name: 'Office Furniture', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Executive Chair,Staff Chair,Visitor Chair,Computer Desk', is_required: true } ] },
+  { name: 'Rugs & Carpets', is_imei_based: false, parent_name: 'Home Decor', attributes: [ { attribute_name: 'Size', attribute_type: 'text', is_required: true } ] },
+  { name: 'Bed Sheets & Covers', is_imei_based: false, parent_name: 'Bedding & Bath', attributes: [ { attribute_name: 'Size', attribute_type: 'select', options: 'Single,Double,King', is_required: true }, { attribute_name: 'Material', attribute_type: 'select', options: 'Cotton,Silk,Blended', is_required: false } ] }
+];
+
+// --- JEWELRY & WATCHES CATEGORIES BLUEPRINT ---
+const JEWELRY_CATEGORIES = [
+  // PARENTS (Main Categories)
+  { name: 'Fine Jewelry', is_imei_based: true, parent_name: null, attributes: [ { attribute_name: 'Material', attribute_type: 'select', options: 'Gold,Silver,Platinum', is_required: true }, { attribute_name: 'Purity', attribute_type: 'select', options: '24K,22K,21K,18K', is_required: true }, { attribute_name: 'Weight (Grams)', attribute_type: 'text', is_required: true } ] },
+  { name: 'Fashion & Artificial Jewelry', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false }, { attribute_name: 'Material', attribute_type: 'select', options: 'Brass,Copper,Alloy,Stainless Steel', is_required: false } ] },
+  { name: 'Watches', is_imei_based: true, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: true }, { attribute_name: 'Gender', attribute_type: 'select', options: 'Men,Women,Unisex,Kids', is_required: false } ] },
+
+  // SUB-CATEGORIES
+  { name: 'Rings', is_imei_based: true, parent_name: 'Fine Jewelry', attributes: [ { attribute_name: 'Ring Size', attribute_type: 'text', is_required: true }, { attribute_name: 'Gemstone', attribute_type: 'text', is_required: false } ] },
+  { name: 'Necklaces & Pendants', is_imei_based: true, parent_name: 'Fine Jewelry', attributes: [ { attribute_name: 'Length', attribute_type: 'text', is_required: false } ] },
+  { name: 'Earrings & Studs', is_imei_based: true, parent_name: 'Fine Jewelry', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Studs,Drops,Hoops,Danglers', is_required: true } ] },
+  { name: 'Bridal Sets', is_imei_based: false, parent_name: 'Fashion & Artificial Jewelry', attributes: [ { attribute_name: 'Color/Stone', attribute_type: 'text', is_required: false } ] },
+  { name: 'Bangles & Bracelets', is_imei_based: false, parent_name: 'Fashion & Artificial Jewelry', attributes: [ { attribute_name: 'Size', attribute_type: 'text', is_required: true } ] },
+  { name: 'Analog & Digital Watches', is_imei_based: true, parent_name: 'Watches', attributes: [ { attribute_name: 'Movement', attribute_type: 'select', options: 'Quartz (Battery),Automatic,Mechanical', is_required: true }, { attribute_name: 'Strap Material', attribute_type: 'select', options: 'Stainless Steel,Leather,Silicone,Resin', is_required: false }, { attribute_name: 'Dial Color', attribute_type: 'text', is_required: false } ] }
+];
+
+// --- PET SUPPLIES CATEGORIES BLUEPRINT ---
+const PET_CATEGORIES = [
+  // PARENTS (Main Categories)
+  { name: 'Cat Supplies', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Dog Supplies', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Birds & Fish', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  { name: 'Pet Accessories', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+
+  // SUB-CATEGORIES
+  { name: 'Cat Food', is_imei_based: false, parent_name: 'Cat Supplies', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Dry Food,Wet Food,Treats', is_required: true }, { attribute_name: 'Weight', attribute_type: 'select', options: '400g,1.2 Kg,2 Kg,7 Kg', is_required: true }, { attribute_name: 'Flavor', attribute_type: 'text', is_required: false } ] },
+  { name: 'Cat Litter', is_imei_based: false, parent_name: 'Cat Supplies', attributes: [ { attribute_name: 'Volume', attribute_type: 'select', options: '5 Ltr,10 Ltr,15 Ltr', is_required: true }, { attribute_name: 'Type', attribute_type: 'select', options: 'Bentonite,Silica Gel,Wood,Tofu', is_required: false } ] },
+  { name: 'Dog Food', is_imei_based: false, parent_name: 'Dog Supplies', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Dry Food,Wet Food,Treats,Bones', is_required: true }, { attribute_name: 'Weight', attribute_type: 'select', options: '1 Kg,3 Kg,10 Kg,15 Kg', is_required: true } ] },
+  { name: 'Bird Seed & Fish Food', is_imei_based: false, parent_name: 'Birds & Fish', attributes: [ { attribute_name: 'Weight', attribute_type: 'text', is_required: true } ] },
+  { name: 'Collars, Leashes & Harnesses', is_imei_based: false, parent_name: 'Pet Accessories', attributes: [ { attribute_name: 'Size', attribute_type: 'select', options: 'S,M,L,XL', is_required: true } ] },
+  { name: 'Pet Toys & Beds', is_imei_based: false, parent_name: 'Pet Accessories', attributes: [ { attribute_name: 'Type', attribute_type: 'text', is_required: true } ] }
 ];
 
 // --- DEFAULT EXPENSE CATEGORIES BLUEPRINT ---
@@ -174,7 +536,24 @@ const DataService = {
 
       // 2. PRODUCT CATEGORIES SETUP
       // Faisla karein ke kaunsi categories banani hain
-      const categoriesToCreate = businessType === 'Crockery' ? CROCKERY_CATEGORIES : DEFAULT_CATEGORIES;
+      let categoriesToCreate = DEFAULT_CATEGORIES;
+      if (businessType === 'Crockery') categoriesToCreate = CROCKERY_CATEGORIES;
+      else if (businessType === 'Grocery & Minimart') categoriesToCreate = GROCERY_CATEGORIES;
+      else if (businessType === 'Pharmacy & Medical') categoriesToCreate = PHARMACY_CATEGORIES;
+      else if (businessType === 'Garments & Boutique') categoriesToCreate = GARMENTS_CATEGORIES;
+      else if (businessType === 'Footwear & Shoes') categoriesToCreate = FOOTWEAR_CATEGORIES;
+      else if (businessType === 'Hardware & Sanitary') categoriesToCreate = HARDWARE_CATEGORIES;
+      else if (businessType === 'Cosmetics & Beauty') categoriesToCreate = COSMETICS_CATEGORIES;
+      else if (businessType === 'Auto Parts & Accessories') categoriesToCreate = AUTOPARTS_CATEGORIES;
+      else if (businessType === 'Power Tools & Machinery') categoriesToCreate = TOOLS_CATEGORIES;
+      else if (businessType === 'Books & Stationery') categoriesToCreate = STATIONERY_CATEGORIES; // NAYA IZAFA
+      else if (businessType === 'Toys & Games') categoriesToCreate = TOYS_CATEGORIES; // NAYA IZAFA
+      else if (businessType === 'Sports & Outdoors') categoriesToCreate = SPORTS_CATEGORIES; // NAYA IZAFA
+      else if (businessType === 'Furniture & Home Decor') categoriesToCreate = FURNITURE_CATEGORIES; // NAYA IZAFA
+      else if (businessType === 'Jewelry & Watches') categoriesToCreate = JEWELRY_CATEGORIES; // NAYA IZAFA
+      else if (businessType === 'Pet Supplies') categoriesToCreate = PET_CATEGORIES; // NAYA IZAFA
+
+      const createdCategoriesMap = {}; // NAYA IZAFA: Parent IDs yaad rakhne ke liye
 
       for (const catTemplate of categoriesToCreate) {
         // [IMPORTANT]: Har category ko add karne se pehle DB mein check karein
@@ -183,34 +562,47 @@ const DataService = {
           .and(c => c.user_id === userId)
           .first();
 
-        if (alreadyExists) continue; // Agar Call 1 ne bana di hai, to Call 2 yahan ruk jayegi
+        let categoryId;
+        if (alreadyExists) {
+            categoryId = alreadyExists.id; // Agar pehle se bani hai to uski ID le lo
+        } else {
+            categoryId = crypto.randomUUID();
+            let parentId = null;
+            
+            // Agar blueprint mein iska koi parent hai, to map se uski ID nikal lo
+            if (catTemplate.parent_name && createdCategoriesMap[catTemplate.parent_name]) {
+                parentId = createdCategoriesMap[catTemplate.parent_name];
+            }
 
-        const categoryId = crypto.randomUUID();
-        const categoryData = {
-          id: categoryId,
-          name: catTemplate.name,
-          is_imei_based: catTemplate.is_imei_based,
-          user_id: userId,
-          updated_at: new Date().toISOString()
-        };
+            const categoryData = {
+              id: categoryId,
+              name: catTemplate.name,
+              is_imei_based: catTemplate.is_imei_based,
+              parent_id: parentId, // NAYA IZAFA: Parent ID Database mein bhejna
+              user_id: userId,
+              updated_at: new Date().toISOString()
+            };
 
-        await db.categories.add(categoryData);
-        await db.sync_queue.add({ table_name: 'categories', action: 'create', data: categoryData });
+            await db.categories.add(categoryData);
+            await db.sync_queue.add({ table_name: 'categories', action: 'create', data: categoryData });
 
-        for (const attrTemplate of catTemplate.attributes) {
-          const attributeData = {
-            id: crypto.randomUUID(),
-            category_id: categoryId,
-            attribute_name: attrTemplate.attribute_name,
-            attribute_type: attrTemplate.attribute_type,
-            options: attrTemplate.options ? attrTemplate.options.split(',') : null,
-            is_required: attrTemplate.is_required,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-          await db.category_attributes.add(attributeData);
-          await db.sync_queue.add({ table_name: 'category_attributes', action: 'create', data: attributeData });
+            for (const attrTemplate of catTemplate.attributes) {
+              const attributeData = {
+                id: crypto.randomUUID(),
+                category_id: categoryId,
+                attribute_name: attrTemplate.attribute_name,
+                attribute_type: attrTemplate.attribute_type,
+                options: attrTemplate.options ? attrTemplate.options.split(',') : null,
+                is_required: attrTemplate.is_required,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              };
+              await db.category_attributes.add(attributeData);
+              await db.sync_queue.add({ table_name: 'category_attributes', action: 'create', data: attributeData });
+            }
         }
+        // NAYA IZAFA: Is category ki ID mehfooz kar lo taake iske bachon (sub-categories) ko mil sake
+        createdCategoriesMap[catTemplate.name] = categoryId;
       }
 
       // 3. EXPENSE CATEGORIES SETUP

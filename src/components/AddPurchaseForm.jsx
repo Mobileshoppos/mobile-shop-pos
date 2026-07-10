@@ -472,6 +472,28 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
   
   const totalAmount = purchaseItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.purchase_price || 0)), 0);
 
+  // --- NAYA IZAFA: Parent aur Child dono ke attributes lane ka function ---
+  const fetchInheritedAttributes = async (categoryId) => {
+    let currentId = categoryId;
+    const hierarchyIds = [];
+    const allCategories = await db.categories.toArray();
+
+    // Jab tak parent milta rahe, ID save karte raho (Neeche se Upar ki taraf)
+    while (currentId) {
+        hierarchyIds.push(currentId);
+        const currentCat = allCategories.find(c => c.id === currentId);
+        currentId = currentCat ? currentCat.parent_id : null;
+    }
+
+    let combinedAttributes = [];
+    // Har ID ke attributes Local DB se mangwayein
+    for (const id of hierarchyIds) {
+        const attrs = await db.category_attributes.where('category_id').equals(id).toArray();
+        combinedAttributes = [...combinedAttributes, ...attrs];
+    }
+    return combinedAttributes;
+  };
+
   const getProductsWithCategory = useCallback(async () => {
     try {
       const localProducts = await db.products.toArray();
@@ -585,8 +607,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
           setSelectedProduct(targetProduct);
           form.setFieldsValue({ product_id: targetProduct.id });
           const fetchAttributes = async () => {
-             // Internet (Supabase) ke bajaye local DB se attributes uthayein
-             const data = await db.category_attributes.where('category_id').equals(targetProduct.category_id).toArray();
+             // NAYA IZAFA: Ab hum parent aur child dono ke attributes layenge
+             const data = await fetchInheritedAttributes(targetProduct.category_id);
              setSelectedProductAttributes(data || []);
              setTimeout(() => { setIsItemModalVisible(true); }, 200);
           };
@@ -609,8 +631,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
     if (!productId) { message.warning('Please select a product first.'); return; }
     const selectedProdInfo = products.find(p => p.id === productId);
     try {
-      // Internet (Supabase) ke bajaye local DB se attributes uthayein
-      const data = await db.category_attributes.where('category_id').equals(selectedProdInfo.category_id).toArray();
+      // NAYA IZAFA: Ab hum parent aur child dono ke attributes layenge
+      const data = await fetchInheritedAttributes(selectedProdInfo.category_id);
       
       setSelectedProductAttributes(data || []);
       setSelectedProduct(selectedProdInfo);
@@ -626,8 +648,8 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
         const originalProduct = products.find(p => p.id === record.product_id);
         if (!originalProduct) return;
 
-        // Local DB use karein
-        const attrs = await db.category_attributes.where('category_id').equals(originalProduct.category_id).toArray();
+        // NAYA IZAFA: Ab hum parent aur child dono ke attributes layenge
+        const attrs = await fetchInheritedAttributes(originalProduct.category_id);
 
         setSelectedProductAttributes(attrs || []);
         setSelectedProduct(originalProduct);

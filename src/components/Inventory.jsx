@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useLocation, Link } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme, DatePicker, Tooltip } from 'antd';
-import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined, LockOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme, DatePicker, Tooltip, TreeSelect } from 'antd';
+import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined, LockOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined, CalendarOutlined, WarningOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -260,65 +260,118 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, loadi
                         )}
                       </div>
 
-                      {/* ATTRIBUTES - FONT INCREASED TO 14px */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {/* NAYA IZAFA: Batch aur Expiry Tags */}
-                        {variant.batch_number && <Tag color="blue" style={{ margin: 0, fontSize: '14px', padding: '4px 8px', color: token.colorText }}>B.No: {variant.batch_number}</Tag>}
-                        {variant.expiry_date && <Tag color={new Date(variant.expiry_date) < new Date() ? "red" : "orange"} style={{ margin: 0, fontSize: '14px', padding: '4px 8px', color: token.colorText }}>Exp: {new Date(variant.expiry_date).toLocaleDateString()}</Tag>}
+                      {/* ATTRIBUTES & TAGS - 2 ROWS PROFESSIONAL LAYOUT (ALIGNED & SCROLLABLE) */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', justifyContent: 'center', overflow: 'hidden' }}>
                         
-                        {variant.item_attributes && Object.entries(variant.item_attributes).map(([key, value]) => {
-                          if (!value || key.toLowerCase().includes('imei') || key.toLowerCase().includes('serial')) return null;
-                          return <Tag key={key} style={{ margin: 0, opacity: 0.8, fontSize: '14px', padding: '4px 8px' }}>{value}</Tag>;
-                        })}
-                        
-                        {(!variant.item_attributes || Object.keys(variant.item_attributes).length === 0) && (
-                          <Tag style={{ margin: 0, opacity: 0.5, fontSize: '12px' }}>Standard</Tag>
-                        )}
+                        {/* ROW 1: Item Attributes (Plain Text with Pipes, Aligned with Sale Price) */}
+                        <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', height: '20px' }}>
+                          {(() => {
+                            const attrValues = [];
+                            if (variant.item_attributes) {
+                              Object.entries(variant.item_attributes).forEach(([key, value]) => {
+                                if (value && !key.toLowerCase().includes('imei') && !key.toLowerCase().includes('serial')) {
+                                  attrValues.push(value);
+                                }
+                              });
+                            }
+                            
+                            const hasAttributes = attrValues.length > 0;
+                            const hasImeis = variant.imeis && variant.imeis.length > 0;
 
-                        {variant.imeis && variant.imeis.length > 0 && (
-                          <span style={{ display: 'flex', alignItems: 'center', marginLeft: '8px' }}>
-                            <Text type="secondary" style={{ fontSize: '13px', marginRight: '4px' }}>IMEI:</Text>
-                            <Text style={{ fontSize: '13px', color: isDarkMode ? '#aaa' : '#666' }}>{variant.imeis.join(', ')}</Text>
-                          </span>
+                            return (
+                              <>
+                                <Text strong style={{ fontSize: '16px', lineHeight: '1.2', color: token.colorText }}>
+                                  {hasAttributes ? attrValues.join('  |  ') : 'Standard'}
+                                </Text>
+                                {hasImeis && (
+                                  <Text style={{ fontSize: '16px', lineHeight: '1.2', color: isDarkMode ? '#aaa' : '#666', marginLeft: hasAttributes ? '8px' : '0' }}>
+                                    {hasAttributes ? '  |  ' : ''}IMEI: {variant.imeis.join(', ')}
+                                  </Text>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+
+                        {/* ROW 2: Batch, Expiry, Warranty Tags (Aligned with Buy Price, Scrollable) */}
+                        {(variant.batch_number || variant.expiry_date || (profile?.warranty_system_enabled !== false && variant.warranty_days > 0)) && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', height: '18px' }}>
+                            {variant.batch_number && <Tag color="blue" style={{ margin: 0, fontSize: '12px', padding: '1px 6px', color: token.colorText, border: 'none', background: token.colorFillAlter, lineHeight: '1.2' }}>B.No: {variant.batch_number}</Tag>}
+                            
+                            {variant.expiry_date && (() => {
+                              const expDate = new Date(variant.expiry_date);
+                              const todayZero = new Date(); todayZero.setHours(0,0,0,0);
+                              const alertDays = profile?.expiry_alert_days || 30;
+                              const alertLimitDate = new Date(); alertLimitDate.setDate(alertLimitDate.getDate() + alertDays);
+                              
+                              let iconColor = token.colorTextSecondary; // Normal/Valid
+                              let tooltipText = "Valid Expiry";
+                              let Icon = CalendarOutlined;
+
+                              if (expDate < todayZero) {
+                                  iconColor = token.colorError; // Expired (Red)
+                                  tooltipText = "EXPIRED";
+                                  Icon = WarningOutlined;
+                              } else if (expDate <= alertLimitDate) {
+                                  iconColor = token.colorWarning; // Expiring Soon (Yellow/Orange)
+                                  tooltipText = "Expiring Soon";
+                                  Icon = WarningOutlined;
+                              }
+
+                              return (
+                                  <Tooltip title={tooltipText}>
+                                      <Tag style={{ margin: 0, fontSize: '12px', padding: '1px 6px', border: 'none', background: token.colorFillAlter, color: iconColor, display: 'flex', alignItems: 'center', gap: '4px', lineHeight: '1.2' }}>
+                                          <Icon style={{ fontSize: '12px' }} /> {expDate.toLocaleDateString()}
+                                      </Tag>
+                                  </Tooltip>
+                              );
+                            })()}
+
+                            {profile?.warranty_system_enabled !== false && variant.warranty_days > 0 && (
+                              <Tag color="cyan" style={{ margin: 0, fontSize: '12px', padding: '1px 6px', color: token.colorText, border: 'none', background: token.colorFillAlter, lineHeight: '1.2' }}>
+                                🛡️ {variant.warranty_days}
+                              </Tag>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
 
                     {/* ADD STOCK BUTTON (Sirf Ijazat walo ke liye) */}
-{can('can_edit_inventory') && (
-  <>
-    <Button 
-      type="text" 
-      icon={<PlusOutlined />} 
-      size="small" 
-      style={{ marginLeft: '8px', color: token.colorSuccess, fontSize: '16px' }} 
-      onClick={() => onAddStock(variant)} 
-      title="Add Stock / Add New Variants"
-    />
-    <Button 
-      type="text" 
-      icon={<EditOutlined />} 
-      size="small" 
-      style={{ marginLeft: '8px', color: 'token.colorPrimary', fontSize: '16px' }} 
-      onClick={() => {
-          const cat = categories?.find(c => c.id === product.category_id);
-          const isImei = cat ? cat.is_imei_based : false;
-          onQuickEdit(variant, isImei); 
-      }}
-      title="Edit Barcode/Price"
-    />
-    
-    <Button 
-      type="text" 
-      danger
-      icon={<AlertOutlined />} 
-      size="small" 
-      style={{ marginLeft: '8px', fontSize: '16px' }} 
-      onClick={() => onMarkDamaged(variant)} 
-      title="Mark as Damaged/Defective"
-    />
-  </>
-)}
+                    {can('can_edit_inventory') && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto', flexShrink: 0 }}>
+                        <Button 
+                          type="text" 
+                          icon={<PlusOutlined />} 
+                          size="small" 
+                          style={{ color: token.colorSuccess, fontSize: '16px' }} 
+                          onClick={() => onAddStock(variant)} 
+                          title="Add Stock / Add New Variants"
+                        />
+                        <Button 
+                          type="text" 
+                          icon={<EditOutlined />} 
+                          size="small" 
+                          style={{ color: 'token.colorPrimary', fontSize: '16px' }} 
+                          onClick={() => {
+                              const cat = categories?.find(c => c.id === product.category_id);
+                              const isImei = cat ? cat.is_imei_based : false;
+                              onQuickEdit(variant, isImei); 
+                          }}
+                          title="Edit Barcode/Price"
+                        />
+                        
+                        <Button 
+                          type="text" 
+                          danger
+                          icon={<AlertOutlined />} 
+                          size="small" 
+                          style={{ fontSize: '16px' }} 
+                          onClick={() => onMarkDamaged(variant)} 
+                          title="Mark as Damaged/Defective"
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
                 {/* AGAR PRODUCT KHALI HAI TO YEH DIKHAO */}
@@ -363,7 +416,7 @@ const Inventory = () => {
   const refArchive = useRef(null);
   const refFirstStock = useRef(null); 
   const [showArchived, setShowArchived] = useState(false);
-  const [isSingleColumn, setIsSingleColumn] = useState(false); // <--- NAYA IZAFA: View Toggle State
+  const [isSingleColumn, setIsSingleColumn] = useState(true); // <--- Default to true (List View)
   const searchInputRef = useRef(null);
   const productNameInputRef = useRef(null);
 
@@ -385,6 +438,31 @@ const Inventory = () => {
   const [products, setProducts] = useState([]);
   const [totalModelCount, setTotalModelCount] = useState(0); // <--- NAYA: Total Models ki ginti
   const [categories, setCategories] = useState([]);
+  const [categoryTree, setCategoryTree] = useState([]); // NAYA IZAFA: TreeSelect ke liye
+  
+  // NAYA IZAFA: Flat categories ko Tree mein badalne ka function
+  const buildCategoryTree = (flatCategories) => {
+    const map = new Map();
+    const tree = [];
+    flatCategories.forEach(cat => {
+      map.set(cat.id, { value: cat.id, title: cat.name, parent_id: cat.parent_id, children: [] });
+    });
+    flatCategories.forEach(cat => {
+      if (cat.parent_id && map.has(cat.parent_id)) {
+        map.get(cat.parent_id).children.push(map.get(cat.id));
+      } else {
+        tree.push(map.get(cat.id));
+      }
+    });
+    const clean = (nodes) => {
+      nodes.forEach(node => {
+        if (node.children.length === 0) delete node.children;
+        else clean(node.children);
+      });
+    };
+    clean(tree);
+    return tree;
+  };
   const [loading, setLoading] = useState(true);
   const [advancedFilters, setAdvancedFilters] = useState([]);
   const [filterAttributes, setFilterAttributes] = useState({}); 
@@ -555,11 +633,13 @@ const Inventory = () => {
         if (localCategories.length > 0) {
             const visibleCategories = localCategories.filter(cat => cat.is_visible !== false);
             setCategories(visibleCategories);
+            setCategoryTree(buildCategoryTree(visibleCategories)); // NAYA IZAFA
         } else if (navigator.onLine) {
             const { data: categoriesData, error: categoriesError } = await supabase.rpc('get_user_categories_with_settings');
             if (!categoriesError && categoriesData) {
                 const visibleCategories = categoriesData.filter(cat => cat.is_visible);
                 setCategories(visibleCategories);
+                setCategoryTree(buildCategoryTree(visibleCategories)); // NAYA IZAFA
             }
         }
         if (filterCategory && navigator.onLine) {
@@ -1051,19 +1131,20 @@ const Inventory = () => {
             </div>
           </Col>
 
-          {/* 2. Category Select */}
+          {/* 2. Category Select (TreeSelect) */}
           <Col xs={12} sm={6} md={4}>
-            <Select 
-              placeholder="Category" 
-              style={{ width: '100%' }} 
-              value={filterCategory} 
-              onChange={(value) => setFilterCategory(value)} 
-              allowClear
+            <TreeSelect
               showSearch
-              optionFilterProp="children"
-            >
-              {categories.map(cat => (<Option key={cat.id} value={cat.id}>{cat.name}</Option>))}
-            </Select>
+              style={{ width: '100%' }}
+              value={filterCategory}
+              dropdownStyle={{ maxHeight: 400, overflow: 'auto' }}
+              placeholder="Category"
+              allowClear
+              treeDefaultExpandAll
+              treeData={categoryTree}
+              onChange={(value) => setFilterCategory(value)}
+              treeNodeFilterProp="title"
+            />
           </Col>
 
           {/* 3. Sort Select */}
@@ -1376,7 +1457,15 @@ const Inventory = () => {
                 rules={[{ required: true }]}
                 extra={<span>Can't find your category? <Link to="/categories">Create a new one here</Link></span>}
               >
-                <Select placeholder="Select...">{categories.map(c => (<Option key={c.id} value={c.id}>{c.name}</Option>))}</Select>
+                <TreeSelect
+                  showSearch
+                  dropdownStyle={{ maxHeight: 400, overflow: 'auto' }}
+                  placeholder="Select Category..."
+                  allowClear
+                  treeDefaultExpandAll
+                  treeData={categoryTree}
+                  treeNodeFilterProp="title"
+                />
               </Form.Item>
             </Col>
           </Row>

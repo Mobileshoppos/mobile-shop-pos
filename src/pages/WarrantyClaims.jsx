@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Typography, Input, Card, Row, Col, Button, Table, Tag, Space, App, Empty, Descriptions, Divider, Modal, Form, Select, Alert, List, theme, Spin } from 'antd';
-import { SearchOutlined, SafetyCertificateOutlined, ToolOutlined, HistoryOutlined, DeleteOutlined } from '@ant-design/icons';
+import { SearchOutlined, SafetyCertificateOutlined, ToolOutlined, HistoryOutlined, DeleteOutlined, PrinterOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
+import { generateInvoiceId } from '../utils/idGenerator'; // <--- NAYA IZAFA
+import { db } from '../db'; // <--- NAYA IZAFA
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { getPlanLimits } from '../config/subscriptionPlans';
@@ -22,6 +24,12 @@ const WarrantyClaims = () => {
     const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
     const [claimForm] = Form.useForm();
     const searchInputRef = useRef(null);
+
+    // --- NAYA IZAFA: Status Update Modal States ---
+    const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+    const [selectedClaimForStatus, setSelectedClaimForStatus] = useState(null);
+    const [pendingStatus, setPendingStatus] = useState('');
+    const [resolutionRemarks, setResolutionRemarks] = useState('');
 
     const fetchClaims = async () => {
         const data = await DataService.getWarrantyClaims();
@@ -68,10 +76,15 @@ const WarrantyClaims = () => {
 
     const handleCreateClaim = async (values) => {
         try {
+            // --- NAYA IZAFA: Voucher ID Generation ---
+            const shortId = await generateInvoiceId();
+            const claimNo = `CLM-${shortId}`;
+
             const claimData = {
+                claim_no: claimNo, // <--- NAYA IZAFA
                 inventory_id: lookupResult?.item?.id || lookupResult?.inventory?.id,
                 customer_id: lookupResult?.saleDetails?.customer_id || lookupResult?.sale?.customer_id || null,
-                imei: lookupResult?.type === 'IMEI' ? imeiSearch : (lookupResult?.item?.imei || `Batch-${lookupResult?.item?.id}`),
+                imei: lookupResult?.type === 'IMEI' ? imeiSearch : (lookupResult?.item?.imei || (lookupResult?.item?.batch_number ? `Batch: ${lookupResult.item.batch_number}` : `Bulk-${lookupResult?.item?.id?.slice(0,8)}`)),
                 product_name_snapshot: lookupResult?.product?.name || "Unknown Product",
                 issue_description: values.issue_description,
                 status: 'Received from Customer',
@@ -87,9 +100,42 @@ const WarrantyClaims = () => {
         }
     };
 
-    const handleStatusUpdate = async (id, newStatus) => {
-        await DataService.updateWarrantyClaimStatus(id, newStatus);
+    // --- NAYA IZAFA: Status Update Logic ---
+    const handleStatusUpdateClick = (record, newStatus) => {
+        // Agar status final hai (Returned ya Rejected), to modal kholo remarks ke liye
+        if (newStatus === 'Returned to Customer' || newStatus === 'Rejected') {
+            setSelectedClaimForStatus(record);
+            setPendingStatus(newStatus);
+            setResolutionRemarks(record.resolution_remarks || '');
+            setIsStatusModalOpen(true);
+        } else {
+            // Warna direct update kar do
+            handleStatusUpdate(record.id, newStatus, '');
+        }
+    };
+
+    const handleStatusUpdate = async (id, newStatus, remarks = '') => {
+        const updatedAt = new Date().toISOString();
+        
+        // 1. Local DB ko dono fields ke sath ek hi dafa update karein
+        await db.warranty_claims.update(id, { 
+            status: newStatus, 
+            resolution_remarks: remarks, 
+            updated_at: updatedAt 
+        });
+        
+        // 2. Poore database record ko read karein (taake user_id aur baqi fields shamil hon)
+        const updatedClaim = await db.warranty_claims.get(id);
+        
+        // 3. Poora record Sync Queue mein daalein taake RLS violation na ho!
+        await db.sync_queue.add({ 
+            table_name: 'warranty_claims', 
+            action: 'update', 
+            data: updatedClaim 
+        });
+        
         message.success("Status updated!");
+        setIsStatusModalOpen(false);
         fetchClaims();
     };
 
@@ -184,6 +230,8 @@ const WarrantyClaims = () => {
                                                 <Tag color="cyan">{lookupResult.item?.purchase_id || lookupResult.inventory?.purchase_id || 'N/A'}</Tag>
                                             </Descriptions.Item>
                                             <Descriptions.Item label="Sold On">{lookupResult.saleDetails ? dayjs(lookupResult.saleDetails.created_at).format('DD-MMM-YYYY') : <Tag color="processing">In Stock</Tag>}</Descriptions.Item>
+                                            {lookupResult.item?.batch_number && <Descriptions.Item label="Batch No."><Tag color="blue">{lookupResult.item.batch_number}</Tag></Descriptions.Item>}
+                                            {lookupResult.item?.expiry_date && <Descriptions.Item label="Expiry Date"><Text type={dayjs().isAfter(dayjs(lookupResult.item.expiry_date), 'day') ? "danger" : "success"}>{dayjs(lookupResult.item.expiry_date).format('DD-MMM-YYYY')}</Text></Descriptions.Item>}
                                         </Descriptions>
                                         
                                         <Divider style={{margin: '12px 0'}} />
@@ -273,9 +321,18 @@ const WarrantyClaims = () => {
                                                         <List.Item.Meta 
                                                             title={entry.product?.name} 
                                                             description={
-                                                                hasWarranty 
-                                                                ? <Text type={isExpired ? "danger" : "success"}>Warranty Till: {dayjs(expiryDate).format('DD-MMM-YYYY')}</Text>
-                                                                : <Text type="secondary">Warranty: None</Text>
+                                                                <Space direction="vertical" size={0}>
+                                                                    {hasWarranty 
+                                                                        ? <Text type={isExpired ? "danger" : "success"}>Warranty Till: {dayjs(expiryDate).format('DD-MMM-YYYY')}</Text>
+                                                                        : <Text type="secondary">Warranty: None</Text>
+                                                                    }
+                                                                    {(entry.inventory?.batch_number || entry.inventory?.expiry_date) && (
+                                                                        <Space size={4} style={{ marginTop: '4px' }}>
+                                                                            {entry.inventory?.batch_number && <Tag color="blue" style={{ fontSize: '10px', margin: 0 }}>Batch: {entry.inventory.batch_number}</Tag>}
+                                                                            {entry.inventory?.expiry_date && <Tag color={dayjs().isAfter(dayjs(entry.inventory.expiry_date), 'day') ? "error" : "warning"} style={{ fontSize: '10px', margin: 0 }}>Exp: {dayjs(entry.inventory.expiry_date).format('DD-MMM-YYYY')}</Tag>}
+                                                                        </Space>
+                                                                    )}
+                                                                </Space>
                                                             } 
                                                         />
                                                     </List.Item>
@@ -304,7 +361,8 @@ const WarrantyClaims = () => {
                                     key: 'info',
                                     render: (_, record) => (
                                         <Space direction="vertical" size={0}>
-                                            <Text strong style={{fontSize: '12px'}}>{dayjs(record.created_at).format('DD-MMM')}</Text>
+                                            <Text strong style={{color: token.colorPrimary}}>{record.claim_no || 'N/A'}</Text>
+                                            <Text style={{fontSize: '12px'}}>{dayjs(record.created_at).format('DD-MMM-YYYY')}</Text>
                                             <Text type="secondary" style={{fontSize: '11px'}}>{record.imei}</Text>
                                         </Space>
                                     )
@@ -322,47 +380,89 @@ const WarrantyClaims = () => {
                                 { 
                                     title: 'Status', 
                                     dataIndex: 'status',
-                                    render: (status, record) => (
-                                        <Space direction="vertical" size={4}>
-                                            <Tag color={status.includes('Supplier') ? 'warning' : 'processing'} style={{ margin: 0, fontSize: '10px' }}>
-                                                {status}
-                                            </Tag>
-                                            <Select 
-                                                size="small"
-                                                style={{ width: 130, fontSize: '11px' }}
-                                                value={status}
-                                                onChange={(value) => handleStatusUpdate(record.id, value)}
-                                                options={[
-                                                    { value: 'Received from Customer', label: 'Received' },
-                                                    { value: 'Sent to Supplier', label: 'Sent to Supplier' },
-                                                    { value: 'Received from Supplier', label: 'Back from Supplier' },
-                                                    { value: 'Returned to Customer', label: 'Returned' },
-                                                    { value: 'Rejected', label: 'Rejected' },
-                                                ]}
-                                            />
-                                        </Space>
-                                    )
+                                    render: (status, record) => {
+                                        // --- NAYA IZAFA: Supplier Claim Aging Calculation ---
+                                        const daysPending = status === 'Sent to Supplier' ? dayjs().diff(dayjs(record.updated_at), 'day') : 0;
+                                        
+                                        return (
+                                            <Space direction="vertical" size={4}>
+                                                <Tag color={status.includes('Supplier') ? 'warning' : 'processing'} style={{ margin: 0, fontSize: '10px' }}>
+                                                    {status}
+                                                </Tag>
+                                                <Select 
+                                                    size="small"
+                                                    style={{ width: 130, fontSize: '11px' }}
+                                                    value={status}
+                                                    onChange={(value) => handleStatusUpdateClick(record, value)}
+                                                    options={[
+                                                        { value: 'Received from Customer', label: 'Received' },
+                                                        { value: 'Sent to Supplier', label: 'Sent to Supplier' },
+                                                        { value: 'Received from Supplier', label: 'Back from Supplier' },
+                                                        { value: 'Returned to Customer', label: 'Returned' },
+                                                        { value: 'Rejected', label: 'Rejected' },
+                                                    ]}
+                                                />
+                                                {/* --- NAYA IZAFA: Aging Badge (Ruka Hua Maal) --- */}
+                                                {status === 'Sent to Supplier' && (
+                                                    <Text type={daysPending >= 7 ? "danger" : "warning"} style={{fontSize: '10px', display: 'block'}}>
+                                                        <ClockCircleOutlined /> Sent {daysPending} {daysPending === 1 ? 'day' : 'days'} ago
+                                                    </Text>
+                                                )}
+                                                {record.resolution_remarks && (
+                                                    <Text type="secondary" style={{fontSize: '10px', display: 'block', maxWidth: '130px'}} ellipsis={{ tooltip: record.resolution_remarks }}>
+                                                        Note: {record.resolution_remarks}
+                                                    </Text>
+                                                )}
+                                            </Space>
+                                        );
+                                    }
                                 },
                                 {
-                                    title: '',
+                                    title: 'Action',
                                     key: 'action',
                                     render: (_, record) => (
-                                        <Button 
-                                            type="text" 
-                                            danger 
-                                            icon={<DeleteOutlined />} 
-                                            onClick={() => {
-                                                modal.confirm({
-                                                    title: 'Delete Claim?',
-                                                    content: 'Are you sure you want to remove this claim record?',
-                                                    onOk: async () => {
-                                                        await DataService.deleteWarrantyClaim(record.id);
-                                                        message.success("Claim deleted");
-                                                        fetchClaims();
-                                                    }
-                                                });
-                                            }}
-                                        />
+                                        <Space>
+                                            <Button 
+                                                type="text" 
+                                                icon={<PrinterOutlined style={{ color: token.colorInfo }} />} 
+                                                onClick={() => {
+                                                    const printContent = `
+                                                        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 400px; border: 1px solid #ccc;">
+                                                            <h2 style="text-align: center; margin-bottom: 5px;">Repair Claim Slip</h2>
+                                                            <p style="text-align: center; margin-top: 0; font-size: 12px; color: #666;">${profile?.shop_name || 'My Shop'}</p>
+                                                            <hr style="border-top: 1px dashed #ccc;" />
+                                                            <p><b>Claim No:</b> ${record.claim_no || 'N/A'}</p>
+                                                            <p><b>Date:</b> ${dayjs(record.created_at).format('DD-MMM-YYYY hh:mm A')}</p>
+                                                            <p><b>Product:</b> ${record.product_name_snapshot}</p>
+                                                            <p><b>IMEI/Batch:</b> ${record.imei}</p>
+                                                            <p><b>Issue:</b> ${record.issue_description}</p>
+                                                            <hr style="border-top: 1px dashed #ccc;" />
+                                                            <p style="font-size: 12px; text-align: center;">Please keep this slip safe. Required at the time of collection.</p>
+                                                        </div>
+                                                    `;
+                                                    const printWindow = window.open('', '_blank');
+                                                    printWindow.document.write(printContent);
+                                                    printWindow.document.close();
+                                                    printWindow.print();
+                                                }}
+                                            />
+                                            <Button 
+                                                type="text" 
+                                                danger 
+                                                icon={<DeleteOutlined />} 
+                                                onClick={() => {
+                                                    modal.confirm({
+                                                        title: 'Delete Claim?',
+                                                        content: 'Are you sure you want to remove this claim record?',
+                                                        onOk: async () => {
+                                                            await DataService.deleteWarrantyClaim(record.id);
+                                                            message.success("Claim deleted");
+                                                            fetchClaims();
+                                                        }
+                                                    });
+                                                }}
+                                            />
+                                        </Space>
                                     )
                                 }
                             ]}
@@ -388,6 +488,30 @@ const WarrantyClaims = () => {
                     </Form.Item>
                 </Form>
             </Modal>
+
+            {/* --- NAYA IZAFA: Status Update Remarks Modal --- */}
+            <Modal
+                title="Update Claim Status"
+                open={isStatusModalOpen}
+                onCancel={() => setIsStatusModalOpen(false)}
+                onOk={() => handleStatusUpdate(selectedClaimForStatus.id, pendingStatus, resolutionRemarks)}
+                okText="Save & Update"
+            >
+                <div style={{ marginTop: '16px' }}>
+                    <Text>You are marking this claim as: <Tag color={pendingStatus === 'Rejected' ? 'error' : 'success'}>{pendingStatus}</Tag></Text>
+                    <div style={{ marginTop: '16px' }}>
+                        <Text strong>Resolution Remarks / Notes (Optional)</Text>
+                        <Input.TextArea 
+                            rows={3} 
+                            placeholder="e.g. Replaced with new unit, or Screen repaired successfully..." 
+                            value={resolutionRemarks}
+                            onChange={(e) => setResolutionRemarks(e.target.value)}
+                            style={{ marginTop: '8px' }}
+                        />
+                    </div>
+                </div>
+            </Modal>
+
         </div> {/* Content Wrapper End */}
         </div> /* Main Container End */
     );

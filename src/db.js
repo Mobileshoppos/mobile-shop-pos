@@ -7,7 +7,7 @@ export const db = new Dexie('MobileShopDB');
 // Note: Hum sirf wohi columns likhte hain jin se hamein search ya filter karna ho.
 // Baqi data khud ba khud save ho jata hai.
 
-db.version(62).stores({
+db.version(64).stores({
   // --- Business Data Tables (Jo Supabase se sync honge) ---
   
   // Naya: Custom Accounts (Bank, Cash, Wallets)
@@ -17,7 +17,7 @@ db.version(62).stores({
   products: 'id, local_id, category_id, name, barcode, user_id, is_active, updated_at, image_url, rack_location', 
   
   // Categories
-  categories: 'id, local_id, user_id, name, updated_at',
+  categories: 'id, local_id, user_id, parent_id, name, updated_at',
   
   // Customers: Phone number se dhoondne ke liye
   customers: 'id, local_id, phone, name, email, tax_id, user_id, is_active, updated_at, customer_group',
@@ -50,7 +50,7 @@ db.version(62).stores({
   id_mappings: '++id, local_id, server_id, table_name',
   cash_adjustments: 'id, local_id, voucher_no, user_id, staff_id, type, payment_method, created_at, transfer_to, updated_at, register_id, session_id',
   daily_closings: 'id, local_id, user_id, staff_id, closing_date, created_at, updated_at',
-  warranty_claims: 'id, local_id, user_id, inventory_id, customer_id, imei, status, updated_at',
+  warranty_claims: 'id, local_id, claim_no, user_id, inventory_id, customer_id, imei, status, updated_at',
   // Naya: Staff ki mukammal details (Phone, CNIC, Bank etc.)
   staff_members: 'id, local_id, user_id, pin_code, salary, balance, joining_date, phone, cnic, email, is_active, updated_at',
   // expense_id add kiya taake payment aur expense ka link rahe

@@ -23,6 +23,7 @@ const Categories = () => {
   const { user, profile } = useAuth();
   
   const [categories, setCategories] = useState([]);
+  const [rawCategories, setRawCategories] = useState([]); // NAYA IZAFA: Dropdown ke liye asal list
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -55,8 +56,43 @@ const Categories = () => {
     try {
       setLoadingCategories(true);
       const data = await DataService.getProductCategories();
-      // Ab humein koi filter nahi chahiye kyunke saari categories user ki apni hain
-      setCategories(data);
+      
+      setRawCategories(data); // NAYA IZAFA: Asal list dropdown ke liye save ki
+
+      // NAYA IZAFA: Flat list ko Tree (darakht) mein badalna
+      const categoryMap = new Map();
+      const tree = [];
+
+      // Pehle sab ko map mein daalein aur children array banayein
+      data.forEach(cat => {
+        categoryMap.set(cat.id, { ...cat, children: [] });
+      });
+
+      // Ab parent-child ka rishta banayein
+      data.forEach(cat => {
+        if (cat.parent_id) {
+          const parent = categoryMap.get(cat.parent_id);
+          if (parent) {
+            parent.children.push(categoryMap.get(cat.id));
+          }
+        } else {
+          tree.push(categoryMap.get(cat.id));
+        }
+      });
+
+      // Khali children array ko hata dein taake faltu [+] icon na aaye
+      const cleanEmptyChildren = (nodes) => {
+        nodes.forEach(node => {
+          if (node.children.length === 0) {
+            delete node.children;
+          } else {
+            cleanEmptyChildren(node.children);
+          }
+        });
+      };
+      cleanEmptyChildren(tree);
+
+      setCategories(tree); // Table ke liye tree structure set kiya
     } catch (error) { 
       message.error('Error fetching categories: ' + error.message); 
     } finally { 
@@ -70,20 +106,48 @@ const Categories = () => {
     if (!categoryId) return;
     try {
       setLoadingAttributes(true);
-      // DataService se attributes layein
-      const data = await DataService.getCategoryAttributes(categoryId);
-      setAttributes(data);
+      
+      // NAYA IZAFA: Parent Categories ke attributes bhi lana
+      const hierarchyIds = [];
+      let currentId = categoryId;
+      
+      // Jab tak parent milta rahe, ID save karte raho (Neeche se Upar ki taraf)
+      while (currentId) {
+        hierarchyIds.push(currentId);
+        const currentCat = rawCategories.find(c => c.id === currentId);
+        currentId = currentCat ? currentCat.parent_id : null;
+      }
+
+      let combinedAttributes = [];
+      
+      // Har ID ke attributes DataService se mangwayein
+      for (const id of hierarchyIds) {
+        const data = await DataService.getCategoryAttributes(id);
+        const mappedData = data.map(attr => ({
+          ...attr,
+          // Agar attribute ki ID current category se match na ho, to matlab virasat (inherit) mein mila hai
+          is_inherited: attr.category_id !== categoryId, 
+          source_category_name: attr.category_id !== categoryId ? rawCategories.find(c => c.id === attr.category_id)?.name : null
+        }));
+        combinedAttributes = [...combinedAttributes, ...mappedData];
+      }
+
+      setAttributes(combinedAttributes);
     } catch (error) { message.error("Failed to fetch attributes: " + error.message); } 
     finally { setLoadingAttributes(false); }
-  }, [message]);
+  }, [message, rawCategories]); // rawCategories ko dependencies mein add kiya
 
   const showCategoryModal = async (category = null) => {
     setEditingCategory(category);
     if (category) {
-      categoryForm.setFieldsValue({ name: category.name, is_imei_based: category.is_imei_based });
+      categoryForm.setFieldsValue({ 
+        name: category.name, 
+        is_imei_based: category.is_imei_based,
+        parent_id: category.parent_id || null // NAYA IZAFA
+      });
     } else {
       categoryForm.resetFields();
-      categoryForm.setFieldsValue({ is_imei_based: false });
+      categoryForm.setFieldsValue({ is_imei_based: false, parent_id: null }); // NAYA IZAFA
     }
     setIsCategoryModalOpen(true);
   };
@@ -107,13 +171,19 @@ const Categories = () => {
         ]);
         return;
       }
+      // NAYA IZAFA: parent_id ko theek tarah set karna
+      const payload = {
+        ...values,
+        parent_id: values.parent_id || null 
+      };
+
       if (editingCategory) {
         // Update (Offline)
-        await DataService.updateProductCategory(editingCategory.id, values);
+        await DataService.updateProductCategory(editingCategory.id, payload);
         message.success('Category updated successfully!');
       } else {
         // Add (Offline)
-        const newCat = { ...values, user_id: user.id };
+        const newCat = { ...payload, user_id: user.id };
         await DataService.addProductCategory(newCat);
         message.success('Category added successfully!');
       }
@@ -140,7 +210,8 @@ const Categories = () => {
     if (attribute) {
       attributeForm.setFieldsValue({
         ...attribute,
-        options: Array.isArray(attribute.options) ? attribute.options.join(',') : ''
+        // NAYA IZAFA: Ab options ko string banane ki zaroorat nahi, direct array hi set karein
+        options: Array.isArray(attribute.options) ? attribute.options : []
       });
     } else {
       attributeForm.resetFields();
@@ -160,7 +231,8 @@ const Categories = () => {
       const payload = {
         ...values,
         category_id: selectedCategory.id,
-        options: values.attribute_type === 'select' && values.options ? values.options.split(',').map(opt => opt.trim()) : null,
+        // NAYA IZAFA: Ab options pehle se hi array hain, is liye split karne ki zaroorat nahi
+        options: values.attribute_type === 'select' && values.options ? values.options : null,
       };
 
       if (editingAttribute) {
@@ -232,12 +304,37 @@ const Categories = () => {
   ];
 
   const attributeColumns = [
-    { title: 'Attribute Name', dataIndex: 'attribute_name', key: 'attribute_name' },
+    { 
+      title: 'Attribute Name', 
+      dataIndex: 'attribute_name', 
+      key: 'attribute_name',
+      render: (text, record) => (
+        <Space direction="vertical" size={0}>
+          <Text>{text}</Text>
+          {/* NAYA IZAFA: Virasat ka Tag */}
+          {record.is_inherited && (
+            <Tag color="purple" style={{ margin: 0, fontSize: '10px', lineHeight: '14px', border: 'none' }}>
+              From: {record.source_category_name}
+            </Tag>
+          )}
+        </Space>
+      )
+    },
     { title: 'Type', dataIndex: 'attribute_type', key: 'attribute_type', render: type => <Tag>{type.toUpperCase()}</Tag> },
     { title: 'Required', dataIndex: 'is_required', key: 'is_required', render: req => req ? <Tag color="success">Yes</Tag> : <Tag>No</Tag> },
     {
         title: 'Actions', key: 'actions', width: 120, align: 'center',
-        render: (_, record) => (
+        render: (_, record) => {
+          // NAYA IZAFA: Agar attribute virasat mein mila hai to edit/delete ki jagah Lock dikhayein
+          if (record.is_inherited) {
+            return (
+              <Tooltip title={`Edit this in the main category (${record.source_category_name})`}>
+                <LockOutlined style={{ color: token.colorTextDisabled, fontSize: '16px' }} />
+              </Tooltip>
+            );
+          }
+
+          return (
             <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => showAttributeModal(record)} />
                 {(() => {
@@ -260,7 +357,8 @@ const Categories = () => {
                    );
                 })()}
             </Space>
-        )
+          );
+        }
     }
   ];
 
@@ -272,7 +370,8 @@ const Categories = () => {
         </Title>
       )}
       <Row gutter={[24, 24]}>
-        <Col span={isMobile ? 24 : 10}>
+        {/* NAYA IZAFA: Left column ki width 10 se badha kar 12 (50%) kar di gayi hai */}
+        <Col span={isMobile ? 24 : 12}>
           <Card>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <Title level={4} style={{ margin: 0 }}>Product Categories</Title>
@@ -320,9 +419,12 @@ const Categories = () => {
             />
           </Card>
         </Col>
-        <Col span={isMobile ? 24 : 14}>
-          <Card>
-            {selectedCategory ? (
+        {/* NAYA IZAFA: Right column ki width 14 se kam kar ke 12 (50%) kar di gayi hai */}
+        <Col span={isMobile ? 24 : 12}>
+          {/* NAYA IZAFA: Right side ko scroll ke sath sticky (fixed) kiya gaya hai */}
+          <div style={{ position: isMobile ? 'static' : 'sticky', top: isMobile ? 'auto' : '85px', zIndex: 10 }}>
+            <Card>
+              {selectedCategory ? (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <Title level={4} style={{ margin: 0 }}>Attributes for: <Text style={{ color: token.colorSuccess }}>{selectedCategory.name}</Text></Title>
@@ -366,6 +468,7 @@ const Categories = () => {
               </div>
             )}
           </Card>
+         </div>
         </Col>
       </Row>
 
@@ -382,6 +485,28 @@ const Categories = () => {
           >
     <Input ref={categoryNameInputRef} placeholder="e.g. Smartphones, Audio, Accessories" />
         </Form.Item>
+
+          {/* NAYA IZAFA: Parent Category Select Dropdown */}
+          <Form.Item 
+              name="parent_id" 
+              label="Parent Category (Optional)"
+              tooltip="Select a main category if you want to make this a sub-category."
+          >
+              <Select 
+                  allowClear 
+                  placeholder="None (Main Category)"
+                  showSearch
+                  optionFilterProp="children"
+              >
+                  {rawCategories
+                      .filter(cat => cat.id !== editingCategory?.id) // Khud ko parent banane se rokna
+                      .map(cat => (
+                          <Option key={cat.id} value={cat.id}>{cat.name}</Option>
+                      ))
+                  }
+              </Select>
+          </Form.Item>
+
           <Form.Item 
             name="is_imei_based" 
             label="Stock Tracking Type"
@@ -405,8 +530,18 @@ const Categories = () => {
           <Form.Item name="attribute_name" label="Attribute Name" rules={[{ required: true }]}><Input ref={attributeNameInputRef} placeholder="e.g., Color, Storage, IMEI" /></Form.Item>
           <Form.Item name="attribute_type" label="Input Type" rules={[{ required: true }]}><Select><Option value="text">Text</Option><Option value="number">Number</Option><Option value="select">Select</Option></Select></Form.Item>
           {attributeType === 'select' && (
-            <Form.Item name="options" label="Options (comma-separated)" rules={[{ required: true, message: 'Please provide options for the select type!'}]}>
-              <Input placeholder="e.g., New, Used, Open Box" />
+            <Form.Item 
+              name="options" 
+              label="Options (Type and press Enter)" 
+              rules={[{ required: true, message: 'Please provide at least one option!'}]}
+              tooltip="Type an option name and press Enter to add it as a tag."
+            >
+              <Select 
+                mode="tags" 
+                style={{ width: '100%' }} 
+                placeholder="e.g., New (Press Enter), Used (Press Enter)" 
+                open={false} // Ye dropdown menu ko khulne se rokta hai, sirf type aur enter kaam karega
+              />
             </Form.Item>
           )}
           <Form.Item name="is_required" label="Is this field required?" valuePropName="checked"><Switch /></Form.Item>
