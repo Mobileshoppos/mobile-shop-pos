@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Table, Typography, Spin, ConfigProvider, theme, Modal, Tag, Button, Space, App, Form, Radio, Checkbox, Row, Col, DatePicker, Select } from 'antd'; // <--- UPDATED (Select Added)
-import { PrinterOutlined, FileExcelOutlined } from '@ant-design/icons';
+import { PrinterOutlined, FileExcelOutlined, BookOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import DataService from '../DataService';
 import DataExport from './DataExport'; // <--- NAYA IZAFA: Smart Export System
@@ -229,7 +229,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       key: 'sale',
       align: 'right',
       render: (val, record) => (
-        <a onClick={() => handleCellClick(record.date, 'sale')} style={{ fontWeight: val > 0 ? 'bold' : 'normal' }}>
+        <a onClick={() => handleCellClick(record.date, 'sale')} style={{ color: token.colorCardDetailsText }}>
           {formatCurrency(val, profile?.currency)}
         </a>
       ),
@@ -240,7 +240,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       key: 'purchase',
       align: 'right',
       render: (val, record) => (
-        <a onClick={() => handleCellClick(record.date, 'purchase')} style={{ fontWeight: val > 0 ? 'bold' : 'normal' }}>
+        <a onClick={() => handleCellClick(record.date, 'purchase')} style={{ color: token.colorText }}>
           {formatCurrency(val, profile?.currency)}
         </a>
       ),
@@ -251,7 +251,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       key: 'receipt',
       align: 'right',
       render: (val, record) => (
-        <a onClick={() => handleCellClick(record.date, 'receipt')} style={{ fontWeight: val > 0 ? 'bold' : 'normal' }}>
+        <a onClick={() => handleCellClick(record.date, 'receipt')} style={{ color: token.colorText }}>
           {formatCurrency(val, profile?.currency)}
         </a>
       ),
@@ -262,7 +262,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       key: 'payment',
       align: 'right',
       render: (val, record) => (
-        <a onClick={() => handleCellClick(record.date, 'payment')} style={{ fontWeight: val > 0 ? 'bold' : 'normal' }}>
+        <a onClick={() => handleCellClick(record.date, 'payment')} style={{ color: token.colorText }}>
           {formatCurrency(val, profile?.currency)}
         </a>
       ),
@@ -274,7 +274,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       render: (_, record) => {
         const net = (record.receipt || 0) - (record.payment || 0);
         return (
-          <Text strong style={{ color: net >= 0 ? token.colorSuccess : token.colorError }}>
+          <Text strong style={{ color: net >= 0 ? token.colorAmountPositive : token.colorAmountNegative }}>
             {net >= 0 ? '+' : ''}{formatCurrency(net, profile?.currency)}
           </Text>
         );
@@ -288,7 +288,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       dataIndex: 'exact_time', 
       key: 'time', 
       width: 100, 
-      render: (text) => <Text type="secondary">{dayjs(text).format('hh:mm A')}</Text> 
+      render: (text) => <Text style={{ color: token.colorCardColumnsTitleText }}>{dayjs(text).format('hh:mm A')}</Text> 
     },
     { 
       title: 'Ref No.', 
@@ -298,7 +298,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       render: (text) => (
         <Text 
           code 
-          style={{ color: token.colorPrimary, cursor: 'pointer' }}
+          style={{ color: token.colorCardDetailsText, cursor: 'pointer', textDecoration: 'underline' }}
           onClick={() => {
             setVoucherToSearch(text);
             setIsVoucherModalOpen(true);
@@ -308,7 +308,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
         </Text>
       )
     },
-    { title: 'Party / Category', dataIndex: 'party_name', key: 'party_name', width: 180, render: (text) => <Text strong>{text}</Text> }, // FIX: Width set ki
+    { title: 'Party / Category', dataIndex: 'party_name', key: 'party_name', width: 180, render: (text) => <Text strong style={{ color: token.colorCardDetailsText }}>{text}</Text> }, // FIX: Width set ki
     { 
       title: 'Description', 
       dataIndex: 'description', 
@@ -327,27 +327,27 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
         </Tag>
       ) : '-'
     },
-    { title: 'Amount', dataIndex: 'amount', key: 'amount', align: 'right', width: 140, render: (val) => <Text strong>{formatCurrency(val, profile?.currency)}</Text> }, // FIX: Width set ki
+    { title: 'Amount', dataIndex: 'amount', key: 'amount', align: 'right', width: 140, render: (val) => <Text strong style={{ color: token.colorCardDetailsText }}>{formatCurrency(val, profile?.currency)}</Text> }, // FIX: Width set ki
   ];
 
   const reportCardStyle = {
     borderRadius: 8,
-    border: `1px solid ${token.colorPrimary}33`, 
-    boxShadow: `0 4px 12px ${token.colorPrimary}15`, 
+    border: `1px solid ${token.colorCardBorder}`, 
+    boxShadow: `0 4px 12px ${token.colorCardShadow}`, 
     transition: 'all 0.3s ease',
     backgroundColor: token.colorCardBg || token.colorBgContainer
   };
 
   return (
-    <ConfigProvider theme={{ components: { Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg } } }}>
+    <ConfigProvider theme={{ components: { Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg, headerColor: token.colorCardColumnsTitleText } } }}>
       <Card 
-        title={<Text strong style={{ fontSize: '16px' }}>Daily Financial Summary (Day Book)</Text>} 
+        title={<Space><BookOutlined style={{ color: token.colorPrimary, fontSize: '18px' }} /><Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Daily Financial Summary (Day Book)</Text></Space>} 
         extra={
           <Button 
-            type="primary" 
-            ghost 
+            type="default" 
             size="small" 
             icon={<FileExcelOutlined />} 
+            style={{ color: token.colorText, borderColor: token.colorBorder }} 
             onClick={() => {
               setIsExportWizardOpen(true);
               setExportData(data); // Shuruat mein current loaded data select ho
@@ -376,7 +376,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       <Modal
         title={
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '24px' }}>
-            <Title level={4} style={{ margin: 0, color: token.colorPrimary }}>{modalTitle}</Title>
+            <Title level={4} style={{ margin: 0, color: token.colorCardHeadingsText }}>{modalTitle}</Title>
             <DataExport 
               data={modalData.map(item => ({
                 ...item,
@@ -410,8 +410,8 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
               pageData.forEach(({ amount }) => { totalAmount += amount; });
               return (
                 <Table.Summary.Row style={{ background: token.colorFillAlter }}>
-                  <Table.Summary.Cell index={0} colSpan={5}><Text strong>Total</Text></Table.Summary.Cell>
-                  <Table.Summary.Cell index={1} align="right"><Text strong style={{ fontSize: '16px', color: token.colorPrimary }}>{formatCurrency(totalAmount, profile?.currency)}</Text></Table.Summary.Cell>
+                  <Table.Summary.Cell index={0} colSpan={5}><Text strong style={{ color: token.colorCardHeadingsText }}>Total</Text></Table.Summary.Cell>
+                  <Table.Summary.Cell index={1} align="right"><Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>{formatCurrency(totalAmount, profile?.currency)}</Text></Table.Summary.Cell>
                 </Table.Summary.Row>
               );
             }}

@@ -21,7 +21,8 @@ import {
   TransactionOutlined,
   ShoppingCartOutlined,
   LockOutlined, // <-- Naya Icon
-  RollbackOutlined
+  RollbackOutlined,
+  AreaChartOutlined
 } from '@ant-design/icons';
 import { getPlanLimits } from '../config/subscriptionPlans'; // <-- Control Center Import
 import { Area, Pie } from '@ant-design/charts'; 
@@ -222,11 +223,11 @@ const Dashboard = () => {
   // --- Custom Styles for Cards ---
   const cardStyle = { borderRadius: 8, border: 'none', color: '#ffffff', height: '100%' };
   
-  // NAYA: Reports page wala same style in 5 cards ke liye
+  // NAYA: Upgraded theme configuration for all Cards
   const reportCardStyle = {
     borderRadius: 8,
-    border: `1px solid ${token.colorPrimary}33`, 
-    boxShadow: `0 4px 12px ${token.colorPrimary}15`, 
+    border: `1px solid ${token.colorCardBorder}`, 
+    boxShadow: `0 4px 12px ${token.colorCardShadow}`, 
     transition: 'all 0.3s ease',
     backgroundColor: token.colorCardBg || token.colorBgContainer
   };
@@ -681,10 +682,15 @@ const Dashboard = () => {
           {/* 1. Graph Card */}
           <Card 
   title={
-    timeRange === 'today' ? "Sales Overview (Last 7 Days)" : 
-    timeRange === 'week' ? "Sales Overview (This Week)" : 
-    timeRange === 'month' ? "Sales Overview (This Month)" : 
-    "Sales Overview (Custom Range)"
+    <Space>
+      <AreaChartOutlined style={{ color: token.colorPrimary, fontSize: '18px' }} />
+      <span style={{ color: token.colorCardHeadingsText, fontWeight: 600 }}>
+        {timeRange === 'today' ? "Sales Overview (Last 7 Days)" : 
+         timeRange === 'week' ? "Sales Overview (This Week)" : 
+         timeRange === 'month' ? "Sales Overview (This Month)" : 
+         "Sales Overview (Custom Range)"}
+      </span>
+    </Space>
   } 
   style={reportCardStyle}
 >
@@ -696,7 +702,12 @@ const Dashboard = () => {
 
           {/* 2. Recent Transactions Table */}
           <Card 
-  title="Recent Transactions" 
+  title={
+    <Space>
+      <HistoryOutlined style={{ color: token.colorPrimary, fontSize: '18px' }} />
+      <span style={{ color: token.colorCardHeadingsText, fontWeight: 600 }}>Recent Transactions</span>
+    </Space>
+  } 
   style={{ ...reportCardStyle, marginTop: 15 }}
 >
             <Table
@@ -709,13 +720,13 @@ const Dashboard = () => {
                   title: 'Customer', 
                   dataIndex: 'customer', 
                   key: 'customer',
-                  render: (text) => <Text strong>{text}</Text>
+                  render: (text) => <Text strong style={{ color: token.colorCardDetailsText }}>{text}</Text>
                 },
                 { 
                   title: 'Date', 
                   dataIndex: 'date', 
                   key: 'date',
-                  render: (date) => <Text type="secondary" style={{fontSize: 12}}>{new Date(date).toLocaleDateString()}</Text>
+                  render: (date) => <Text style={{ fontSize: 12, color: token.colorCardColumnsTitleText }}>{new Date(date).toLocaleDateString()}</Text>
                 },
                 { 
                   title: 'Status', 
@@ -734,7 +745,7 @@ const Dashboard = () => {
                   dataIndex: 'amount', 
                   key: 'amount',
                   align: 'right',
-                  render: (amount) => <Tag color="processing">{formatCurrency(amount, profile?.currency)}</Tag>
+                  render: (amount) => <Text strong style={{ color: token.colorCardDetailsText }}>{formatCurrency(amount, profile?.currency)}</Text>
                 },
               ]}
             />
@@ -763,7 +774,7 @@ const Dashboard = () => {
                       <List.Item>
                         <List.Item.Meta
                           title={item.name}
-                          description={<Text type="secondary">Only {item.quantity} left</Text>}
+                          description={<Text style={{ color: token.colorCardColumnsTitleText }}>Only {item.quantity} left</Text>}
                         />
                         <Tag color="error">Low</Tag>
                       </List.Item>
@@ -772,7 +783,7 @@ const Dashboard = () => {
                   />
                 ) : (
                   <div style={{ textAlign: 'center', padding: '20px', color: token.colorTextSecondary }}>
-                    <Text type="secondary">Low Stock Alerts are disabled in Settings.</Text>
+                    <Text style={{ color: token.colorCardColumnsTitleText }}>Low Stock Alerts are disabled in Settings.</Text>
                   </div>
                 )}
               </Card>
@@ -796,17 +807,17 @@ const Dashboard = () => {
                       <List.Item.Meta
                         title={item.name}
                         description={
-                          <Text type="secondary">
-                            {item.brand ? `${item.brand} | ` : ''}B.No: {item.batch || 'N/A'} | Qty: {item.qty}
-                          </Text>
-                        }
+                            <Text style={{ color: token.colorCardColumnsTitleText }}>
+                              {item.brand ? `${item.brand} | ` : ''}B.No: {item.batch || 'N/A'} | Qty: {item.qty}
+                            </Text>
+                          }
                       />
                       <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <div style={{ textAlign: 'right' }}>
                               <div style={{ fontSize: '12px', fontWeight: 'bold', color: item.isExpired ? token.colorError : token.colorWarning }}>
                                   {item.isExpired ? 'EXPIRED' : 'Expiring'}
                               </div>
-                              <div style={{ fontSize: '11px' }}>{new Date(item.expiry).toLocaleDateString()}</div>
+                              <div style={{ fontSize: '11px', color: token.colorCardColumnsTitleText }}>{new Date(item.expiry).toLocaleDateString()}</div>
                           </div>
                           <Tooltip title="Return to Supplier">
                               <Button 
@@ -870,12 +881,12 @@ const Dashboard = () => {
     styles={{ body: { padding: '12px' } }}
   >
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <Text type="secondary">Total Stock Value:</Text>
-      <Text strong style={{ fontSize: '16px' }}>
+      <Text style={{ color: token.colorCardDetailsText }}>Total Stock Value:</Text>
+      <Text strong style={{ fontSize: '16px', color: token.colorCardDetailsText }}>
         {formatCurrency(stats?.totalInventoryValue || 0, profile?.currency)}
       </Text>
     </div>
-    <div style={{ marginTop: 8, fontSize: '11px', color: token.colorTextSecondary, fontStyle: 'italic' }}>
+    <div style={{ marginTop: 8, fontSize: '11px', color: token.colorCardColumnsTitleText, fontStyle: 'italic' }}>
       * Based on purchase price of available items.
     </div>
   </Card>

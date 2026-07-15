@@ -41,9 +41,15 @@ export const darkThemeTokens = {
   colorLink: '#7AB2B2',
   colorLinkHover: '#EBF4F6',
   
-  // --- Header Controls ---
+  // --- Header Controls (Upgraded) ---
   colorHeaderBg: '#1E1E1E',
   colorHeaderText: 'rgba(255, 255, 255, 0.87)',
+  colorHeaderIcon: '#1AB6C9',
+  colorHeaderBorder: '#333333',
+  colorHeaderBulbGreen: '#66bb6a',
+  colorHeaderBulbYellow: '#ffa726',
+  colorHeaderBulbRed: '#ef5350',
+  colorHeaderBulbInactive: '#333333',
   
   // --- Side Menu Controls ---
   colorSiderBg: '#1E1E1E',
@@ -52,10 +58,17 @@ export const darkThemeTokens = {
   colorMenuSelectedText: '#7AB2B2',
   colorMenuHoverBg: 'rgba(255, 255, 255, 0.08)',
   
-  // --- Naye Custom Controls (Dark Mode) ---
+  // --- Naye Custom Controls For Cards ---
   colorCardBg: '#1E1E1E',
   colorTableBg: '#1E1E1E',
   colorTableHeaderBg: '#282828',
+  colorCardBorder: '#2A2A2A',
+  colorCardShadow: 'rgba(0, 0, 0, 0.5)',
+  colorCardHeadingsText: 'rgba(255, 255, 255, 0.87)',
+  colorCardColumnsTitleText: 'rgba(255, 255, 255, 0.60)',
+  colorCardDetailsText: 'rgba(255, 255, 255, 0.87)',
+  colorAmountPositive: '#66bb6a',
+  colorAmountNegative: '#ef5350',
 };
 
 export const lightThemeTokens = {
@@ -63,8 +76,8 @@ export const lightThemeTokens = {
   colorBgLayout: '#EBF4F6',
   colorBgContainer: '#EBF4F6',
   colorFillAlter: '#EBF4F6',
-  colorTextHeading: '#5F6368',
-  colorBorder: '#7AB2B2',
+  colorTextHeading: '#141414',
+  colorBorder: '#BFBFBF',
   
   // --- Semantic Colors (Status Tags waghera ke liye) ---
   colorSuccess: '#52c41a',
@@ -74,14 +87,20 @@ export const lightThemeTokens = {
   
   // --- Text & Links ---
   colorText: '#333333',
-  colorTextSecondary: '#2A4B54',
-  colorTextDescription: '#2A4B54',
+  colorTextSecondary: '#8C8C8C',
+  colorTextDescription: '#8C8C8C',
   colorLink: '#088395',
   colorLinkHover: '#5F6368',
   
-  // --- Header Controls ---
+  // --- Header Controls (Upgraded) ---
   colorHeaderBg: '#EBF4F6',
-  colorHeaderText: '#5F6368',
+  colorHeaderText: '#141414',
+  colorHeaderIcon: '#5F6368',
+  colorHeaderBorder: '#BFBFBF',
+  colorHeaderBulbGreen: '#52c41a',
+  colorHeaderBulbYellow: '#faad14',
+  colorHeaderBulbRed: '#ff4d4f',
+  colorHeaderBulbInactive: '#D9D9D9',
   
   // --- Side Menu Controls ---
   colorSiderBg: '#EBF4F6',
@@ -90,8 +109,15 @@ export const lightThemeTokens = {
   colorMenuSelectedText: '#09637E',
   colorMenuHoverBg: '#f5f5f5',
 
-  // --- Naye Custom Controls (Light Mode) ---
+  // --- Naye Custom Controls For Cards ---
   colorCardBg: '#FFFFFF',
   colorTableBg: '#FFFFFF',
   colorTableHeaderBg: '#FAFAFA',
+  colorCardBorder: '#BFBFBF',
+  colorCardShadow: 'rgba(0, 0, 0, 0.05)',
+  colorCardHeadingsText: '#181818',
+  colorCardColumnsTitleText: '#303030',
+  colorCardDetailsText: '#333333',
+  colorAmountPositive: '#52c41a',
+  colorAmountNegative: '#ff4d4f',
 };

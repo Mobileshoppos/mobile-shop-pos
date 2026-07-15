@@ -86,8 +86,8 @@ const Reports = () => {
   // --- UPDATED: Universal Glow Style (Light & Dark Compatible) ---
   const cardStyle = {
     borderRadius: 8,
-    border: `1px solid ${token.colorPrimary}33`, 
-    boxShadow: `0 4px 12px ${token.colorPrimary}15`, 
+    border: `1px solid ${token.colorCardBorder}`, 
+    boxShadow: `0 4px 12px ${token.colorCardShadow}`, 
     height: '100%',
     transition: 'all 0.3s ease', 
     backgroundColor: token.colorCardBg || token.colorBgContainer // Ab yeh ThemeConfig se control hoga
@@ -183,7 +183,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
       ctx.save();
       const centerX = (left + right) / 2;
       const centerY = (top + bottom) / 2;
-      ctx.fillStyle = token.colorText;
+      ctx.fillStyle = token.colorCardHeadingsText;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = '11px sans-serif';
@@ -826,8 +826,8 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             </Card>
           </Col>
           <Col xs={24} sm={12} md={8}>
-            <Card style={{ borderRadius: 8, borderLeft: `4px solid ${token.colorSuccess}` }}>
-              <Statistic title="Net Profit" value={overviewData.netProfit} prefix={<RiseOutlined />} valueStyle={{ color: token.colorSuccess }} formatter={(val) => formatCurrency(val, profile?.currency)} />
+            <Card style={{ borderRadius: 8, borderLeft: `4px solid ${token.colorAmountPositive}` }}>
+              <Statistic title="Net Profit" value={overviewData.netProfit} prefix={<RiseOutlined />} valueStyle={{ color: token.colorAmountPositive }} formatter={(val) => formatCurrency(val, profile?.currency)} />
             </Card>
           </Col>
           <Col xs={24} sm={12} md={8}>
@@ -838,19 +838,19 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           <Col xs={24} sm={12} md={8}>
             <Card style={{ borderRadius: 8, borderLeft: `4px solid ${token.colorInfo}` }}>
               <Statistic title="Current Stock Value" value={overviewData.totalInventoryValue} prefix={<InboxOutlined />} formatter={(val) => formatCurrency(val, profile?.currency)} />
-              <Text type="secondary" style={{ fontSize: '11px' }}>*Based on purchase price of available items</Text>
+              <Text style={{ fontSize: '11px', color: token.colorCardColumnsTitleText }}>*Based on purchase price of available items</Text>
             </Card>
           </Col>
           <Col xs={24} sm={12} md={8}>
-            <Card style={{ borderRadius: 8, borderLeft: `4px solid ${token.colorError}` }}>
-              <Statistic title="Accounts Receivable" value={overviewData.totalReceivables} prefix={<WalletOutlined />} valueStyle={{ color: token.colorError }} formatter={(val) => formatCurrency(val, profile?.currency)} />
-              <Text type="secondary" style={{ fontSize: '11px' }}>*Outstanding from Customers & Staff</Text>
+            <Card style={{ borderRadius: 8, borderLeft: `4px solid ${token.colorAmountNegative}` }}>
+              <Statistic title="Accounts Receivable" value={overviewData.totalReceivables} prefix={<WalletOutlined />} valueStyle={{ color: token.colorAmountNegative }} formatter={(val) => formatCurrency(val, profile?.currency)} />
+              <Text style={{ fontSize: '11px', color: token.colorCardColumnsTitleText }}>*Outstanding from Customers & Staff</Text>
             </Card>
           </Col>
           <Col xs={24} sm={12} md={8}>
             <Card style={{ borderRadius: 8, borderLeft: `4px solid #faad14` }}>
               <Statistic title="Accounts Payable" value={overviewData.totalPayables} prefix={<WalletOutlined />} formatter={(val) => formatCurrency(val, profile?.currency)} />
-              <Text type="secondary" style={{ fontSize: '11px' }}>*Outstanding to Suppliers</Text>
+              <Text style={{ fontSize: '11px', color: token.colorCardColumnsTitleText }}>*Outstanding to Suppliers</Text>
             </Card>
           </Col>
         </Row>
@@ -895,7 +895,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         const centerX = (left + right) / 2;
         const centerY = (top + bottom) / 2;
 
-        ctx.fillStyle = token.colorText;
+        ctx.fillStyle = token.colorCardHeadingsText;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
@@ -931,7 +931,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           fill: true,
           label: 'Profit',
           data: salesData.salesTrend?.map(item => item.profit) || [],
-          borderColor: token.colorSuccess,
+          borderColor: token.colorAmountPositive,
           backgroundColor: 'rgba(82, 196, 26, 0.1)', 
           tension: 0.4,
           pointRadius: 3,
@@ -945,7 +945,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         <Row gutter={[16, 16]}>
           {/* Left Side: Sales Trend */}
           <Col xs={24} lg={14}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}>Sales Trend (Revenue Over Time)</Text>} style={cardStyle}>
+            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Sales Trend (Revenue Over Time)</Text>} style={cardStyle}>
               {salesData.salesTrend?.length > 0 ? (
                 <div style={{ height: 300 }}>
                   <Line data={lineData} options={lineOptions} />
@@ -959,10 +959,10 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           {/* Right Side: Category Breakdown (With Toggle & Label) */}
           <Col xs={24} lg={10}>
             <Card 
-              title={<Text strong style={{ fontSize: '16px' }}>Category Breakdown</Text>} 
+              title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Category Breakdown</Text>} 
               extra={
                 <Space size="small">
-                  <Text type="secondary" style={{ fontSize: '12px' }}>View by:</Text>
+                  <Text style={{ fontSize: '12px', color: token.colorCardColumnsTitleText }}>View by:</Text>
                   <Radio.Group 
                     value={catChartFilter} 
                     onChange={(e) => setCatChartFilter(e.target.value)} 
@@ -989,7 +989,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
 
         {/* Row 2: Consolidated Financial Summary (Aligned & Perfected) */}
         <Card 
-          title={<Text strong style={{ fontSize: '16px' }}><RiseOutlined /> Financial Performance & Tax Summary</Text>}
+          title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}><RiseOutlined /> Financial Performance & Tax Summary</Text>}
           size="small"
           style={{ ...cardStyle, marginTop: '16px', height: 'auto' }} 
           styles={{ body: { padding: '16px 24px' } }}
@@ -998,13 +998,13 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             {/* Cash Sales */}
             <Col xs={24} sm={12} md={5}>
               <Statistic 
-                title={<Space><WalletOutlined style={{ color: token.colorSuccess }} /> Cash Sales</Space>} 
+                title={<Space><WalletOutlined style={{ color: token.colorAmountPositive }} /> Cash Sales</Space>} 
                 value={salesData.cashSales} 
                 formatter={(val) => formatCurrency(val, profile?.currency)} 
                 valueStyle={{ fontSize: '20px' }}
               />
               <div style={{ height: '25px', marginTop: 4 }}>
-                <Progress percent={cashPercent} size="small" strokeColor={token.colorSuccess} showInfo={false} style={{ marginBottom: 2 }} />
+                <Progress percent={cashPercent} size="small" strokeColor={token.colorAmountPositive} showInfo={false} style={{ marginBottom: 2 }} />
                 <div style={{ marginTop: '-8px' }}>
                   <Text type="secondary" style={{ fontSize: '13px', fontWeight: 500 }}>{cashPercent}% of total</Text>
                 </div>
@@ -1046,7 +1046,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
               <Statistic 
                 title={<Space><ArrowDownOutlined /> Tax Refunded</Space>} 
                 value={salesData.totalTaxRefunded} 
-                valueStyle={{ color: token.colorError, fontSize: '18px' }} 
+                valueStyle={{ color: token.colorAmountNegative, fontSize: '18px' }} 
                 formatter={(val) => formatCurrency(val, profile?.currency)} 
               />
               <div style={{ height: '20px' }} /> {/* Spacer */}
@@ -1069,7 +1069,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           {/* Staff Performance (Aligned Header) */}
           <Col xs={24} lg={12}>
             <Card 
-              title={<Text strong style={{ fontSize: '16px' }}><TeamOutlined /> Staff Performance</Text>} 
+              title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}><TeamOutlined /> Staff Performance</Text>} 
               extra={<div style={{ height: 24 }} />} 
               style={cardStyle} 
               styles={{ body: { padding: 0 } }}
@@ -1084,7 +1084,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                   { title: 'Invoices', dataIndex: 'sale_count', key: 'sale_count', align: 'center', render: (val) => <Tag>{val}</Tag> },
                   { title: 'Items Sold', dataIndex: 'items_sold', key: 'items_sold', align: 'center', render: (val) => <Text>{val}</Text> },
                   { title: 'Revenue', dataIndex: 'total_sales', key: 'total_sales', align: 'right', render: (val) => <Text strong>{formatCurrency(val, profile?.currency)}</Text> },
-                  { title: 'Profit', dataIndex: 'profit', key: 'profit', align: 'right', render: (val) => <Text strong style={{ color: token.colorSuccess }}>{formatCurrency(val, profile?.currency)}</Text> }
+                  { title: 'Profit', dataIndex: 'profit', key: 'profit', align: 'right', render: (val) => <Text strong style={{ color: token.colorAmountPositive }}>{formatCurrency(val, profile?.currency)}</Text> }
                 ]}
               />
             </Card>
@@ -1093,10 +1093,10 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           {/* Top Selling Products (Aligned Header & Rich Data) */}
           <Col xs={24} lg={12}>
             <Card 
-              title={<Text strong style={{ fontSize: '16px' }}><TrophyOutlined style={{ color: '#faad14' }} /> Top 10 Selling Products</Text>} 
+              title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}><TrophyOutlined style={{ color: '#faad14' }} /> Top 10 Selling Products</Text>} 
               extra={
                 <Space size="small">
-                  <Text type="secondary" style={{ fontSize: '12px' }}>Sort by:</Text>
+                  <Text style={{ fontSize: '12px', color: token.colorCardColumnsTitleText }}>Sort by:</Text>
                   <Radio.Group 
                     value={productFilter} 
                     onChange={(e) => setProductFilter(e.target.value)} 
@@ -1143,7 +1143,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                     dataIndex: 'profit', 
                     key: 'profit', 
                     align: 'right', 
-                    render: (val) => <Text strong style={{ color: productFilter === 'profit' ? token.colorSuccess : 'inherit', opacity: productFilter === 'profit' ? 1 : 0.6 }}>{formatCurrency(val, profile?.currency)}</Text> 
+                    render: (val) => <Text strong style={{ color: productFilter === 'profit' ? token.colorAmountPositive : 'inherit', opacity: productFilter === 'profit' ? 1 : 0.6 }}>{formatCurrency(val, profile?.currency)}</Text> 
                   }
                 ]}
               />
@@ -1166,7 +1166,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         {
           label: 'Daily Profit',
           data: profitLossData.profitTrend?.map(item => item.profit) || [],
-          borderColor: token.colorSuccess,
+          borderColor: token.colorAmountPositive,
           backgroundColor: 'rgba(82, 196, 26, 0.1)',
           fill: true, tension: 0.4, pointRadius: 3,
         },
@@ -1201,7 +1201,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         ctx.save();
         const centerX = (left + right) / 2;
         const centerY = (top + bottom) / 2;
-        ctx.fillStyle = token.colorText;
+        ctx.fillStyle = token.colorCardHeadingsText;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = '11px sans-serif';
@@ -1219,13 +1219,13 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
     // 3. Statement Table Data (Damaged Loss shamil kiya gaya)
     const summaryData = [
       { label: 'Gross Sales (Revenue)', value: profitLossData.totalRevenue + (profitLossData.totalRefunds || 0), color: 'inherit' },
-      { label: 'Sales Returns & Refunds', value: profitLossData.totalRefunds || 0, color: token.colorError, isNegative: true },
+      { label: 'Sales Returns & Refunds', value: profitLossData.totalRefunds || 0, color: token.colorAmountNegative, isNegative: true },
       { label: 'Net Revenue (A)', value: profitLossData.totalRevenue, color: 'inherit', bold: true, borderTop: true },
-      { label: 'Cost of Goods Sold (B)', value: profitLossData.totalCost, color: token.colorError, isNegative: true },
-      { label: 'Gross Profit (A - B)', value: profitLossData.grossProfit, color: token.colorSuccess, bold: true },
+      { label: 'Cost of Goods Sold (B)', value: profitLossData.totalCost, color: token.colorAmountNegative, isNegative: true },
+      { label: 'Gross Profit (A - B)', value: profitLossData.grossProfit, color: token.colorAmountPositive, bold: true },
       { label: 'Total Operating Expenses (C)', value: profitLossData.totalExpenses, color: token.colorWarning, isNegative: true },
       { label: 'Damaged Stock Loss (D)', value: profitLossData.damagedLoss || 0, color: '#fa541c', isNegative: true },
-      { label: 'NET PROFIT (After all losses)', value: profitLossData.netProfit, color: token.colorSuccess, bold: true, highlight: true },
+      { label: 'NET PROFIT (After all losses)', value: profitLossData.netProfit, color: token.colorAmountPositive, bold: true, highlight: true },
     ];
 
     return (
@@ -1238,7 +1238,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             </Card>
           </Col>
           <Col xs={12} md={6}>
-            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorError}` }}>
+            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorAmountNegative}` }}>
               <Statistic title="Total COGS" value={profitLossData.totalCost} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '18px' }} />
             </Card>
           </Col>
@@ -1248,8 +1248,8 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             </Card>
           </Col>
           <Col xs={12} md={6}>
-            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorSuccess}` }}>
-              <Statistic title="Net Profit" value={profitLossData.netProfit} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '20px', color: token.colorSuccess, fontWeight: 'bold' }} />
+            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorAmountPositive}` }}>
+              <Statistic title="Net Profit" value={profitLossData.netProfit} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '20px', color: token.colorAmountPositive, fontWeight: 'bold' }} />
             </Card>
           </Col>
         </Row>
@@ -1258,7 +1258,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         <Row gutter={[16, 16]}>
           <Col xs={24} lg={14}>
             <Card 
-              title={<Text strong style={{ fontSize: '16px' }}><RiseOutlined /> Profit Trend (Daily)</Text>} 
+              title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}><RiseOutlined /> Profit Trend (Daily)</Text>} 
               style={cardStyle}
             >
               <div style={{ height: 280 }}>
@@ -1269,7 +1269,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           </Col>
           <Col xs={24} lg={10}>
             <Card 
-              title={<Text strong style={{ fontSize: '16px' }}><PieChartOutlined /> Expense Distribution</Text>} 
+              title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}><PieChartOutlined /> Expense Distribution</Text>} 
               style={cardStyle}
             >
               <div style={{ height: 280, display: 'flex', justifyContent: 'center' }}>
@@ -1290,7 +1290,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         {/* Row 3: Detailed Statement & Margin */}
         <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
           <Col xs={24} lg={16}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}>Detailed P&L Statement</Text>} style={cardStyle}>
+            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Detailed P&L Statement</Text>} style={cardStyle}>
               <Table
                 dataSource={summaryData}
                 pagination={false}
@@ -1324,18 +1324,18 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             </Card>
           </Col>
           <Col xs={24} lg={8}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}>Profitability Insight</Text>} style={cardStyle}>
+            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Profitability Insight</Text>} style={cardStyle}>
               <div style={{ textAlign: 'center', padding: '20px 0' }}>
                 <Statistic 
                   title="Net Profit Margin" 
                   value={profitLossData.profitMargin} 
                   suffix="%" 
-                  valueStyle={{ color: token.colorSuccess, fontSize: '32px', fontWeight: 'bold' }} 
+                  valueStyle={{ color: token.colorAmountPositive, fontSize: '32px', fontWeight: 'bold' }} 
                 />
                 <Progress 
                   type="dashboard" 
                   percent={profitLossData.profitMargin} 
-                  strokeColor={token.colorSuccess} 
+                  strokeColor={token.colorAmountPositive} 
                   style={{ marginTop: 20 }}
                   format={percent => `${percent}%`}
                 />
@@ -1394,13 +1394,13 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             </Card>
           </Col>
           <Col xs={12} md={6}>
-            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorSuccess}` }}>
-              <Statistic title="Potential Profit" value={inventoryData.totalPotentialProfit} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '20px', color: token.colorSuccess }} />
+            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorAmountPositive}` }}>
+              <Statistic title="Potential Profit" value={inventoryData.totalPotentialProfit} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '20px', color: token.colorAmountPositive }} />
             </Card>
           </Col>
           <Col xs={12} md={4}>
-            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorError}` }}>
-              <Statistic title="Out of Stock" value={inventoryData.outOfStockItems?.length || 0} valueStyle={{ color: token.colorError, fontSize: '18px' }} />
+            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorAmountNegative}` }}>
+              <Statistic title="Out of Stock" value={inventoryData.outOfStockItems?.length || 0} valueStyle={{ color: token.colorAmountNegative, fontSize: '18px' }} />
             </Card>
           </Col>
           <Col xs={24} md={5}>
@@ -1411,7 +1411,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 formatter={(val) => formatCurrency(val, profile?.currency)} 
                 valueStyle={{ color: '#fa541c', fontSize: '18px' }} 
               />
-              <Text type="secondary" style={{ fontSize: '10px' }}>Total value of unusable items</Text>
+              <Text style={{ fontSize: '10px', color: token.colorCardColumnsTitleText }}>Total value of unusable items</Text>
             </Card>
           </Col>
         </Row>
@@ -1419,7 +1419,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         {/* Row 2: Distribution Charts */}
         <Row gutter={[16, 16]}>
           <Col xs={24} lg={12}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}>Assets by Category</Text>} style={cardStyle}>
+            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Assets by Category</Text>} style={cardStyle}>
               <div style={{ height: 280, display: 'flex', justifyContent: 'center' }}>
                 <Doughnut 
                   data={catChartData} 
@@ -1430,7 +1430,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             </Card>
           </Col>
           <Col xs={24} lg={12}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}>Assets by Brand</Text>} style={cardStyle}>
+            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Assets by Brand</Text>} style={cardStyle}>
               <div style={{ height: 280, display: 'flex', justifyContent: 'center' }}>
                 <Doughnut 
                   data={brandChartData} 
@@ -1445,7 +1445,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         {/* Row 3: Brand Valuation & Health Lists */}
         <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
           <Col xs={24} lg={14}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}>Brand-wise Valuation</Text>} style={cardStyle} styles={{ body: { padding: 0 } }}>
+            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Brand-wise Valuation</Text>} style={cardStyle} styles={{ body: { padding: 0 } }}>
               <Table
                 dataSource={inventoryData.brandValuation}
                 rowKey="name"
@@ -1455,13 +1455,13 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                   { title: 'Brand', dataIndex: 'name', key: 'name' },
                   { title: 'Qty', dataIndex: 'qty', key: 'qty', align: 'center' },
                   { title: 'Asset Value', dataIndex: 'value', key: 'value', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
-                  { title: 'Potential Profit', dataIndex: 'profit', key: 'profit', align: 'right', render: (val) => <Text strong style={{ color: token.colorSuccess }}>{formatCurrency(val, profile?.currency)}</Text> }
+                  { title: 'Potential Profit', dataIndex: 'profit', key: 'profit', align: 'right', render: (val) => <Text strong style={{ color: token.colorAmountPositive }}>{formatCurrency(val, profile?.currency)}</Text> }
                 ]}
               />
             </Card>
           </Col>
           <Col xs={24} lg={10}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}>Inventory Health</Text>} style={cardStyle} styles={{ body: { padding: '0 16px' } }}>
+            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Inventory Health</Text>} style={cardStyle} styles={{ body: { padding: '0 16px' } }}>
               <Tabs defaultActiveKey="low" size="small" items={[
                 {
                   key: 'low',
@@ -1540,8 +1540,8 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         {
           label: 'Customers / Suppliers',
           data:[ledgerData.totalCustomerReceivable, ledgerData.totalSupplierPayable],
-          backgroundColor:[token.colorInfo + '88', token.colorError + '88'],
-          borderColor: [token.colorInfo, token.colorError],
+          backgroundColor:[token.colorInfo + '88', token.colorAmountNegative + '88'],
+          borderColor: [token.colorInfo, token.colorAmountNegative],
           borderWidth: 1,
         },
         {
@@ -1559,7 +1559,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
       labels: ['0-30 Days (Current)', '31-60 Days (Overdue)', '60+ Days (Risk)'],
       datasets: [{
         data: [ledgerData.customerAging.current, ledgerData.customerAging.mid, ledgerData.customerAging.old],
-        backgroundColor: [token.colorSuccess, token.colorWarning, token.colorError],
+        backgroundColor: [token.colorAmountPositive, token.colorWarning, token.colorAmountNegative],
         borderColor: token.colorBgContainer,
         borderWidth: 2,
         cutout: '70%',
@@ -1583,7 +1583,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         ctx.save();
         const centerX = (left + right) / 2;
         const centerY = (top + bottom) / 2;
-        ctx.fillStyle = token.colorText;
+        ctx.fillStyle = token.colorCardHeadingsText;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = '11px sans-serif';
@@ -1604,7 +1604,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorInfo}` }}>
               <Statistic title="Total Receivables" value={ledgerData.grandTotalReceivable} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '20px', color: token.colorInfo }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                <Text type="secondary" style={{ fontSize: '10px' }}>Customers + Staff Advances</Text>
+                <Text style={{ fontSize: '10px', color: token.colorCardColumnsTitleText }}>Customers + Staff Advances</Text>
                 <Tooltip title="Money owed to customers due to returns/overpayments">
                   <Tag color="blue" style={{ fontSize: '10px', margin: 0, fontWeight: 'bold' }}>
   Credits: {formatCurrency(ledgerData.totalCustomerCredits || 0, profile?.currency)}
@@ -1614,15 +1614,15 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             </Card>
           </Col>
           <Col xs={12} md={8}>
-            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorError}` }}>
-              <Statistic title="Total Payables" value={ledgerData.grandTotalPayable} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '20px', color: token.colorError }} />
-              <Text type="secondary" style={{ fontSize: '10px' }}>Suppliers + Salaries Due</Text>
+            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorAmountNegative}` }}>
+              <Statistic title="Total Payables" value={ledgerData.grandTotalPayable} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '20px', color: token.colorAmountNegative }} />
+              <Text style={{ fontSize: '10px', color: token.colorCardColumnsTitleText }}>Suppliers + Salaries Due</Text>
             </Card>
           </Col>
           <Col xs={24} md={8}>
-            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${ledgerData.netPosition >= 0 ? token.colorSuccess : token.colorError}` }}>
+            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${ledgerData.netPosition >= 0 ? token.colorAmountPositive : token.colorAmountNegative}` }}>
               <Statistic title="Net Cash Position" value={ledgerData.netPosition} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '20px', fontWeight: 'bold' }} />
-              <Text type="secondary" style={{ fontSize: '10px' }}>Receivables minus Payables</Text>
+              <Text style={{ fontSize: '10px', color: token.colorCardColumnsTitleText }}>Receivables minus Payables</Text>
             </Card>
           </Col>
         </Row>
@@ -1630,14 +1630,14 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         {/* Row 2: Charts Side-by-Side */}
         <Row gutter={[16, 16]}>
           <Col xs={24} lg={12}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}>Receivables vs Payables</Text>} style={cardStyle}>
+            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Receivables vs Payables</Text>} style={cardStyle}>
               <div style={{ height: 280 }}>
                 <Bar data={comparisonData} options={barOptions} />
               </div>
             </Card>
           </Col>
           <Col xs={24} lg={12}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}>Receivables Aging (Days)</Text>} style={cardStyle}>
+            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Receivables Aging (Days)</Text>} style={cardStyle}>
               <div style={{ height: 280, display: 'flex', justifyContent: 'center' }}>
                 <Doughnut 
                   data={agingChartData} 
@@ -1678,7 +1678,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                       rowKey="id" pagination={false} size="small"
                       columns={[
                         { title: 'Customer Name', dataIndex: 'name', key: 'name' },
-                        { title: 'Amount', dataIndex: 'balance', key: 'bal', align: 'right', render: (v) => <Text strong style={{ color: token.colorSuccess }}>{formatCurrency(v, profile?.currency)}</Text> }
+                        { title: 'Amount', dataIndex: 'balance', key: 'bal', align: 'right', render: (v) => <Text strong style={{ color: token.colorAmountPositive }}>{formatCurrency(v, profile?.currency)}</Text> }
                       ]}
                     />
                   )
@@ -1731,7 +1731,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                         { 
                           title: 'Balance', dataIndex: 'balance', key: 'bal', align: 'right', 
                           render: (v) => (
-                            <Text strong style={{ color: v > 0 ? token.colorSuccess : token.colorError }}>
+                            <Text strong style={{ color: v > 0 ? token.colorAmountPositive : token.colorAmountNegative }}>
                               {v > 0 ? 'Salary Due: ' : 'Advance: '}
                               {formatCurrency(Math.abs(v), profile?.currency)}
                             </Text>
@@ -1762,10 +1762,10 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         data: auditData.dailyDiffTrend?.map(item => item.difference) || [],
         // Agar farq negative hai to Red, positive hai to Green
         backgroundColor: auditData.dailyDiffTrend?.map(item => 
-          item.difference < 0 ? token.colorError + 'aa' : token.colorSuccess + 'aa'
+          item.difference < 0 ? token.colorAmountNegative + 'aa' : token.colorAmountPositive + 'aa'
         ),
         borderColor: auditData.dailyDiffTrend?.map(item => 
-          item.difference < 0 ? token.colorError : token.colorSuccess
+          item.difference < 0 ? token.colorAmountNegative : token.colorAmountPositive
         ),
         borderWidth: 1,
       }]
@@ -1776,7 +1776,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
       labels: ['Cash In', 'Cash Out'],
       datasets: [{
         data: [auditData.totalIn, auditData.totalOut],
-        backgroundColor: [token.colorSuccess, token.colorError],
+        backgroundColor: [token.colorAmountPositive, token.colorAmountNegative],
         borderColor: token.colorBgContainer,
         borderWidth: 2,
         cutout: '70%',
@@ -1788,25 +1788,25 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         {/* Row 1: Audit KPI Cards */}
         <Row gutter={[16, 16]} style={{ marginBottom: '16px' }}>
           <Col xs={12} md={6}>
-            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorSuccess}` }}>
-              <Statistic title="Manual Cash In" value={auditData.totalIn} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '18px', color: token.colorSuccess }} />
+            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorAmountPositive}` }}>
+              <Statistic title="Manual Cash In" value={auditData.totalIn} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '18px', color: token.colorAmountPositive }} />
             </Card>
           </Col>
           <Col xs={12} md={6}>
-            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorError}` }}>
-              <Statistic title="Manual Cash Out" value={auditData.totalOut} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '18px', color: token.colorError }} />
+            <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorAmountNegative}` }}>
+              <Statistic title="Manual Cash Out" value={auditData.totalOut} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '18px', color: token.colorAmountNegative }} />
             </Card>
           </Col>
           <Col xs={12} md={6}>
             <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorWarning}` }}>
-              <Statistic title="Total Shortages" value={auditData.totalShortage} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '18px', color: token.colorError }} />
-              <Text type="secondary" style={{ fontSize: '10px' }}>Cash missing at closing</Text>
+              <Statistic title="Total Shortages" value={auditData.totalShortage} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '18px', color: token.colorAmountNegative }} />
+              <Text style={{ fontSize: '10px', color: token.colorCardColumnsTitleText }}>Cash missing at closing</Text>
             </Card>
           </Col>
           <Col xs={12} md={6}>
             <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorInfo}` }}>
-              <Statistic title="Net Audit Difference" value={auditData.netDifference} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '18px', color: auditData.netDifference >= 0 ? token.colorSuccess : token.colorError }} />
-              <Text type="secondary" style={{ fontSize: '10px' }}>Overall surplus/deficit</Text>
+              <Statistic title="Net Audit Difference" value={auditData.netDifference} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '18px', color: auditData.netDifference >= 0 ? token.colorAmountPositive : token.colorAmountNegative }} />
+              <Text style={{ fontSize: '10px', color: token.colorCardColumnsTitleText }}>Overall surplus/deficit</Text>
             </Card>
           </Col>
         </Row>
@@ -1814,7 +1814,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         {/* Row 2: Visual Audit Analysis */}
         <Row gutter={[16, 16]}>
           <Col xs={24} lg={14}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}><HistoryOutlined /> Daily Closing Discrepancies</Text>} style={cardStyle}>
+            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}><HistoryOutlined /> Daily Closing Discrepancies</Text>} style={cardStyle}>
               <div style={{ height: 280 }}>
                 {auditData.dailyDiffTrend?.length > 0 ? (
                   <Bar data={diffChartData} options={lineOptions} />
@@ -1825,7 +1825,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             </Card>
           </Col>
           <Col xs={24} lg={10}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}><PieChartOutlined /> Manual Adjustment Flow</Text>} style={cardStyle}>
+            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}><PieChartOutlined /> Manual Adjustment Flow</Text>} style={cardStyle}>
               <div style={{ height: 280, display: 'flex', justifyContent: 'center' }}>
                 <Doughnut 
                   data={flowChartData} 
@@ -1840,7 +1840,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         {/* Row 3: Audit Logs */}
         <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
           <Col xs={24} lg={14}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}>Staff Ledger Activity</Text>} style={cardStyle} styles={{ body: { padding: 0 } }}>
+            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Staff Ledger Activity</Text>} style={cardStyle} styles={{ body: { padding: 0 } }}>
               <Table
                 dataSource={auditData.staffTransactions}
                 rowKey="id"
@@ -1858,13 +1858,13 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
               },
               { title: 'Transaction', dataIndex: 'type', key: 'type', render: t => <Tag color={t === 'Salary' ? 'blue' : t === 'Advance' ? 'volcano' : 'orange'}>{t.toUpperCase()}</Tag> },
               { title: 'Amount', dataIndex: 'amount', key: 'amt', align: 'right', render: v => <Text strong>{formatCurrency(v, profile?.currency)}</Text> },
-              { title: 'Remarks', dataIndex: 'notes', key: 'notes', ellipsis: true, render: (text) => <Text type="secondary" style={{ fontSize: '12px' }}>{text || '-'}</Text> }
+              { title: 'Remarks', dataIndex: 'notes', key: 'notes', ellipsis: true, render: (text) => <Text style={{ fontSize: '12px', color: token.colorCardColumnsTitleText }}>{text || '-'}</Text> }
             ]}
               />
             </Card>
           </Col>
           <Col xs={24} lg={10}>
-            <Card title={<Text strong style={{ fontSize: '16px' }}>Recent Closing Audit</Text>} style={cardStyle} styles={{ body: { padding: 0 } }}>
+            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Recent Closing Audit</Text>} style={cardStyle} styles={{ body: { padding: 0 } }}>
               <Table
                 dataSource={auditData.recentClosings}
                 rowKey="id"
@@ -1883,11 +1883,11 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                   { title: 'Expected', dataIndex: 'expected_closing', align: 'right', render: v => formatCurrency(v, profile?.currency) },
                   { title: 'Actual', dataIndex: 'actual_closing', align: 'right', render: v => formatCurrency(v, profile?.currency) },
                   { title: 'Diff', dataIndex: 'difference', align: 'right', render: v => (
-                    <Text strong style={{ color: v < 0 ? token.colorError : token.colorSuccess }}>
+                    <Text strong style={{ color: v < 0 ? token.colorAmountNegative : token.colorAmountPositive }}>
                       {v > 0 ? '+' : ''}{formatCurrency(v, profile?.currency)}
                     </Text>
                   )},
-                  { title: 'Remarks', dataIndex: 'notes', key: 'notes', ellipsis: true, render: (text) => <Text type="secondary" style={{ fontSize: '11px' }}>{text || '-'}</Text> }
+                  { title: 'Remarks', dataIndex: 'notes', key: 'notes', ellipsis: true, render: (text) => <Text style={{ fontSize: '11px', color: token.colorCardColumnsTitleText }}>{text || '-'}</Text> }
                 ]}
               />
             </Card>
@@ -1928,11 +1928,11 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                       position: 'relative'
                     }}
                   >
-                    <div style={{ position: 'absolute', top: '12px', right: '12px', width: '10px', height: '10px', borderRadius: '50%', background: reg.status === 'open' ? token.colorSuccess : token.colorTextDisabled }} />
+                    <div style={{ position: 'absolute', top: '12px', right: '12px', width: '10px', height: '10px', borderRadius: '50%', background: reg.status === 'open' ? token.colorAmountPositive : token.colorTextDisabled }} />
                     <Text strong style={{ fontSize: '15px', display: 'block', marginBottom: '4px' }}>{reg.name}</Text>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <UserOutlined style={{ color: token.colorTextSecondary, fontSize: '12px' }} />
-                      <Text type="secondary" style={{ fontSize: '12px' }}>{reg.status === 'open' ? `In Use: ${staffName}` : 'Closed'}</Text>
+                      <Text style={{ fontSize: '12px', color: token.colorCardColumnsTitleText }}>{reg.status === 'open' ? `In Use: ${staffName}` : 'Closed'}</Text>
                     </div>
                   </div>
                 );
@@ -1962,7 +1962,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                     </div>
                     <Text strong style={{ fontSize: '15px', display: 'block', marginBottom: '4px' }}>{acc.name}</Text>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Text type="secondary" style={{ fontSize: '12px' }}>{acc.type}</Text>
+                      <Text style={{ fontSize: '12px', color: token.colorCardColumnsTitleText }}>{acc.type}</Text>
                     </div>
                   </div>
                 );
@@ -2017,7 +2017,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                   if (rec.type === 'Info') return <Text type="secondary">{formatCurrency(v, profile?.currency)}</Text>;
                   const isCredit = rec.type === 'Credit (In)';
                   return (
-                    <Text strong style={{ color: isCredit ? token.colorSuccess : token.colorError }}>
+                    <Text strong style={{ color: isCredit ? token.colorAmountPositive : token.colorAmountNegative }}>
                       {isCredit ? '+' : '-'} {formatCurrency(v, profile?.currency)}
                     </Text>
                   );
@@ -2080,7 +2080,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
   return (
     <ConfigProvider theme={{ 
       components: { 
-        Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg },
+        Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg, headerColor: token.colorCardColumnsTitleText, colorText: token.colorCardDetailsText },
         Tabs: { itemActiveBg: token.colorCardBg, cardBg: token.colorBgLayout, colorBorderSecondary: token.colorBorder }
       } 
     }}>

@@ -212,7 +212,7 @@ const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
     border: 'none',
     transition: 'all 0.2s ease-in-out',
     backgroundColor: token.colorPrimary,
-    color: token.colorHeaderTextLightSolid,
+    color: token.colorTextLightSolid,
   };
 return (
     <>
@@ -222,8 +222,8 @@ return (
   height: '64px', 
   lineHeight: '64px', 
   marginTop: 0, 
-  borderBottom: `1px solid ${token.colorPrimary}33`,
-  boxShadow: `0 2px 8px ${token.colorPrimary}15`,
+  borderBottom: `1px solid ${token.colorHeaderBorder}`,
+  boxShadow: `0 2px 8px ${token.colorHeaderBorder}66`,
   marginBottom: '8px'
 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '100%' }}>
@@ -235,7 +235,7 @@ return (
     type="text"
     icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
     onClick={() => setCollapsed(!collapsed)}
-    style={{ fontSize: '18px', width: 32, height: 32, color: token.colorHeaderText, marginRight: '8px' }}
+    style={{ fontSize: '18px', width: 32, height: 32, color: token.colorHeaderIcon, marginRight: '8px' }}
   />
 )}
 
@@ -267,8 +267,8 @@ return (
                     onClick={stuckCount > 0 ? showSyncCenter : null}
                     style={{
                       width: '10px', height: '10px', borderRadius: '50%',
-                      background: stuckCount > 0 ? token.colorError : token.colorFillSecondary, 
-                      boxShadow: stuckCount > 0 ? `0 0 8px ${token.colorError}` : 'none',
+                      background: stuckCount > 0 ? token.colorHeaderBulbRed : token.colorHeaderBulbInactive, 
+                      boxShadow: stuckCount > 0 ? `0 0 8px ${token.colorHeaderBulbRed}` : 'none',
                       cursor: stuckCount > 0 ? 'pointer' : 'default',
                       transition: 'all 0.3s',
                       animation: stuckCount > 0 ? 'blink-red 1s infinite' : 'none'
@@ -284,7 +284,7 @@ return (
                 }>
                   <div style={{
                     width: '14px', height: '14px', borderRadius: '50%',
-                    background: pendingCount > 0 ? token.colorWarning : (stuckCount > 0 ? token.colorWarning : token.colorFillSecondary),
+                    background: pendingCount > 0 ? token.colorHeaderBulbYellow : (stuckCount > 0 ? token.colorHeaderBulbYellow : token.colorHeaderBulbInactive),
                     animation: pendingCount > 0 ? 'pulse-yellow 1.5s infinite' : 'none',
                     transition: 'all 0.3s'
                   }} />
@@ -299,9 +299,9 @@ return (
                   <div style={{
                     width: '14px', height: '14px', borderRadius: '50%',
                     // Green light hamesha jalegi (Online hone ki nishani), lekin glow tab karegi jab sab perfect ho
-                    background: token.colorSuccess,
+                    background: token.colorHeaderBulbGreen,
                     opacity: (pendingCount === 0 && stuckCount === 0) ? 1 : 0.6,
-                    boxShadow: (pendingCount === 0 && stuckCount === 0) ? `0 0 8px ${token.colorSuccess}` : 'none',
+                    boxShadow: (pendingCount === 0 && stuckCount === 0) ? `0 0 8px ${token.colorHeaderBulbGreen}` : 'none',
                     transition: 'all 0.3s'
                   }} />
                 </Tooltip>
@@ -313,7 +313,8 @@ return (
                     onClick={handleManualSync}
                     style={{ 
                       fontSize: '16px', 
-                      color: isSyncing ? token.colorPrimary : token.colorTextSecondary,
+                      color: token.colorHeaderIcon,
+                      opacity: isSyncing ? 1 : 0.8,
                       cursor: isSyncing ? 'default' : 'pointer',
                       marginLeft: '4px',
                       transition: 'color 0.3s'
@@ -332,7 +333,7 @@ return (
                       }}
                       style={{ 
                         fontSize: '16px', 
-                        color: token.colorWarning, // Theme config se color aa raha hai
+                        color: token.colorHeaderBulbYellow, 
                         cursor: 'pointer',
                         marginLeft: '8px',
                         transition: 'color 0.3s'
@@ -458,7 +459,7 @@ return (
                   shape="circle" 
                   icon={<FileTextOutlined />} 
                   onClick={() => setIsVoucherSearchOpen(true)}
-                  style={{ border: `1px solid ${token.colorPrimary}33`, color: token.colorPrimary }}
+                  style={{ border: `1px solid ${token.colorHeaderBorder}`, color: token.colorHeaderIcon }}
                 />
               </Tooltip>
               
@@ -549,8 +550,8 @@ return (
                   {/* Naam aur Tag sirf Desktop par dikhega */}
                   {!isMobile && (
                     <div style={{ textAlign: 'left' }}>
-                      <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorTextHeading }}>{activeStaff ? activeStaff.name : (profile?.name || 'Owner')}</Text>
-                      <Tag color={activeStaff ? (activeSession ? "green" : "blue") : "gold"} style={{ fontSize: '10px', margin: 0, padding: '0 4px', lineHeight: '1.4', borderRadius: '4px', border: 'none' }}>
+                      <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorHeaderText }}>{activeStaff ? activeStaff.name : (profile?.name || 'Owner')}</Text>
+                      <Tag color={activeStaff ? (activeSession ? "green" : "blue") : "gold"} style={{ fontSize: '10px', margin: 0, padding: '0 4px', lineHeight: '1.4', borderRadius: '4px', border: 'none', color: token.colorText }}>
                         {activeStaff ? (activeSession ? "SHIFT ACTIVE" : activeStaff.role?.toUpperCase()) : 'ADMIN'}
                       </Tag>
                     </div>
@@ -559,9 +560,9 @@ return (
                   <div style={{ 
                     position: 'relative',
                     width: '36px', height: '36px', borderRadius: '10px',
-                    background: 'transparent', color: token.colorPrimary,
+                    background: 'transparent', color: token.colorHeaderIcon,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px',
-                    border: `1px solid ${token.colorPrimary}33`
+                    border: `1px solid ${token.colorHeaderBorder}`
                   }}>
                     <UserSwitchOutlined />
                     {/* Mobile par shift active hone ki nishani (Green Dot) */}

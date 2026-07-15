@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal, Input, Button, Table, Tag, Alert, Spin, Typography, Space } from 'antd';
+import { Modal, Input, Button, Table, Tag, Alert, Spin, Typography, Space, theme, ConfigProvider } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom'; // <--- NAYA IZAFA
 import { db } from '../db';
@@ -20,7 +20,8 @@ const VoucherSearchModal = ({ open, onClose, autoSearchQuery = '' }) => {
   const [errorMessage, setErrorMessage] = useState('');
   const [receiptData, setReceiptData] = useState(null); 
   const searchInputRef = useRef(null); 
-  const navigate = useNavigate(); // <--- NAYA IZAFA 
+  const navigate = useNavigate(); // <--- NAYA IZAFA
+  const { token } = theme.useToken(); 
 
   // --- NAYA IZAFA: Print Button ka Function ---
   const handlePrintReceipt = () => {
@@ -395,7 +396,7 @@ const VoucherSearchModal = ({ open, onClose, autoSearchQuery = '' }) => {
     { title: 'Paid Via', dataIndex: 'paymentMethod', key: 'paymentMethod', render: (text) => <Tag color="blue">{text}</Tag> },
     { title: 'Staff', dataIndex: 'staffName', key: 'staffName' },
     { title: 'Status', dataIndex: 'status', key: 'status', render: (text) => <Tag color={text === 'VALID' ? 'green' : 'default'}>{text}</Tag> },
-    { title: 'Amount', dataIndex: 'amount', key: 'amount', render: (val) => <Text strong style={{ color: '#cf1322', fontSize: 15 }}>{formatCurrency(val)}</Text> },
+    { title: 'Amount', dataIndex: 'amount', key: 'amount', render: (val) => <Text strong style={{ color: token.colorCardDetailsText, fontSize: 15 }}>{formatCurrency(val)}</Text> },
   ];
 
   const exportColumns = [
@@ -415,8 +416,8 @@ const VoucherSearchModal = ({ open, onClose, autoSearchQuery = '' }) => {
       title={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '24px' }}>
           <Space>
-            <FileTextOutlined style={{ color: '#1890ff' }} />
-            <span>Universal Voucher Search</span>
+            <FileTextOutlined style={{ color: token.colorPrimary }} />
+            <span style={{ color: token.colorCardHeadingsText }}>Universal Voucher Search</span>
           </Space>
           <Space>
             {/* NAYA IZAFA: Agar Purchase Invoice hai to View Full Bill ka button dikhayein */}
@@ -494,7 +495,7 @@ const VoucherSearchModal = ({ open, onClose, autoSearchQuery = '' }) => {
           onSearch={handleSearch}
           loading={loading}
         />
-        <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+        <Text style={{ fontSize: 11, marginTop: 4, display: 'block', color: token.colorCardColumnsTitleText }}>
           Tip: Ensure the prefix (e.g., EXP-, RCPT-, PAY-, RET-, ADJ-) is included.
         </Text>
       </div>
@@ -510,14 +511,16 @@ const VoucherSearchModal = ({ open, onClose, autoSearchQuery = '' }) => {
       )}
 
       {searchedData && (
-        <Table 
-          columns={columns} 
-          dataSource={[searchedData]} 
-          rowKey="voucherNo" 
-          pagination={false} 
-          size="small" 
-          scroll={{ x: true }}
-        />
+        <ConfigProvider theme={{ components: { Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg, headerColor: token.colorCardColumnsTitleText, colorText: token.colorCardDetailsText } } }}>
+          <Table 
+            columns={columns} 
+            dataSource={[searchedData]} 
+            rowKey="voucherNo" 
+            pagination={false} 
+            size="small" 
+            scroll={{ x: true }}
+          />
+        </ConfigProvider>
       )}
     </Modal>
   );

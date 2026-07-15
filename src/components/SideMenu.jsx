@@ -236,8 +236,8 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
-    // Primary color glow ke saath fading line
-    background: `linear-gradient(to bottom, ${token.colorPrimary}33 80%, transparent 100%) no-repeat right / 1px 100%, ${token.colorSiderBg}`,
+    // ThemeConfig ke border color ke saath fading line
+    background: `linear-gradient(to bottom, ${token.colorHeaderBorder} 80%, transparent 100%) no-repeat right / 1px 100%, ${token.colorSiderBg}`,
     borderRight: 'none',
     ...(isMobile && {
         position: 'fixed',
@@ -277,7 +277,7 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
                 justifyContent: collapsed ? 'center' : 'flex-start',
                 cursor: 'pointer',
                 background: 'transparent',
-                borderBottom: `1px solid ${token.colorPrimary}33`, // Glow effect wali line
+                borderBottom: `1px solid ${token.colorHeaderBorder}`, // ThemeConfig border line
                 marginBottom: '8px'
             }}>
                 {/* Logo Icon */}
