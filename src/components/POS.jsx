@@ -1611,8 +1611,8 @@ const POS = () => {
                       onClick={() => handleAddToCart(product)}
                       style={{ 
                         borderRadius: 8,
-                        border: `1px solid ${token.colorPrimary}33`, 
-                        boxShadow: `0 4px 12px ${token.colorPrimary}15`, 
+                        border: `1px solid ${token.colorCardBorder}`, 
+                        boxShadow: `0 4px 12px ${token.colorCardShadow}`, 
                         transition: 'all 0.3s ease',
                         backgroundColor: token.colorCardBg || token.colorBgContainer,
                         height: '100%',
@@ -1640,9 +1640,9 @@ const POS = () => {
                                  overflow: 'hidden', 
                                  textOverflow: 'ellipsis', 
                                  whiteSpace: 'nowrap',
-                                 backgroundColor: product.quantity > 0 ? token.colorPrimary : token.colorError,
-                                 color: '#fff',
-                                 borderColor: 'transparent',
+                                 backgroundColor: 'transparent',
+                                 color: product.quantity > 0 ? token.colorPrimary : token.colorAmountNegative,
+                                 borderColor: product.quantity > 0 ? token.colorPrimary : token.colorAmountNegative,
                                  borderRadius: '4px',
                                  padding: '0 6px'
                                }}
@@ -1665,13 +1665,13 @@ const POS = () => {
                       </div>
                       <div style={{ marginBottom: '4px', overflow: 'hidden' }}>
                         <Tooltip title={product.brand || product.category_name} placement="topLeft" mouseEnterDelay={0.5}>
-                          <Text type="secondary" style={{ fontSize: '11px', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <Text style={{ fontSize: '11px', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: token.colorCardBrandText }}>
                             {product.brand || product.category_name}
                           </Text>
                         </Tooltip>
                         {/* --- NAYA IZAFA: Grid Card par Location --- */}
                         {limits.allow_stock_location && product.rack_location && (
-                           <Text type="secondary" style={{ fontSize: '10px', display: 'block', color: token.colorPrimary }}>
+                           <Text style={{ fontSize: '10px', display: 'block', color: token.colorCardLocationTag }}>
                              📍 {product.rack_location}
                            </Text>
                         )}
@@ -1704,8 +1704,8 @@ const POS = () => {
                     hoverable
                     style={{ 
                       borderRadius: 8,
-                      border: `1px solid ${token.colorPrimary}33`, 
-                      boxShadow: `0 4px 12px ${token.colorPrimary}15`, 
+                      border: `1px solid ${token.colorCardBorder}`, 
+                      boxShadow: `0 4px 12px ${token.colorCardShadow}`, 
                       transition: 'all 0.3s ease',
                       backgroundColor: token.colorCardBg || token.colorBgContainer,
                       height: '100%'
@@ -1720,14 +1720,14 @@ const POS = () => {
                         {product.image_url && (
                           <img src={product.image_url} alt={product.name} style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '4px', border: `1px solid ${token.colorBorder}` }} />
                         )}
-                        <Text strong style={{ fontSize: '16px', lineHeight: 1 }}>
+                        <Text strong style={{ fontSize: '16px', lineHeight: 1, color: token.colorCardHeadingsText }}>
                           {product.name}
                         </Text>
-                        <Tag style={{ margin: 0, fontSize: '11px', padding: '0 4px' }}>{product.category_name}</Tag>
-                        {product.brand && <Text type="secondary" style={{ fontSize: '12px' }}>{product.brand}</Text>}
+                        <Tag style={{ margin: 0, fontSize: '13px', padding: '0 6px', backgroundColor: token.colorCardCategoryTag + '15', color: token.colorCardCategoryTag, border: `1px solid ${token.colorCardCategoryTag}33` }}>{product.category_name}</Tag>
+                        {product.brand && <Text style={{ fontSize: '15px', color: token.colorCardBrandText }}>{product.brand}</Text>}
                         {/* --- NAYA IZAFA: List Card par Location --- */}
                         {limits.allow_stock_location && product.rack_location && (
-                           <Tag color="blue" style={{ margin: 0, fontSize: '10px', padding: '0 4px' }}>
+                           <Tag style={{ margin: 0, fontSize: '13px', padding: '0 6px', backgroundColor: token.colorCardLocationTag + '15', color: token.colorCardLocationTag, border: `1px solid ${token.colorCardLocationTag}33` }}>
                              📍 {product.rack_location}
                            </Tag>
                         )}
@@ -1735,10 +1735,10 @@ const POS = () => {
                       
                       {/* Right Side: Price, Total Stock */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <Text strong style={{ fontSize: '15px', color: token.colorSuccess }}>
+                        <Text strong style={{ fontSize: '15px', color: token.colorAmountPositive }}>
                           {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
                         </Text>
-                        <Tag color={product.quantity > 0 ? "processing" : "error"} style={{ margin: 0, fontSize: '14px', fontWeight: 'bold' }}>
+                        <Tag style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', backgroundColor: 'transparent', color: product.quantity > 0 ? token.colorPrimary : token.colorAmountNegative, borderColor: product.quantity > 0 ? token.colorPrimary : token.colorAmountNegative }}>
                            Total: {product.quantity}
                         </Tag>
                       </div>
@@ -1763,8 +1763,15 @@ const POS = () => {
                             {/* Stock Count */}
                             <div style={{ marginRight: '8px', flexShrink: 0 }}>
                               <Tag 
-                                style={{ margin: 0, fontSize: '17px', padding: '0 6px', fontWeight: 'bold' }}
-                                color={variant.display_quantity > 0 ? "cyan" : "red"}
+                                style={{ 
+                                  margin: 0, 
+                                  fontSize: '15px', 
+                                  padding: '1px 8px', 
+                                  fontWeight: 'bold', 
+                                  backgroundColor: 'transparent',
+                                  color: variant.display_quantity > 0 ? token.colorPrimary : token.colorAmountNegative,
+                                  borderColor: variant.display_quantity > 0 ? token.colorPrimary : token.colorAmountNegative
+                                }}
                               >
                                 {variant.display_quantity}
                               </Tag>
@@ -1774,7 +1781,7 @@ const POS = () => {
                               
                               {/* ROW 1: Price and Item Attributes (Aligned horizontally with Pipe) */}
                               <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', height: '20px' }}>
-                                <Text strong style={{ color: token.colorSuccess, fontSize: '15px', lineHeight: '1.2', marginRight: '8px' }}>
+                                <Text strong style={{ color: token.colorAmountPositive, fontSize: '15px', lineHeight: '1.2', marginRight: '8px' }}>
                                    {formatCurrency(variant.sale_price, profile?.currency)}
                                 </Text>
                                 {(() => {
@@ -1788,7 +1795,7 @@ const POS = () => {
                                   }
                                   const hasAttributes = attrValues.length > 0;
                                   return (
-                                    <Text type="secondary" style={{ fontSize: '14px', lineHeight: '1.2' }}>
+                                    <Text style={{ fontSize: '14px', lineHeight: '1.2', color: token.colorCardDetailsText }}>
                                       |   {hasAttributes ? attrValues.join('  |  ') : 'Standard'}
                                     </Text>
                                   );

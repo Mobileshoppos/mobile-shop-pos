@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Table, Typography, Row, Col, Card, Spin, Tag, Descriptions } from 'antd';
+import { Modal, Table, Typography, Row, Col, Card, Spin, Tag, Descriptions, theme, ConfigProvider } from 'antd';
 import { db } from '../db';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,7 @@ import DataExport from './DataExport'; // <--- NAYA IZAFA
 const { Text, Title } = Typography;
 
 const ProductLedgerModal = ({ visible, onClose, product }) => {
+    const { token } = theme.useToken();
     const { profile } = useAuth();
     const [loading, setLoading] = useState(false);
     const [historyData, setHistoryData] = useState([]);
@@ -113,7 +114,7 @@ const ProductLedgerModal = ({ visible, onClose, product }) => {
             title: 'Qty',
             dataIndex: 'qty',
             align: 'center',
-            render: (q) => <Text strong style={{ color: q.startsWith('+') ? '#52c41a' : '#f5222d' }}>{q}</Text>
+            render: (q) => <Text strong style={{ color: q.startsWith('+') ? token.colorAmountPositive : token.colorAmountNegative }}>{q}</Text>
         },
         {
             title: 'Details',
@@ -133,7 +134,7 @@ const ProductLedgerModal = ({ visible, onClose, product }) => {
         <Modal
             title={
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '24px' }}>
-                    <Title level={4} style={{ margin: 0 }}>Item Ledger / Overview</Title>
+                    <Title level={4} style={{ margin: 0, color: token.colorCardHeadingsText }}>Item Ledger / Overview</Title>
                     <DataExport 
                         data={historyData.map(item => ({
                             ...item,
@@ -154,19 +155,27 @@ const ProductLedgerModal = ({ visible, onClose, product }) => {
             {loading ? (
                 <div style={{ textAlign: 'center', padding: '50px' }}><Spin /></div>
             ) : (
-                <>
-                    <Card size="small" style={{ marginBottom: '16px', background: 'rgba(0,0,0,0.02)' }}>
+                <ConfigProvider theme={{ components: { Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg, headerColor: token.colorCardColumnsTitleText, colorText: token.colorCardDetailsText }, Descriptions: { colorTextLabel: token.colorCardColumnsTitleText, colorTextValue: token.colorCardDetailsText } } }}>
+                    <Card size="small" style={{ marginBottom: '16px', background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}` }}>
                         <Descriptions size="small" column={2}>
-                            <Descriptions.Item label="Product Name"><Text strong>{product?.name}</Text></Descriptions.Item>
+                            <Descriptions.Item label="Product Name"><Text strong style={{ color: token.colorCardDetailsText }}>{product?.name}</Text></Descriptions.Item>
                             <Descriptions.Item label="Category">{product?.category_name}</Descriptions.Item>
                             <Descriptions.Item label="Brand">{product?.brand || 'N/A'}</Descriptions.Item>
-                            <Descriptions.Item label="Barcode"><Text code>{product?.barcode || 'N/A'}</Text></Descriptions.Item>
-                            <Descriptions.Item label="Current Stock"><Tag color="processing" style={{ fontSize: '14px' }}>{product?.quantity} Units</Tag></Descriptions.Item>
-                            <Descriptions.Item label="Sale Price Range"><Text strong color="success">{formatCurrency(product?.min_sale_price, profile?.currency)} - {formatCurrency(product?.max_sale_price, profile?.currency)}</Text></Descriptions.Item>
+                            <Descriptions.Item label="Barcode"><Text code style={{ color: token.colorCardDetailsText }}>{product?.barcode || 'N/A'}</Text></Descriptions.Item>
+                            <Descriptions.Item label="Current Stock">
+                                <Tag style={{ fontSize: '14px', backgroundColor: 'transparent', color: token.colorCardDetailsText, borderColor: token.colorCardBorder, fontWeight: 'bold' }}>
+                                    {product?.quantity} Units
+                                </Tag>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Sale Price Range">
+                                <Text strong style={{ color: token.colorAmountPositive }}>
+                                    {formatCurrency(product?.min_sale_price, profile?.currency)} - {formatCurrency(product?.max_sale_price, profile?.currency)}
+                                </Text>
+                            </Descriptions.Item>
                         </Descriptions>
                     </Card>
 
-                    <Title level={5}>Movement History</Title>
+                    <Title level={5} style={{ color: token.colorCardHeadingsText, marginTop: '16px' }}>Movement History</Title>
                     <Table 
                         columns={columns} 
                         dataSource={historyData} 
@@ -174,7 +183,7 @@ const ProductLedgerModal = ({ visible, onClose, product }) => {
                         size="small" 
                         pagination={{ pageSize: 10 }}
                     />
-                </>
+                </ConfigProvider>
             )}
         </Modal>
     );

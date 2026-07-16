@@ -69,6 +69,9 @@ export const darkThemeTokens = {
   colorCardDetailsText: 'rgba(255, 255, 255, 0.87)',
   colorAmountPositive: '#66bb6a',
   colorAmountNegative: '#ef5350',
+  colorCardCategoryTag: '#1AB6C9',        // Category tag (Teal)
+  colorCardBrandText: 'rgba(255, 255, 255, 0.60)', // Brand text
+  colorCardLocationTag: '#FFA726',       // Location tag (Orange)
 };
 
 export const lightThemeTokens = {
@@ -89,8 +92,8 @@ export const lightThemeTokens = {
   colorText: '#333333',
   colorTextSecondary: '#8C8C8C',
   colorTextDescription: '#8C8C8C',
-  colorLink: '#088395',
-  colorLinkHover: '#5F6368',
+  colorLink: '#353535',
+  colorLinkHover: '#6B21A8',
   
   // --- Header Controls (Upgraded) ---
   colorHeaderBg: '#EBF4F6',
@@ -120,4 +123,7 @@ export const lightThemeTokens = {
   colorCardDetailsText: '#333333',
   colorAmountPositive: '#52c41a',
   colorAmountNegative: '#ff4d4f',
+  colorCardCategoryTag: '#09637E',        // Category tag ka text/border color
+  colorCardBrandText: '#595959',          // Brand text ka color
+  colorCardLocationTag: '#D46B08',       // Location (Rack) tag ka text/border color
 };

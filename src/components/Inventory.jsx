@@ -121,7 +121,19 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, loadi
 
   return (
     <>
-      <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
+      <style>{`
+        .hide-scrollbar::-webkit-scrollbar { display: none; } 
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Pure GPU-Accelerated CSS Hover with Theme Tokens */
+        .product-name-link {
+          color: ${token.colorLink};
+          transition: color 0.12s ease-in-out;
+        }
+        .product-name-link:hover {
+          color: ${token.colorLinkHover} !important;
+        }
+      `}</style>
 
       <List
         grid={isSingleColumn ? { gutter: 16, xs: 1, sm: 1, md: 1, lg: 1, xl: 1 } : { gutter: 16, xs: 1, sm: 1, md: 2, lg: 2, xl: 2 }}
@@ -133,8 +145,8 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, loadi
               hoverable
               style={{ 
                 borderRadius: 8,
-                border: `1px solid ${token.colorPrimary}33`, 
-                boxShadow: `0 4px 12px ${token.colorPrimary}15`, 
+                border: `1px solid ${token.colorCardBorder}`, 
+                boxShadow: `0 4px 12px ${token.colorCardShadow}`, 
                 transition: 'all 0.3s ease',
                 backgroundColor: token.colorCardBg || token.colorBgContainer, 
                 height: '100%' 
@@ -152,26 +164,31 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, loadi
                   {/* NAYA IZAFA: Name ko clickable link bana diya */}
                   <a 
                     onClick={() => onViewLedger(product)} 
-                    style={{ fontSize: '18px', lineHeight: 1, fontWeight: 'bold' }}
+                    className="product-name-link"
+                    style={{ 
+                      fontSize: '18px', 
+                      lineHeight: 1, 
+                      fontWeight: 'bold'
+                    }}
                   >
                     {product.name}
                   </a>
-                  <Tag color="cyan" style={{ margin: 0, fontSize: '11px', padding: '2px 6px' }}>
+                  <Tag style={{ margin: 0, fontSize: '13px', padding: '2px 6px', backgroundColor: token.colorCardCategoryTag + '15', color: token.colorCardCategoryTag, border: `1px solid ${token.colorCardCategoryTag}33` }}>
                     {product.category_name}
                   </Tag>
-                  {product.brand && <Text type="secondary" style={{ fontSize: '13px' }}>{product.brand}</Text>}
+                  {product.brand && <Text style={{ fontSize: '15px', color: token.colorCardBrandText }}>{product.brand}</Text>}
                   {limits.allow_stock_location && product.rack_location && (
-                    <Tag color="blue" style={{ margin: 0, fontSize: '11px', padding: '2px 6px' }}>
-                      📍 {product.rack_location}
-                    </Tag>
-                  )}
+                      <Tag style={{ margin: 0, fontSize: '13px', padding: '2px 6px', backgroundColor: token.colorCardLocationTag + '15', color: token.colorCardLocationTag, border: `1px solid ${token.colorCardLocationTag}33` }}>
+                        📍 {product.rack_location}
+                      </Tag>
+                    )}
                 </div>
 
                 {/* --- RIGHT SIDE (Price + Menu) --- */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   
                   {/* Price Range */}
-                  <Text strong style={{ fontSize: '17px', color: token.colorSuccess, whiteSpace: 'nowrap' }}>
+                  <Text strong style={{ fontSize: '17px', color: token.colorAmountPositive, whiteSpace: 'nowrap' }}>
                     {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
                   </Text>
                   
@@ -237,8 +254,15 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, loadi
                         {/* STOCK BADGE - TRANSPARENT STYLE */}
                       <div style={{ marginRight: '12px', flexShrink: 0 }}>
                         <Tag 
-                          color={variant.display_quantity > 0 ? "processing" : "error"}
-                          style={{ margin: 0, fontSize: '15px', padding: '4px 10px', color: token.colorText }}
+                          style={{ 
+                            margin: 0, 
+                            fontSize: '15px', 
+                            padding: '1px 8px', // Box ko chota karne ke liye padding kam ki
+                            fontWeight: 'bold', // Numbers ko bold kiya
+                            backgroundColor: 'transparent',
+                            color: variant.display_quantity > 0 ? token.colorPrimary : token.colorAmountNegative,
+                            borderColor: variant.display_quantity > 0 ? token.colorPrimary : token.colorAmountNegative
+                          }}
                         >
                           {variant.display_quantity}
                         </Tag>
@@ -246,15 +270,15 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, loadi
                       </div>
 
                       <div style={{ marginRight: '16px', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
-                        {/* SALE PRICE - FONT INCREASED TO 15px */}
-                        <Text strong style={{ color: token.colorSuccess, fontSize: '16px', lineHeight: '1.2' }}>
-                           <span style={{ fontSize: '12px', opacity: 0.8, marginRight: '4px', color: token.colorTextSecondary }}>Sale:</span>
+                        {/* SALE PRICE */}
+                        <Text strong style={{ color: token.colorAmountPositive, fontSize: isSingleColumn ? '18px' : '16px', lineHeight: '1.2' }}>
+                           <span style={{ fontSize: isSingleColumn ? '14px' : '12px', opacity: 0.8, marginRight: '4px', color: token.colorCardColumnsTitleText }}>Sale:</span>
                            {formatCurrency(variant.sale_price, profile?.currency)}
                         </Text>
-                        {/* BUY PRICE - Sirf Owner ya Report dekhne wale ko dikhega */}
+                        {/* BUY PRICE */}
                         {can('can_view_reports') && (
-                          <Text type="secondary" style={{ fontSize: '12px', lineHeight: '1.2' }}>
-                             <span style={{ fontSize: '10px', opacity: 0.8, marginRight: '4px' }}>Buy:</span>
+                          <Text style={{ fontSize: isSingleColumn ? '14px' : '12px', lineHeight: '1.2', color: token.colorCardDetailsText }}>
+                             <span style={{ fontSize: isSingleColumn ? '12px' : '10px', opacity: 0.8, marginRight: '4px', color: token.colorCardColumnsTitleText }}>Buy:</span>
                              {formatCurrency(variant.purchase_price, profile?.currency)}
                           </Text>
                         )}
@@ -280,11 +304,11 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, loadi
 
                             return (
                               <>
-                                <Text strong style={{ fontSize: '16px', lineHeight: '1.2', color: token.colorText }}>
+                                <Text strong style={{ fontSize: isSingleColumn ? '18px' : '16px', lineHeight: '1.2', color: token.colorCardDetailsText }}>
                                   {hasAttributes ? attrValues.join('  |  ') : 'Standard'}
                                 </Text>
                                 {hasImeis && (
-                                  <Text style={{ fontSize: '16px', lineHeight: '1.2', color: isDarkMode ? '#aaa' : '#666', marginLeft: hasAttributes ? '8px' : '0' }}>
+                                  <Text style={{ fontSize: isSingleColumn ? '18px' : '16px', lineHeight: '1.2', color: isDarkMode ? '#aaa' : '#666', marginLeft: hasAttributes ? '8px' : '0' }}>
                                     {hasAttributes ? '  |  ' : ''}IMEI: {variant.imeis.join(', ')}
                                   </Text>
                                 )}
@@ -1169,7 +1193,7 @@ const Inventory = () => {
                   onClick={handleResetFilters} 
                   type="text"
                   size="small"
-                  style={{ color: token.colorTextSecondary }}
+                  style={{ color: token.colorCardDetailsText }}
                />
              </Tooltip>
              
@@ -1181,7 +1205,7 @@ const Inventory = () => {
                  onClick={() => setShowFilters(!showFilters)} 
                  type={showFilters ? 'primary' : 'text'}
                  size="small"
-                 style={{ color: showFilters ? undefined : token.colorTextSecondary }}
+                 style={{ color: showFilters ? undefined : token.colorCardDetailsText }}
                />
              </Tooltip>
 
@@ -1194,7 +1218,7 @@ const Inventory = () => {
                  type={showArchived ? 'primary' : 'text'}
                  danger={showArchived}
                  size="small"
-                 style={{ color: showArchived ? undefined : token.colorTextSecondary }}
+                 style={{ color: showArchived ? undefined : token.colorCardDetailsText }}
                />
              </Tooltip>
 
@@ -1206,7 +1230,7 @@ const Inventory = () => {
                    onClick={() => setIsSingleColumn(!isSingleColumn)} 
                    type="text"
                    size="small"
-                   style={{ color: token.colorTextSecondary }}
+                   style={{ color: token.colorCardDetailsText }}
                  />
                </Tooltip>
              )}

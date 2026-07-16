@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag, Dropdown, Menu, Tooltip, Select, theme, Switch
+  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag, Dropdown, Menu, Tooltip, Select, theme, Switch, ConfigProvider
 } from 'antd';
 import { UserSwitchOutlined, UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined, MoreOutlined, EditOutlined, ReloadOutlined, InboxOutlined, DeleteOutlined, SearchOutlined, LockOutlined, PrinterOutlined } from '@ant-design/icons';
 import { generatePaymentReceipt } from '../utils/receiptGenerator';
@@ -1380,7 +1380,7 @@ const handleCloseInvoiceSearchModal = () => {
         }
       ];
       return (
-        <Card size="small" style={{ margin: '8px 0' }}>
+        <Card size="small" style={{ margin: '8px 0', background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}` }}>
           <Descriptions title={`Invoice #${record.details.invoice_id || record.details.id} Summary`} bordered size="small" column={1}>
             {/* --- IN 5 JAGAHON PAR TABDEELI HUI HAI --- */}
             <Descriptions.Item label="Subtotal">{formatCurrency(record.details.subtotal || 0, profile?.currency)}</Descriptions.Item>
@@ -1440,7 +1440,7 @@ const handleCloseInvoiceSearchModal = () => {
         { title: 'Returned Price', dataIndex: 'price_at_return', align: 'right', render: p => formatCurrency(p, profile?.currency) }
       ];
       return (
-        <Card size="small" style={{ margin: '8px 0' }}>
+        <Card size="small" style={{ margin: '8px 0', background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}` }}>
           <Descriptions title={`Return Details & Explanation`} bordered size="small" column={1}>
             <Descriptions.Item label="Reason for Return">{returnDetails.reason || <Text type="secondary">No reason provided.</Text>}</Descriptions.Item>
             
@@ -1475,6 +1475,7 @@ const handleCloseInvoiceSearchModal = () => {
   };
   
   return (
+  <ConfigProvider theme={{ components: { Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg, headerColor: token.colorCardColumnsTitleText, colorText: token.colorCardDetailsText }, Descriptions: { colorTextLabel: token.colorCardColumnsTitleText, colorTextValue: token.colorCardDetailsText } } }}>
   <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}> 
   <div style={{
     display: 'flex',
@@ -1648,10 +1649,10 @@ const handleCloseInvoiceSearchModal = () => {
         dataSource={customers}
         renderItem={(customer) => (
         <List.Item style={{ padding: '0 0 16px 0' }}>
-            <Card style={{ width: '100%' }} styles={{ body: { padding: '16px' } }}>
+            <Card style={{ width: '100%', border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}`, backgroundColor: token.colorCardBg || token.colorBgContainer }} styles={{ body: { padding: '16px' } }}>
             <Row justify="space-between" align="top">
                 <Col>
-    <Text strong style={{ fontSize: '16px' }}>{customer.name}</Text><br/>
+    <Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>{customer.name}</Text><br/>
     <Text type="secondary">{customer.phone_number}</Text><br/>
     {/* --- Nayi Line Shamil Ki Gayi Hai --- */}
     {customer.address && <Text type="secondary">{customer.address}</Text>}
@@ -1827,7 +1828,7 @@ const handleCloseInvoiceSearchModal = () => {
 <Modal
     title={
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '95%' }}>
-        <span>Ledger: {selectedCustomer?.name}</span>
+                <span style={{ color: token.colorCardHeadingsText, fontWeight: 600 }}>Ledger: {selectedCustomer?.name}</span>
         {/* --- NAYA IZAFA: Ledger Print/Excel Buttons --- */}
         <DataExport 
             data={ledgerData.map(item => {
@@ -1865,8 +1866,8 @@ const handleCloseInvoiceSearchModal = () => {
                                     <Text type="secondary">{new Date(record.date).toLocaleString()}</Text>
                                 </Col>
                                 <Col span={8} style={{ textAlign: 'right' }}>
-                                    {record.debit > 0 && <Text type="danger">- {formatCurrency(record.debit, profile?.currency)}</Text>}
-                                    {record.credit > 0 && <Text type="success">+ {formatCurrency(record.credit, profile?.currency)}</Text>}
+                                    {record.debit > 0 && <Text style={{ color: token.colorAmountNegative }}>- {formatCurrency(record.debit, profile?.currency)}</Text>}
+                                    {record.credit > 0 && <Text style={{ color: token.colorAmountPositive, fontWeight: 'bold' }}>+ {formatCurrency(record.credit, profile?.currency)}</Text>}
                                 </Col>
                             </Row>
                             <div style={{ textAlign: 'right', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f0f0f0' }}>
@@ -1935,8 +1936,8 @@ const handleCloseInvoiceSearchModal = () => {
       key: 'staff', 
       render: (_, record) => staffMembers.find(s => s.id === record.details?.staff_id)?.name || 'Owner' 
     },
-    { title: 'Debit', dataIndex: 'debit', align: 'right', render: a => a > 0 ? <Text>{formatCurrency(a, profile?.currency)}</Text> : '-' },
-    { title: 'Credit', dataIndex: 'credit', align: 'right', render: a => a > 0 ? <Text type="success">{formatCurrency(a, profile?.currency)}</Text> : '-' },
+    { title: 'Debit', dataIndex: 'debit', align: 'right', render: a => a > 0 ? <Text style={{ color: token.colorAmountNegative }}>{formatCurrency(a, profile?.currency)}</Text> : '-' },
+    { title: 'Credit', dataIndex: 'credit', align: 'right', render: a => a > 0 ? <Text style={{ color: token.colorAmountPositive, fontWeight: 'bold' }}>{formatCurrency(a, profile?.currency)}</Text> : '-' },
     { title: 'Balance', dataIndex: 'balance', align: 'right', render: a => <Text strong>{formatCurrency(a, profile?.currency)}</Text> },
     { 
       title: 'Action', 
@@ -2291,6 +2292,7 @@ const handleCloseInvoiceSearchModal = () => {
 </Modal>
 
  </div> 
+ </ConfigProvider>
  );
 };
 
