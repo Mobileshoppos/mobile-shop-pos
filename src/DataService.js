@@ -4967,14 +4967,14 @@ async addCustomer(customerData) {
 
     sales.forEach(s => {
       if (s.payment_method === 'Cash') {
-        ledger.push({ id: s.id, date: s.created_at, type: 'Credit (In)', amount: s.amount_paid_at_sale, notes: `Sale #${s.invoice_id || s.id.slice(0,8)} - ${custMap[s.customer_id] || 'Walk-in'}`, source: 'Sales', staff_id: s.staff_id }); // <--- NAYA IZAFA
+        ledger.push({ id: s.id, date: s.created_at, type: 'Credit (In)', amount: s.amount_paid_at_sale, notes: `Sale #${s.invoice_id || s.id.slice(0,8)} - ${custMap[s.customer_id] || 'Walk-in'}`, source: 'Sales', staff_id: s.staff_id, customer_id: s.customer_id, supplier_id: null }); // <--- NAYA IZAFA
       }
     });
 
     payments.forEach(p => {
       if (p.payment_method === 'Cash') {
         const vNoDisplay = p.voucher_no || `RCPT-${p.id.slice(0,6).toUpperCase()}`;
-        ledger.push({ id: p.id, date: p.created_at, type: 'Credit (In)', amount: p.amount_paid, notes: `Received from ${custMap[p.customer_id] || 'Customer'} (${vNoDisplay})`, source: 'Collection', staff_id: p.staff_id }); // <--- NAYA IZAFA
+        ledger.push({ id: p.id, date: p.created_at, type: 'Credit (In)', amount: p.amount_paid, notes: `Received from ${custMap[p.customer_id] || 'Customer'} (${vNoDisplay})`, source: 'Collection', staff_id: p.staff_id, customer_id: p.customer_id, supplier_id: null }); // <--- NAYA IZAFA
       }
     });
 
@@ -4982,25 +4982,25 @@ async addCustomer(customerData) {
       if (sp.payment_method === 'Cash') {
         let note = `Paid to ${supMap[sp.supplier_id] || 'Supplier'}`;
         if (sp.purchase_id) note += ` (Inv #${purMap[sp.purchase_id]})`;
-        ledger.push({ id: sp.id, date: sp.created_at, type: 'Debit (Out)', amount: sp.amount, notes: note, source: 'Supplier Payment', staff_id: sp.staff_id }); // <--- NAYA IZAFA
+        ledger.push({ id: sp.id, date: sp.created_at, type: 'Debit (Out)', amount: sp.amount, notes: note, source: 'Supplier Payment', staff_id: sp.staff_id, customer_id: null, supplier_id: sp.supplier_id }); // <--- NAYA IZAFA
       }
     });
 
     expenses.forEach(e => {
       if (e.payment_method === 'Cash') {
-        ledger.push({ id: e.id, date: e.created_at, type: 'Debit (Out)', amount: e.amount, notes: e.title, source: 'Expense', staff_id: e.staff_id }); // <--- NAYA IZAFA
+        ledger.push({ id: e.id, date: e.created_at, type: 'Debit (Out)', amount: e.amount, notes: e.title, source: 'Expense', staff_id: e.staff_id, customer_id: null, supplier_id: null }); // <--- NAYA IZAFA
       }
     });
 
     payouts.forEach(p => {
       if (p.payment_method === 'Cash') {
-        ledger.push({ id: p.id, date: p.created_at, type: 'Debit (Out)', amount: p.amount_paid, notes: `Refunded to ${custMap[p.customer_id] || 'Customer'}`, source: 'Credit Settlement', staff_id: p.staff_id }); // <--- NAYA IZAFA
+        ledger.push({ id: p.id, date: p.created_at, type: 'Debit (Out)', amount: p.amount_paid, notes: `Refunded to ${custMap[p.customer_id] || 'Customer'}`, source: 'Credit Settlement', staff_id: p.staff_id, customer_id: p.customer_id, supplier_id: null }); // <--- NAYA IZAFA
       }
     });
 
     supRefunds.forEach(r => {
       if (r.payment_method === 'Cash') {
-        ledger.push({ id: r.id, date: r.created_at, type: 'Credit (In)', amount: r.amount, notes: `Refund from ${supMap[r.supplier_id] || 'Supplier'}`, source: 'Supplier Refund', staff_id: r.staff_id }); // <--- NAYA IZAFA
+        ledger.push({ id: r.id, date: r.created_at, type: 'Credit (In)', amount: r.amount, notes: `Refund from ${supMap[r.supplier_id] || 'Supplier'}`, source: 'Supplier Refund', staff_id: r.staff_id, customer_id: null, supplier_id: r.supplier_id }); // <--- NAYA IZAFA
       }
     });
 
@@ -5083,25 +5083,25 @@ async addCustomer(customerData) {
     }
 
     sales.forEach(s => {
-        if (s.payment_method === accountName) ledger.push({ id: s.id, date: s.created_at, type: 'Credit (In)', amount: s.amount_paid_at_sale, notes: `Sale #${s.invoice_id || s.id.slice(0,8)} - ${custMap[s.customer_id] || 'Walk-in'}`, source: 'Sales', staff_id: s.staff_id }); // <--- NAYA IZAFA
+        if (s.payment_method === accountName) ledger.push({ id: s.id, date: s.created_at, type: 'Credit (In)', amount: s.amount_paid_at_sale, notes: `Sale #${s.invoice_id || s.id.slice(0,8)} - ${custMap[s.customer_id] || 'Walk-in'}`, source: 'Sales', staff_id: s.staff_id, customer_id: s.customer_id, supplier_id: null }); // <--- NAYA IZAFA
     });
     payments.forEach(p => {
         const vNoDisplay = p.voucher_no || `RCPT-${p.id.slice(0,6).toUpperCase()}`;
-        if (p.payment_method === accountName) ledger.push({ id: p.id, date: p.created_at, type: 'Credit (In)', amount: p.amount_paid, notes: `Received from ${custMap[p.customer_id] || 'Customer'} (${vNoDisplay})`, source: 'Collection', staff_id: p.staff_id }); // <--- NAYA IZAFA
+        if (p.payment_method === accountName) ledger.push({ id: p.id, date: p.created_at, type: 'Credit (In)', amount: p.amount_paid, notes: `Received from ${custMap[p.customer_id] || 'Customer'} (${vNoDisplay})`, source: 'Collection', staff_id: p.staff_id, customer_id: p.customer_id, supplier_id: null }); // <--- NAYA IZAFA
     });
     supPayments.forEach(sp => {
         let note = `Paid to ${supMap[sp.supplier_id] || 'Supplier'}`;
         if (sp.purchase_id) note += ` (Inv #${purMap[sp.purchase_id]})`;
-        if (sp.payment_method === accountName) ledger.push({ id: sp.id, date: sp.created_at, type: 'Debit (Out)', amount: sp.amount, notes: note, source: 'Supplier Payment', staff_id: sp.staff_id }); // <--- NAYA IZAFA
+        if (sp.payment_method === accountName) ledger.push({ id: sp.id, date: sp.created_at, type: 'Debit (Out)', amount: sp.amount, notes: note, source: 'Supplier Payment', staff_id: sp.staff_id, customer_id: null, supplier_id: sp.supplier_id }); // <--- NAYA IZAFA
     });
     expenses.forEach(e => {
-        if (e.payment_method === accountName) ledger.push({ id: e.id, date: e.created_at, type: 'Debit (Out)', amount: e.amount, notes: e.title, source: 'Expense', staff_id: e.staff_id }); // <--- NAYA IZAFA
+        if (e.payment_method === accountName) ledger.push({ id: e.id, date: e.created_at, type: 'Debit (Out)', amount: e.amount, notes: e.title, source: 'Expense', staff_id: e.staff_id, customer_id: null, supplier_id: null }); // <--- NAYA IZAFA
     });
     payouts.forEach(p => {
-        if (p.payment_method === accountName) ledger.push({ id: p.id, date: p.created_at, type: 'Debit (Out)', amount: p.amount_paid, notes: `Refunded to ${custMap[p.customer_id] || 'Customer'}`, source: 'Credit Settlement', staff_id: p.staff_id }); // <--- NAYA IZAFA
+        if (p.payment_method === accountName) ledger.push({ id: p.id, date: p.created_at, type: 'Debit (Out)', amount: p.amount_paid, notes: `Refunded to ${custMap[p.customer_id] || 'Customer'}`, source: 'Credit Settlement', staff_id: p.staff_id, customer_id: p.customer_id, supplier_id: null }); // <--- NAYA IZAFA
     });
     supRefunds.forEach(r => {
-        if (r.refund_method === accountName || r.payment_method === accountName) ledger.push({ id: r.id, date: r.created_at, type: 'Credit (In)', amount: r.amount, notes: `Refund from ${supMap[r.supplier_id] || 'Supplier'}`, source: 'Supplier Refund', staff_id: r.staff_id }); // <--- NAYA IZAFA
+        if (r.refund_method === accountName || r.payment_method === accountName) ledger.push({ id: r.id, date: r.created_at, type: 'Credit (In)', amount: r.amount, notes: `Refund from ${supMap[r.supplier_id] || 'Supplier'}`, source: 'Supplier Refund', staff_id: r.staff_id, customer_id: null, supplier_id: r.supplier_id }); // <--- NAYA IZAFA
     });
     adjustments.forEach(a => {
         let txType = 'Info';

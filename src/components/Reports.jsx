@@ -122,6 +122,12 @@ const Reports = () => {
   const [vaultTxType, setVaultTxType] = useState('all');
   const [vaultStaff, setVaultStaff] = useState('all'); // <--- NAYA IZAFA: Handled by filter state
   const [vaultSearchText, setVaultSearchText] = useState(''); // <--- NAYA IZAFA: Search input state
+  const [vaultCustomer, setVaultCustomer] = useState('all'); // <--- NAYA IZAFA: Select Customer State
+  const [vaultSupplier, setVaultSupplier] = useState('all'); // <--- NAYA IZAFA: Select Supplier State
+
+  // Lists loading states
+  const [customerList, setCustomerList] = useState([]); // <--- NAYA IZAFA
+  const [supplierList, setSupplierList] = useState([]); // <--- NAYA IZAFA
 
   // --- NAYA IZAFA: Cash & Audit Filter States ---
   const [auditStaff, setAuditStaff] = useState('all');
@@ -780,6 +786,12 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           setStaffList(staff);
           const sessions = await db.register_sessions.filter(s => !s.closed_at).toArray();
           setActiveSessionsData(sessions);
+
+          // NAYA IZAFA: Customers aur Suppliers ko local database se load karwana
+          const custs = await db.customers.toArray();
+          setCustomerList(custs.filter(c => c.is_active !== false));
+          const sups = await db.suppliers.toArray();
+          setSupplierList(sups.filter(s => s.is_active !== false));
 
           // Default Selection
           if (!selectedRegForLedger) {
@@ -2056,6 +2068,16 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             parts.push(`Search: "${vaultSearchText}"`);
         }
 
+        // NAYA IZAFA: Subtitle mein active Customer/Supplier ka naam print karwana
+        if (vaultCustomer !== 'all') {
+            const cust = customerList.find(c => c.id === vaultCustomer);
+            parts.push(`Customer: ${cust ? cust.name : 'Unknown'}`);
+        }
+        if (vaultSupplier !== 'all') {
+            const sup = supplierList.find(s => s.id === vaultSupplier);
+            parts.push(`Supplier: ${sup ? sup.name : 'Unknown'}`);
+        }
+
         // Period Summary card ka math data add karna taake print/export mein automatic shamil ho jaye
         const metrics = getPeriodMetrics();
         parts.push(`Opening: ${formatCurrency(metrics.opening, curr)}`);
@@ -2102,7 +2124,17 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             }
         }
 
-        // 4. Text Search Filter (Dynamic)
+        // 4. NAYA IZAFA: Customer Filter Logic
+        if (vaultCustomer !== 'all') {
+            filtered = filtered.filter(tx => tx.customer_id === vaultCustomer);
+        }
+
+        // 5. NAYA IZAFA: Supplier Filter Logic
+        if (vaultSupplier !== 'all') {
+            filtered = filtered.filter(tx => tx.supplier_id === vaultSupplier);
+        }
+
+        // 6. Text Search Filter (Dynamic)
         if (vaultSearchText) {
             const query = vaultSearchText.toLowerCase().trim();
             filtered = filtered.filter(tx => 
@@ -2322,6 +2354,44 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                     allowClear
                 />
 
+                {/* NAYA IZAFA: Customer Search & Select Filter (Only shown for cash/bank) */}
+                <Select 
+                    showSearch
+                    size="small" 
+                    placeholder="Select Customer"
+                    value={vaultCustomer} 
+                    onChange={setVaultCustomer} 
+                    style={{ width: 150 }} 
+                    styles={{ popup: { root: { zIndex: 2000 } } }}
+                    filterOption={(input, option) =>
+                      (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                    }
+                >
+                    <Select.Option value="all">All Customers</Select.Option>
+                    {customerList.map(c => (
+                        <Select.Option value={c.id} key={c.id}>{c.name}</Select.Option>
+                    ))}
+                </Select>
+
+                {/* NAYA IZAFA: Supplier Search & Select Filter */}
+                <Select 
+                    showSearch
+                    size="small" 
+                    placeholder="Select Supplier"
+                    value={vaultSupplier} 
+                    onChange={setVaultSupplier} 
+                    style={{ width: 150 }} 
+                    styles={{ popup: { root: { zIndex: 2000 } } }}
+                    filterOption={(input, option) =>
+                      (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                    }
+                >
+                    <Select.Option value="all">All Suppliers</Select.Option>
+                    {supplierList.map(s => (
+                        <Select.Option value={s.id} key={s.id}>{s.name}</Select.Option>
+                    ))}
+                </Select>
+
                 {/* 2. Handled by (Staff) Dropdown Filter */}
                 <Select 
                     size="small" 
@@ -2380,6 +2450,8 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                             setVaultTxType('all');
                             setVaultDateRange('this_month');
                             setVaultStaff('all');
+                            setVaultCustomer('all'); // <--- NAYA IZAFA: Customer Reset
+                            setVaultSupplier('all'); // <--- NAYA IZAFA: Supplier Reset
                             setVaultSearchText(''); // <--- NAYA IZAFA: Search clear ho jaye
                             setVaultCustomDates([]);
                         }} 
