@@ -10,8 +10,8 @@ export default defineConfig({
       injectRegister: null,
       workbox: {
         globPatterns:['**/*.{js,css,html,ico,png,svg}'],
-        // FIX: Limit ko 2MB se barha kar 5MB kar diya hai taake Netlify fail na ho
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // FIX: Limit ko barha kar 8MB kar diya hai taake Netlify fail na ho (5.25MB ke size ko handle karne ke liye)
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
         runtimeCaching:[
