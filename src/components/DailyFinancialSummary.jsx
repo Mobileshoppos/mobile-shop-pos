@@ -480,21 +480,9 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
           {/* 1. Date Range Configuration (Dynamic Dropdown Layout) */}
           <Form.Item label={<Text strong>1. Select Date Range</Text>}>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', flexWrap: 'wrap' }}>
-              {/* Button 1: Active Filter */}
-              <Button 
-                type={exportDateRangeType === 'current' ? 'primary' : 'default'} 
-                onClick={() => {
-                  setExportDateRangeType('current');
-                  handleExportRangeChange('current');
-                }}
-                style={{ flex: 1, minWidth: '110px' }}
-              >
-                Active Filter
-              </Button>
-              
-              {/* Dropdown: Presets */}
+              {/* Dropdown: Presets (Ab Active Filter iske andar hai) */}
               <Select
-                value={['today', 'yesterday', 'week', 'month', 'year'].includes(exportDateRangeType) ? exportDateRangeType : undefined}
+                value={['current', 'today', 'yesterday', 'week', 'month', 'year'].includes(exportDateRangeType) ? exportDateRangeType : undefined}
                 onChange={(val) => {
                   setExportDateRangeType(val);
                   handleExportRangeChange(val);
@@ -504,6 +492,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
                 styles={{ popup: { root: { zIndex: 2000 } } }} // FIX: Deprecated dropdownStyle replaced with styles.popup.root
                 allowClear={false}
               >
+                <Select.Option value="current">Active Filter</Select.Option>
                 <Select.Option value="today">Today Only</Select.Option>
                 <Select.Option value="yesterday">Yesterday</Select.Option>
                 <Select.Option value="week">This Week</Select.Option>

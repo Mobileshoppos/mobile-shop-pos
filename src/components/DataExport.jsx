@@ -1,12 +1,15 @@
 import React from 'react';
-import { Button, Space, message, Tooltip, theme } from 'antd';
+// NAYA: 'message' hata kar 'App' import kiya hai
+import { Button, Space, App, Tooltip, theme } from 'antd';
 import { PrinterOutlined, FileExcelOutlined } from '@ant-design/icons'; // NAYA: Printer icon import kiya
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
-const DataExport = ({ data, exportColumns, fileName = 'Export_Data', reportTitle = 'Data Report' }) => {
+// NAYA IZAFA: 'reportSubtitle' prop ko shamil kiya gaya hai
+const DataExport = ({ data, exportColumns, fileName = 'Export_Data', reportTitle = 'Data Report', reportSubtitle = '' }) => {
   const { token } = theme.useToken();
+  const { message } = App.useApp(); // <--- NAYA IZAFA: Theme-aware message ke liye
 
   // NAYA: PDF Download ki jagah ab yeh Print karega
   const handlePrint = () => {
@@ -21,9 +24,21 @@ const DataExport = ({ data, exportColumns, fileName = 'Export_Data', reportTitle
       doc.setFontSize(18);
       doc.text(reportTitle, 14, 22);
       
-      doc.setFontSize(10);
-      doc.setTextColor(100);
-      doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+      // NAYA IZAFA: Dynamic StartY aur Subtitle rendering
+      let startY = 35;
+      if (reportSubtitle) {
+          doc.setFontSize(9);
+          doc.setTextColor(80); // Dark gray color
+          doc.text(reportSubtitle, 14, 28);
+          doc.setTextColor(100);
+          doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 34);
+          startY = 39; // Table thora neechay se shuru hoga
+      } else {
+          doc.setFontSize(10);
+          doc.setTextColor(100);
+          doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+          startY = 35;
+      }
 
       const tableColumn = exportColumns.map(col => col.title);
       const tableRows = [];
@@ -41,7 +56,7 @@ const DataExport = ({ data, exportColumns, fileName = 'Export_Data', reportTitle
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
-        startY: 35,
+        startY: startY, // <--- NAYA IZAFA: Dynamic StartY use ho raha hai
         theme: 'grid',
         headStyles: { fillColor: [26, 182, 201] }, // Aap ke theme ka colorPrimary (#1AB6C9)
         styles: { fontSize: 9 },

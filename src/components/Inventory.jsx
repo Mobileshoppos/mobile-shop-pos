@@ -1161,7 +1161,7 @@ const Inventory = () => {
               showSearch
               style={{ width: '100%' }}
               value={filterCategory}
-              dropdownStyle={{ maxHeight: 400, overflow: 'auto' }}
+              styles={{ popup: { root: { maxHeight: 400, overflow: 'auto' } } }} // <--- NAYA IZAFA: Warning fix
               placeholder="Category"
               allowClear
               treeDefaultExpandAll
@@ -1483,7 +1483,7 @@ const Inventory = () => {
               >
                 <TreeSelect
                   showSearch
-                  dropdownStyle={{ maxHeight: 400, overflow: 'auto' }}
+                  styles={{ popup: { root: { maxHeight: 400, overflow: 'auto' } } }} // <--- NAYA IZAFA: Warning fix
                   placeholder="Select Category..."
                   allowClear
                   treeDefaultExpandAll
