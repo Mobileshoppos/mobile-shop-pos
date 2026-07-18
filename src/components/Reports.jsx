@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 // NAYA IZAFA: Destructuring mein 'Input' ko shamil kiya gaya hai
-import { Typography, Tabs, Card, Row, Col, Statistic, Spin, DatePicker, Space, theme, Table, Progress, Divider, Tag, Empty, Button, Dropdown, Menu, Radio, Badge, Tooltip, App, Select, ConfigProvider, Input } from 'antd';
+import { Typography, Tabs, Card, Row, Col, Statistic, Spin, DatePicker, Space, theme, Table, Progress, Divider, Tag, Empty, Button, Dropdown, Menu, Radio, Badge, Tooltip, App, Select, ConfigProvider, Input, Modal, Form, Checkbox } from 'antd';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -133,6 +133,22 @@ const Reports = () => {
   const [auditStaff, setAuditStaff] = useState('all');
   const [auditDiscrepancy, setAuditDiscrepancy] = useState('all'); // 'all', 'discrepancy', 'matched'
 
+  // --- NAYA IZAFA: Daily Profit & Loss Ledger State ---
+  const [dailyPLList, setDailyPLList] = useState([]);
+  
+  // --- NAYA IZAFA: Local Table Filters for P&L ---
+  const [plTableDateType, setPlTableDateType] = useState('sync'); // 'sync' means follow the main tab filter
+  const [plTableCustomDates, setPlTableCustomDates] = useState([]);
+  const [isPLTableLoading, setIsPLTableLoading] = useState(false);
+
+  // --- NAYA IZAFA: P&L Export Wizard States ---
+  const [isPLExportWizardOpen, setIsPLExportWizardOpen] = useState(false);
+  const [plExportDateRangeType, setPLExportDateRangeType] = useState('current');
+  const [plExportCustomDates, setPLExportCustomDates] = useState([]);
+  const [plSelectedColumns, setPlSelectedColumns] = useState(['gross_sales', 'returns', 'discounts', 'taxes', 'grand_total', 'cogs', 'expenses', 'damaged_loss', 'net_profit']);
+  const [plExportData, setPlExportData] = useState([]);
+  const [plExportLoading, setPlExportLoading] = useState(false);
+
   const [dateRange, setDateRange] = useState([dayjs().startOf('month'), dayjs().endOf('month')]);
 const [timeRange, setTimeRange] = useState('month'); 
 const [productFilter, setProductFilter] = useState('qty');
@@ -250,6 +266,101 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
 
     if (val !== 'custom') {
       setDateRange([start, end]);
+    }
+  };
+
+  // --- NAYA IZAFA: P&L Wizard Data Calculation ---
+  const handlePLExportRangeChange = async (type, dates) => {
+    if (type === 'current') {
+        setPlExportData(dailyPLList);
+        return;
+    }
+    setPlExportLoading(true);
+    try {
+        let start, end;
+        const now = dayjs();
+        if (type === 'today') { start = now; end = now; }
+        else if (type === 'yesterday') { start = now.subtract(1, 'day'); end = now.subtract(1, 'day'); }
+        else if (type === 'week') { start = now.startOf('week'); end = now.endOf('day'); }
+        else if (type === 'month') { start = now.startOf('month'); end = now.endOf('month'); }
+        else if (type === 'year') { start = now.startOf('year'); end = now.endOf('day'); }
+        else if (type === 'custom' && dates && dates.length === 2) { start = dayjs(dates[0]); end = dayjs(dates[1]); }
+
+        if (!start || !end) return;
+
+        const startMs = start.startOf('day').toDate().getTime();
+        const endMs = end.endOf('day').toDate().getTime();
+        const startDateStr = start.format('YYYY-MM-DD');
+        const endDateStr = end.format('YYYY-MM-DD');
+
+        const [allSales, allReturns, allExpenses, allInventory] = await Promise.all([
+            db.sales.where('created_at').between(new Date(startMs).toISOString(), new Date(endMs).toISOString()).toArray(),
+            db.sale_returns.where('created_at').between(new Date(startMs).toISOString(), new Date(endMs).toISOString()).toArray(),
+            db.expenses.where('expense_date').between(startDateStr, endDateStr).toArray(),
+            db.inventory.where('updated_at').between(new Date(startMs).toISOString(), new Date(endMs).toISOString()).toArray()
+        ]);
+
+        const salesIds = allSales.map(s => s.id);
+        const saleItems = await db.sale_items.where('sale_id').anyOf(salesIds).toArray();
+        const returnIds = allReturns.map(r => r.id);
+        const returnedItems = returnIds.length > 0 ? await db.sale_return_items.where('return_id').anyOf(returnIds).toArray() : [];
+
+        const dailyPL = [];
+        let loopDate = new Date(startDateStr);
+        let endLimit = new Date(endDateStr);
+        const todayDate = new Date(dayjs().format('YYYY-MM-DD'));
+        if (endLimit > todayDate) endLimit = todayDate;
+
+        while (loopDate <= endLimit) {
+            const dateStr = loopDate.toISOString().split('T')[0];
+            const formattedDate = dayjs(dateStr).format('dddd, DD MMM YYYY');
+
+            const daySales = allSales.filter(s => new Date(s.sale_date || s.created_at).toISOString().split('T')[0] === dateStr);
+            const grossSales = daySales.reduce((sum, s) => sum + (Number(s.subtotal) || Number(s.total_amount) || 0), 0);
+            const discounts = daySales.reduce((sum, s) => sum + (Number(s.discount) || 0), 0);
+            const taxes = daySales.reduce((sum, s) => sum + (Number(s.tax_amount) || 0), 0);
+            const dayReturns = allReturns.filter(r => new Date(r.created_at).toISOString().split('T')[0] === dateStr);
+            const refunds = dayReturns.reduce((sum, r) => sum + ((Number(r.total_refund_amount) || 0) - (Number(r.tax_refunded) || 0)), 0);
+            const dayExpenses = allExpenses.filter(e => e.expense_date === dateStr);
+            const expensesAmt = dayExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+            const daySaleIds = daySales.map(s => s.id);
+            const daySaleItems = saleItems.filter(si => daySaleIds.includes(si.sale_id));
+            let cogs = 0;
+            daySaleItems.forEach(item => { cogs += (Number(item.purchase_price) || 0) * (item.quantity || 1); });
+
+            const dayReturnIds = dayReturns.map(r => r.id);
+            const dayReturnedItems = returnedItems.filter(ri => dayReturnIds.includes(ri.return_id));
+            let returnCost = 0;
+            for (const rItem of dayReturnedItems) {
+                const sItem = saleItems.find(si => si.inventory_id === rItem.inventory_id);
+                if (sItem && sItem.purchase_price) returnCost += Number(sItem.purchase_price) * (rItem.quantity || 1);
+            }
+            const netCogs = Math.max(0, cogs - returnCost);
+
+            const dayDamaged = allInventory.filter(i => {
+                const dDate = new Date(i.updated_at).toISOString().split('T')[0];
+                return dDate === dateStr && Number(i.damaged_qty || 0) > 0;
+            });
+            const damagedLoss = dayDamaged.reduce((sum, i) => sum + (Number(i.purchase_price || 0) * Number(i.damaged_qty || 0)), 0);
+
+            const grandTotal = grossSales - refunds - discounts;
+            const netProfit = grandTotal - netCogs - expensesAmt - damagedLoss;
+
+            // Sirf wo din jahan koi activity hui ho
+            if (grossSales > 0 || refunds > 0 || expensesAmt > 0 || damagedLoss > 0) {
+                dailyPL.push({
+                    key: dateStr, date: formattedDate, gross_sales: grossSales, returns: refunds, discounts: discounts,
+                    taxes: taxes, grand_total: grandTotal, cogs: netCogs, expenses: expensesAmt, damaged_loss: damagedLoss, net_profit: netProfit
+                });
+            }
+            loopDate.setDate(loopDate.getDate() + 1);
+        }
+        setPlExportData(dailyPL.reverse());
+    } catch (error) {
+        console.error("Export calculation error:", error);
+    } finally {
+        setPlExportLoading(false);
     }
   };
 
@@ -748,7 +859,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           setSalesData(data);
         }
         else if (activeTab === 'profit_loss') {
-          // NAYA IZAFA: Profit & Loss Data mangwana
+          // NAYA IZAFA: Profit & Loss Data mangwana (Sirf Top Cards aur Charts ke liye)
           const data = await DataService.getDetailedProfitLossReport(startDate, endDate);
           setProfitLossData(data);
         }
@@ -840,6 +951,110 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
     window.addEventListener('local-db-updated', fetchReportData);
     return () => window.removeEventListener('local-db-updated', fetchReportData);
   }, [dateRange, activeTab, selectedRegForLedger]);
+
+  // --- NAYA IZAFA: Independent Daily P&L Table Calculator (Reacts to Local Filters) ---
+  useEffect(() => {
+    const fetchDailyPLTable = async () => {
+      if (activeTab !== 'profit_loss') return;
+      setIsPLTableLoading(true);
+      try {
+        let start, end;
+        const now = dayjs();
+        
+        // Decide which date range to use
+        if (plTableDateType === 'sync') {
+            start = dateRange[0]; end = dateRange[1];
+        } else if (plTableDateType === 'today') {
+            start = now.startOf('day'); end = now.endOf('day');
+        } else if (plTableDateType === 'this_month') {
+            start = now.startOf('month'); end = now.endOf('month');
+        } else if (plTableDateType === 'last_month') {
+            start = now.subtract(1, 'month').startOf('month'); end = now.subtract(1, 'month').endOf('month');
+        } else if (plTableDateType === 'custom' && plTableCustomDates.length === 2) {
+            start = dayjs(plTableCustomDates[0]).startOf('day'); end = dayjs(plTableCustomDates[1]).endOf('day');
+        }
+
+        if (!start || !end) return;
+
+        const startMs = start.toDate().getTime();
+        const endMs = end.toDate().getTime();
+        const startDateStr = start.format('YYYY-MM-DD');
+        const endDateStr = end.format('YYYY-MM-DD');
+
+        const [allSales, allReturns, allExpenses, allInventory] = await Promise.all([
+            db.sales.where('created_at').between(new Date(startMs).toISOString(), new Date(endMs).toISOString()).toArray(),
+            db.sale_returns.where('created_at').between(new Date(startMs).toISOString(), new Date(endMs).toISOString()).toArray(),
+            db.expenses.where('expense_date').between(startDateStr, endDateStr).toArray(),
+            db.inventory.where('updated_at').between(new Date(startMs).toISOString(), new Date(endMs).toISOString()).toArray()
+        ]);
+
+        const salesIds = allSales.map(s => s.id);
+        const saleItems = await db.sale_items.where('sale_id').anyOf(salesIds).toArray();
+        const returnIds = allReturns.map(r => r.id);
+        const returnedItems = returnIds.length > 0 ? await db.sale_return_items.where('return_id').anyOf(returnIds).toArray() : [];
+
+        const dailyPL = [];
+        let loopDate = new Date(startDateStr);
+        let endLimit = new Date(endDateStr);
+        
+        // Future dates block logic
+        const todayDate = new Date(now.format('YYYY-MM-DD'));
+        if (endLimit > todayDate) endLimit = todayDate;
+
+        while (loopDate <= endLimit) {
+            const dateStr = loopDate.toISOString().split('T')[0];
+            const formattedDate = dayjs(dateStr).format('dddd, DD MMM YYYY');
+
+            const daySales = allSales.filter(s => new Date(s.sale_date || s.created_at).toISOString().split('T')[0] === dateStr);
+            const grossSales = daySales.reduce((sum, s) => sum + (Number(s.subtotal) || Number(s.total_amount) || 0), 0);
+            const discounts = daySales.reduce((sum, s) => sum + (Number(s.discount) || 0), 0);
+            const taxes = daySales.reduce((sum, s) => sum + (Number(s.tax_amount) || 0), 0);
+            const dayReturns = allReturns.filter(r => new Date(r.created_at).toISOString().split('T')[0] === dateStr);
+            const refunds = dayReturns.reduce((sum, r) => sum + ((Number(r.total_refund_amount) || 0) - (Number(r.tax_refunded) || 0)), 0);
+            const dayExpenses = allExpenses.filter(e => e.expense_date === dateStr);
+            const expensesAmt = dayExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+            const daySaleIds = daySales.map(s => s.id);
+            const daySaleItems = saleItems.filter(si => daySaleIds.includes(si.sale_id));
+            let cogs = 0;
+            daySaleItems.forEach(item => { cogs += (Number(item.purchase_price) || 0) * (item.quantity || 1); });
+
+            const dayReturnIds = dayReturns.map(r => r.id);
+            const dayReturnedItems = returnedItems.filter(ri => dayReturnIds.includes(ri.return_id));
+            let returnCost = 0;
+            for (const rItem of dayReturnedItems) {
+                const sItem = saleItems.find(si => si.inventory_id === rItem.inventory_id);
+                if (sItem && sItem.purchase_price) returnCost += Number(sItem.purchase_price) * (rItem.quantity || 1);
+            }
+            const netCogs = Math.max(0, cogs - returnCost);
+
+            const dayDamaged = allInventory.filter(i => {
+                const dDate = new Date(i.updated_at).toISOString().split('T')[0];
+                return dDate === dateStr && Number(i.damaged_qty || 0) > 0;
+            });
+            const damagedLoss = dayDamaged.reduce((sum, i) => sum + (Number(i.purchase_price || 0) * Number(i.damaged_qty || 0)), 0);
+
+            const grandTotal = grossSales - refunds - discounts;
+            const netProfit = grandTotal - netCogs - expensesAmt - damagedLoss;
+
+            // Sirf wo din jahan koi activity hui ho
+            if (grossSales > 0 || refunds > 0 || expensesAmt > 0 || damagedLoss > 0) {
+                dailyPL.push({
+                    key: dateStr, date: formattedDate, gross_sales: grossSales, returns: refunds, discounts: discounts,
+                    taxes: taxes, grand_total: grandTotal, cogs: netCogs, expenses: expensesAmt, damaged_loss: damagedLoss, net_profit: netProfit
+                });
+            }
+            loopDate.setDate(loopDate.getDate() + 1);
+        }
+        setDailyPLList(dailyPL.reverse());
+      } catch (err) {
+        console.error("Daily PL Table Error:", err);
+      } finally {
+        setIsPLTableLoading(false);
+      }
+    };
+    fetchDailyPLTable();
+  }, [activeTab, dateRange, plTableDateType, plTableCustomDates]);
 
   // --- OVERVIEW TAB UI ---
   const renderOverviewTab = () => {
@@ -1374,11 +1589,120 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             </Card>
           </Col>
         </Row>
+
+        {/* --- NAYA IZAFA: Daily Profit & Loss Ledger Table --- */}
+        <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
+          <Col span={24}>
+            <Card 
+              title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}><BookOutlined /> Daily Profit & Loss Ledger</Text>} 
+              extra={
+                <Space size="small" wrap>
+                    {/* NAYA IZAFA: Local Table Filter */}
+                    <Text type="secondary" style={{ fontSize: '12px' }}>Filter Table:</Text>
+                    <Select 
+                        size="small" 
+                        value={plTableDateType} 
+                        onChange={(val) => { setPlTableDateType(val); setPlTableCustomDates([]); }} 
+                        style={{ width: 140 }} 
+                        styles={{ popup: { root: { zIndex: 2000 } } }}
+                    >
+                        <Select.Option value="sync">Same as Tab Filter</Select.Option>
+                        <Select.Option value="today">Today</Select.Option>
+                        <Select.Option value="this_month">This Month</Select.Option>
+                        <Select.Option value="last_month">Last Month</Select.Option>
+                        <Select.Option value="custom">Custom Range</Select.Option>
+                    </Select>
+                    
+                    {plTableDateType === 'custom' && (
+                        <DatePicker.RangePicker
+                            size="small"
+                            format="DD/MM/YYYY"
+                            onChange={(dates) => {
+                                if (dates) setPlTableCustomDates([dates[0].toISOString(), dates[1].toISOString()]);
+                                else setPlTableCustomDates([]);
+                            }}
+                            style={{ width: 220 }}
+                        />
+                    )}
+
+                    <Button 
+                        type="default" 
+                        size="small" 
+                        icon={<FileExcelOutlined />} 
+                        style={{ color: token.colorText, borderColor: token.colorBorder, marginLeft: '8px' }} 
+                        onClick={() => {
+                            setIsPLExportWizardOpen(true);
+                            setPlExportData(dailyPLList); 
+                            setPLExportDateRangeType('current');
+                        }}
+                    >
+                        Export Options
+                    </Button>
+                </Space>
+              }
+              style={cardStyle} 
+              styles={{ body: { padding: 0 } }}
+            >
+              <Table
+                dataSource={dailyPLList}
+                loading={isPLTableLoading}
+                rowKey="key"
+                pagination={{ pageSize: 7 }}
+                size="small"
+                scroll={{ x: 'max-content' }}
+                // NAYA IZAFA: Grand Total Row at the bottom
+                summary={(pageData) => {
+                    let tGross = 0, tRet = 0, tDisc = 0, tTax = 0, tNetRev = 0, tCogs = 0, tExp = 0, tDmg = 0, tNet = 0;
+                    // Hum filtered list (dailyPLList) ka total kar rahe hain, na ke sirf pageData ka
+                    dailyPLList.forEach(r => {
+                        tGross += r.gross_sales; tRet += r.returns; tDisc += r.discounts; tTax += r.taxes;
+                        tNetRev += r.grand_total; tCogs += r.cogs; tExp += r.expenses; tDmg += r.damaged_loss; tNet += r.net_profit;
+                    });
+                    return (
+                        <Table.Summary.Row style={{ background: token.colorFillAlter }}>
+                            <Table.Summary.Cell index={0}><Text strong style={{ color: token.colorCardHeadingsText }}>GRAND TOTAL</Text></Table.Summary.Cell>
+                            <Table.Summary.Cell index={1} align="right"><Text strong>{formatCurrency(tGross, profile?.currency)}</Text></Table.Summary.Cell>
+                            <Table.Summary.Cell index={2} align="right"><Text strong style={{ color: token.colorAmountNegative }}>{formatCurrency(tRet, profile?.currency)}</Text></Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right"><Text strong style={{ color: token.colorWarning }}>{formatCurrency(tDisc, profile?.currency)}</Text></Table.Summary.Cell>
+                            <Table.Summary.Cell index={4} align="right"><Text strong>{formatCurrency(tTax, profile?.currency)}</Text></Table.Summary.Cell>
+                            <Table.Summary.Cell index={5} align="right"><Text strong style={{ fontSize: '15px' }}>{formatCurrency(tNetRev, profile?.currency)}</Text></Table.Summary.Cell>
+                            <Table.Summary.Cell index={6} align="right"><Text strong>{formatCurrency(tCogs, profile?.currency)}</Text></Table.Summary.Cell>
+                            <Table.Summary.Cell index={7} align="right"><Text strong style={{ color: token.colorWarning }}>{formatCurrency(tExp, profile?.currency)}</Text></Table.Summary.Cell>
+                            <Table.Summary.Cell index={8} align="right"><Text strong style={{ color: '#fa541c' }}>{formatCurrency(tDmg, profile?.currency)}</Text></Table.Summary.Cell>
+                            <Table.Summary.Cell index={9} align="right"><Text strong style={{ fontSize: '15px', color: tNet >= 0 ? token.colorAmountPositive : token.colorAmountNegative }}>{formatCurrency(tNet, profile?.currency)}</Text></Table.Summary.Cell>
+                        </Table.Summary.Row>
+                    );
+                }}
+                columns={[
+                  { title: 'Date', dataIndex: 'date', key: 'date', render: (text) => <Text strong>{text}</Text> },
+                  { title: 'Gross Sales', dataIndex: 'gross_sales', key: 'g_sales', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
+                  { title: 'Returns (-)', dataIndex: 'returns', key: 'ret', align: 'right', render: (val) => <Text style={{ color: val > 0 ? token.colorAmountNegative : 'inherit' }}>{val > 0 ? '-' : ''} {formatCurrency(val, profile?.currency)}</Text> },
+                  { title: 'Discounts (-)', dataIndex: 'discounts', key: 'disc', align: 'right', render: (val) => <Text style={{ color: val > 0 ? token.colorWarning : 'inherit' }}>{val > 0 ? '-' : ''} {formatCurrency(val, profile?.currency)}</Text> },
+                  { title: 'Taxes (+)', dataIndex: 'taxes', key: 'tax', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
+                  { title: 'Net Revenue', dataIndex: 'grand_total', key: 'g_total', align: 'right', render: (val) => <Text strong>{formatCurrency(val, profile?.currency)}</Text> },
+                  { title: 'Product Cost (COGS)', dataIndex: 'cogs', key: 'cogs', align: 'right', render: (val) => <Text type="secondary">{formatCurrency(val, profile?.currency)}</Text> },
+                  { title: 'Expenses (-)', dataIndex: 'expenses', key: 'exp', align: 'right', render: (val) => <Text style={{ color: val > 0 ? token.colorWarning : 'inherit' }}>{val > 0 ? '-' : ''} {formatCurrency(val, profile?.currency)}</Text> },
+                  { title: 'Damaged Loss (-)', dataIndex: 'damaged_loss', key: 'dmg', align: 'right', render: (val) => <Text style={{ color: val > 0 ? '#fa541c' : 'inherit' }}>{val > 0 ? '-' : ''} {formatCurrency(val, profile?.currency)}</Text> },
+                  { 
+                    title: 'Net Profit / Loss', 
+                    dataIndex: 'net_profit', 
+                    key: 'n_profit', 
+                    align: 'right', 
+                    render: (val) => (
+                      <Text strong style={{ color: val >= 0 ? token.colorAmountPositive : token.colorAmountNegative }}>
+                        {val >= 0 ? '↑' : '↓'} {formatCurrency(val, profile?.currency)}
+                      </Text>
+                    ) 
+                  }
+                ]}
+              />
+            </Card>
+          </Col>
+        </Row>
       </div>
     );
   };
 
-  // --- UPDATED: INVENTORY & ASSETS TAB UI (With Slow Moving & Damaged) ---
   // --- UPDATED: PROFESSIONAL INVENTORY & ASSETS TAB UI ---
   const renderInventoryTab = () => {
     if (loading || !inventoryData) return <div style={{ textAlign: 'center', padding: '50px' }}><Spin size="large" /></div>;
@@ -2776,6 +3100,165 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         )}
       />
     </div> {/* Content Wrapper End */}
+
+    {/* --- NAYA IZAFA: P&L Export & Print Wizard Modal --- */}
+    <Modal
+        title="Export & Print Wizard (Profit & Loss Ledger)"
+        open={isPLExportWizardOpen}
+        onCancel={() => {
+            setIsPLExportWizardOpen(false);
+            setPLExportDateRangeType('current');
+            setPLExportCustomDates([]);
+            setPlSelectedColumns(['gross_sales', 'returns', 'discounts', 'taxes', 'grand_total', 'cogs', 'expenses', 'damaged_loss', 'net_profit']);
+        }}
+        footer={
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text type="secondary" style={{ fontSize: '11px' }}>
+                {plExportLoading ? 'Calculating data...' : `${plExportData.length} ${plExportData.length === 1 ? 'Day' : 'Days'} with Activity`}
+            </Text>
+            <Space>
+                {plExportData.length > 0 && !plExportLoading && (
+                <DataExport
+                    data={(() => {
+                        const formatted = plExportData.map(item => ({
+                            ...item,
+                            gross_sales: formatCurrency(item.gross_sales, profile?.currency),
+                            returns: formatCurrency(item.returns, profile?.currency),
+                            discounts: formatCurrency(item.discounts, profile?.currency),
+                            taxes: formatCurrency(item.taxes, profile?.currency),
+                            grand_total: formatCurrency(item.grand_total, profile?.currency),
+                            cogs: formatCurrency(item.cogs, profile?.currency),
+                            expenses: formatCurrency(item.expenses, profile?.currency),
+                            damaged_loss: formatCurrency(item.damaged_loss, profile?.currency),
+                            net_profit: formatCurrency(item.net_profit, profile?.currency)
+                        }));
+
+                        // NAYA IZAFA: Grand Total ki calculation karke uski ek naye row banana
+                        let tGross = 0, tRet = 0, tDisc = 0, tTax = 0, tNetRev = 0, tCogs = 0, tExp = 0, tDmg = 0, tNet = 0;
+                        plExportData.forEach(r => {
+                            tGross += r.gross_sales; tRet += r.returns; tDisc += r.discounts; tTax += r.taxes;
+                            tNetRev += r.grand_total; tCogs += r.cogs; tExp += r.expenses; tDmg += r.damaged_loss; tNet += r.net_profit;
+                        });
+                        
+                        // Aakhir mein total wali row ko export data mein shamil kar dena
+                        formatted.push({
+                            date: 'GRAND TOTAL',
+                            gross_sales: formatCurrency(tGross, profile?.currency),
+                            returns: formatCurrency(tRet, profile?.currency),
+                            discounts: formatCurrency(tDisc, profile?.currency),
+                            taxes: formatCurrency(tTax, profile?.currency),
+                            grand_total: formatCurrency(tNetRev, profile?.currency),
+                            cogs: formatCurrency(tCogs, profile?.currency),
+                            expenses: formatCurrency(tExp, profile?.currency),
+                            damaged_loss: formatCurrency(tDmg, profile?.currency),
+                            net_profit: formatCurrency(tNet, profile?.currency)
+                        });
+
+                        return formatted;
+                    })()}
+                    exportColumns={[
+                        { title: 'Date', dataIndex: 'date' },
+                        ...(plSelectedColumns.includes('gross_sales') ? [{ title: 'Gross Sales', dataIndex: 'gross_sales' }] : []),
+                        ...(plSelectedColumns.includes('returns') ? [{ title: 'Returns', dataIndex: 'returns' }] : []),
+                        ...(plSelectedColumns.includes('discounts') ? [{ title: 'Discounts', dataIndex: 'discounts' }] : []),
+                        ...(plSelectedColumns.includes('taxes') ? [{ title: 'Taxes', dataIndex: 'taxes' }] : []),
+                        ...(plSelectedColumns.includes('grand_total') ? [{ title: 'Net Revenue', dataIndex: 'grand_total' }] : []),
+                        ...(plSelectedColumns.includes('cogs') ? [{ title: 'Product Cost (COGS)', dataIndex: 'cogs' }] : []),
+                        ...(plSelectedColumns.includes('expenses') ? [{ title: 'Expenses', dataIndex: 'expenses' }] : []),
+                        ...(plSelectedColumns.includes('damaged_loss') ? [{ title: 'Damaged Loss', dataIndex: 'damaged_loss' }] : []),
+                        ...(plSelectedColumns.includes('net_profit') ? [{ title: 'Net Profit/Loss', dataIndex: 'net_profit' }] : [])
+                    ]}
+                    fileName="Daily_Profit_Loss_Ledger"
+                    reportTitle="Daily Profit & Loss Ledger Statement"
+                    reportSubtitle={plExportDateRangeType === 'current' ? `Period: ${dateRange[0].format('DD MMM YY')} to ${dateRange[1].format('DD MMM YY')}` : `Custom Export`}
+                />
+                )}
+                <Button onClick={() => setIsPLExportWizardOpen(false)}>Close</Button>
+            </Space>
+            </div>
+        }
+        centered
+        width="65%"
+    >
+        <Form layout="vertical" style={{ marginTop: '16px' }}>
+            {/* 1. Date Range Configuration */}
+            <Form.Item label={<Text strong>1. Select Date Range</Text>}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', flexWrap: 'wrap' }}>
+                    <Select
+                        value={['current', 'today', 'yesterday', 'week', 'month', 'year'].includes(plExportDateRangeType) ? plExportDateRangeType : undefined}
+                        onChange={(val) => {
+                            setPLExportDateRangeType(val);
+                            handlePLExportRangeChange(val);
+                        }}
+                        style={{ flex: 1.5, minWidth: '160px' }}
+                        placeholder="Choose Preset Range"
+                        styles={{ popup: { root: { zIndex: 2000 } } }}
+                        allowClear={false}
+                    >
+                        <Select.Option value="current">Active Filter (On Screen)</Select.Option>
+                        <Select.Option value="today">Today Only</Select.Option>
+                        <Select.Option value="yesterday">Yesterday</Select.Option>
+                        <Select.Option value="week">This Week</Select.Option>
+                        <Select.Option value="month">This Month</Select.Option>
+                        <Select.Option value="year">This Year</Select.Option>
+                    </Select>
+
+                    <Button 
+                        type={plExportDateRangeType === 'custom' ? 'primary' : 'default'} 
+                        onClick={() => {
+                            setPLExportDateRangeType('custom');
+                            handlePLExportRangeChange('custom', plExportCustomDates);
+                        }}
+                        style={{ flex: 1, minWidth: '110px' }}
+                    >
+                        Custom Range
+                    </Button>
+                </div>
+            </Form.Item>
+
+            {plExportDateRangeType === 'custom' && (
+                <Form.Item label="Select Custom Range" required>
+                    <DatePicker.RangePicker
+                        format="DD/MM/YYYY"
+                        value={plExportCustomDates.length === 2 ? [dayjs(plExportCustomDates[0]), dayjs(plExportCustomDates[1])] : null}
+                        onChange={(dates) => {
+                            if (dates) {
+                                setPLExportCustomDates([dates[0].toISOString(), dates[1].toISOString()]);
+                                handlePLExportRangeChange('custom', dates);
+                            } else {
+                                setPLExportCustomDates([]);
+                            }
+                        }}
+                        style={{ width: '100%' }}
+                    />
+                </Form.Item>
+            )}
+
+            {/* 2. Columns Selection */}
+            <Form.Item label={<Text strong>2. Select Columns to Include</Text>}>
+                <Checkbox.Group
+                    value={plSelectedColumns}
+                    onChange={(vals) => {
+                        if (vals.length > 0) setPlSelectedColumns(vals);
+                        else message.warning('At least one column must be selected.');
+                    }}
+                    style={{ width: '100%' }}
+                >
+                    <Row gutter={[16, 8]}>
+                        <Col span={8}><Checkbox value="gross_sales">Gross Sales</Checkbox></Col>
+                        <Col span={8}><Checkbox value="returns">Returns (-)</Checkbox></Col>
+                        <Col span={8}><Checkbox value="discounts">Discounts (-)</Checkbox></Col>
+                        <Col span={8}><Checkbox value="taxes">Taxes (+)</Checkbox></Col>
+                        <Col span={8}><Checkbox value="grand_total">Net Revenue</Checkbox></Col>
+                        <Col span={8}><Checkbox value="cogs">Product Cost (COGS)</Checkbox></Col>
+                        <Col span={8}><Checkbox value="expenses">Expenses (-)</Checkbox></Col>
+                        <Col span={8}><Checkbox value="damaged_loss">Damaged Loss (-)</Checkbox></Col>
+                        <Col span={8}><Checkbox value="net_profit">Net Profit/Loss</Checkbox></Col>
+                    </Row>
+                </Checkbox.Group>
+            </Form.Item>
+        </Form>
+    </Modal>
     </div>
     </ConfigProvider>
   );
