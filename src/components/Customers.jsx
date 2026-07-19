@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag, Dropdown, Menu, Tooltip, Select, theme, Switch, ConfigProvider
+  Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag, Dropdown, Menu, Tooltip, Select, theme, Switch, ConfigProvider, Statistic
 } from 'antd';
 import { UserSwitchOutlined, UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined, MoreOutlined, EditOutlined, ReloadOutlined, InboxOutlined, DeleteOutlined, SearchOutlined, LockOutlined, PrinterOutlined } from '@ant-design/icons';
 import { generatePaymentReceipt } from '../utils/receiptGenerator';
@@ -18,6 +18,7 @@ import { useSync } from '../context/SyncContext';
 import DataService from '../DataService';
 import { generateInvoiceId } from '../utils/idGenerator'; // <--- NAYA IZAFA
 import DataExport from '../components/DataExport'; // <--- NAYA IZAFA: Export ke liye
+import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 // Global Countries List
@@ -37,6 +38,14 @@ const Customers = () => {
   const { token } = theme.useToken(); // Control Center Connection
   const { message, modal } = AntApp.useApp();
   const [searchParams] = useSearchParams();
+
+  // NAYA IZAFA: Unified Card style for border-outline consistency
+  const mainCardStyle = {
+    borderRadius: 8,
+    border: `1px solid ${token.colorCardBorder}`, 
+    boxShadow: `0 4px 12px ${token.colorCardShadow}`, 
+    backgroundColor: token.colorCardBg || token.colorBgContainer
+  };
   const searchInputRef = useRef(null);
   const invoiceSearchInputRef = useRef(null);
   const customerNameInputRef = useRef(null);
@@ -65,6 +74,10 @@ const Customers = () => {
   const [staffMembers, setStaffMembers] = useState([]); // <--- NAYA IZAFA
   const [paymentAccounts, setPaymentAccounts] = useState([]); // <--- NAYA IZAFA
   const [showArchived, setShowArchived] = useState(false);
+
+  // --- NAYA IZAFA: Ledger Modal Date Filter States ---
+  const [ledgerDateRange, setLedgerDateRange] = useState('all');
+  const [ledgerCustomDates, setLedgerCustomDates] = useState([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedSale, setSelectedSale] = useState(null);
   const [returnableItems, setReturnableItems] = useState([]);
@@ -146,13 +159,26 @@ const Customers = () => {
 
   const getCustomers = async () => {
     try {
-      // Naya: Agar pehle se data mojud hai to loading spinner mat dikhao (Silent Refresh)
       if (customers.length === 0) setLoading(true);
       let data = await db.customers.toArray();
-      setTotalCount(data.length); // <--- NAYA: Filter hone se pehle poori ginti save kar li
+      setTotalCount(data.length); 
+
+      // NAYA IZAFA: Dynamic calculations for bills count and billing volume
+      const allSales = await db.sales.toArray();
+      const salesStatsMap = {};
+      allSales.forEach(s => {
+          if (!salesStatsMap[s.customer_id]) {
+              salesStatsMap[s.customer_id] = { count: 0, total: 0 };
+          }
+          salesStatsMap[s.customer_id].count += 1;
+          salesStatsMap[s.customer_id].total += (s.total_amount || 0);
+      });
       
       // --- NAYA IZAFA: Purane brackets aur slashes wale data ko saaf karna ---
       data = data.map(c => {
+          // Statistical data attach karna
+          c.total_bills = salesStatsMap[c.id]?.count || 0;
+          c.total_billings = salesStatsMap[c.id]?.total || 0;
           let cleanGroup = c.customer_group;
           if (typeof cleanGroup === 'string' && cleanGroup.startsWith('[')) {
               try { cleanGroup = JSON.parse(cleanGroup).join(', '); } catch(e) {}
@@ -1165,13 +1191,42 @@ const handleCloseInvoiceSearchModal = () => {
             return { ...tx, balance: runningBalance, key: `${tx.type}-${tx.details.id}` };
         });
 
-        setLedgerData(finalLedger.reverse());
+        // --- NAYA IZAFA: On-Screen Ledger Date Range Filter (Competitor's Report 3 Feature) ---
+        let displayedLedger = [...finalLedger];
+
+        if (ledgerDateRange !== 'all') {
+            let start, end;
+            const now = dayjs();
+            if (ledgerDateRange === 'today') { start = now.startOf('day'); end = now.endOf('day'); }
+            else if (ledgerDateRange === 'this_month') { start = now.startOf('month'); end = now.endOf('month'); }
+            else if (ledgerDateRange === 'last_month') { start = now.subtract(1, 'month').startOf('month'); end = now.subtract(1, 'month').endOf('month'); }
+            else if (ledgerDateRange === 'custom' && ledgerCustomDates.length === 2) {
+                start = dayjs(ledgerCustomDates[0]).startOf('day'); end = dayjs(ledgerCustomDates[1]).endOf('day');
+            }
+            if (start && end) {
+                const startTime = start.toDate().getTime();
+                const endTime = end.toDate().getTime();
+                displayedLedger = displayedLedger.filter(tx => {
+                    const txTime = new Date(tx.date).getTime();
+                    return txTime >= startTime && txTime <= endTime;
+                });
+            }
+        }
+
+        setLedgerData(displayedLedger.reverse());
     } catch (error) {
         message.error('Error fetching ledger: ' + error.message);
     } finally {
         setLedgerLoading(false);
     }
-};
+  };
+
+  // NAYA IZAFA: Ledger filters badalne par auto-refresh logic
+  useEffect(() => {
+    if (isLedgerModalOpen && selectedCustomer) {
+        handleViewLedger(selectedCustomer);
+    }
+  }, [ledgerDateRange, ledgerCustomDates]);
 
   // --- NAYA IZAFA: Export ke liye columns define kiye hain ---
   const exportColumns = [
@@ -1194,13 +1249,28 @@ const handleCloseInvoiceSearchModal = () => {
   ];
 
   const customerColumns = [
-    { title: 'Customer Name', dataIndex: 'name' },
-    { title: 'Phone', dataIndex: 'phone_number' },
-    { title: 'Group', dataIndex: 'customer_group', render: (grp) => grp ? <Tag color="purple">{grp}</Tag> : <Text type="secondary">-</Text> },
-    { title: 'City', dataIndex: 'city', render: (city) => city || <Text type="secondary">-</Text> },
-    { title: 'Address', dataIndex: 'address', render: (address) => address || <Text type="secondary">N/A</Text> },
-    { title: 'Balance', dataIndex: 'balance', align: 'right', render: (b) => <Text style={{ color: b > 0 ? token.colorError : token.colorSuccess }}>{formatCurrency(b, profile?.currency)}</Text> },
-    // Is hisse ko dhoond kar replace karein
+    { title: 'Customer Name', dataIndex: 'name', key: 'name', render: (t) => <Text strong style={{ color: token.colorCardDetailsText }}>{t}</Text> },
+    { title: 'Phone', dataIndex: 'phone_number', key: 'phone' },
+    { title: 'Group', dataIndex: 'customer_group', key: 'group', render: (grp) => grp ? <Tag color="purple">{grp}</Tag> : <Text type="secondary">-</Text> },
+    { title: 'City', dataIndex: 'city', key: 'city', render: (city) => city || <Text type="secondary">-</Text> },
+    
+    // NAYA IZAFA: Total Bills & Billings (Competitor's Report 2 Feature)
+    { 
+      title: 'Total Invoices', 
+      dataIndex: 'total_bills', 
+      key: 'total_bills', 
+      align: 'center', 
+      render: (v) => <Tag style={{ border: 'none', background: token.colorFillAlter }}>{v || 0}</Tag> 
+    },
+    { 
+      title: 'Total Billings', 
+      dataIndex: 'total_billings', 
+      key: 'total_billings', 
+      align: 'right', 
+      render: (v) => <Text strong style={{ color: token.colorCardDetailsText }}>{formatCurrency(v || 0, profile?.currency)}</Text> 
+    },
+
+    { title: 'Balance', dataIndex: 'balance', key: 'balance', align: 'right', render: (b) => <Text strong style={{ color: b > 0 ? token.colorError : token.colorSuccess }}>{formatCurrency(b, profile?.currency)}</Text> },
     { 
       title: 'Actions', 
       key: 'actions', 
@@ -1477,255 +1547,298 @@ const handleCloseInvoiceSearchModal = () => {
   return (
   <ConfigProvider theme={{ components: { Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg, headerColor: token.colorCardColumnsTitleText, colorText: token.colorCardDetailsText }, Descriptions: { colorTextLabel: token.colorCardColumnsTitleText, colorTextValue: token.colorCardDetailsText } } }}>
   <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}> 
-  <div style={{
-    display: 'flex',
-    flexDirection: isMobile ? 'column' : 'row',
-    justifyContent: 'space-between',
-    alignItems: isMobile ? 'flex-start' : 'center',
-    marginBottom: '24px'
-}}>
-    {isMobile && (
-        <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
-            <UserSwitchOutlined /> Customer Management
-        </Title>
-    )}
 
-    {/* Computer (Desktop) ke liye Search Bar aur Filters */}
-    {!isMobile && (
-      <Space style={{ marginLeft: 20 }}>
-        <Input
-          id="cust-search-input-desktop"
-          ref={searchInputRef}
-          placeholder="Search by Name or Phone..."
-          prefix={<SearchOutlined />}
-          style={{ width: 250 }}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          allowClear
-        />
-        <Select
-          placeholder="Filter by City"
-          allowClear
-          style={{ width: 150 }}
-          value={selectedCityFilter}
-          onChange={(val) => setSelectedCityFilter(val)}
-          options={availableCities.map(city => ({ label: city, value: city }))}
-        />
-        <Select
-          placeholder="Filter by Group"
-          allowClear
-          style={{ width: 150 }}
-          value={selectedGroupFilter}
-          onChange={(val) => setSelectedGroupFilter(val)}
-          options={availableGroups.map(g => ({ label: g, value: g }))}
-        />
-      </Space>
-    )}
+  {/* --- NAYA IZAFA: Customer Accounts KPI Summary (Competitor's Report 1 Feature - Increased Text Size) --- */}
+  {(!isMobile && can('can_view_reports')) && (
+    <Card 
+      size="small" 
+      style={{ 
+          marginBottom: '16px', 
+          background: token.colorFillAlter, 
+          border: `1px dashed ${token.colorBorder}` 
+      }}
+      styles={{ body: { padding: '16px 20px' } }}
+    >
+      <Row gutter={[16, 8]} align="middle">
+        <Col span={8}>
+          <Statistic 
+            title={<Text type="secondary" style={{ fontSize: '13px', fontWeight: 500 }}>Total Customer Receivables (Udhaar)</Text>} 
+            value={customers.filter(c => (c.balance || 0) > 0).reduce((sum, c) => sum + c.balance, 0)} 
+            formatter={(val) => formatCurrency(val, profile?.currency)} 
+            valueStyle={{ fontSize: '18px', fontWeight: 'bold', color: token.colorError }} 
+          />
+        </Col>
+        <Col span={8}>
+          <Statistic 
+            title={<Text type="secondary" style={{ fontSize: '13px', fontWeight: 500 }}>Total Customer Credits (Advances)</Text>} 
+            value={Math.abs(customers.filter(c => (c.balance || 0) < 0).reduce((sum, c) => sum + c.balance, 0))} 
+            formatter={(val) => formatCurrency(val, profile?.currency)} 
+            valueStyle={{ fontSize: '18px', fontWeight: 'bold', color: token.colorSuccess }} 
+          />
+        </Col>
+        <Col span={8}>
+          <Statistic 
+            title={<Text type="secondary" style={{ fontSize: '13px', fontWeight: 500 }}>Net Outstanding Balance</Text>} 
+            value={customers.reduce((sum, c) => sum + (c.balance || 0), 0)} 
+            formatter={(val) => formatCurrency(val, profile?.currency)} 
+            valueStyle={{ fontSize: '20px', fontWeight: 'bold', color: token.colorPrimary }} 
+          />
+        </Col>
+      </Row>
+    </Card>
+  )}
 
-    {/* Mobile ke liye Search Bar aur Filters */}
-    {isMobile && (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px', width: '100%' }}>
-        <Input
-          id="cust-search-input-mobile"
-          ref={searchInputRef}
-          placeholder="Search Name or Phone..."
-          prefix={<SearchOutlined />}
-          style={{ width: '100%' }}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          allowClear
-        />
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <Select
-            placeholder="City"
+  <Card style={mainCardStyle} styles={{ body: { padding: isMobile ? '8px' : '16px' } }}> {/* <--- NAYA IZAFA: Poore section ko ek card mein wrap kiya consistent outline ke liye */}
+    <div style={{
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      justifyContent: 'space-between',
+      alignItems: isMobile ? 'flex-start' : 'center',
+      marginBottom: '24px'
+    }}>
+      {isMobile && (
+          <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
+              <UserSwitchOutlined /> Customer Management
+          </Title>
+      )}
+
+      {/* Computer (Desktop) ke liye Search Bar aur Filters */}
+      {!isMobile && (
+        <Space style={{ marginLeft: 20 }}>
+          <Input
+            id="cust-search-input-desktop"
+            ref={searchInputRef}
+            placeholder="Search by Name or Phone..."
+            prefix={<SearchOutlined />}
+            style={{ width: 250 }}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             allowClear
-            style={{ flex: 1 }}
+          />
+          <Select
+            placeholder="Filter by City"
+            allowClear
+            style={{ width: 150 }}
             value={selectedCityFilter}
             onChange={(val) => setSelectedCityFilter(val)}
             options={availableCities.map(city => ({ label: city, value: city }))}
           />
           <Select
-            placeholder="Group"
+            placeholder="Filter by Group"
             allowClear
-            style={{ flex: 1 }}
+            style={{ width: 150 }}
             value={selectedGroupFilter}
             onChange={(val) => setSelectedGroupFilter(val)}
             options={availableGroups.map(g => ({ label: g, value: g }))}
           />
-        </div>
-      </div>
-    )}
-    <div style={{ 
-        display: 'flex', 
-        flexDirection: isMobile ? 'column' : 'row', 
-        alignItems: 'center', 
-        gap: '12px',
-        width: isMobile ? '100%' : 'auto' 
-    }}>
-        {/* Return aur Archive Buttons - Ye hamesha ek hi row mein rahenge */}
-        <Space size="middle" align="center">
-            <Button 
-                icon={<SwapOutlined />} 
-                onClick={() => setIsInvoiceSearchModalOpen(true)} 
-                title="Return by Invoice"
-            />
-            <Space>
-                <Switch 
-                    checked={showArchived} 
-                    onChange={(val) => setShowArchived(val)} 
-                    size="small" 
-                />
-                <Text type="secondary" style={{ fontSize: '11px' }}>
-                    {showArchived ? "Archived" : "Active"}
-                </Text>
-            </Space>
         </Space>
+      )}
 
-        {/* --- NAYA IZAFA: PDF aur Excel Buttons --- */}
-        <DataExport 
-            data={customers} 
-            exportColumns={exportColumns} 
-            fileName="Customers_List" 
-            reportTitle="Customers Directory" 
-        />
+      {/* Mobile ke liye Search Bar aur Filters */}
+      {isMobile && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px', width: '100%' }}>
+          <Input
+            id="cust-search-input-mobile"
+            ref={searchInputRef}
+            placeholder="Search Name or Phone..."
+            prefix={<SearchOutlined />}
+            style={{ width: '100%' }}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            allowClear
+          />
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Select
+              placeholder="City"
+              allowClear
+              style={{ flex: 1 }}
+              value={selectedCityFilter}
+              onChange={(val) => setSelectedCityFilter(val)}
+              options={availableCities.map(city => ({ label: city, value: city }))}
+            />
+            <Select
+              placeholder="Group"
+              allowClear
+              style={{ flex: 1 }}
+              value={selectedGroupFilter}
+              onChange={(val) => setSelectedGroupFilter(val)}
+              options={availableGroups.map(g => ({ label: g, value: g }))}
+            />
+          </div>
+        </div>
+      )}
+      <div style={{ 
+          display: 'flex', 
+          flexDirection: isMobile ? 'column' : 'row', 
+          alignItems: 'center', 
+          gap: '12px',
+          width: isMobile ? '100%' : 'auto' 
+      }}>
+          {/* Return aur Archive Buttons - Ye hamesha ek hi row mein rahenge */}
+          <Space size="middle" align="center">
+              <Button 
+                  icon={<SwapOutlined />} 
+                  onClick={() => setIsInvoiceSearchModalOpen(true)} 
+                  title="Return by Invoice"
+              />
+              <Space>
+                  <Switch 
+                      checked={showArchived} 
+                      onChange={(val) => { setShowArchived(val); setSelectedGroupFilter(null); setSelectedCityFilter(null); }} 
+                      size="small" 
+                  />
+                  <Text type="secondary" style={{ fontSize: '11px' }}>
+                      {showArchived ? "Archived" : "Active"}
+                  </Text>
+              </Space>
+          </Space>
 
-        {/* Add Customer Button */}
-        {(() => {
-            const limits = getPlanLimits(profile?.subscription_tier);
-            const isFeatureLocked = !limits.allow_customer_management;
-            const currentCount = totalCount; // <--- NAYA: Ab yeh Total (Active+Archive) ginega
-            const isLimitReached = currentCount >= limits.max_customers;
-            const isLocked = isFeatureLocked || isLimitReached;
-            
-            return (
-                <Button
-                    id="cust-add-btn"
-                    type="primary"
-                    icon={isLocked ? <LockOutlined /> : <UserAddOutlined />}
-                    onClick={() => {
-                        if (isLocked) {
-                            modal.confirm({
-                                title: isFeatureLocked ? 'Customer Management Locked' : 'Customer Limit Reached',
-                                content: (
-                                    <div>
-                                        {isFeatureLocked ? (
-                                            <>
-                                                <p>In Free Plan, you can only use the built-in <b>Walk-in Customer</b>.</p>
-                                                <p>To save customer details and maintain ledgers (Khata), please upgrade to Growth or Pro Plan.</p>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <p>You have reached your plan's limit of <b>{limits.max_customers} customers</b>.</p>
-                                                <p>Please upgrade your subscription to add more customers.</p>
-                                            </>
-                                        )}
-                                    </div>
-                                ),
-                                okText: 'View Plans',
-                                cancelText: 'Close',
-                                onOk: () => navigate('/subscription')
-                            });
-                        } else {
-                            setIsAddModalOpen(true);
-                        }
-                    }}
-                    style={{ 
-                        width: isMobile ? '100%' : 'auto',
-                        ...(isLocked ? { 
-                            color: token.colorTextDisabled, 
-                            backgroundColor: token.colorFillTertiary, 
-                            borderColor: token.colorBorder 
-                        } : {})
-                    }}
-                >
-                    Add Customer
-                </Button>
-            );
-        })()}
-    </div>
-</div> {isMobile ? (
-    <List
-        loading={loading}
-        dataSource={customers}
-        renderItem={(customer) => (
-        <List.Item style={{ padding: '0 0 16px 0' }}>
-            <Card style={{ width: '100%', border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}`, backgroundColor: token.colorCardBg || token.colorBgContainer }} styles={{ body: { padding: '16px' } }}>
-            <Row justify="space-between" align="top">
-                <Col>
-    <Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>{customer.name}</Text><br/>
-    <Text type="secondary">{customer.phone_number}</Text><br/>
-    {/* --- Nayi Line Shamil Ki Gayi Hai --- */}
-    {customer.address && <Text type="secondary">{customer.address}</Text>}
-</Col>
-                <Col style={{ textAlign: 'right' }}>
-                <Text type="secondary">Balance</Text><br/>
-                <Text type={customer.balance > 0 ? 'danger' : 'success'} strong style={{ fontSize: '16px' }}>
-                    {formatCurrency(customer.balance, profile?.currency)}
-                </Text>
-                </Col>
-            </Row>
-            <div style={{ borderTop: '1px solid #f0f0f0', marginTop: '12px', paddingTop: '12px' }}>
-                <Space style={{ width: '100%' }}>
-                  <Button icon={<EyeOutlined />} onClick={() => handleViewLedger(customer)} style={{ flex: 1 }}>Ledger</Button>
-                  
-                  <Tooltip title={!activeSession ? "Please open a register shift to process cash transactions." : ""}>
-                    <span style={{ flex: 1, display: 'flex' }}>
-                      <Button icon={<DollarCircleOutlined />} onClick={() => showPaymentModal(customer)} style={{ width: '100%' }} disabled={!activeSession}>
-                        Receive
-                      </Button>
-                    </span>
-                  </Tooltip>
+          {/* --- NAYA IZAFA: PDF aur Excel Buttons --- */}
+          <DataExport 
+              data={customers} 
+              exportColumns={exportColumns} 
+              fileName="Customers_List" 
+              reportTitle="Customers Directory" 
+          />
 
-                  {customer.balance < 0 && (
+          {/* Add Customer Button */}
+          {(() => {
+              const limits = getPlanLimits(profile?.subscription_tier);
+              const isFeatureLocked = !limits.allow_customer_management;
+              const currentCount = totalCount; // <--- NAYA: Ab yeh Total (Active+Archive) ginega
+              const isLimitReached = currentCount >= limits.max_customers;
+              const isLocked = isFeatureLocked || isLimitReached;
+              
+              return (
+                  <Button
+                      id="cust-add-btn"
+                      type="primary"
+                      icon={isLocked ? <LockOutlined /> : <UserAddOutlined />}
+                      onClick={() => {
+                          if (isLocked) {
+                              modal.confirm({
+                                  title: isFeatureLocked ? 'Customer Management Locked' : 'Customer Limit Reached',
+                                  content: (
+                                      <div>
+                                          {isFeatureLocked ? (
+                                              <>
+                                                  <p>In Free Plan, you can only use the built-in <b>Walk-in Customer</b>.</p>
+                                                  <p>To save customer details and maintain ledgers (Khata), please upgrade to Growth or Pro Plan.</p>
+                                              </>
+                                          ) : (
+                                              <>
+                                                  <p>You have reached your plan's limit of <b>{limits.max_customers} customers</b>.</p>
+                                                  <p>Please upgrade your subscription to add more customers.</p>
+                                              </>
+                                          )}
+                                      </div>
+                                  ),
+                                  okText: 'View Plans',
+                                  cancelText: 'Close',
+                                  onOk: () => navigate('/subscription')
+                              });
+                          } else {
+                              setIsAddModalOpen(true);
+                          }
+                      }}
+                      style={{ 
+                          width: isMobile ? '100%' : 'auto',
+                          ...(isLocked ? { 
+                              color: token.colorTextDisabled, 
+                              backgroundColor: token.colorFillTertiary, 
+                              borderColor: token.colorBorder 
+                          } : {})
+                      }}
+                  >
+                      Add Customer
+                  </Button>
+              );
+          })()}
+      </div>
+  </div> {isMobile ? (
+      <List
+          loading={loading}
+          dataSource={customers}
+          renderItem={(customer) => (
+          <List.Item style={{ padding: '0 0 16px 0' }}>
+              <Card style={{ width: '100%', border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}`, backgroundColor: token.colorCardBg || token.colorBgContainer }} styles={{ body: { padding: '16px' } }}>
+              <Row justify="space-between" align="top">
+                  <Col>
+      <Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>{customer.name}</Text><br/>
+      <Text type="secondary">{customer.phone_number}</Text><br/>
+      {/* --- Nayi Line Shamil Ki Gayi Hai --- */}
+      {customer.address && <Text type="secondary">{customer.address}</Text>}
+  </Col>
+                  <Col style={{ textAlign: 'right' }}>
+                  <Text type="secondary">Balance</Text><br/>
+                  <Text type={customer.balance > 0 ? 'danger' : 'success'} strong style={{ fontSize: '16px' }}>
+                      {formatCurrency(customer.balance, profile?.currency)}
+                  </Text>
+                  </Col>
+              </Row>
+              <div style={{ borderTop: '1px solid #f0f0f0', marginTop: '12px', paddingTop: '12px' }}>
+                  <Space style={{ width: '100%' }}>
+                    <Button icon={<EyeOutlined />} onClick={() => handleViewLedger(customer)} style={{ flex: 1 }}>Ledger</Button>
+                    
                     <Tooltip title={!activeSession ? "Please open a register shift to process cash transactions." : ""}>
                       <span style={{ flex: 1, display: 'flex' }}>
-                        <Button type="primary" ghost icon={<DollarCircleOutlined />} onClick={() => showPayoutModal(customer)} style={{ width: '100%' }} disabled={!activeSession}>
-                          Settle
+                        <Button icon={<DollarCircleOutlined />} onClick={() => showPaymentModal(customer)} style={{ width: '100%' }} disabled={!activeSession}>
+                          Receive
                         </Button>
                       </span>
                     </Tooltip>
-                  )}
 
-                  <Dropdown 
-                    trigger={['click']}
-                    menu={{
-                      items: [
-                        {
-                          key: 'edit',
-                          label: 'Edit Details',
-                          icon: <EditOutlined />,
-                          disabled: customer.name === 'Walk-in Customer',
-                          onClick: () => showEditModal(customer)
-                        },
-                        {
-                          key: 'archive',
-                          label: showArchived ? 'Restore Customer' : 'Archive Customer',
-                          icon: showArchived ? <ReloadOutlined /> : <InboxOutlined />,
-                          disabled: customer.name === 'Walk-in Customer',
-                          onClick: () => handleToggleArchive(customer)
-                        },
-                        {
-                          key: 'delete',
-                          label: 'Delete Customer',
-                          icon: <DeleteOutlined />,
-                          danger: true,
-                          disabled: customer.name === 'Walk-in Customer',
-                          onClick: () => handleDeleteCustomer(customer)
-                        }
-                      ]
-                    }}
-                  >
-                    <Button icon={<MoreOutlined />} style={{ flex: 0.3 }} />
-                  </Dropdown>
-                </Space>
-            </div>
-            </Card>
-        </List.Item>
-        )}
-    />
-    ) : (
-    <Table columns={customerColumns} dataSource={customers} loading={loading} rowKey="id" />
-)} <Modal title={editingCustomer ? "Edit Customer" : "Add New Customer"} open={isAddModalOpen} onCancel={() => setIsAddModalOpen(false)} onOk={() => addForm.submit()} okText="Save"> 
+                    {customer.balance < 0 && (
+                      <Tooltip title={!activeSession ? "Please open a register shift to process cash transactions." : ""}>
+                        <span style={{ flex: 1, display: 'flex' }}>
+                          <Button type="primary" ghost icon={<DollarCircleOutlined />} onClick={() => showPayoutModal(customer)} style={{ width: '100%' }} disabled={!activeSession}>
+                            Settle
+                          </Button>
+                        </span>
+                      </Tooltip>
+                    )}
+
+                    <Dropdown 
+                      trigger={['click']}
+                      menu={{
+                        items: [
+                          {
+                            key: 'edit',
+                            label: 'Edit Details',
+                            icon: <EditOutlined />,
+                            disabled: customer.name === 'Walk-in Customer',
+                            onClick: () => showEditModal(customer)
+                          },
+                          {
+                            key: 'archive',
+                            label: showArchived ? 'Restore Customer' : 'Archive Customer',
+                            icon: showArchived ? <ReloadOutlined /> : <InboxOutlined />,
+                            disabled: customer.name === 'Walk-in Customer',
+                            onClick: () => handleToggleArchive(customer)
+                          },
+                          {
+                            key: 'delete',
+                            label: 'Delete Customer',
+                            icon: <DeleteOutlined />,
+                            danger: true,
+                            disabled: customer.name === 'Walk-in Customer',
+                            onClick: () => handleDeleteCustomer(customer)
+                          }
+                        ]
+                      }}
+                    >
+                      <Button icon={<MoreOutlined />} style={{ flex: 0.3 }} />
+                    </Dropdown>
+                  </Space>
+              </div>
+              </Card>
+          </List.Item>
+          )}
+      />
+      ) : (
+      <Table columns={customerColumns} dataSource={customers} loading={loading} rowKey="id" />
+  )}
+  </Card> {/* <--- NAYA IZAFA: Card wrapper closed */} <Modal title={editingCustomer ? "Edit Customer" : "Add New Customer"} open={isAddModalOpen} onCancel={() => setIsAddModalOpen(false)} onOk={() => addForm.submit()} okText="Save"> 
   <Form form={addForm} layout="vertical" onFinish={handleAddCustomer}>
   {/* NAYA IZAFA: Enter dabane se form save karne ke liye hidden button */}
   <button type="submit" style={{ display: 'none' }} />
@@ -1827,28 +1940,60 @@ const handleCloseInvoiceSearchModal = () => {
 </Modal> 
 <Modal
     title={
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '95%' }}>
-                <span style={{ color: token.colorCardHeadingsText, fontWeight: 600 }}>Ledger: {selectedCustomer?.name}</span>
-        {/* --- NAYA IZAFA: Ledger Print/Excel Buttons --- */}
-        <DataExport 
-            data={ledgerData.map(item => {
-                let ref = '';
-                if (item.type === 'sale') ref = item.details?.invoice_id || item.details?.id?.split('-')[0]?.toUpperCase();
-                else ref = item.details?.voucher_no || item.details?.id?.split('-')[0]?.toUpperCase();
-                return {
-                    ...item,
-                    formattedDate: new Date(item.date).toLocaleString(),
-                    ref_no: ref
-                };
-            })} 
-            exportColumns={ledgerExportColumns} 
-            fileName={`Ledger_${selectedCustomer?.name}`} 
-            reportTitle={`Account Statement: ${selectedCustomer?.name}`} 
-        />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '98%', flexWrap: 'wrap', gap: '8px' }}>
+        <span style={{ color: token.colorCardHeadingsText, fontWeight: 600 }}>Ledger: {selectedCustomer?.name}</span>
+        
+        {/* --- NAYA IZAFA: Dynamic Inline Date Filter inside Ledger Modal (Competitor's Report 3 Feature) --- */}
+        <Space wrap size="small" style={{ marginLeft: 'auto' }}>
+            <Text type="secondary" style={{ fontSize: '11px' }}>Filter Period:</Text>
+            <Select 
+                size="small" 
+                value={ledgerDateRange} 
+                onChange={(val) => { setLedgerDateRange(val); setLedgerCustomDates([]); }} 
+                style={{ width: 110 }} 
+                styles={{ popup: { root: { zIndex: 2050 } } }} // Modal ke z-index se oopar rakhne ke liye
+            >
+                <Select.Option value="all">All Time</Select.Option>
+                <Select.Option value="today">Today</Select.Option>
+                <Select.Option value="this_month">This Month</Select.Option>
+                <Select.Option value="last_month">Last Month</Select.Option>
+                <Select.Option value="custom">Custom Range</Select.Option>
+            </Select>
+
+            {ledgerDateRange === 'custom' && (
+                <DatePicker.RangePicker
+                    size="small"
+                    format="DD/MM/YYYY"
+                    onChange={(dates) => {
+                        if (dates) setLedgerCustomDates([dates[0].toISOString(), dates[1].toISOString()]);
+                        else setLedgerCustomDates([]);
+                    }}
+                    style={{ width: 200 }}
+                />
+            )}
+
+            {/* Print/Excel Buttons */}
+            <DataExport 
+                data={ledgerData.map(item => {
+                    let ref = '';
+                    if (item.type === 'sale') ref = item.details?.invoice_id || item.details?.id?.split('-')[0]?.toUpperCase();
+                    else ref = item.details?.voucher_no || item.details?.id?.split('-')[0]?.toUpperCase();
+                    return {
+                        ...item,
+                        formattedDate: new Date(item.date).toLocaleString(),
+                        ref_no: ref
+                    };
+                })} 
+                exportColumns={ledgerExportColumns} 
+                fileName={`Ledger_${selectedCustomer?.name}`} 
+                reportTitle={`Account Statement: ${selectedCustomer?.name}`} 
+                reportSubtitle={ledgerDateRange === 'all' ? 'All Time Statement' : `Period: ${ledgerDateRange}`}
+            />
+        </Space>
       </div>
     }
     open={isLedgerModalOpen}
-    onCancel={() => setIsLedgerModalOpen(false)}
+    onCancel={() => { setIsLedgerModalOpen(false); setLedgerDateRange('all'); setLedgerCustomDates([]); }} // Reset filters on close
     footer={null}
     width={isMobile ? '95vw' : '85vw'}
 >
