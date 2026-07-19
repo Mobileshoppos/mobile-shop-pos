@@ -2379,17 +2379,30 @@ async addCustomer(customerData) {
       loopDate.setDate(loopDate.getDate() + 1);
     }
 
-    // 5. Expense Breakdown (Doughnut Chart ke liye)
+    // 5. Expense Breakdown (Grouped/Rolled Up by Parent Category dynamically)
     const expenseCategories = await db.expense_categories.toArray();
     const expenseCatMap = {};
-    expenseCategories.forEach(c => expenseCatMap[c.id] = c.name);
+    expenseCategories.forEach(c => expenseCatMap[c.id] = c); // <--- Store full object instead of just name
 
     const expMap = {};
     const expCountMap = {}; // Naya map count ke liye
     filteredExpenses.forEach(e => {
-      const catName = expenseCatMap[e.category_id] || 'Other';
-      expMap[catName] = (expMap[catName] || 0) + (e.amount || 0);
-      expCountMap[catName] = (expCountMap[catName] || 0) + 1; // Har entry par +1
+      const cat = expenseCatMap[e.category_id];
+      let resolvedName = 'Other Expenses';
+      
+      if (cat) {
+          if (cat.parent_id) {
+              // Sub-category found, dynamically roll up to parent category name
+              const parent = expenseCatMap[cat.parent_id];
+              resolvedName = parent ? parent.name : 'Other Expenses';
+          } else {
+              // Already a parent category
+              resolvedName = cat.name;
+          }
+      }
+
+      expMap[resolvedName] = (expMap[resolvedName] || 0) + (e.amount || 0);
+      expCountMap[resolvedName] = (expCountMap[resolvedName] || 0) + 1; // Har entry par +1
     });
 
     const expenseBreakdown = Object.keys(expMap).map(name => ({
@@ -3318,15 +3331,15 @@ async addCustomer(customerData) {
     return categoryData;
   },
 
-  async updateExpenseCategory(id, name) {
+  async updateExpenseCategory(id, updates) {
     // Local Update
-    await db.expense_categories.update(id, { name });
+    await db.expense_categories.update(id, updates);
     
     // Queue
     await db.sync_queue.add({
       table_name: 'expense_categories',
       action: 'update',
-      data: { id, name }
+      data: { id, ...updates }
     });
     return true;
   },
@@ -3665,12 +3678,22 @@ async addCustomer(customerData) {
     const expensesGrowth = calculateGrowth(totalExpensesCurrent, totalExpensesPrevious);
 
     const expenseCatMap = {};
-    expenseCategories.forEach(c => expenseCatMap[c.id] = c.name);
+    expenseCategories.forEach(c => expenseCatMap[c.id] = c); // <--- Store full object
     const expenseBreakdown = [];
     const breakdownMap = {};
     currentExpensesData.forEach(e => {
-        const catName = expenseCatMap[e.category_id] || 'Other';
-        breakdownMap[catName] = (breakdownMap[catName] || 0) + (e.amount || 0);
+        const cat = expenseCatMap[e.category_id];
+        let resolvedName = 'Other';
+        if (cat) {
+            if (cat.parent_id) {
+                // Dynamic Roll-up to Parent Category Name for Dashboard
+                const parent = expenseCatMap[cat.parent_id];
+                resolvedName = parent ? parent.name : 'Other';
+            } else {
+                resolvedName = cat.name;
+            }
+        }
+        breakdownMap[resolvedName] = (breakdownMap[resolvedName] || 0) + (e.amount || 0);
     });
     Object.keys(breakdownMap).forEach(name => {
         expenseBreakdown.push({ type: name, value: breakdownMap[name] });
@@ -4927,32 +4950,35 @@ async addCustomer(customerData) {
     adjustments.forEach(a => {
       let txType = 'Info';
       
-      // 1. Agar Cash In hai is counter par
-      if (a.type === 'In' && a.register_id === registerId) {
+      // 1. Agar Cash In hai is counter par (Sirf tab jab payment method 'Cash' ho)
+      if (a.type === 'In' && a.register_id === registerId && a.payment_method === 'Cash') {
           txType = 'Credit (In)';
       } 
-      // 2. Agar Cash Out hai is counter se
-      else if (a.type === 'Out' && a.register_id === registerId) {
+      // 2. Agar Cash Out hai is counter se (Sirf tab jab payment method 'Cash' ho)
+      else if (a.type === 'Out' && a.register_id === registerId && a.payment_method === 'Cash') {
           txType = 'Debit (Out)';
       } 
       // 3. Agar Transfer hai aur is counter mein paisa AAYA hai
       else if (a.type === 'Transfer' && a.transfer_to === registerId) {
           txType = 'Credit (In)';
       } 
-      // 4. Agar Transfer hai aur is counter se paisa GAYA hai
-      else if (a.type === 'Transfer' && a.register_id === registerId) {
+      // 4. Agar Transfer hai aur is counter se paisa GAYA hai (Sirf tab jab payment method 'Cash' ho)
+      else if (a.type === 'Transfer' && a.register_id === registerId && a.payment_method === 'Cash') {
           txType = 'Debit (Out)';
       }
 
-      ledger.push({
-        id: a.id,
-        date: a.created_at,
-        type: txType,
-        amount: a.amount,
-        notes: a.notes,
-        source: 'Manual Adjustment / Transfer',
-        staff_id: a.staff_id // <--- NAYA IZAFA
-      });
+      // NAYA IZAFA: Agar transaction is counter ki nahi hai (jaise kisi bank ki ho), to usay ignore karein
+      if (txType !== 'Info') {
+          ledger.push({
+            id: a.id,
+            date: a.created_at,
+            type: txType,
+            amount: a.amount,
+            notes: a.notes,
+            source: 'Manual Adjustment / Transfer',
+            staff_id: a.staff_id 
+          });
+      }
     });
 
     // --- NAYA IZAFA: Name Mapping ke liye Data Layein ---

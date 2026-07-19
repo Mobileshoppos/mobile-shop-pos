@@ -65,19 +65,20 @@ import {
   PrinterOutlined,
   UndoOutlined,
   SearchOutlined,
-  InfoCircleOutlined // <--- NAYA IZAFA: Info icon import kiya
+  AppstoreOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf'; // <--- NAYA IZAFA
-import autoTable from 'jspdf-autotable'; // <--- NAYA IZAFA
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
 const Reports = () => {
-  const { message } = App.useApp(); // <--- NAYA IZAFA: Theme wala message
+  const { message } = App.useApp();
   const navigate = useNavigate(); 
-  const[searchParams, setSearchParams] = useSearchParams(); // Naya: URL parameters ke liye
+  const[searchParams, setSearchParams] = useSearchParams();
   const { token } = theme.useToken();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { profile } = useAuth();
@@ -124,6 +125,7 @@ const Reports = () => {
   const [vaultSearchText, setVaultSearchText] = useState(''); // <--- NAYA IZAFA: Search input state
   const [vaultCustomer, setVaultCustomer] = useState('all'); // <--- NAYA IZAFA: Select Customer State
   const [vaultSupplier, setVaultSupplier] = useState('all'); // <--- NAYA IZAFA: Select Supplier State
+  const [vaultViewMode, setVaultViewMode] = useState('detailed'); // <--- NAYA IZAFA: View Mode State ('detailed' vs 'grouped')
 
   // Lists loading states
   const [customerList, setCustomerList] = useState([]); // <--- NAYA IZAFA
@@ -885,10 +887,11 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           setAllRegisters(regs);
           
           let accounts = [];
+          let banks = []; // <--- NAYA IZAFA: Variable ko azaad kar diya gaya hai
           if (DataService.getPaymentAccounts) {
               accounts = await DataService.getPaymentAccounts();
               // Sirf Bank/Wallets filter karein kyunke Cash to Counter hai
-              const banks = accounts.filter(a => a.type !== 'Cash');
+              banks = accounts.filter(a => a.type !== 'Cash'); // <--- 'const' hata diya
               setPaymentAccounts(banks);
           }
 
@@ -904,38 +907,62 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           const sups = await db.suppliers.toArray();
           setSupplierList(sups.filter(s => s.is_active !== false));
 
-          // Default Selection
+          // NAYA IZAFA: Default Selection ab "All Accounts" hogi
           if (!selectedRegForLedger) {
-            if (regs.length > 0) {
-                setSelectedRegForLedger(regs[0].id);
-                setSelectedAccountType('counter');
-            } else if (accounts.length > 0) {
-                setSelectedRegForLedger(accounts[0].name);
-                setSelectedAccountType('bank');
-            }
+              setSelectedRegForLedger('all');
+              setSelectedAccountType('all');
           }
 
-          if (selectedRegForLedger) {
-            if (selectedAccountType === 'counter') {
-                const ledger = await DataService.getRegisterLedger(selectedRegForLedger);
-                setRegisterLedgerData(ledger);
-                const trueCash = await DataService.getRegisterCurrentCash(selectedRegForLedger);
-                setCurrentCounterCash(trueCash);
-            } else {
-                const ledger = await DataService.getBankAccountLedger(selectedRegForLedger);
-                setRegisterLedgerData(ledger);
-                
-                // Bank ka balance nikalna (Opening Balance + In - Out)
-                const accDetails = accounts.find(a => a.name === selectedRegForLedger);
-                const openingBal = accDetails ? Number(accDetails.opening_balance) || 0 : 0;
-                
-                let bal = openingBal;
-                ledger.forEach(tx => {
-                    if (tx.type === 'Credit (In)') bal += Number(tx.amount);
-                    if (tx.type === 'Debit (Out)') bal -= Number(tx.amount);
-                });
-                setCurrentCounterCash(bal);
-            }
+          // NAYA IZAFA: All Accounts (Master Ledger) Logic
+          if (selectedRegForLedger === 'all' || !selectedRegForLedger) {
+              let combinedLedger = [];
+              let totalCombinedCash = 0;
+
+              // 1. Saare Counters ka data aur balance jama karein
+              for (const reg of regs) {
+                  const ledger = await DataService.getRegisterLedger(reg.id);
+                  const cash = await DataService.getRegisterCurrentCash(reg.id);
+                  totalCombinedCash += cash;
+                  // Har entry ke sath uske account ka naam jod dein
+                  combinedLedger.push(...ledger.map(tx => ({ ...tx, account_name: reg.name })));
+              }
+
+              // 2. Saare Banks/Wallets ka data aur balance jama karein
+              for (const acc of banks) {
+                  const ledger = await DataService.getBankAccountLedger(acc.name);
+                  const openingBal = Number(acc.opening_balance) || 0;
+                  let bal = openingBal;
+                  ledger.forEach(tx => {
+                      if (tx.type === 'Credit (In)') bal += Number(tx.amount);
+                      if (tx.type === 'Debit (Out)') bal -= Number(tx.amount);
+                  });
+                  totalCombinedCash += bal;
+                  combinedLedger.push(...ledger.map(tx => ({ ...tx, account_name: acc.name })));
+              }
+
+              // Sab ko waqt ke hisaab se tarteeb dein (Newest first)
+              combinedLedger.sort((a, b) => new Date(b.date) - new Date(a.date));
+              setRegisterLedgerData(combinedLedger);
+              setCurrentCounterCash(totalCombinedCash);
+
+          } else if (selectedAccountType === 'counter') {
+              const ledger = await DataService.getRegisterLedger(selectedRegForLedger);
+              const regName = regs.find(r => r.id === selectedRegForLedger)?.name || 'Counter';
+              setRegisterLedgerData(ledger.map(tx => ({ ...tx, account_name: regName })));
+              const trueCash = await DataService.getRegisterCurrentCash(selectedRegForLedger);
+              setCurrentCounterCash(trueCash);
+          } else {
+              const ledger = await DataService.getBankAccountLedger(selectedRegForLedger);
+              setRegisterLedgerData(ledger.map(tx => ({ ...tx, account_name: selectedRegForLedger })));
+              
+              const accDetails = banks.find(a => a.name === selectedRegForLedger);
+              const openingBal = accDetails ? Number(accDetails.opening_balance) || 0 : 0;
+              let bal = openingBal;
+              ledger.forEach(tx => {
+                  if (tx.type === 'Credit (In)') bal += Number(tx.amount);
+                  if (tx.type === 'Debit (Out)') bal -= Number(tx.amount);
+              });
+              setCurrentCounterCash(bal);
           }
         }
       } catch (error) {
@@ -950,7 +977,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
     // NAYA IZAFA: Background mein data download hone par Reports page ko Live Refresh karna
     window.addEventListener('local-db-updated', fetchReportData);
     return () => window.removeEventListener('local-db-updated', fetchReportData);
-  }, [dateRange, activeTab, selectedRegForLedger]);
+  }, [dateRange, activeTab, selectedRegForLedger, selectedAccountType]); // <--- NAYA IZAFA: selectedAccountType add kiya taake state hamesha fresh rahe
 
   // --- NAYA IZAFA: Independent Daily P&L Table Calculator (Reacts to Local Filters) ---
   useEffect(() => {
@@ -2313,8 +2340,9 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
 
   // --- NAYA IZAFA: VAULT & CASH FLOW TAB UI ---
   const renderVaultFlowTab = () => {
-    // NAYA IZAFA: Selected account ka asli naam nikalna (UUID ki jagah "Main Counter" show karne ke liye)
+    // NAYA IZAFA: Selected account ka asli naam nikalna
     const getSelectedAccountDisplayName = () => {
+        if (selectedRegForLedger === 'all') return 'All Accounts (Master Ledger)'; // <--- NAYA IZAFA
         if (selectedAccountType === 'counter') {
             const reg = allRegisters.find(r => r.id === selectedRegForLedger);
             return reg ? reg.name : 'Counter';
@@ -2322,10 +2350,159 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         return selectedRegForLedger || 'Bank Account';
     };
 
+    // NAYA IZAFA: 3-Level Collapsible Grouped Summary Report Builder (Odoo/QuickBooks Standard)
+    const getGroupedVaultData = () => {
+        const rawFiltered = getRawFilteredData();
+        const groups = {};
+
+        rawFiltered.forEach(tx => {
+            const sourceKey = tx.source || 'Other';
+            
+            // Party Name dynamically resolve karna
+            let partyKey = 'Internal / General';
+            if (tx.customer_id) {
+                partyKey = customerList.find(c => c.id === tx.customer_id)?.name || 'Walk-in Customer';
+            } else if (tx.supplier_id) {
+                partyKey = supplierList.find(s => s.id === tx.supplier_id)?.name || 'Supplier';
+            } else if (tx.source === 'Expense') {
+                partyKey = tx.notes || 'Operating Expense';
+            } else if (tx.source === 'Manual Adjustment / Transfer') {
+                partyKey = tx.notes || 'Internal Adjustment';
+            } else if (tx.notes) {
+                partyKey = tx.notes;
+            }
+
+            // Level 1: Transaction Source (e.g. Sales, Expenses)
+            if (!groups[sourceKey]) {
+                groups[sourceKey] = {
+                    key: sourceKey,
+                    title: sourceKey,
+                    type: 'source',
+                    credit: 0,
+                    debit: 0,
+                    children: {}
+                };
+            }
+
+            const isCredit = tx.type === 'Credit (In)';
+            const amt = Number(tx.amount) || 0;
+
+            if (isCredit) {
+                groups[sourceKey].credit += amt;
+            } else if (tx.type === 'Debit (Out)') {
+                groups[sourceKey].debit += amt;
+            }
+
+            // Level 2: Party Name / Sub Category (e.g. Walk-in, Specific Supplier)
+            if (!groups[sourceKey].children[partyKey]) {
+                groups[sourceKey].children[partyKey] = {
+                    key: `${sourceKey}-${partyKey}`,
+                    title: partyKey,
+                    type: 'party',
+                    credit: 0,
+                    debit: 0,
+                    children: []
+                };
+            }
+
+            if (isCredit) {
+                groups[sourceKey].children[partyKey].credit += amt;
+            } else if (tx.type === 'Debit (Out)') {
+                groups[sourceKey].children[partyKey].debit += amt;
+            }
+
+            // Level 3: Leaf Nodes (Asli transactions)
+            groups[sourceKey].children[partyKey].children.push({
+                key: tx.id,
+                date: tx.date,
+                type: tx.type,
+                amount: tx.amount,
+                notes: tx.notes,
+                source: tx.source,
+                staff_id: tx.staff_id,
+                runningBalance: tx.runningBalance,
+                account_name: tx.account_name,
+                isLeaf: true
+            });
+        });
+
+        // Object map ko nested array format mein tabdeel karna (Ant Design native tree support)
+        return Object.values(groups).map(g => ({
+            ...g,
+            children: Object.values(g.children).map(p => ({
+                ...p,
+                children: p.children.sort((a, b) => new Date(b.date) - new Date(a.date))
+            }))
+        }));
+    };
+
+    // NAYA IZAFA: Grouped View ke Table Columns
+    const groupedColumns = [
+        {
+            title: 'Date / Category / Party Name',
+            dataIndex: 'title',
+            key: 'title',
+            render: (text, record) => {
+                if (record.isLeaf) {
+                    return dayjs(record.date).format('DD MMM YYYY, hh:mm A');
+                }
+                return <Text strong style={{ color: token.colorCardHeadingsText }}>{text}</Text>;
+            }
+        },
+        {
+            title: 'Handled by',
+            dataIndex: 'staff_id',
+            key: 'handled_by',
+            render: (staffId, record) => {
+                if (!record.isLeaf) return null;
+                const staff = staffList.find(s => s.id === staffId);
+                const displayRole = profile?.role ? (profile.role.charAt(0).toUpperCase() + profile.role.slice(1).toLowerCase()) : 'Owner';
+                return <Text>{staff ? staff.name : displayRole}</Text>;
+            }
+        },
+        {
+            title: 'Description',
+            dataIndex: 'notes',
+            key: 'description',
+            render: (notes, record) => {
+                if (!record.isLeaf) return null;
+                return notes;
+            }
+        },
+        {
+            title: 'Credit (In)',
+            dataIndex: 'credit',
+            key: 'credit',
+            align: 'right',
+            render: (val, record) => {
+                if (record.isLeaf) {
+                    const isCredit = record.type === 'Credit (In)';
+                    if (!isCredit) return '-';
+                    return <Text strong style={{ color: token.colorAmountPositive }}>+{formatCurrency(record.amount, profile?.currency)}</Text>;
+                }
+                return val > 0 ? <Text strong style={{ color: token.colorAmountPositive }}>{formatCurrency(val, profile?.currency)}</Text> : '-';
+            }
+        },
+        {
+            title: 'Debit (Out)',
+            dataIndex: 'debit',
+            key: 'debit',
+            align: 'right',
+            render: (val, record) => {
+                if (record.isLeaf) {
+                    const isDebit = record.type === 'Debit (Out)';
+                    if (!isDebit) return '-';
+                    return <Text strong style={{ color: token.colorAmountNegative }}>-{formatCurrency(record.amount, profile?.currency)}</Text>;
+                }
+                return val > 0 ? <Text strong style={{ color: token.colorAmountNegative }}>{formatCurrency(val, profile?.currency)}</Text> : '-';
+            }
+        }
+    ];
+
     // NAYA IZAFA: Har transaction ke sath uska automatic Running Balance backtracking se nikalna (PKR 0 Fix)
     const getLedgerWithRunningBalances = () => {
         const rawList = [...registerLedgerData];
-        let tempBalance = currentCounterCash; // Aaj ka final actual balance
+        let tempBalance = currentCounterCash; 
 
         const listWithBalances = rawList.map(item => {
             const amt = Number(item.amount) || 0;
@@ -2338,19 +2515,16 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 runningBalance: tempBalance
             };
             
-            // Pichli (purani) entry ke liye balance work-backwards karein
             tempBalance -= numericQty; 
-            
             return itemWithBalance;
         });
-        
         return listWithBalances;
     };
 
     // NAYA IZAFA: Active filters aur Period Metrics ko text format mein print karne ke liye helper
     const getVaultFilterDescription = () => {
         const parts = [];
-        const curr = profile?.currency || 'USD'; // <--- NAYA IZAFA: Safe currency fallback ('USD') to prevent crash
+        const curr = profile?.currency || 'USD'; 
         
         if (vaultStaff !== 'all') {
             if (vaultStaff === 'owner') {
@@ -2363,36 +2537,19 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         }
         
         if (vaultTxType !== 'all') {
-            const typeLabels = {
-                Sales: 'Sales',
-                'Credit Settlement': 'Sale Returns / Payouts',
-                Collection: 'Customer Payments',
-                'Supplier Payment': 'Supplier Payments',
-                Expense: 'Expenses',
-                'Supplier Refund': 'Supplier Refunds',
-                'Manual Adjustment / Transfer': 'Adjustments / Transfers'
-            };
+            const typeLabels = { Sales: 'Sales', 'Credit Settlement': 'Sale Returns / Payouts', Collection: 'Customer Payments', 'Supplier Payment': 'Supplier Payments', Expense: 'Expenses', 'Supplier Refund': 'Supplier Refunds', 'Manual Adjustment / Transfer': 'Adjustments / Transfers' };
             parts.push(`Type: ${typeLabels[vaultTxType] || vaultTxType}`);
         }
         
         if (vaultDateRange !== 'all') {
-            if (vaultDateRange === 'custom' && vaultCustomDates.length === 2) {
-                parts.push(`Date: ${dayjs(vaultCustomDates[0]).format('DD/MM/YY')} to ${dayjs(vaultCustomDates[1]).format('DD/MM/YY')}`);
-            } else {
-                const rangeLabels = {
-                    today: 'Today',
-                    this_month: 'This Month',
-                    last_month: 'Last Month'
-                };
+            if (vaultDateRange === 'custom' && vaultCustomDates.length === 2) { parts.push(`Date: ${dayjs(vaultCustomDates[0]).format('DD/MM/YY')} to ${dayjs(vaultCustomDates[1]).format('DD/MM/YY')}`); } 
+            else {
+                const rangeLabels = { today: 'Today', this_month: 'This Month', last_month: 'Last Month' };
                 parts.push(`Date: ${rangeLabels[vaultDateRange] || vaultDateRange}`);
             }
         }
 
-        if (vaultSearchText) {
-            parts.push(`Search: "${vaultSearchText}"`);
-        }
-
-        // NAYA IZAFA: Subtitle mein active Customer/Supplier ka naam print karwana
+        if (vaultSearchText) parts.push(`Search: "${vaultSearchText}"`);
         if (vaultCustomer !== 'all') {
             const cust = customerList.find(c => c.id === vaultCustomer);
             parts.push(`Customer: ${cust ? cust.name : 'Unknown'}`);
@@ -2402,7 +2559,6 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             parts.push(`Supplier: ${sup ? sup.name : 'Unknown'}`);
         }
 
-        // Period Summary card ka math data add karna taake print/export mein automatic shamil ho jaye
         const metrics = getPeriodMetrics();
         parts.push(`Opening: ${formatCurrency(metrics.opening, curr)}`);
         parts.push(`Inflow: +${formatCurrency(metrics.inflow, curr)}`);
@@ -2412,11 +2568,10 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         return parts.join('  |  ');
     };
 
-    // NAYA IZAFA: Common raw filtering logic (Both for UI Table and Excel/PDF Export)
+    // NAYA IZAFA: Common raw filtering logic
     const getRawFilteredData = () => {
-        let filtered = getLedgerWithRunningBalances(); // <--- NAYA IZAFA: raw data ki jagah balances wala data connect kiya
+        let filtered = getLedgerWithRunningBalances(); 
         
-        // 1. Date Filter
         if (vaultDateRange !== 'all') {
             let start, end;
             const now = dayjs();
@@ -2434,48 +2589,23 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             }
         }
         
-        // 2. Transaction Type Filter
-        if (vaultTxType !== 'all') {
-            filtered = filtered.filter(tx => tx.source === vaultTxType);
-        }
-
-        // 3. Handled by Filter
+        if (vaultTxType !== 'all') filtered = filtered.filter(tx => tx.source === vaultTxType);
         if (vaultStaff !== 'all') {
-            if (vaultStaff === 'owner') {
-                filtered = filtered.filter(tx => !tx.staff_id);
-            } else {
-                filtered = filtered.filter(tx => tx.staff_id === vaultStaff);
-            }
+            if (vaultStaff === 'owner') filtered = filtered.filter(tx => !tx.staff_id);
+            else filtered = filtered.filter(tx => tx.staff_id === vaultStaff);
         }
-
-        // 4. NAYA IZAFA: Customer Filter Logic
-        if (vaultCustomer !== 'all') {
-            filtered = filtered.filter(tx => tx.customer_id === vaultCustomer);
-        }
-
-        // 5. NAYA IZAFA: Supplier Filter Logic
-        if (vaultSupplier !== 'all') {
-            filtered = filtered.filter(tx => tx.supplier_id === vaultSupplier);
-        }
-
-        // 6. Text Search Filter (Dynamic)
+        if (vaultCustomer !== 'all') filtered = filtered.filter(tx => tx.customer_id === vaultCustomer);
+        if (vaultSupplier !== 'all') filtered = filtered.filter(tx => tx.supplier_id === vaultSupplier);
         if (vaultSearchText) {
             const query = vaultSearchText.toLowerCase().trim();
-            filtered = filtered.filter(tx => 
-                (tx.notes && tx.notes.toLowerCase().includes(query)) ||
-                (tx.source && tx.source.toLowerCase().includes(query))
-            );
+            filtered = filtered.filter(tx => (tx.notes && tx.notes.toLowerCase().includes(query)) || (tx.source && tx.source.toLowerCase().includes(query)));
         }
-        
         return filtered;
     };
 
-    // NAYA IZAFA: Period Summary calculations (Opening, Inflow, Outflow, Closing of the selected period)
     const getPeriodMetrics = () => {
         const rawAll = getLedgerWithRunningBalances(); 
-        const rawFiltered = getRawFilteredData(); // Sabhi active filters ke sath (Inflow aur Outflow ke liye)
-        
-        // Dynamic Date-Only List (Opening aur Closing ke exact calculation ke liye)
+        const rawFiltered = getRawFilteredData(); 
         const dateOnlyFiltered = (() => {
             let filtered = [...rawAll];
             if (vaultDateRange !== 'all') {
@@ -2488,32 +2618,23 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                     start = dayjs(vaultCustomDates[0]).startOf('day'); end = dayjs(vaultCustomDates[1]).endOf('day');
                 }
                 if (start && end) {
-                    filtered = filtered.filter(tx => {
-                        const txDate = dayjs(tx.date);
-                        return txDate.isAfter(start) && txDate.isBefore(end);
-                    });
+                    filtered = filtered.filter(tx => { const txDate = dayjs(tx.date); return txDate.isAfter(start) && txDate.isBefore(end); });
                 }
             }
             return filtered;
         })();
 
-        let totalInflow = 0;
-        let totalOutflow = 0;
-        
+        let totalInflow = 0; let totalOutflow = 0;
         rawFiltered.forEach(tx => {
             const amt = Number(tx.amount) || 0;
             if (tx.type === 'Credit (In)') totalInflow += amt;
             else if (tx.type === 'Debit (Out)') totalOutflow += amt;
         });
 
-        let periodOpeningBalance = 0;
-        let periodClosingBalance = 0;
-
-        // Dynamic Balances strictly depend on date range only (Professional Accounting Rule)
+        let periodOpeningBalance = 0; let periodClosingBalance = 0;
         if (dateOnlyFiltered.length > 0) {
             const newestItem = dateOnlyFiltered[0];
             const oldestItem = dateOnlyFiltered[dateOnlyFiltered.length - 1];
-
             periodClosingBalance = newestItem.runningBalance || 0;
             periodOpeningBalance = (oldestItem.runningBalance || 0) - (oldestItem.numericQty || 0);
         } else {
@@ -2539,19 +2660,12 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 periodClosingBalance = currentCounterCash;
             }
         }
-
-        return {
-            opening: periodOpeningBalance,
-            inflow: totalInflow,
-            outflow: totalOutflow,
-            closing: periodClosingBalance
-        };
+        return { opening: periodOpeningBalance, inflow: totalInflow, outflow: totalOutflow, closing: periodClosingBalance };
     };
 
-    // NAYA IZAFA: Export ke liye data ko format karne ka helper
     const getVaultExportData = () => {
         const rawFiltered = getRawFilteredData();
-        const curr = profile?.currency || 'USD'; // <--- NAYA IZAFA: Safe currency fallback ('USD') to prevent crash
+        const curr = profile?.currency || 'USD'; 
         const displayRole = profile?.role ? (profile.role.charAt(0).toUpperCase() + profile.role.slice(1).toLowerCase()) : 'Owner';
         
         return rawFiltered.map(tx => {
@@ -2562,19 +2676,43 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 ...tx,
                 date_formatted: dayjs(tx.date).format('DD MMM YYYY, hh:mm A'),
                 handled_by_name: staff ? staff.name : displayRole,
+                account_name: tx.account_name || '-', // <--- NAYA IZAFA
                 amount_formatted: `${sign} ${formatCurrency(tx.amount, curr)}`
             };
         });
     };
 
     return (
-      <div style={{ marginTop: '4px' }}> {/* <--- NAYA IZAFA: Top space reduced */}
+      <div style={{ marginTop: '4px' }}> 
         <Card style={cardStyle}>
           <div style={{ marginBottom: '20px' }}>
             <Text strong style={{ display: 'block', marginBottom: '12px' }}>Select Account to View Ledger:</Text>
             
-            {/* NAYA IZAFA: Dropdown ki jagah Selectable Cards */}
             <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }} className="hide-scrollbar">
+              
+              {/* NAYA IZAFA: All Accounts (Master Ledger) Card */}
+              <div 
+                onClick={() => { setSelectedRegForLedger('all'); setSelectedAccountType('all'); }}
+                style={{
+                  minWidth: '200px',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  border: `2px solid ${selectedRegForLedger === 'all' ? token.colorPrimary : token.colorBorderSecondary}`,
+                  background: selectedRegForLedger === 'all' ? (isDarkMode ? token.colorPrimary + '22' : token.colorPrimary + '11') : 'transparent',
+                  transition: 'all 0.2s ease',
+                  position: 'relative'
+                }}
+              >
+                <div style={{ position: 'absolute', top: '12px', right: '12px' }}>
+                   <AppstoreOutlined style={{ color: token.colorPrimary, fontSize: '16px' }} />
+                </div>
+                <Text strong style={{ fontSize: '15px', display: 'block', marginBottom: '4px' }}>All Accounts</Text>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Text style={{ fontSize: '12px', color: token.colorCardColumnsTitleText }}>Master Ledger View</Text>
+                </div>
+              </div>
+
               {/* 1. Counters Render Karein */}
               {allRegisters.map(reg => {
                 const isSelected = selectedRegForLedger === reg.id && selectedAccountType === 'counter';
@@ -2782,11 +2920,23 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                     />
                 </Tooltip>
 
+                {/* NAYA IZAFA: View Mode Switch (Detailed vs Summary) */}
+                <Radio.Group 
+                    value={vaultViewMode} 
+                    onChange={(e) => setVaultViewMode(e.target.value)} 
+                    size="small"
+                    buttonStyle="solid"
+                >
+                    <Radio.Button value="detailed">Detailed</Radio.Button>
+                    <Radio.Button value="grouped">Summary</Radio.Button>
+                </Radio.Group>
+
                 {/* 6. Reusable Export Component (far-right par aligned hai) */}
                 <DataExport 
                     data={getVaultExportData()}
                     exportColumns={[
                         { title: 'Date & Time', dataIndex: 'date_formatted' },
+                        { title: 'Account', dataIndex: 'account_name' }, // <--- NAYA IZAFA
                         { title: 'Source', dataIndex: 'source' },
                         { title: 'Description', dataIndex: 'notes' },
                         { title: 'Handled by', dataIndex: 'handled_by_name' },
@@ -2800,7 +2950,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             </Space>
           </div>
 
-          {/* --- NAYA IZAFA: Period Summary Card (Slim, No Header, Absolute Position Tooltip & English Text) --- */}
+          {/* ... (Summary Card Code remains the same) ... */}
           {(() => {
               const metrics = getPeriodMetrics();
               return (
@@ -2810,11 +2960,10 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                       marginBottom: '16px', 
                       background: token.colorFillAlter, 
                       border: `1px dashed ${token.colorBorder}`,
-                      position: 'relative' // <--- NAYA IZAFA: Absolute positioning support
+                      position: 'relative' 
                   }}
-                  styles={{ body: { padding: '16px' } }} // <--- Unnecessary spacing removed
+                  styles={{ body: { padding: '16px' } }} 
                 >
-                  {/* Absolute Positioned Info Tooltip (Saves Card Header Height) */}
                   <div style={{ position: 'absolute', top: '10px', right: '14px', zIndex: 10 }}>
                     <Tooltip 
                       title={
@@ -2823,7 +2972,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                           <p style={{ margin: 0 }}><b>• Inflow / Outflow:</b> Show the total funds received and spent matching all your active filters (Search, Handled by, Type).</p>
                         </div>
                       }
-                      styles={{ root: { maxWidth: '300px' } }} // <--- NAYA IZAFA: Warning fix for Ant Design v5
+                      styles={{ root: { maxWidth: '300px' } }} 
                     >
                       <InfoCircleOutlined style={{ color: token.colorTextSecondary, cursor: 'pointer', fontSize: '14px' }} />
                     </Tooltip>
@@ -2831,36 +2980,16 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
 
                   <Row gutter={[16, 8]} align="middle">
                     <Col xs={12} sm={6}>
-                      <Statistic 
-                        title={<Text type="secondary" style={{ fontSize: '11px' }}>Period Opening Balance</Text>} 
-                        value={metrics.opening} 
-                        formatter={(val) => formatCurrency(val, profile?.currency)} 
-                        valueStyle={{ fontSize: '14px', fontWeight: 'bold', color: token.colorText }}
-                      />
+                      <Statistic title={<Text type="secondary" style={{ fontSize: '11px' }}>Period Opening Balance</Text>} value={metrics.opening} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '14px', fontWeight: 'bold', color: token.colorText }} />
                     </Col>
                     <Col xs={12} sm={6}>
-                      <Statistic 
-                        title={<Text type="secondary" style={{ fontSize: '11px' }}>Total Inflow (+)</Text>} 
-                        value={metrics.inflow} 
-                        formatter={(val) => formatCurrency(val, profile?.currency)} 
-                        valueStyle={{ fontSize: '14px', fontWeight: 'bold', color: token.colorAmountPositive }}
-                      />
+                      <Statistic title={<Text type="secondary" style={{ fontSize: '11px' }}>Total Inflow (+)</Text>} value={metrics.inflow} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '14px', fontWeight: 'bold', color: token.colorAmountPositive }} />
                     </Col>
                     <Col xs={12} sm={6}>
-                      <Statistic 
-                        title={<Text type="secondary" style={{ fontSize: '11px' }}>Total Outflow (-)</Text>} 
-                        value={metrics.outflow} 
-                        formatter={(val) => formatCurrency(val, profile?.currency)} 
-                        valueStyle={{ fontSize: '14px', fontWeight: 'bold', color: token.colorAmountNegative }}
-                      />
+                      <Statistic title={<Text type="secondary" style={{ fontSize: '11px' }}>Total Outflow (-)</Text>} value={metrics.outflow} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '14px', fontWeight: 'bold', color: token.colorAmountNegative }} />
                     </Col>
                     <Col xs={12} sm={6}>
-                      <Statistic 
-                        title={<Text type="secondary" style={{ fontSize: '11px' }}>Period Closing Balance</Text>} 
-                        value={metrics.closing} 
-                        formatter={(val) => formatCurrency(val, profile?.currency)} 
-                        valueStyle={{ fontSize: '15px', fontWeight: 'bold', color: token.colorPrimary }}
-                      />
+                      <Statistic title={<Text type="secondary" style={{ fontSize: '11px' }}>Period Closing Balance</Text>} value={metrics.closing} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '15px', fontWeight: 'bold', color: token.colorPrimary }} />
                     </Col>
                   </Row>
                 </Card>
@@ -2868,20 +2997,21 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           })()}
 
           <Table 
-            dataSource={getRawFilteredData()} // <--- NAYA IZAFA: Clean dynamic filtered data connect kiya
-            rowKey="id"
-            columns={[
+            dataSource={vaultViewMode === 'grouped' ? getGroupedVaultData() : getRawFilteredData()} // <--- NAYA IZAFA: Conditional Data
+            rowKey={(record) => record.key || record.id} // <--- NAYA IZAFA: Dynamic safe RowKey
+            pagination={vaultViewMode === 'grouped' ? false : { pageSize: 10 }} // <--- NAYA IZAFA: Grouped view mein pagination off (Accordion design)
+            columns={vaultViewMode === 'grouped' ? groupedColumns : [ // <--- NAYA IZAFA: Conditional Columns
               { title: 'Date & Time', dataIndex: 'date', render: d => dayjs(d).format('DD MMM YYYY, hh:mm A') },
+              { title: 'Account', dataIndex: 'account_name', render: t => <Text strong>{t || '-'}</Text> }, 
               { title: 'Source', dataIndex: 'source' },
               { title: 'Description', dataIndex: 'notes' },
               
               // NAYA IZAFA: Handled by Column (Responsive & Customized)
               { 
-                title: 'Handled by', // <--- Column ka naam update kar diya
+                title: 'Handled by', 
                 dataIndex: 'staff_id', 
                 render: (staffId) => {
                   const staff = staffList.find(s => s.id === staffId);
-                  // Dynamic Role capitalize logic (Owner / Admin ke bajaye customized role)
                   const displayRole = profile?.role ? (profile.role.charAt(0).toUpperCase() + profile.role.slice(1).toLowerCase()) : 'Owner';
                   return <Text strong style={{ whiteSpace: 'nowrap' }}>{staff ? staff.name : displayRole}</Text>;
                 } 
@@ -2893,14 +3023,14 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 render: t => {
                   if (t === 'Credit (In)') return <Tag color="green">{t}</Tag>;
                   if (t === 'Debit (Out)') return <Tag color="volcano">{t}</Tag>;
-                  return <Tag color="blue">{t}</Tag>; // Info ke liye Blue
+                  return <Tag color="blue">{t}</Tag>; 
                 }
               },
               { 
                 title: 'Amount', 
                 dataIndex: 'amount', 
                 align: 'right', 
-                width: 140, // <--- Col Width set ki taake amount break na ho
+                width: 140, 
                 render: (v, rec) => {
                   if (rec.type === 'Info') return <Text type="secondary" style={{ whiteSpace: 'nowrap' }}>{formatCurrency(v, profile?.currency)}</Text>;
                   const isCredit = rec.type === 'Credit (In)';

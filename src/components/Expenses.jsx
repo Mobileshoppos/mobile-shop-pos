@@ -15,9 +15,10 @@ import {
   Radio,
   Tag,
   Tooltip,
-  theme
+  theme,
+  Card
 } from 'antd';
-import { PlusOutlined, EditOutlined, CloseCircleOutlined, DollarCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, CloseCircleOutlined, DollarCircleOutlined, UndoOutlined, SearchOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import DataExport from '../components/DataExport'; // <--- NAYA IZAFA
 import { useAuth } from '../context/AuthContext';
@@ -47,6 +48,14 @@ const Expenses = () => {
   const [form] = Form.useForm();
   const expenseTitleInputRef = useRef(null);
 
+  // --- NAYA IZAFA: Expense List View Modes ---
+  const [expenseViewMode, setExpenseViewMode] = useState('detailed'); // 'detailed' vs 'grouped'
+
+  // --- NAYA IZAFA: Search & Performance States ---
+  const [searchText, setSearchText] = useState('');
+  const [dateRange, setDateRange] = useState([dayjs().startOf('month'), dayjs().endOf('month')]); // Default This Month
+  const [expenseDateRangeType, setExpenseDateRangeType] = useState('this_month');
+
   // Modal khulne par cursor Title field mein le jane ki logic
   useEffect(() => {
     if (isModalOpen) {
@@ -57,28 +66,197 @@ const Expenses = () => {
     }
   }, [isModalOpen]);
 
+  // --- NAYA IZAFA: 3-Level Collapsible Grouped Expenses Data Builder (Standard Reconciliation) ---
+  const getGroupedExpensesData = () => {
+    const groups = {};
+    
+    // Category mapping
+    const categoryMap = {};
+    categories.forEach(c => { categoryMap[c.id] = c; });
+
+    expenses.forEach(e => {
+        const cat = categoryMap[e.category_id];
+        let parentCatName = 'Other Expenses';
+        let subCatName = 'General';
+        
+        if (cat) {
+            if (cat.parent_id) {
+                // Agar subcategory hai, to uske parent ka naam aur apna naam lein
+                const parent = categoryMap[cat.parent_id];
+                parentCatName = parent ? parent.name : 'Other Expenses';
+                subCatName = cat.name;
+            } else {
+                // Agar khud hi main category hai
+                parentCatName = cat.name;
+                subCatName = 'General / Miscellaneous';
+            }
+        }
+
+        // Level 1: Parent Category
+        if (!groups[parentCatName]) {
+            groups[parentCatName] = {
+                key: parentCatName,
+                title: parentCatName,
+                type: 'parent',
+                amount: 0,
+                children: {}
+            };
+        }
+
+        const amt = Number(e.amount) || 0;
+        groups[parentCatName].amount += amt;
+
+        // Level 2: Sub Category
+        if (!groups[parentCatName].children[subCatName]) {
+            groups[parentCatName].children[subCatName] = {
+                key: `${parentCatName}-${subCatName}`,
+                title: subCatName,
+                type: 'sub',
+                amount: 0,
+                children: []
+            };
+        }
+        groups[parentCatName].children[subCatName].amount += amt;
+
+        // Level 3: Individual Expense Transactions (Leafs)
+        groups[parentCatName].children[subCatName].children.push({
+            id: e.id,
+            key: e.id,
+            date: e.expense_date,
+            voucher_no: e.voucher_no,
+            title: e.title,
+            payment_method: e.payment_method,
+            amount: e.amount,
+            staff_id: e.staff_id,
+            isLeaf: true
+        });
+    });
+
+    // Nested array format mein convert karna (Tree Table)
+    return Object.values(groups).map(g => ({
+        ...g,
+        children: Object.values(g.children).map(s => ({
+            ...s,
+            children: s.children.sort((a, b) => new Date(b.date) - new Date(a.date))
+        }))
+    }));
+  };
+
+  // NAYA IZAFA: Grouped View Columns Configuration
+  const groupedColumns = [
+    {
+      title: 'Category Name / Date',
+      dataIndex: 'title',
+      key: 'title',
+      render: (text, record) => {
+          if (record.isLeaf) {
+              return dayjs(record.date).format('DD MMM, YYYY');
+          }
+          return <Text strong style={{ color: token.colorCardHeadingsText }}>{text}</Text>;
+      }
+    },
+    {
+      title: 'Voucher No.',
+      dataIndex: 'voucher_no',
+      key: 'voucher_no',
+      render: (text, record) => record.isLeaf ? <Text code>{text || '-'}</Text> : null
+    },
+    {
+      title: 'Title / Description',
+      dataIndex: 'title',
+      key: 'title',
+      render: (text, record) => record.isLeaf ? text : null
+    },
+    {
+      title: 'Paid From',
+      dataIndex: 'payment_method',
+      key: 'payment_method',
+      render: (method, record) => record.isLeaf ? <Tag color={method === 'Cash' ? 'default' : 'cyan'}>{method || 'Cash'}</Tag> : null
+    },
+    {
+      title: 'Amount',
+      dataIndex: 'amount',
+      key: 'amount',
+      align: 'right',
+      render: (val, record) => (
+          <Text strong style={{ color: record.isLeaf ? undefined : token.colorWarning }}>
+              {formatCurrency(val, profile?.currency)}
+          </Text>
+      )
+    },
+    {
+      title: 'Handled By',
+      key: 'staff',
+      render: (_, record) => {
+        if (!record.isLeaf) return null;
+        const staff = staffMembers.find(s => s.id === record.staff_id);
+        return <Text type="secondary" style={{ fontSize: '12px' }}>{staff ? staff.name : 'Owner'}</Text>;
+      }
+    }
+  ];
+
   const getData = useCallback(async () => {
     try {
       setLoading(true);
-      // Ab hum DataService se data le rahe hain
-      const expensesData = await DataService.getExpenses();
+
+      // 1. High-Performance Indexed Query (Loads ONLY selected dates to prevent lags/crashes over the years)
+      let matchedExpenses = [];
+      if (dateRange && dateRange[0] && dateRange[1]) {
+          const startStr = dateRange[0].startOf('day').format('YYYY-MM-DD');
+          const endStr = dateRange[1].endOf('day').format('YYYY-MM-DD');
+          matchedExpenses = await db.expenses
+              .where('expense_date')
+              .between(startStr, endStr, true, true)
+              .toArray();
+      } else {
+          // Safety Cap: Capped to 500 records on "All Time" to prevent memory leaks/crashes
+          matchedExpenses = await db.expenses
+              .orderBy('expense_date')
+              .reverse()
+              .limit(500)
+              .toArray();
+      }
+
       const categoriesData = await DataService.getExpenseCategories();
-      const staffData = await DataService.getStaffMembers(); // <--- NAYA IZAFA
+      const staffData = await DataService.getStaffMembers();
 
       if (DataService.getPaymentAccounts) {
           const accountsData = await DataService.getPaymentAccounts();
           setPaymentAccounts(accountsData);
       }
 
-      setExpenses(expensesData);
+      const catMap = {};
+      categoriesData.forEach(c => { catMap[c.id] = c.name; });
+
+      // Join categories in memory
+      const mappedExpenses = matchedExpenses.map(e => ({
+          ...e,
+          expense_categories: { name: catMap[e.category_id] || 'Uncategorized' }
+      }));
+
+      // Live search filter inside memory
+      let finalExpenses = mappedExpenses;
+      if (searchText) {
+          const query = searchText.toLowerCase().trim();
+          finalExpenses = mappedExpenses.filter(e => 
+              (e.title && e.title.toLowerCase().includes(query)) ||
+              (e.voucher_no && e.voucher_no.toLowerCase().includes(query)) ||
+              (e.expense_categories?.name && e.expense_categories.name.toLowerCase().includes(query))
+          );
+      }
+
+      // Sort descending (Newest first)
+      finalExpenses.sort((a, b) => new Date(b.expense_date) - new Date(a.expense_date));
+
+      setExpenses(finalExpenses);
       setCategories(categoriesData);
-      setStaffMembers(staffData); // <--- NAYA IZAFA
+      setStaffMembers(staffData);
     } catch (error) {
       message.error('Error fetching data: ' + error.message);
     } finally {
       setLoading(false);
     }
-  }, [message]);
+  }, [message, dateRange, searchText]); // <--- Dependencies updated
 
   useEffect(() => {
     getData();
@@ -269,37 +447,166 @@ const Expenses = () => {
     },
   ];
 
+  // NAYA IZAFA: Dynamic Export formatting based on selected view mode (Excel layout formatted beautifully)
+  const getDynamicExportData = () => {
+    if (expenseViewMode === 'grouped') {
+        const flatList = [];
+        const grouped = getGroupedExpensesData();
+        grouped.forEach(g => {
+            flatList.push({ category_name: g.title, amount: formatCurrency(g.amount, profile?.currency), is_parent: true });
+            g.children.forEach(s => {
+                flatList.push({ category_name: `  └── ${s.title}`, amount: formatCurrency(s.amount, profile?.currency), is_sub: true });
+                s.children.forEach(leaf => {
+                    flatList.push({
+                        category_name: `      • ${leaf.title}`,
+                        date: dayjs(leaf.date).format('DD MMM, YYYY'),
+                        voucher: leaf.voucher_no,
+                        method: leaf.payment_method,
+                        amount: formatCurrency(leaf.amount, profile?.currency),
+                        staff: staffMembers.find(st => st.id === leaf.staff_id)?.name || 'Owner'
+                    });
+                });
+            });
+        });
+        return flatList;
+    }
+    return expenses.map(e => ({
+        ...e,
+        formattedDate: dayjs(e.expense_date).format('DD MMM, YYYY'),
+        categoryName: e.expense_categories ? e.expense_categories.name : 'N/A',
+        staffName: staffMembers.find(s => s.id === e.staff_id)?.name || 'Owner',
+        amount_formatted: formatCurrency(e.amount, profile?.currency)
+    }));
+  };
+
+  const getDynamicExportColumns = () => {
+    if (expenseViewMode === 'grouped') {
+        return [
+            { title: 'Category Name / Title', dataIndex: 'category_name' },
+            { title: 'Date', dataIndex: 'date' },
+            { title: 'Voucher No', dataIndex: 'voucher' },
+            { title: 'Account', dataIndex: 'method' },
+            { title: 'Amount', dataIndex: 'amount' },
+            { title: 'Handled By', dataIndex: 'staff' }
+        ];
+    }
+    return [
+        { title: 'Date', dataIndex: 'formattedDate' },
+        { title: 'Voucher No.', dataIndex: 'voucher_no' },
+        { title: 'Title / Description', dataIndex: 'title' },
+        { title: 'Category', dataIndex: 'categoryName' },
+        { title: 'Paid From', dataIndex: 'payment_method' },
+        { title: 'Amount', dataIndex: 'amount_formatted' },
+        { title: 'Handled By', dataIndex: 'staffName' }
+    ];
+  };
+
   return (
     <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: isMobile ? 'space-between' : 'flex-end', marginBottom: '16px', gap: '16px' }}>
-        
-        {/* --- NAYA IZAFA: Export Buttons aur Add Button ek sath --- */}
-        <Space>
-          <DataExport 
-            data={expenses.map(e => ({
-              ...e,
-              formattedDate: dayjs(e.expense_date).format('DD MMM, YYYY'),
-              categoryName: e.expense_categories ? e.expense_categories.name : 'N/A',
-              staffName: staffMembers.find(s => s.id === e.staff_id)?.name || 'Owner'
-            }))} 
-            exportColumns={exportColumns} 
-            fileName="Expenses_List" 
-            reportTitle="Expenses Report" 
-          />
-          <Tooltip title={!activeSession ? "Please open a register shift to add expenses." : ""}>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => showModal()} style={{ width: isMobile ? '100%' : 'auto' }} disabled={!activeSession}>
-              Add New Expense
-            </Button>
-          </Tooltip>
-        </Space>
-
-      </div>
       {isMobile && (
         <Title level={2} style={{ margin: 0, marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
           <DollarCircleOutlined /> Manage Expenses
         </Title>
       )}
-      <Table columns={columns} dataSource={expenses} loading={loading} rowKey="id" scroll={{ x: true }} />
+      <Card styles={{ body: { paddingTop: '16px' } }}> {/* <--- NAYA IZAFA: Header clean and space optimized */}
+        
+        {/* --- NAYA IZAFA: Advanced Filter Bar (With Search, Period, Toggle, and Export) --- */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
+          
+          <Space wrap={isMobile}>
+            {/* 1. View Mode Switch */}
+            <Radio.Group 
+              value={expenseViewMode} 
+              onChange={(e) => setExpenseViewMode(e.target.value)} 
+              size="middle"
+              buttonStyle="solid"
+            >
+              <Radio.Button value="detailed">Detailed List</Radio.Button>
+              <Radio.Button value="grouped">Summary Ledger</Radio.Button>
+            </Radio.Group>
+
+            {/* 2. Interactive Search Box */}
+            <Input.Search 
+              placeholder="Search description or voucher..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              onSearch={setSearchText}
+              style={{ width: 220 }}
+              allowClear
+            />
+
+            {/* 3. Quick Period Selector (Default: This Month) */}
+            <Select
+              value={expenseDateRangeType}
+              onChange={(val) => {
+                  setExpenseDateRangeType(val);
+                  const now = dayjs();
+                  if (val === 'today') {
+                      setDateRange([now.startOf('day'), now.endOf('day')]);
+                  } else if (val === 'week') {
+                      setDateRange([now.startOf('week'), now.endOf('day')]);
+                  } else if (val === 'this_month') {
+                      setDateRange([now.startOf('month'), now.endOf('month')]);
+                  } else if (val === 'all') {
+                      setDateRange(null); // All Time (capped to 500)
+                  }
+              }}
+              style={{ width: 130 }}
+              styles={{ popup: { root: { zIndex: 2000 } } }}
+            >
+              <Select.Option value="this_month">This Month</Select.Option>
+              <Select.Option value="today">Today</Select.Option>
+              <Select.Option value="week">This Week</Select.Option>
+              <Select.Option value="all">All Time</Select.Option>
+              <Select.Option value="custom">Custom Range</Select.Option>
+            </Select>
+
+            {expenseDateRangeType === 'custom' && (
+              <DatePicker.RangePicker 
+                value={dateRange}
+                onChange={(values) => setDateRange(values)}
+                style={{ width: 250 }}
+              />
+            )}
+
+            {/* 4. Reset Button */}
+            <Tooltip title="Reset Filters">
+                <Button 
+                  icon={<UndoOutlined />} 
+                  onClick={() => {
+                    setSearchText('');
+                    setExpenseDateRangeType('this_month');
+                    setDateRange([dayjs().startOf('month'), dayjs().endOf('month')]);
+                  }}
+                />
+            </Tooltip>
+          </Space>
+
+          {/* Right Aligned Export & Add Buttons */}
+          <Space>
+            <DataExport 
+              data={getDynamicExportData()} 
+              exportColumns={getDynamicExportColumns()} 
+              fileName={expenseViewMode === 'grouped' ? "Grouped_Expenses_Report" : "Expenses_Detailed_List"} 
+              reportTitle={expenseViewMode === 'grouped' ? "Category Wise Expenses Summary" : "Expenses Detailed List Report"} 
+            />
+            <Tooltip title={!activeSession ? "Please open a register shift to add expenses." : ""}>
+              <Button id="exp-add-btn" type="primary" icon={<PlusOutlined />} onClick={() => showModal()} style={{ width: isMobile ? '100%' : 'auto' }} disabled={!activeSession}>
+                Add New Expense
+              </Button>
+            </Tooltip>
+          </Space>
+        </div>
+
+        <Table 
+          columns={expenseViewMode === 'grouped' ? groupedColumns : columns} 
+          dataSource={expenseViewMode === 'grouped' ? getGroupedExpensesData() : expenses} 
+          loading={loading} 
+          rowKey={(record) => record.key || record.id}
+          pagination={expenseViewMode === 'grouped' ? false : { pageSize: 10 }}
+          scroll={{ x: true }} 
+        />
+      </Card>
       
       <Modal title={editingExpense ? 'Edit Expense' : 'Add a New Expense'} open={isModalOpen} onCancel={handleCancel} onOk={() => form.submit()} okText="Save">
         <Form form={form} layout="vertical" onFinish={handleOk}>

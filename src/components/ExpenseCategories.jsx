@@ -10,7 +10,8 @@ import {
   Space,
   Popconfirm,
   Tooltip,
-  theme
+  theme,
+  Select
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, FileProtectOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom'; // Naya Import
@@ -29,6 +30,7 @@ const ExpenseCategories = () => {
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { user, profile } = useAuth();
   const [categories, setCategories] = useState([]);
+  const [rawCategories, setRawCategories] = useState([]); // <--- NAYA IZAFA: Dropdown ke liye flat list
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -38,11 +40,41 @@ const ExpenseCategories = () => {
   const getCategories = useCallback(async () => {
     try {
       setLoading(true);
-      // DataService se categories layein (Local DB)
       const data = await DataService.getExpenseCategories();
-      // Naam ke hisaab se sort karein
-      data.sort((a, b) => a.name.localeCompare(b.name));
-      setCategories(data);
+      
+      setRawCategories(data); // <--- NAYA IZAFA
+
+      // NAYA IZAFA: Flat list ko Tree (darakht) mein badalna
+      const categoryMap = new Map();
+      const tree = [];
+
+      data.forEach(cat => {
+        categoryMap.set(cat.id, { ...cat, children: [] });
+      });
+
+      data.forEach(cat => {
+        if (cat.parent_id && categoryMap.has(cat.parent_id)) {
+          categoryMap.get(cat.parent_id).children.push(categoryMap.get(cat.id));
+        } else {
+          tree.push(categoryMap.get(cat.id));
+        }
+      });
+
+      const cleanEmptyChildren = (nodes) => {
+        nodes.forEach(node => {
+          if (node.children.length === 0) {
+            delete node.children;
+          } else {
+            cleanEmptyChildren(node.children);
+          }
+        });
+      };
+      cleanEmptyChildren(tree);
+
+      // Main branches ko sort karein
+      tree.sort((a, b) => a.name.localeCompare(b.name));
+      setCategories(tree);
+
     } catch (error) {
       message.error('Error fetching categories: ' + error.message);
     } finally {
@@ -55,23 +87,30 @@ const ExpenseCategories = () => {
   }, [getCategories]);
 
   const showModal = async (category = null) => {
-    // NAYA: System Category Check
     if (category && category.name === 'Salaries & Wages') {
       message.warning("This is a System Category used for Staff Ledger. It cannot be renamed.");
       return;
     }
 
     let inUse = false;
-    
-    // Agar Edit mode hai, to check karein ke kya is category mein expenses hain?
     if (category) {
       const count = await db.expenses.where('category_id').equals(category.id).count();
       inUse = count > 0;
     }
 
-    setIsCategoryInUse(inUse); // Lock set karein
+    setIsCategoryInUse(inUse); 
     setEditingCategory(category);
-    form.setFieldsValue(category ? { name: category.name } : { name: '' });
+    
+    if (category) {
+      form.setFieldsValue({ 
+        name: category.name,
+        parent_id: category.parent_id || null // <--- NAYA IZAFA: Form mein parent_id set karna
+      });
+    } else {
+      form.resetFields();
+      form.setFieldsValue({ name: '', parent_id: null }); // <--- NAYA IZAFA
+    }
+    
     setIsModalOpen(true);
   };
 
@@ -83,8 +122,8 @@ const ExpenseCategories = () => {
 
   const handleOk = async (values) => {
     try {
-      // Duplicate Check (Local level par check karein ke naam pehle se to nahi?)
-      const isDuplicate = categories.some(cat => 
+      // Duplicate Check ab rawCategories par hoga (flat list)
+      const isDuplicate = rawCategories.some(cat => 
         cat.name.toLowerCase().trim() === values.name.toLowerCase().trim() && 
         cat.id !== editingCategory?.id
       );
@@ -93,16 +132,18 @@ const ExpenseCategories = () => {
         return message.error('A category with this name already exists!');
       }
 
+      const payload = {
+        name: values.name,
+        parent_id: values.parent_id || null // <--- NAYA IZAFA: parent_id payload mein shamil kiya
+      };
+
       if (editingCategory) {
         // Update (Offline)
-        await DataService.updateExpenseCategory(editingCategory.id, values.name);
+        await DataService.updateExpenseCategory(editingCategory.id, payload);
         message.success('Category updated successfully!');
       } else {
         // Add (Offline)
-        // User ID hum DataService mein handle nahi kar rahe kyunke local DB mein zaroori nahi, 
-        // lekin Supabase ke liye hum user_id sync context mein bhejte hain ya yahan pass kar sakte hain.
-        // Behtar hai yahan pass kar dein agar available hai.
-        const newCat = { name: values.name, user_id: user.id };
+        const newCat = { ...payload, user_id: user.id };
         await DataService.addExpenseCategory(newCat);
         message.success('Category added successfully!');
       }
@@ -237,6 +278,27 @@ const ExpenseCategories = () => {
             validateStatus={isCategoryInUse ? "warning" : ""}
           >
             <Input disabled={isCategoryInUse} placeholder="e.g. Rent, Salaries" />
+          </Form.Item>
+
+          {/* NAYA IZAFA: Parent Category Selector Dropdown */}
+          <Form.Item 
+              name="parent_id" 
+              label="Parent Category (Optional)"
+              tooltip="Select a main category if you want to make this a sub-category."
+          >
+              <Select 
+                  allowClear 
+                  placeholder="None (Main Category)"
+                  showSearch
+                  optionFilterProp="children"
+              >
+                  {rawCategories
+                      .filter(cat => cat.id !== editingCategory?.id) // Khud ko parent banane se rokna
+                      .map(cat => (
+                          <Select.Option key={cat.id} value={cat.id}>{cat.name}</Select.Option>
+                      ))
+                  }
+              </Select>
           </Form.Item>
         </Form>
       </Modal>

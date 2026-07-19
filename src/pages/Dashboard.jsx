@@ -463,73 +463,79 @@ const Dashboard = () => {
           </Card>
         </Col>
 
-        {/* Card: Cash Drawer / Cash in Hand */}
+        {/* Card: Cash Drawer / Cash in Hand (Total Cash & Bank Consolidated) */}
         <Col xs={24} sm={12} md={8} lg={flexColProps}>
-          <Card ref={refCash} style={{ ...cardStyle, backgroundColor: isDarkMode ? '#0F7A82' : '#088395' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <Statistic
-              title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Cash in Hand (Total)</span>}
-              value={stats?.cashInHand || 0}
-              prefix={<WalletOutlined />}
-              valueStyle={{ color: 'white', fontWeight: 'bold', fontSize: '21px' }}
-              formatter={(val) => formatCurrency(val, profile?.currency)}
-            />
-              <Space size="small">
-                <Tooltip title={!activeSession ? "Please open a register shift to adjust cash." : "Cash Adjustment (In/Out)"}>
-                  <Button 
-                    type="text" 
-                    size="small"
-                    disabled={!activeSession}
-                    icon={<TransactionOutlined style={{ color: 'white', fontSize: '18px' }} />} 
-                    onClick={async () => {
-                      const regId = activeSession?.register_id || localStorage.getItem('paired_register_id');
-                      if (regId) {
-                        const bal = await DataService.getRegisterCurrentCash(regId);
-                        setAdjModalBalance(bal);
-                      }
-                      setIsAdjustmentModalOpen(true);
-                    }} 
+          {(() => {
+            // NAYA IZAFA: Consolidated Grand Total (Counters Cash + Banks + Wallets)
+            const grandTotalCashAndBank = (stats?.cashInHand || 0) + 
+              (stats?.accountsBreakdown || []).reduce((sum, acc) => sum + (acc.balance || 0), 0);
+
+            return (
+              <Card ref={refCash} style={{ ...cardStyle, backgroundColor: isDarkMode ? '#0F7A82' : '#088395' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <Statistic
+                    title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>Total Cash & Bank</span>} // <--- Title updated
+                    value={grandTotalCashAndBank} // <--- Dynamic Consolidated Sum
+                    prefix={<WalletOutlined />}
+                    valueStyle={{ color: 'white', fontWeight: 'bold', fontSize: '21px' }}
+                    formatter={(val) => formatCurrency(val, profile?.currency)}
                   />
-                </Tooltip>
-                {/* Transfer to Vault button removed */}
-              </Space>
-            </div>
-            {/* --- NAYA IZAFA: Dynamic Accounts Breakdown (Banks & Wallets) --- */}
-            {stats?.accountsBreakdown?.length > 0 ? (
-              <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
-                {stats.accountsBreakdown.map((acc, idx) => (
-                  <div key={`acc-${idx}`} style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                    <span style={{ color: 'rgba(255,255,255,0.9)' }}>{acc.name}:</span>
-                    <span style={{ fontWeight: 'bold' }}>{formatCurrency(acc.balance, profile?.currency)}</span>
+                  <Space size="small">
+                    <Tooltip title={!activeSession ? "Please open a register shift to adjust cash." : "Cash Adjustment (In/Out)"}>
+                      <Button 
+                        type="text" 
+                        size="small"
+                        disabled={!activeSession}
+                        icon={<TransactionOutlined style={{ color: 'white', fontSize: '18px' }} />} 
+                        onClick={async () => {
+                          const regId = activeSession?.register_id || localStorage.getItem('paired_register_id');
+                          if (regId) {
+                            const bal = await DataService.getRegisterCurrentCash(regId);
+                            setAdjModalBalance(bal);
+                          }
+                          setIsAdjustmentModalOpen(true);
+                        }} 
+                      />
+                    </Tooltip>
+                  </Space>
+                </div>
+                
+                {/* --- NAYA IZAFA: Dynamic Accounts Breakdown (Banks & Wallets) --- */}
+                {stats?.accountsBreakdown?.length > 0 ? (
+                  <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+                    {stats.accountsBreakdown.map((acc, idx) => (
+                      <div key={`acc-${idx}`} style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                        <span style={{ color: 'rgba(255,255,255,0.9)' }}>{acc.name}:</span>
+                        <span style={{ fontWeight: 'bold' }}>{formatCurrency(acc.balance, profile?.currency)}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Bank Balance:</span>
-                  <span style={{ fontWeight: 'bold' }}>{formatCurrency(stats?.bankBalance || 0, profile?.currency)}</span>
-              </div>
-            )}
-            
-            {/* --- NAYA IZAFA: Counters Breakdown --- */}
-            {stats?.countersBreakdown?.length > 0 && (
-              <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px dashed rgba(255,255,255,0.2)' }}>
-                <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    All Counters Cash
-                </div>
-                <div className="hide-scrollbar" style={{ maxHeight: '60px', overflowY: 'auto' }}>
-                  {stats.countersBreakdown.map((counter, idx) => (
-                    <div key={idx} style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.9)', marginTop: 2 }}>
-                      <span>{counter.name}:</span>
-                      <span style={{ fontWeight: 'bold' }}>{formatCurrency(counter.cash, profile?.currency)}</span>
+                ) : (
+                  <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Bank Balance:</span>
+                      <span style={{ fontWeight: 'bold' }}>{formatCurrency(stats?.bankBalance || 0, profile?.currency)}</span>
+                  </div>
+                )}
+                
+                {/* --- NAYA IZAFA: Counters Breakdown --- */}
+                {stats?.countersBreakdown?.length > 0 && (
+                  <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px dashed rgba(255,255,255,0.2)' }}>
+                    <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        All Counters Cash
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {/* Day-End Closing Button Removed */}
-          </Card>
+                    <div className="hide-scrollbar" style={{ maxHeight: '60px', overflowY: 'auto' }}>
+                      {stats.countersBreakdown.map((counter, idx) => (
+                        <div key={idx} style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.9)', marginTop: 2 }}>
+                          <span>{counter.name}:</span>
+                          <span style={{ fontWeight: 'bold' }}>{formatCurrency(counter.cash, profile?.currency)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            );
+          })()}
         </Col>
 
         {/* Card 2: Profit (Updated Layout for Clarity) */}
