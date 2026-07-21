@@ -2425,10 +2425,10 @@ async addCustomer(customerData) {
   },
 
   // --- UPDATED: Professional Inventory & Assets Report (With Potential Profit & Brand Logic) ---
-  async getInventoryReport() {
+  async getInventoryReport(startDateStr, endDateStr) {
     // --- PLAN GUARD: Free users ko dummy data do (Marketing) ---
     const settings = await db.user_settings.toCollection().first();
-    if (!settings || settings.subscription_tier === 'free') return { totalUnits: 450, totalAssetValue: 1250000, totalPotentialProfit: 250000, totalDamagedLoss: 4500, categoryValuation: [{name: 'Android', value: 800000, qty: 30}, {name: 'iPhone', value: 400000, qty: 10}], brandValuation: [{name: 'Samsung', value: 500000}, {name: 'Apple', value: 400000}], lowStockItems: [], outOfStockItems: [], slowMovingItems: [] };
+    if (!settings || settings.subscription_tier === 'free') return { totalUnits: 450, totalAssetValue: 1250000, totalPotentialProfit: 250000, totalDamagedLoss: 4500, categoryValuation: [{name: 'Android', value: 800000, qty: 30}, {name: 'iPhone', value: 400000, qty: 10}], brandValuation: [{name: 'Samsung', value: 500000}, {name: 'Apple', value: 400000}], lowStockItems: [], outOfStockItems: [], slowMovingItems: [], stockFlowItems: [] };
     // --------------------------------------------
     const products = await db.products.toArray();
     const categories = await db.categories.toArray();
@@ -2490,11 +2490,126 @@ async addCustomer(customerData) {
     const userProfileForLimit = await db.user_settings.toCollection().first();
     const globalThreshold = userProfileForLimit?.low_stock_threshold || 5;
 
-    // 4. Alerts & Lists
+    // --- NAYA IZAFA: lowStockItems with Sales Velocity & Reorder Required ---
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const recent90DaysSales = await db.sale_items.filter(si => new Date(si.created_at || Date.now()) > ninetyDaysAgo).toArray();
+
+    const velocityMap = {};
+    const nowMs = Date.now();
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+    const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000;
+    const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
+
+    recent90DaysSales.forEach(si => {
+      const pid = si.product_id;
+      const diffMs = nowMs - new Date(si.created_at || nowMs).getTime();
+      if (!velocityMap[pid]) velocityMap[pid] = { v30: 0, v60: 0, v90: 0 };
+      
+      if (diffMs <= thirtyDaysMs) {
+        velocityMap[pid].v30 += (si.quantity || 1);
+      } else if (diffMs <= sixtyDaysMs) {
+        velocityMap[pid].v60 += (si.quantity || 1);
+      } else if (diffMs <= ninetyDaysMs) {
+        velocityMap[pid].v90 += (si.quantity || 1);
+      }
+    });
+
     const lowStockItems = products
-        // NAYA IZAFA: Per-product limit check
         .filter(p => (productStock[p.id] || 0) > 0 && (productStock[p.id] || 0) <= (p.low_stock_threshold || globalThreshold))
-        .map(p => ({ name: p.name, brand: p.brand, qty: productStock[p.id], current_qty: productStock[p.id] })); // current_qty added for reports export
+        .map(p => {
+          const vel = velocityMap[p.id] || { v30: 0, v60: 0, v90: 0 };
+          const currentQty = productStock[p.id] || 0;
+          const alertQty = p.low_stock_threshold || globalThreshold;
+          const required = Math.max(0, vel.v30 - currentQty);
+          return {
+            key: p.id,
+            name: p.name,
+            brand: p.brand || '-',
+            qty: currentQty,
+            current_qty: currentQty,
+            alert_qty: alertQty,
+            v30: vel.v30,
+            v60: vel.v60,
+            v90: vel.v90,
+            required: required
+          };
+        });
+
+    // --- NAYA IZAFA: Stock Flow Audit Summary Sheet ---
+    const start = startDateStr ? dayjs(startDateStr) : dayjs().startOf('month');
+    const end = endDateStr ? dayjs(endDateStr) : dayjs().endOf('month');
+    const startMs = start.startOf('day').toDate().getTime();
+    const endMs = end.endOf('day').toDate().getTime();
+
+    // 1. Selected range sales
+    const salesInRange = await db.sales.filter(s => {
+      const t = new Date(s.sale_date || s.created_at).getTime();
+      return t >= startMs && t <= endMs;
+    }).toArray();
+    const saleIdsInRange = salesInRange.map(s => s.id);
+    const saleItemsInRange = saleIdsInRange.length > 0 ? await db.sale_items.where('sale_id').anyOf(saleIdsInRange).toArray() : [];
+
+    // 2. Selected range purchases
+    const purchasesInRange = await db.purchases.filter(p => {
+      const t = new Date(p.purchase_date).getTime();
+      return t >= startMs && t <= endMs;
+    }).toArray();
+    const purchaseIdsInRange = purchasesInRange.map(p => p.id);
+    const invInRange = await db.inventory.filter(i => {
+      const t = new Date(i.updated_at).getTime();
+      return t >= startMs && t <= endMs;
+    }).toArray();
+
+    // 3. Post-period transactions (for tracing back Closing Stock)
+    const salesAfterEnd = await db.sales.filter(s => new Date(s.sale_date || s.created_at).getTime() > endMs).toArray();
+    const saleIdsAfter = salesAfterEnd.map(s => s.id);
+    const saleItemsAfter = saleIdsAfter.length > 0 ? await db.sale_items.where('sale_id').anyOf(saleIdsAfter).toArray() : [];
+
+    const purchasesAfterEnd = await db.purchases.filter(p => new Date(p.purchase_date).getTime() > endMs).toArray();
+    const purchaseIdsAfter = purchasesAfterEnd.map(p => p.id);
+    const invAfterEnd = await db.inventory.filter(i => new Date(i.updated_at).getTime() > endMs).toArray();
+
+    const stockFlowItems = products.map(p => {
+      const currentQty = productStock[p.id] || 0;
+      const avgPrice = p.purchase_price || 0;
+
+      const soldAfter = saleItemsAfter.filter(si => si.product_id === p.id).reduce((sum, si) => sum + (si.quantity || 1), 0);
+      const purchasedAfter = invAfterEnd.filter(i => i.product_id === p.id && purchaseIdsAfter.includes(i.purchase_id)).reduce((sum, i) => sum + (i.quantity || 0), 0);
+      const damagedAfter = invAfterEnd.filter(i => i.product_id === p.id && i.damaged_qty > 0).reduce((sum, i) => sum + (i.damaged_qty || 0), 0);
+
+      const closingQty = currentQty + soldAfter - purchasedAfter + damagedAfter;
+      const closingVal = closingQty * avgPrice;
+
+      const receiptQty = invInRange.filter(i => i.product_id === p.id && purchaseIdsInRange.includes(i.purchase_id)).reduce((sum, i) => sum + (i.quantity || 0), 0);
+      const receiptVal = receiptQty * avgPrice;
+
+      const issuanceQty = saleItemsInRange.filter(si => si.product_id === p.id).reduce((sum, si) => sum + (si.quantity || 1), 0);
+      const issuanceVal = issuanceQty * avgPrice;
+
+      const adjustmentsQty = invInRange.filter(i => i.product_id === p.id && i.damaged_qty > 0).reduce((sum, i) => sum + (i.damaged_qty || 0), 0);
+      const adjustmentsVal = adjustmentsQty * avgPrice;
+
+      const openingQty = closingQty - receiptQty + issuanceQty + adjustmentsQty;
+      const openingVal = openingQty * avgPrice;
+
+      return {
+        key: p.id,
+        code: p.barcode || 'N/A',
+        name: p.name,
+        brand: p.brand || '-',
+        openingQty,
+        openingVal,
+        receiptQty,
+        receiptVal,
+        issuanceQty,
+        issuanceVal,
+        adjustmentsQty,
+        adjustmentsVal,
+        closingQty,
+        closingVal
+      };
+    });
 
     const outOfStockItems = products
         .filter(p => p.is_active !== false && (productStock[p.id] || 0) === 0)
@@ -2550,7 +2665,8 @@ async addCustomer(customerData) {
         lowStockItems,
         outOfStockItems,
         slowMovingItems,
-        expiringSoonItems // <--- NAYA IZAFA
+        expiringSoonItems,
+        stockFlowItems // <--- NAYA IZAFA
     };
   },
 

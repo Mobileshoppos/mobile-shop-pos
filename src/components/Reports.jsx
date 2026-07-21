@@ -143,6 +143,17 @@ const Reports = () => {
   const [plTableCustomDates, setPlTableCustomDates] = useState([]);
   const [isPLTableLoading, setIsPLTableLoading] = useState(false);
 
+  // --- NAYA IZAFA: Local Table Filters for Stock Flow Audit ---
+  const [flowSearchText, setFlowSearchText] = useState('');
+  const [flowDateType, setFlowDateType] = useState('sync'); // 'sync' means follow main tab filter
+  const [flowCustomDates, setFlowCustomDates] = useState([]);
+  const [isFlowTableLoading, setIsFlowTableLoading] = useState(false);
+  const [innerTab, setInnerTab] = useState('low'); // <--- NAYA IZAFA: Inner tabs active state
+  
+  // --- NAYA IZAFA: Brand Search & Health Tab Local Filters ---
+  const [brandSearchText, setBrandSearchText] = useState('');
+  const [healthSearchText, setHealthSearchText] = useState('');
+
   // --- NAYA IZAFA: P&L Export Wizard States ---
   const [isPLExportWizardOpen, setIsPLExportWizardOpen] = useState(false);
   const [plExportDateRangeType, setPLExportDateRangeType] = useState('current');
@@ -846,7 +857,12 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
   // --- DATA FETCHING FUNCTION ---
   useEffect(() => {
     const fetchReportData = async () => {
-      setLoading(true);
+      const isLocalFlowFilterChange = activeTab === 'inventory' && inventoryData !== null;
+      if (isLocalFlowFilterChange) {
+        setIsFlowTableLoading(true);
+      } else {
+        setLoading(true);
+      }
       try {
         const startDate = dateRange[0].format('YYYY-MM-DD');
         const endDate = dateRange[1].format('YYYY-MM-DD');
@@ -866,8 +882,25 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           setProfitLossData(data);
         }
         else if (activeTab === 'inventory') {
-          // NAYA IZAFA: Inventory Data mangwana
-          const data = await DataService.getInventoryReport();
+          // NAYA IZAFA: Inventory Data mangwana with dynamic date filters
+          let resolvedStart = dateRange[0].format('YYYY-MM-DD');
+          let resolvedEnd = dateRange[1].format('YYYY-MM-DD');
+
+          if (flowDateType === 'today') {
+              resolvedStart = dayjs().format('YYYY-MM-DD');
+              resolvedEnd = dayjs().format('YYYY-MM-DD');
+          } else if (flowDateType === 'this_month') {
+              resolvedStart = dayjs().startOf('month').format('YYYY-MM-DD');
+              resolvedEnd = dayjs().endOf('month').format('YYYY-MM-DD');
+          } else if (flowDateType === 'last_month') {
+              resolvedStart = dayjs().subtract(1, 'month').startOf('month').format('YYYY-MM-DD');
+              resolvedEnd = dayjs().subtract(1, 'month').endOf('month').format('YYYY-MM-DD');
+          } else if (flowDateType === 'custom' && flowCustomDates.length === 2) {
+              resolvedStart = dayjs(flowCustomDates[0]).format('YYYY-MM-DD');
+              resolvedEnd = dayjs(flowCustomDates[1]).format('YYYY-MM-DD');
+          }
+
+          const data = await DataService.getInventoryReport(resolvedStart, resolvedEnd);
           setInventoryData(data);
         }
         else if (activeTab === 'ledgers') {
@@ -924,7 +957,11 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                   const cash = await DataService.getRegisterCurrentCash(reg.id);
                   totalCombinedCash += cash;
                   // Har entry ke sath uske account ka naam jod dein
-                  combinedLedger.push(...ledger.map(tx => ({ ...tx, account_name: reg.name })));
+                  combinedLedger.push(...ledger.map(tx => ({ 
+                      ...tx, 
+                      account_name: reg.name,
+                      unique_key: `${tx.id}-${reg.name}` // <--- NAYA IZAFA: Visual unique key
+                  })));
               }
 
               // 2. Saare Banks/Wallets ka data aur balance jama karein
@@ -937,7 +974,11 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                       if (tx.type === 'Debit (Out)') bal -= Number(tx.amount);
                   });
                   totalCombinedCash += bal;
-                  combinedLedger.push(...ledger.map(tx => ({ ...tx, account_name: acc.name })));
+                  combinedLedger.push(...ledger.map(tx => ({ 
+                      ...tx, 
+                      account_name: acc.name,
+                      unique_key: `${tx.id}-${acc.name}` // <--- NAYA IZAFA: Visual unique key
+                  })));
               }
 
               // Sab ko waqt ke hisaab se tarteeb dein (Newest first)
@@ -948,12 +989,20 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           } else if (selectedAccountType === 'counter') {
               const ledger = await DataService.getRegisterLedger(selectedRegForLedger);
               const regName = regs.find(r => r.id === selectedRegForLedger)?.name || 'Counter';
-              setRegisterLedgerData(ledger.map(tx => ({ ...tx, account_name: regName })));
+              setRegisterLedgerData(ledger.map(tx => ({ 
+                  ...tx, 
+                  account_name: regName,
+                  unique_key: `${tx.id}-${regName}` // <--- NAYA IZAFA: Safety visual key
+              })));
               const trueCash = await DataService.getRegisterCurrentCash(selectedRegForLedger);
               setCurrentCounterCash(trueCash);
           } else {
               const ledger = await DataService.getBankAccountLedger(selectedRegForLedger);
-              setRegisterLedgerData(ledger.map(tx => ({ ...tx, account_name: selectedRegForLedger })));
+              setRegisterLedgerData(ledger.map(tx => ({ 
+                  ...tx, 
+                  account_name: selectedRegForLedger,
+                  unique_key: `${tx.id}-${selectedRegForLedger}` // <--- NAYA IZAFA: Safety visual key
+              })));
               
               const accDetails = banks.find(a => a.name === selectedRegForLedger);
               const openingBal = accDetails ? Number(accDetails.opening_balance) || 0 : 0;
@@ -969,15 +1018,16 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         console.error("Failed to fetch report data:", error);
       } finally {
         setLoading(false);
+        setIsFlowTableLoading(false);
       }
     };
 
-    fetchReportData();
+            fetchReportData();
 
-    // NAYA IZAFA: Background mein data download hone par Reports page ko Live Refresh karna
-    window.addEventListener('local-db-updated', fetchReportData);
-    return () => window.removeEventListener('local-db-updated', fetchReportData);
-  }, [dateRange, activeTab, selectedRegForLedger, selectedAccountType]); // <--- NAYA IZAFA: selectedAccountType add kiya taake state hamesha fresh rahe
+            // NAYA IZAFA: Background mein data download hone par Reports page ko Live Refresh karna
+            window.addEventListener('local-db-updated', fetchReportData);
+            return () => window.removeEventListener('local-db-updated', fetchReportData);
+          }, [dateRange, activeTab, selectedRegForLedger, selectedAccountType, flowDateType, flowCustomDates]); // <--- NAYA IZAFA: dynamic stock flow audit reload
 
   // --- NAYA IZAFA: Independent Daily P&L Table Calculator (Reacts to Local Filters) ---
   useEffect(() => {
@@ -1762,27 +1812,27 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
       <div style={{ marginTop: '16px' }}>
         {/* Row 1: Asset KPI Cards */}
         <Row gutter={[16, 16]} style={{ marginBottom: '16px' }}>
-          <Col xs={12} md={6}>
+          <Col xs={24} sm={12} md={{ flex: '1 1 0' }}>
             <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorPrimary}` }}>
               <Statistic title="Total Stock Units" value={inventoryData.totalUnits} prefix={<InboxOutlined />} valueStyle={{ fontSize: '20px' }} />
             </Card>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={24} sm={12} md={{ flex: '1 1 0' }}>
             <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorInfo}` }}>
               <Statistic title="Total Asset Value" value={inventoryData.totalAssetValue} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '20px' }} />
             </Card>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={24} sm={12} md={{ flex: '1 1 0' }}>
             <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorAmountPositive}` }}>
               <Statistic title="Potential Profit" value={inventoryData.totalPotentialProfit} formatter={(val) => formatCurrency(val, profile?.currency)} valueStyle={{ fontSize: '20px', color: token.colorAmountPositive }} />
             </Card>
           </Col>
-          <Col xs={12} md={4}>
+          <Col xs={24} sm={12} md={{ flex: '1 1 0' }}>
             <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid ${token.colorAmountNegative}` }}>
               <Statistic title="Out of Stock" value={inventoryData.outOfStockItems?.length || 0} valueStyle={{ color: token.colorAmountNegative, fontSize: '18px' }} />
             </Card>
           </Col>
-          <Col xs={24} md={5}>
+          <Col xs={24} sm={12} md={{ flex: '1 1 0' }}>
             <Card size="small" style={{ ...cardStyle, borderLeft: `4px solid #fa541c` }}>
               <Statistic 
                 title="Damaged Stock Loss" 
@@ -1823,10 +1873,42 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
 
         {/* Row 3: Brand Valuation & Health Lists */}
         <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
-          <Col xs={24} lg={14}>
-            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Brand-wise Valuation</Text>} style={cardStyle} styles={{ body: { padding: 0 } }}>
+          <Col span={24}>
+            <Card 
+              title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Brand-wise Valuation</Text>} 
+              style={cardStyle} 
+              styles={{ body: { padding: 0 } }}
+              extra={
+                <Space size="small" wrap>
+                  <Input 
+                    size="small"
+                    placeholder="Search brand..." 
+                    prefix={<SearchOutlined style={{ color: token.colorTextSecondary }} />}
+                    value={brandSearchText}
+                    onChange={(e) => setBrandSearchText(e.target.value)}
+                    style={{ width: '150px' }}
+                    allowClear
+                  />
+                  <DataExport 
+                    data={getFilteredBrandValuation().map(item => ({
+                      ...item,
+                      value: formatCurrency(item.value, profile?.currency),
+                      profit: formatCurrency(item.profit, profile?.currency)
+                    }))}
+                    exportColumns={[
+                      { title: 'Brand Name', dataIndex: 'name' },
+                      { title: 'Quantity', dataIndex: 'qty' },
+                      { title: 'Asset Value', dataIndex: 'value' },
+                      { title: 'Potential Profit', dataIndex: 'profit' }
+                    ]}
+                    fileName={`Brand_Valuation_Report_${dayjs().format('YYYY-MM-DD')}`}
+                    reportTitle="Brand-wise Inventory Valuation Report"
+                  />
+                </Space>
+              }
+            >
               <Table
-                dataSource={inventoryData.brandValuation}
+                dataSource={getFilteredBrandValuation()}
                 rowKey="name"
                 pagination={{ pageSize: 6 }}
                 size="small"
@@ -1839,16 +1921,237 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
               />
             </Card>
           </Col>
-          <Col xs={24} lg={10}>
+          <Col span={24}>
             <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Inventory Health</Text>} style={cardStyle} styles={{ body: { padding: '0 16px' } }}>
-              <Tabs defaultActiveKey="low" size="small" items={[
+              <Tabs 
+                activeKey={innerTab} 
+                onChange={(key) => { setInnerTab(key); setHealthSearchText(''); }} 
+                size="small" 
+                tabBarExtraContent={
+                  <Space size="small" wrap style={{ marginRight: '8px' }}>
+                    {/* Render generic search bar for non-flow tabs */}
+                    {innerTab !== 'flow' && (
+                      <Input 
+                        size="small"
+                        placeholder="Search items..." 
+                        prefix={<SearchOutlined style={{ color: token.colorTextSecondary }} />}
+                        value={healthSearchText}
+                        onChange={(e) => setHealthSearchText(e.target.value)}
+                        style={{ width: '150px' }}
+                        allowClear
+                      />
+                    )}
+
+                    {/* Stock Flow Audit specific filters */}
+                    {innerTab === 'flow' && (
+                      <>
+                        <Input 
+                          size="small"
+                          placeholder="Search name, code..." 
+                          prefix={<SearchOutlined style={{ color: token.colorTextSecondary }} />}
+                          value={flowSearchText}
+                          onChange={(e) => setFlowSearchText(e.target.value)}
+                          style={{ width: '150px' }}
+                          allowClear
+                        />
+                        <Select 
+                          size="small" 
+                          value={flowDateType} 
+                          onChange={(val) => { setFlowDateType(val); setFlowCustomDates([]); }} 
+                          style={{ width: 130 }}
+                          styles={{ popup: { root: { zIndex: 2000 } } }}
+                        >
+                          <Select.Option value="sync">Sync Filter</Select.Option>
+                          <Select.Option value="today">Today</Select.Option>
+                          <Select.Option value="this_month">This Month</Select.Option>
+                          <Select.Option value="last_month">Last Month</Select.Option>
+                          <Select.Option value="custom">Custom</Select.Option>
+                        </Select>
+
+                        {flowDateType === 'custom' && (
+                          <DatePicker.RangePicker
+                            size="small"
+                            format="DD/MM/YYYY"
+                            onChange={(dates) => {
+                              if (dates) setFlowCustomDates([dates[0].toISOString(), dates[1].toISOString()]);
+                              else setFlowCustomDates([]);
+                            }}
+                            style={{ width: 180 }}
+                          />
+                        )}
+
+                        <Tooltip title="Reset">
+                          <Button 
+                            size="small" 
+                            type="text" 
+                            icon={<UndoOutlined />} 
+                            onClick={() => {
+                              setFlowSearchText('');
+                              setFlowDateType('sync');
+                              setFlowCustomDates([]);
+                            }} 
+                          />
+                        </Tooltip>
+
+                        <DataExport 
+                          data={(() => {
+                            const formatted = getFilteredStockFlowItems().map(item => ({
+                              ...item,
+                              openingVal: formatCurrency(item.openingVal, profile?.currency),
+                              receiptVal: formatCurrency(item.receiptVal, profile?.currency),
+                              issuanceVal: formatCurrency(item.issuanceVal, profile?.currency),
+                              adjustmentsVal: formatCurrency(item.adjustmentsVal, profile?.currency),
+                              closingVal: formatCurrency(item.closingVal, profile?.currency)
+                            }));
+
+                            let tOpenQty = 0, tOpenVal = 0;
+                            let tRecQty = 0, tRecVal = 0;
+                            let tIssQty = 0, tIssVal = 0;
+                            let tAdjQty = 0, tAdjVal = 0;
+                            let tCloseQty = 0, tCloseVal = 0;
+
+                            getFilteredStockFlowItems().forEach(r => {
+                              tOpenQty += (r.openingQty || 0);
+                              tOpenVal += (r.openingVal || 0);
+                              tRecQty += (r.receiptQty || 0);
+                              tRecVal += (r.receiptVal || 0);
+                              tIssQty += (r.issuanceQty || 0);
+                              tIssVal += (r.issuanceVal || 0);
+                              tAdjQty += (r.adjustmentsQty || 0);
+                              tAdjVal += (r.adjustmentsVal || 0);
+                              tCloseQty += (r.closingQty || 0);
+                              tCloseVal += (r.closingVal || 0);
+                            });
+
+                            formatted.push({
+                              code: 'TOTAL',
+                              name: '',
+                              brand: '',
+                              openingQty: tOpenQty,
+                              openingVal: formatCurrency(tOpenVal, profile?.currency),
+                              receiptQty: tRecQty,
+                              receiptVal: formatCurrency(tRecVal, profile?.currency),
+                              issuanceQty: tIssQty,
+                              issuanceVal: formatCurrency(tIssVal, profile?.currency),
+                              adjustmentsQty: tAdjQty,
+                              adjustmentsVal: formatCurrency(tAdjVal, profile?.currency),
+                              closingQty: tCloseQty,
+                              closingVal: formatCurrency(tCloseVal, profile?.currency)
+                            });
+
+                            return formatted;
+                          })()}
+                          exportColumns={[
+                            { title: 'Code', dataIndex: 'code' },
+                            { title: 'Product Name', dataIndex: 'name' },
+                            { title: 'Brand', dataIndex: 'brand' },
+                            { title: 'Opening Qty', dataIndex: 'openingQty' },
+                            { title: 'Opening Value', dataIndex: 'openingVal' },
+                            { title: 'Receipt Qty', dataIndex: 'receiptQty' },
+                            { title: 'Receipt Value', dataIndex: 'receiptVal' },
+                            { title: 'Issuance Qty', dataIndex: 'issuanceQty' },
+                            { title: 'Issuance Value', dataIndex: 'issuanceVal' },
+                            { title: 'Adjustments Qty', dataIndex: 'adjustmentsQty' },
+                            { title: 'Adjustments Value', dataIndex: 'adjustmentsVal' },
+                            { title: 'Closing Qty', dataIndex: 'closingQty' },
+                            { title: 'Closing Value', dataIndex: 'closingVal' }
+                          ]}
+                          fileName={`Stock_Flow_Audit_Report_${dayjs().format('YYYY-MM-DD')}`}
+                          reportTitle="Stock Flow Audit Report"
+                          reportSubtitle={`Period: ${dateRange[0].format('DD MMM YY')} to ${dateRange[1].format('DD MMM YY')}`}
+                        />
+                      </>
+                    )}
+
+                    {/* Low Stock Export */}
+                    {innerTab === 'low' && (
+                      <DataExport 
+                        data={getFilteredLowStockItems().map(item => ({
+                          ...item,
+                          v30: item.v30 || 0,
+                          v60: item.v60 || 0,
+                          v90: item.v90 || 0,
+                          qty: item.qty,
+                          alert_qty: item.alert_qty,
+                          required: item.required
+                        }))}
+                        exportColumns={[
+                          { title: 'Product Name', dataIndex: 'name' },
+                          { title: 'Brand', dataIndex: 'brand' },
+                          { title: '0-30 Day Sales', dataIndex: 'v30' },
+                          { title: '30-60 Day Sales', dataIndex: 'v60' },
+                          { title: '60-90 Day Sales', dataIndex: 'v90' },
+                          { title: 'In Stock', dataIndex: 'qty' },
+                          { title: 'Alert Qty', dataIndex: 'alert_qty' },
+                          { title: 'Required Qty', dataIndex: 'required' }
+                        ]}
+                        fileName={`Low_Stock_Velocity_Report_${dayjs().format('YYYY-MM-DD')}`}
+                        reportTitle="Low Stock & Reorder Requirements Report"
+                      />
+                    )}
+
+                    {/* Out of Stock Export */}
+                    {innerTab === 'out' && (
+                      <DataExport 
+                        data={getFilteredOutOfStockItems()}
+                        exportColumns={[
+                          { title: 'Product Name', dataIndex: 'name' },
+                          { title: 'Brand', dataIndex: 'brand' }
+                        ]}
+                        fileName={`Out_of_Stock_Report_${dayjs().format('YYYY-MM-DD')}`}
+                        reportTitle="Out of Stock Report"
+                      />
+                    )}
+
+                    {/* Slow Moving Export */}
+                    {innerTab === 'slow' && (
+                      <DataExport 
+                        data={getFilteredSlowMovingItems()}
+                        exportColumns={[
+                          { title: 'Product Name', dataIndex: 'name' },
+                          { title: 'Brand', dataIndex: 'brand' },
+                          { title: 'Remaining Stock', dataIndex: 'qty' }
+                        ]}
+                        fileName={`Slow_Moving_Products_Report_${dayjs().format('YYYY-MM-DD')}`}
+                        reportTitle="Slow Moving Products Report"
+                      />
+                    )}
+
+                    {/* Expiry Export */}
+                    {innerTab === 'expiry' && (
+                      <DataExport 
+                        data={getFilteredExpiringSoonItems().map(item => ({
+                          ...item,
+                          expiry_date_formatted: new Date(item.expiry_date).toLocaleDateString(),
+                          status_text: item.isExpired ? 'EXPIRED' : 'Expiring Soon'
+                        }))}
+                        exportColumns={[
+                          { title: 'Product Name', dataIndex: 'name' },
+                          { title: 'Brand', dataIndex: 'brand' },
+                          { title: 'Batch Number', dataIndex: 'batch_number' },
+                          { title: 'Expiry Date', dataIndex: 'expiry_date_formatted' },
+                          { title: 'In Stock', dataIndex: 'qty' },
+                          { title: 'Status', dataIndex: 'status_text' }
+                        ]}
+                        fileName={`Expiry_Inventory_Report_${dayjs().format('YYYY-MM-DD')}`}
+                        reportTitle="Product Expiry Inventory Report"
+                      />
+                    )}
+                  </Space>
+                }
+                items={[
                 {
                   key: 'low',
                   label: <Badge count={inventoryData.lowStockItems?.length} offset={[10, 0]} size="small"><Text type="warning">Low Stock</Text></Badge>,
                   children: (
-                    <Table dataSource={inventoryData.lowStockItems} rowKey="name" pagination={{ pageSize: 5 }} size="small" columns={[
+                    <Table dataSource={getFilteredLowStockItems()} rowKey="key" pagination={{ pageSize: 5 }} size="small" columns={[
                       { title: 'Product', key: 'p', render: (_, r) => `${r.brand} ${r.name}` },
-                      { title: 'Qty', dataIndex: 'qty', align: 'right', render: (q) => <Tag color="orange">{q}</Tag> }
+                      { title: '0-30 Qty Sale', dataIndex: 'v30', align: 'center', render: (val) => <Text>{val || 0}</Text> },
+                      { title: '30-60 Qty Sale', dataIndex: 'v60', align: 'center', render: (val) => <Text type="secondary">{val || 0}</Text> },
+                      { title: '60-90 Qty Sale', dataIndex: 'v90', align: 'center', render: (val) => <Text type="secondary">{val || 0}</Text> },
+                      { title: 'Quantity', dataIndex: 'qty', align: 'right', render: (q) => <Tag color="orange">{q}</Tag> },
+                      { title: 'Alert Qty', dataIndex: 'alert_qty', align: 'center', render: (val) => <Text>{val}</Text> },
+                      { title: 'Required', dataIndex: 'required', align: 'right', render: (val) => <Text strong style={{ color: val > 0 ? token.colorError : 'inherit' }}>{val > 0 ? `+${val}` : '0'}</Text> }
                     ]} />
                   )
                 },
@@ -1856,7 +2159,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                   key: 'out',
                   label: <Badge count={inventoryData.outOfStockItems?.length} offset={[10, 0]} size="small"><Text type="danger">Out of Stock</Text></Badge>,
                   children: (
-                    <Table dataSource={inventoryData.outOfStockItems} rowKey="name" pagination={{ pageSize: 5 }} size="small" columns={[
+                    <Table dataSource={getFilteredOutOfStockItems()} rowKey="name" pagination={{ pageSize: 5 }} size="small" columns={[
                       { title: 'Product', key: 'p', render: (_, r) => `${r.brand} ${r.name}` },
                       { title: 'Status', key: 's', align: 'right', render: () => <Tag color="red">0 Left</Tag> }
                     ]} />
@@ -1866,7 +2169,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                   key: 'slow',
                   label: <Text>Slow Moving</Text>,
                   children: (
-                    <Table dataSource={inventoryData.slowMovingItems} rowKey="name" pagination={{ pageSize: 5 }} size="small" columns={[
+                    <Table dataSource={getFilteredSlowMovingItems()} rowKey="name" pagination={{ pageSize: 5 }} size="small" columns={[
                       { title: 'Product', key: 'p', render: (_, r) => `${r.brand} ${r.name}` },
                       { title: 'In Stock', dataIndex: 'qty', align: 'right' }
                     ]} />
@@ -1876,7 +2179,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                   key: 'expiry',
                   label: <Badge count={inventoryData.expiringSoonItems?.filter(i => i.isExpired)?.length} offset={[10, 0]} size="small"><Text type="danger">Expiry</Text></Badge>,
                   children: (
-                    <Table dataSource={inventoryData.expiringSoonItems} rowKey="id" pagination={{ pageSize: 5 }} size="small" columns={[
+                    <Table dataSource={getFilteredExpiringSoonItems()} rowKey="id" pagination={{ pageSize: 5 }} size="small" columns={[
                       { title: 'Product', key: 'p', render: (_, r) => `${r.brand} ${r.name}` },
                       { title: 'Batch', dataIndex: 'batch_number', key: 'b' },
                       { title: 'Exp. Date', key: 'exp', render: (_, r) => (
@@ -1897,6 +2200,121 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                           </Tooltip>
                       )}
                     ]} locale={{ emptyText: 'No items expiring soon!' }} />
+                  )
+                },
+                {
+                  key: 'flow',
+                  label: <Text strong style={{ color: token.colorPrimary }}>Stock Flow Audit</Text>,
+                  children: (
+                    <div style={{ paddingTop: '8px' }}>
+                      <Table 
+                        dataSource={getFilteredStockFlowItems()} 
+                        loading={isFlowTableLoading} // <--- NAYA IZAFA: Local table level loading spinner
+                        rowKey="key" 
+                        pagination={{ pageSize: 5 }} 
+                        size="small" 
+                        scroll={{ x: 'max-content' }}
+                        summary={(pageData) => {
+                          let tOpenQty = 0, tOpenVal = 0;
+                          let tRecQty = 0, tRecVal = 0;
+                          let tIssQty = 0, tIssVal = 0;
+                          let tAdjQty = 0, tAdjVal = 0;
+                          let tCloseQty = 0, tCloseVal = 0;
+
+                          const filteredAll = getFilteredStockFlowItems();
+                          filteredAll.forEach(r => {
+                            tOpenQty += (r.openingQty || 0);
+                            tOpenVal += (r.openingVal || 0);
+                            tRecQty += (r.receiptQty || 0);
+                            tRecVal += (r.receiptVal || 0);
+                            tIssQty += (r.issuanceQty || 0);
+                            tIssVal += (r.issuanceVal || 0);
+                            tAdjQty += (r.adjustmentsQty || 0);
+                            tAdjVal += (r.adjustmentsVal || 0);
+                            tCloseQty += (r.closingQty || 0);
+                            tCloseVal += (r.closingVal || 0);
+                          });
+
+                          return (
+                            <Table.Summary.Row style={{ background: token.colorFillAlter }}>
+                              <Table.Summary.Cell index={0} colSpan={3}>
+                                <Text strong style={{ color: token.colorCardHeadingsText }}>Total</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={1} align="center">
+                                <Text strong>{tOpenQty}</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={2} align="right">
+                                <Text strong>{formatCurrency(tOpenVal, profile?.currency)}</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={3} align="center">
+                                <Text strong>{tRecQty}</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={4} align="right">
+                                <Text strong>{formatCurrency(tRecVal, profile?.currency)}</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={5} align="center">
+                                <Text strong>{tIssQty}</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={6} align="right">
+                                <Text strong>{formatCurrency(tIssVal, profile?.currency)}</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={7} align="center">
+                                <Text strong>{tAdjQty}</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={8} align="right">
+                                <Text strong>{formatCurrency(tAdjVal, profile?.currency)}</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={9} align="center">
+                                <Text strong>{tCloseQty}</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={10} align="right">
+                                <Text strong style={{ color: token.colorAmountPositive }}>{formatCurrency(tCloseVal, profile?.currency)}</Text>
+                              </Table.Summary.Cell>
+                            </Table.Summary.Row>
+                          );
+                        }}
+                        columns={[
+                          { title: 'Code', dataIndex: 'code', key: 'code' },
+                          { title: 'Product Name', dataIndex: 'name', key: 'name' },
+                          { title: 'Brand', dataIndex: 'brand', key: 'brand' },
+                          {
+                            title: 'Opening',
+                            children: [
+                              { title: 'Qty', dataIndex: 'openingQty', align: 'center' },
+                              { title: 'Value', dataIndex: 'openingVal', align: 'right', render: (val) => formatCurrency(val, profile?.currency) }
+                            ]
+                          },
+                          {
+                            title: 'Receipt (In)',
+                            children: [
+                              { title: 'Qty', dataIndex: 'receiptQty', align: 'center' },
+                              { title: 'Value', dataIndex: 'receiptVal', align: 'right', render: (val) => formatCurrency(val, profile?.currency) }
+                            ]
+                          },
+                          {
+                            title: 'Issuance (Out)',
+                            children: [
+                              { title: 'Qty', dataIndex: 'issuanceQty', align: 'center' },
+                              { title: 'Value', dataIndex: 'issuanceVal', align: 'right', render: (val) => formatCurrency(val, profile?.currency) }
+                            ]
+                          },
+                          {
+                            title: 'Adjustments (Damaged)',
+                            children: [
+                              { title: 'Qty', dataIndex: 'adjustmentsQty', align: 'center' },
+                              { title: 'Value', dataIndex: 'adjustmentsVal', align: 'right', render: (val) => formatCurrency(val, profile?.currency) }
+                            ]
+                          },
+                          {
+                            title: 'Closing',
+                            children: [
+                              { title: 'Qty', dataIndex: 'closingQty', align: 'center' },
+                              { title: 'Value', dataIndex: 'closingVal', align: 'right', render: (val) => formatCurrency(val, profile?.currency) }
+                            ]
+                          }
+                        ]} 
+                      />
+                    </div>
                   )
                 }
               ]} />
@@ -2413,7 +2831,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
 
             // Level 3: Leaf Nodes (Asli transactions)
             groups[sourceKey].children[partyKey].children.push({
-                key: tx.id,
+                key: tx.unique_key || tx.id, // <--- NAYA IZAFA: Key collision fix
                 date: tx.date,
                 type: tx.type,
                 amount: tx.amount,
@@ -2998,7 +3416,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
 
           <Table 
             dataSource={vaultViewMode === 'grouped' ? getGroupedVaultData() : getRawFilteredData()} // <--- NAYA IZAFA: Conditional Data
-            rowKey={(record) => record.key || record.id} // <--- NAYA IZAFA: Dynamic safe RowKey
+            rowKey={(record) => record.unique_key || record.key || record.id} // <--- NAYA IZAFA: Dynamic safe RowKey with duplicate checks
             pagination={vaultViewMode === 'grouped' ? false : { pageSize: 10 }} // <--- NAYA IZAFA: Grouped view mein pagination off (Accordion design)
             columns={vaultViewMode === 'grouped' ? groupedColumns : [ // <--- NAYA IZAFA: Conditional Columns
               { title: 'Date & Time', dataIndex: 'date', render: d => dayjs(d).format('DD MMM YYYY, hh:mm A') },
@@ -3045,6 +3463,73 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           />
         </Card>
       </div>
+    );
+  };
+
+  // NAYA IZAFA: Helper to filter stock flow list based on local search bar
+  const getFilteredStockFlowItems = () => {
+    if (!inventoryData?.stockFlowItems) return [];
+    const query = flowSearchText.trim().toLowerCase();
+    if (!query) return inventoryData.stockFlowItems;
+    return inventoryData.stockFlowItems.filter(item => 
+      item.name?.toLowerCase().includes(query) || 
+      item.code?.toLowerCase().includes(query) ||
+      item.brand?.toLowerCase().includes(query)
+    );
+  };
+
+  // NAYA IZAFA: Helper to filter Brand-wise valuation list
+  const getFilteredBrandValuation = () => {
+    if (!inventoryData?.brandValuation) return [];
+    const query = brandSearchText.trim().toLowerCase();
+    if (!query) return inventoryData.brandValuation;
+    return inventoryData.brandValuation.filter(item => 
+      item.name?.toLowerCase().includes(query)
+    );
+  };
+
+  // NAYA IZAFA: Helper to filter Low Stock list
+  const getFilteredLowStockItems = () => {
+    if (!inventoryData?.lowStockItems) return [];
+    const query = healthSearchText.trim().toLowerCase();
+    if (!query) return inventoryData.lowStockItems;
+    return inventoryData.lowStockItems.filter(item => 
+      item.name?.toLowerCase().includes(query) || 
+      item.brand?.toLowerCase().includes(query)
+    );
+  };
+
+  // NAYA IZAFA: Helper to filter Out of Stock list
+  const getFilteredOutOfStockItems = () => {
+    if (!inventoryData?.outOfStockItems) return [];
+    const query = healthSearchText.trim().toLowerCase();
+    if (!query) return inventoryData.outOfStockItems;
+    return inventoryData.outOfStockItems.filter(item => 
+      item.name?.toLowerCase().includes(query) || 
+      item.brand?.toLowerCase().includes(query)
+    );
+  };
+
+  // NAYA IZAFA: Helper to filter Slow Moving list
+  const getFilteredSlowMovingItems = () => {
+    if (!inventoryData?.slowMovingItems) return [];
+    const query = healthSearchText.trim().toLowerCase();
+    if (!query) return inventoryData.slowMovingItems;
+    return inventoryData.slowMovingItems.filter(item => 
+      item.name?.toLowerCase().includes(query) || 
+      item.brand?.toLowerCase().includes(query)
+    );
+  };
+
+  // NAYA IZAFA: Helper to filter Expiring list
+  const getFilteredExpiringSoonItems = () => {
+    if (!inventoryData?.expiringSoonItems) return [];
+    const query = healthSearchText.trim().toLowerCase();
+    if (!query) return inventoryData.expiringSoonItems;
+    return inventoryData.expiringSoonItems.filter(item => 
+      item.name?.toLowerCase().includes(query) || 
+      item.brand?.toLowerCase().includes(query) ||
+      item.batch_number?.toLowerCase().includes(query)
     );
   };
 
@@ -3154,7 +3639,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         
         <Space wrap>
           {/* Quick Filters (Today, Week, Month) */}
-          {['sales', 'profit_loss', 'audit'].includes(activeTab) && (
+          {['sales', 'profit_loss', 'inventory', 'audit'].includes(activeTab) && (
             <Space wrap>
               <Radio.Group value={timeRange} onChange={handleRangeChange} buttonStyle="solid">
                 <Radio.Button value="today">Today</Radio.Button>

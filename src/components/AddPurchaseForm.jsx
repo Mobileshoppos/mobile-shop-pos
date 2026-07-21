@@ -6,7 +6,7 @@ import { DeleteOutlined, BarcodeOutlined, EditOutlined, UserAddOutlined } from '
 import DataService from '../DataService';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
-import { useStaff } from '../context/StaffContext'; // <--- NAYA IZAFA
+import { useStaff } from '../context/StaffContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { useSync } from '../context/SyncContext';
 import { db } from '../db';
@@ -24,7 +24,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
   const limits = getPlanLimits(profile?.subscription_tier);
   const isWholesaleActive = profile?.wholesale_pricing_enabled && limits.allow_wholesale_pricing;
   const isBatchExpiryEnabled = profile?.enable_batch_expiry;
-  const { message, modal } = App.useApp(); // NAYA IZAFA: modal shamil kiya gaya
+  const { message, modal } = App.useApp();
   const [form] = Form.useForm();
   const [imeis, setImeis] = useState(['']);
   const imeiInputRefs = useRef([]);
