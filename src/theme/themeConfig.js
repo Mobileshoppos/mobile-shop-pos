@@ -123,7 +123,7 @@ export const lightThemeTokens = {
   colorCardDetailsText: '#333333',
   colorAmountPositive: '#52c41a',
   colorAmountNegative: '#ff4d4f',
-  colorCardCategoryTag: '#09637E',        // Category tag ka text/border color
-  colorCardBrandText: '#595959',          // Brand text ka color
-  colorCardLocationTag: '#D46B08',       // Location (Rack) tag ka text/border color
+  colorCardCategoryTag: '#09637E',
+  colorCardBrandText: '#595959',
+  colorCardLocationTag: '#D46B08',
 };

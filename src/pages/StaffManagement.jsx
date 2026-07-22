@@ -88,19 +88,12 @@ const StaffManagement = () => {
     loadStaff();
   }, [showInactive]);
 
-  // NAYA: Page khulne par ya list badalne par pehle staff ko auto-select karne ke liye
+  // NAYA: Page khulne par default 'all' (Master Summary) ko select karne ki logic
   useEffect(() => {
-    // Sirf computer (Desktop) par auto-select karein, Mobile par nahi
-    if (staffList.length > 0 && !isMobile) {
-      // Check karein ke kya abhi jo staff selected hai wo is list mein mojood hai?
-      const isStillInList = staffList.find(s => s.id === selectedStaff?.id);
-      
-      // Agar koi selected nahi hai, ya purana selected staff is list mein nahi hai (e.g. toggle switch kiya)
-      if (!selectedStaff || !isStillInList) {
-        handleOpenLedger(staffList[0]);
-      }
+    if (staffList.length > 0 && !selectedStaff) {
+      setSelectedStaff('all'); // <--- NAYA IZAFA: Default selection is now master summary sheet
     }
-  }, [staffList, isMobile]);
+  }, [staffList]);
   const handleOpenLedger = async (staff) => {
     setSelectedStaff(staff);
     // setIsLedgerOpen(true); // Yeh line hum ne hata di hai
@@ -410,6 +403,28 @@ const StaffManagement = () => {
               </Button>
             </Flex>
           </div>
+          
+          {/* NAYA IZAFA: All Staff (Summary View) Row in Sidebar */}
+          <div 
+              onClick={() => setSelectedStaff('all')}
+              style={{
+                  padding: '12px 16px',
+                  cursor: 'pointer',
+                  borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                  background: selectedStaff === 'all' ? (isDarkMode ? 'rgba(26, 182, 201, 0.15)' : token.colorMenuSelectedBg) : 'transparent',
+                  borderLeft: selectedStaff === 'all' ? `3px solid ${token.colorPrimary}` : 'none',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+              }}
+          >
+              <Text strong style={{ color: selectedStaff === 'all' ? token.colorPrimary : 'inherit' }}>
+                  All Staff Members (Summary)
+              </Text>
+              <TeamOutlined style={{ color: selectedStaff === 'all' ? token.colorPrimary : token.colorTextSecondary }} />
+          </div>
+
           <Table 
             columns={columns} 
             dataSource={staffList} 
@@ -429,19 +444,98 @@ const StaffManagement = () => {
         <Layout style={{ background: 'transparent', display: (isMobile && !selectedStaff) ? 'none' : 'block' }}>
           <Content style={{ padding: isMobile ? 0 : '0 24px', overflowY: 'auto' }}>
             {selectedStaff ? (
-              <Card>
-                {isMobile && (
-                  <Button 
-                    type="text" 
-                    icon={<ArrowLeftOutlined />} 
-                    onClick={() => setSelectedStaff(null)} 
-                    style={{ marginBottom: 16 }}
-                  >
-                    Back to List
-                  </Button>
-                )}
-                
-                <Flex justify="space-between" align="start" wrap="wrap" gap="small">
+              selectedStaff === 'all' ? (
+                // --- NAYA IZAFA: Master Staff Directory & Balances Sheet ---
+                <Card 
+                  title={<Text strong style={{ fontSize: '18px', color: token.colorCardHeadingsText }}><TeamOutlined /> Master Staff Directory & Balances</Text>}
+                  extra={
+                    <DataExport 
+                        data={staffList.map(s => ({
+                            ...s,
+                            salary_formatted: formatCurrency(s.salary || 0, profile?.currency),
+                            balance_formatted: (s.balance > 0 ? '+' : '') + formatCurrency(s.balance, profile?.currency)
+                        }))} 
+                        exportColumns={[
+                            { title: 'Staff Name', dataIndex: 'name' },
+                            { title: 'Role', dataIndex: 'role' },
+                            { title: 'Phone', dataIndex: 'phone' },
+                            { title: 'Base Salary', dataIndex: 'salary_formatted' },
+                            { title: 'Current Balance', dataIndex: 'balance_formatted' }
+                        ]} 
+                        fileName={`Staff_Balances_Sheet_${dayjs().format('YYYY-MM-DD')}`} 
+                        reportTitle="Master Staff Directory & Balances Sheet" 
+                    />
+                  }
+                >
+                  {isMobile && (
+                    <Button 
+                      type="text" 
+                      icon={<ArrowLeftOutlined />} 
+                      onClick={() => setSelectedStaff(null)} 
+                      style={{ marginBottom: 16 }}
+                    >
+                      Back to List
+                    </Button>
+                  )}
+                  <Table 
+                    dataSource={staffList}
+                    rowKey="id"
+                    pagination={{ pageSize: 8 }}
+                    size="small"
+                    scroll={{ x: 'max-content' }}
+                    onRow={(record) => ({
+                      onClick: () => handleOpenLedger(record),
+                      style: { cursor: 'pointer' }
+                    })}
+                    summary={pageData => {
+                      let totalSalary = 0;
+                      let totalBalance = 0;
+                      pageData.forEach(r => {
+                          totalSalary += (Number(r.salary) || 0);
+                          totalBalance += (Number(r.balance) || 0);
+                      });
+                      return (
+                          <Table.Summary.Row style={{ background: token.colorFillAlter }}>
+                              <Table.Summary.Cell index={0} colSpan={3}>
+                                  <Text strong style={{ color: token.colorCardHeadingsText }}>Total</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={1} align="right">
+                                  <Text strong>{formatCurrency(totalSalary, profile?.currency)}</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={2} align="right">
+                                  <Text strong style={{ color: totalBalance >= 0 ? token.colorSuccess : token.colorError }}>
+                                      {formatCurrency(totalBalance, profile?.currency)}
+                                  </Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={3}></Table.Summary.Cell>
+                          </Table.Summary.Row>
+                      );
+                    }}
+                    columns={[
+                      { title: 'Staff Name', dataIndex: 'name', key: 'name', render: (text) => <Text strong style={{ color: token.colorPrimary }}>{text}</Text> },
+                      { title: 'Role', dataIndex: 'role', key: 'role', render: (text) => <Tag color="blue">{text}</Tag> },
+                      { title: 'Phone', dataIndex: 'phone', key: 'phone' },
+                      { title: 'Base Salary', dataIndex: 'salary', key: 'salary', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
+                      { title: 'Current Balance', dataIndex: 'balance', key: 'balance', align: 'right', render: (val) => <Text strong style={{ color: val > 0 ? token.colorSuccess : val < 0 ? token.colorError : 'inherit' }}>{formatCurrency(val, profile?.currency)}</Text> },
+                      { title: 'Status', dataIndex: 'is_active', key: 'status', render: (val) => <Tag color={val !== false ? 'success' : 'default'}>{val !== false ? 'Active' : 'Archived'}</Tag> }
+                    ]}
+                  />
+                </Card>
+              ) : (
+                // --- EXISTING SINGLE STAFF LEDGER CARD ---
+                <Card>
+                  {isMobile && (
+                    <Button 
+                      type="text" 
+                      icon={<ArrowLeftOutlined />} 
+                      onClick={() => setSelectedStaff(null)} 
+                      style={{ marginBottom: 16 }}
+                    >
+                      Back to List
+                    </Button>
+                  )}
+                  
+                  <Flex justify="space-between" align="start" wrap="wrap" gap="small">
                   <div style={{ flex: 1, minWidth: '200px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <Title level={2} style={{ margin: 0 }}>{selectedStaff.name}</Title>
@@ -564,7 +658,7 @@ const StaffManagement = () => {
                   />
                 </div>
               </Card>
-            ) : (
+            )) : (
               <div style={{ 
                 height: '100%', 
                 display: 'flex', 

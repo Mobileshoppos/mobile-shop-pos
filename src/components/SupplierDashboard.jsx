@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List, Dropdown, Tabs, Descriptions, Divider, Switch, Tooltip } from 'antd';
+import { Layout, Menu, Typography, Card, Row, Col, Table, Tag, Spin, Alert, App as AntApp, Statistic, Empty, Button, Flex, Modal, Form, Input, Space, Popconfirm, InputNumber, DatePicker, Select, theme, List, Dropdown, Tabs, Descriptions, Divider, Switch, Tooltip, ConfigProvider } from 'antd';
 import { ShopOutlined, PlusOutlined, EditOutlined, DeleteOutlined, DollarCircleOutlined, MinusCircleOutlined, SearchOutlined, ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, EyeOutlined, LockOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import DataExport from '../components/DataExport'; // <--- NAYA IZAFA
@@ -242,15 +242,14 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
         },
         { title: 'Type', dataIndex: 'type', key: 'type', render: (t) => <Tag color={t === 'Purchase' ? 'error' : 'success'}>{t}</Tag> },
         { title: 'Details', dataIndex: 'details', key: 'details', render: (text, record) => record.link ? <Link to={record.link}>{text}</Link> : text },
-        { title: 'Debit (Bill)', dataIndex: 'debit', key: 'debit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
-        { title: 'Credit (Paid)', dataIndex: 'credit', key: 'credit', align: 'right', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
+        { title: 'Debit (Bill)', dataIndex: 'debit', key: 'debit', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
+        { title: 'Credit (Paid)', dataIndex: 'credit', key: 'credit', render: (val) => val ? formatCurrency(val, profile?.currency) : '-' },
         { 
             title: 'Balance', 
             dataIndex: 'running_balance', 
             key: 'running_balance', 
-            align: 'right', 
             render: (val) => (
-                <div className="nowrap-column" style={{ color: val > 0 ? token.colorError : token.colorSuccess }}>
+                <div className="nowrap-column" style={{ color: val > 0 ? token.colorAmountNegative : token.colorAmountPositive }}>
                     {formatCurrency(val, profile?.currency)}
                 </div>
             )
@@ -263,16 +262,16 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
         <div>
 
             <Row gutter={[16, 16]} style={{ marginBottom: '24px', textAlign: 'center' }}>
-                <Col xs={12} sm={4}><Statistic title="Total Business" value={calculatedStats?.total_purchases || 0} formatter={() => formatCurrency(calculatedStats?.total_purchases || 0, profile?.currency)} /></Col>
-                <Col xs={12} sm={5}><Statistic title="Total Paid" value={calculatedStats?.total_payments || 0} valueStyle={{ color: token.colorPrimary }} formatter={() => formatCurrency(calculatedStats?.total_payments || 0, profile?.currency)} /></Col>
-                <Col xs={12} sm={5}><Statistic title="Total Refunds" value={calculatedStats?.total_refunds || 0} valueStyle={{ color: token.colorWarning }} formatter={() => formatCurrency(calculatedStats?.total_refunds || 0, profile?.currency)} /></Col>
-                <Col xs={12} sm={5}><Statistic title="Balance Due" value={calculatedStats?.balance_due || 0} valueStyle={{ color: token.colorError }} formatter={() => formatCurrency(calculatedStats?.balance_due || 0, profile?.currency)} /></Col>
-                <Col xs={12} sm={5}><Statistic title="Your Credit" value={calculatedStats?.credit_balance || 0} valueStyle={{ color: token.colorSuccess }} formatter={() => formatCurrency(calculatedStats?.credit_balance || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={4}><Statistic title="Total Business" value={calculatedStats?.total_purchases || 0} valueStyle={{ fontSize: '16px' }} formatter={() => formatCurrency(calculatedStats?.total_purchases || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={5}><Statistic title="Total Paid" value={calculatedStats?.total_payments || 0} valueStyle={{ color: token.colorPrimary, fontSize: '16px' }} formatter={() => formatCurrency(calculatedStats?.total_payments || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={5}><Statistic title="Total Refunds" value={calculatedStats?.total_refunds || 0} valueStyle={{ color: token.colorWarning, fontSize: '16px' }} formatter={() => formatCurrency(calculatedStats?.total_refunds || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={5}><Statistic title="Balance Due" value={calculatedStats?.balance_due || 0} valueStyle={{ color: token.colorAmountNegative, fontSize: '16px', fontWeight: 'bold' }} formatter={() => formatCurrency(calculatedStats?.balance_due || 0, profile?.currency)} /></Col>
+                <Col xs={12} sm={5}><Statistic title="Your Credit" value={calculatedStats?.credit_balance || 0} valueStyle={{ color: token.colorAmountPositive, fontSize: '16px', fontWeight: 'bold' }} formatter={() => formatCurrency(calculatedStats?.credit_balance || 0, profile?.currency)} /></Col>
             </Row>
 
             {/* --- NAYA IZAFA: Heading aur Export Buttons ko ek sath kiya --- */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <Title level={4} style={{ margin: 0 }}>Transaction Ledger</Title>
+                <Title level={4} style={{ margin: 0, color: token.colorCardHeadingsText }}>Transaction Ledger</Title>
                 <DataExport 
                     data={ledgerData.map(item => ({
                         ...item,
@@ -291,7 +290,7 @@ const SupplierLedger = ({ supplier, onRefresh, isMobile, onStatsUpdate }) => {
                     rowKey="key"
                     renderItem={(item) => (
                         <List.Item style={{ padding: '8px 0' }}>
-                            <Card style={{ width: '100%' }} size="small">
+                            <Card style={{ width: '100%', border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}`, backgroundColor: token.colorCardBg || token.colorBgContainer }} size="small">
                                 <Row justify="space-between" align="middle" gutter={8}>
                                     <Col flex="auto">
                                         <Tag color={item.type === 'Purchase' ? token.colorError : token.colorSuccess}>{item.type}</Tag>
@@ -518,8 +517,8 @@ const SupplierDashboard = () => {
 
             if (selectIdAfterFetch) {
                 setSelectedSupplierId(selectIdAfterFetch);
-            } else if (!isMobile && data && data.length > 0 && !selectedSupplierId) {
-                setSelectedSupplierId(data[0].id);
+            } else if (data && data.length > 0 && !selectedSupplierId) {
+                setSelectedSupplierId('all'); // <--- NAYA IZAFA: Default selection is now master summary sheet for both desktop and mobile
             }
         } catch (error) { notification.error({ message: 'Error', description: 'Failed to fetch suppliers list.' });
         } finally { setLoading(false); }
@@ -652,14 +651,84 @@ const SupplierDashboard = () => {
     ];
 
     const renderSupplierDetails = () => {
+        if (selectedSupplierId === 'all') {
+            return (
+                <Content style={{ padding: isMobile ? 0 : '0 24px 24px 24px', overflowY: 'auto' }} className="custom-scrollbar">
+                    <Card 
+                        title={<Text strong style={{ fontSize: '18px', color: token.colorCardHeadingsText }}>Suppliers Directory & Balances</Text>}
+                        style={{ background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}` }}
+                        extra={
+                            <DataExport 
+                                data={filteredSuppliers.map(s => ({
+                                    ...s,
+                                    balance_due_formatted: formatCurrency(s.balance_due, profile?.currency),
+                                    credit_balance_formatted: formatCurrency(s.credit_balance, profile?.currency)
+                                }))}
+                                exportColumns={[
+                                    { title: 'Supplier Name', dataIndex: 'name' },
+                                    { title: 'Contact Person', dataIndex: 'contact_person' },
+                                    { title: 'Phone', dataIndex: 'phone' },
+                                    { title: 'City', dataIndex: 'city' },
+                                    { title: 'Balance Due', dataIndex: 'balance_due_formatted' },
+                                    { title: 'Credit Balance', dataIndex: 'credit_balance_formatted' }
+                                ]}
+                                fileName={`Suppliers_Balances_Sheet_${dayjs().format('YYYY-MM-DD')}`}
+                                reportTitle="Master Suppliers Balances & Directory Sheet"
+                            />
+                        }
+                    >
+                        <Table 
+                            dataSource={filteredSuppliers}
+                            rowKey="id"
+                            pagination={{ pageSize: 8 }}
+                            size="small"
+                            scroll={{ x: 'max-content' }}
+                            onRow={(record) => ({
+                                onClick: () => setSelectedSupplierId(record.id),
+                                style: { cursor: 'pointer' }
+                            })}
+                            summary={pageData => {
+                                let totalDue = 0;
+                                let totalCredit = 0;
+                                pageData.forEach(r => {
+                                    totalDue += (r.balance_due || 0);
+                                    totalCredit += (r.credit_balance || 0);
+                                });
+                                return (
+                                    <Table.Summary.Row style={{ background: token.colorFillAlter }}>
+                                        <Table.Summary.Cell index={0} colSpan={4}>
+                                            <Text strong style={{ color: token.colorCardHeadingsText }}>Total</Text>
+                                        </Table.Summary.Cell>
+                                        <Table.Summary.Cell index={1} align="right">
+                                            <Text strong style={{ color: token.colorError }}>{formatCurrency(totalDue, profile?.currency)}</Text>
+                                        </Table.Summary.Cell>
+                                        <Table.Summary.Cell index={2} align="right">
+                                            <Text strong style={{ color: token.colorSuccess }}>{formatCurrency(totalCredit, profile?.currency)}</Text>
+                                        </Table.Summary.Cell>
+                                    </Table.Summary.Row>
+                                );
+                            }}
+                            columns={[
+                                { title: 'Supplier Company', dataIndex: 'name', key: 'name', render: (text) => <Text strong style={{ color: token.colorPrimary }}>{text}</Text> },
+                                { title: 'Contact Person', dataIndex: 'contact_person', key: 'contact_person' },
+                                { title: 'Phone', dataIndex: 'phone', key: 'phone' },
+                                { title: 'City', dataIndex: 'city', key: 'city', render: (t, r) => `${r.city || '-'}${r.country ? `, ${r.country}` : ''}` },
+                                { title: 'Balance Due', dataIndex: 'balance_due', key: 'due', render: (val) => <Text strong style={{ color: val > 0 ? token.colorAmountNegative : 'inherit' }}>{formatCurrency(val, profile?.currency)}</Text> },
+                                { title: 'Your Credit', dataIndex: 'credit_balance', key: 'credit', render: (val) => <Text strong style={{ color: val > 0 ? token.colorAmountPositive : 'inherit' }}>{formatCurrency(val, profile?.currency)}</Text> }
+                            ]}
+                        />
+                    </Card>
+                </Content>
+            );
+        }
         if (!selectedSupplierId || !selectedSupplier) return (
             <Content style={{ padding: isMobile ? 0 : '0 24px', minHeight: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Empty description={suppliers.length > 0 ? "Select a supplier to see details." : "No suppliers found. Please add one."} />
             </Content>
         );
         return (
-            <Content style={{ padding: isMobile ? 0 : '0 24px', overflowY: 'auto' }} className="custom-scrollbar">
-                <Card>
+            <Content style={{ padding: isMobile ? 0 : '0 24px 24px 24px', overflowY: 'auto' }} className="custom-scrollbar">
+                <Card style={{ background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}` }}>
                     {isMobile && (
                         <Button
                             type="text"
@@ -673,7 +742,7 @@ const SupplierDashboard = () => {
                     <Flex justify="space-between" align="start" wrap="wrap" gap="small">
                         <div style={{ flex: 1, minWidth: '250px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <Title level={isMobile ? 3 : 2} style={{ margin: 0 }}>{selectedSupplier.name}</Title>
+                                <Title level={isMobile ? 3 : 2} style={{ margin: 0, color: token.colorCardHeadingsText }}>{selectedSupplier.name}</Title>
                                 <Space size="middle" style={{ marginLeft: '12px' }}>
                                     <Button 
                                         type="text"
@@ -764,6 +833,7 @@ const SupplierDashboard = () => {
     };
 
     return (
+        <ConfigProvider theme={{ components: { Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg, headerColor: token.colorCardColumnsTitleText, colorText: token.colorCardDetailsText } } }}>
         <>
             <style>{`
                 .custom-scrollbar::-webkit-scrollbar {
@@ -809,11 +879,11 @@ const SupplierDashboard = () => {
             
 
             {isMobile ? (
-                // --- MOBILE LAYOUT (UPDATED) ---
-                selectedSupplierId ? (
-                    renderSupplierDetails()
-                ) : (
-                    <Card>
+                    // --- MOBILE LAYOUT (UPDATED) ---
+                    selectedSupplierId ? (
+                        renderSupplierDetails()
+                    ) : (
+                        <Card style={{ background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}` }}>
                         {/* Compact Stats for Mobile */}
                         <Row gutter={[8, 8]} style={{ marginBottom: '16px', textAlign: 'center', background: token.colorFillAlter, padding: '12px 4px', borderRadius: token.borderRadiusLG }}>
                             <Col span={8}><Statistic title={<Text style={{fontSize: '11px'}}>Suppliers</Text>} value={suppliers.length} valueStyle={{ fontSize: '15px' }} /></Col>
@@ -877,20 +947,28 @@ const SupplierDashboard = () => {
                         </div>
                         {loading ? <div style={{textAlign: 'center', padding: '20px'}}><Spin/></div> :
                             <List
-                                dataSource={filteredSuppliers}
+                                dataSource={[{ id: 'all', name: 'All Suppliers (Summary View)', balance_due: totalBalanceDue, credit_balance: totalGlobalRefunds }, ...filteredSuppliers]}
                                 renderItem={(s) => (
                                     <List.Item
                                         onClick={() => setSelectedSupplierId(s.id)}
-                                        style={{ cursor: 'pointer', padding: '12px 8px' }}
+                                        style={{ 
+                                            cursor: 'pointer', 
+                                            padding: '12px 8px',
+                                            background: s.id === 'all' ? (isDarkMode ? 'rgba(26, 182, 201, 0.08)' : '#e6f7ff') : 'transparent',
+                                            borderRadius: s.id === 'all' ? '6px' : '0px'
+                                        }}
                                     >
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                                            <Text strong style={{ color: 'inherit' }}>{s.name}</Text>
-                                            <Text 
-                                                strong 
-                                                style={{ fontSize: '13px', color: (s.balance_due - s.credit_balance) > 0 ? token.colorError : (s.balance_due - s.credit_balance) < 0 ? token.colorSuccess : token.colorTextSecondary }}
-                                            >
-                                                {formatCurrency(Math.abs(s.balance_due - s.credit_balance), profile?.currency)}
-                                            </Text>
+                                            <Text strong style={{ color: s.id === 'all' ? token.colorPrimary : 'inherit' }}>{s.name}</Text>
+                                            {/* NAYA IZAFA: Wrap in a nowrap div to prevent visual truncation/break on small screens */}
+                                            <div style={{ whiteSpace: 'nowrap', marginLeft: '8px', textAlign: 'right' }}>
+                                                <Text 
+                                                    strong 
+                                                    style={{ fontSize: '13px', color: (s.balance_due - s.credit_balance) > 0 ? token.colorAmountNegative : (s.balance_due - s.credit_balance) < 0 ? token.colorAmountPositive : token.colorTextSecondary }}
+                                                >
+                                                    {formatCurrency(Math.abs(s.balance_due - s.credit_balance), profile?.currency)}
+                                                </Text>
+                                            </div>
                                         </div>
                                     </List.Item>
                                 )}
@@ -900,17 +978,17 @@ const SupplierDashboard = () => {
                 )
             ) : (
                 // --- DESKTOP LAYOUT ---
-                <Layout style={{ background: 'transparent', borderRadius: token.borderRadiusLG, overflow: 'hidden', height: 'calc(100vh - 140px)' }}>
-                    <Sider width={320} style={{ background: token.colorBgContainer, borderRight: `1px solid ${token.colorBorderSecondary}` }}>
+                <Layout style={{ background: 'transparent', borderRadius: token.borderRadiusLG, overflow: 'hidden', height: 'calc(100vh - 110px)' }}>
+                    <Sider width={320} style={{ background: token.colorBgContainer, borderRight: `1px solid ${token.colorCardBorder}`, height: '100%' }}>
                         {/* Compact Stats for Desktop Sidebar */}
-                        <div style={{ padding: '16px 12px', background: token.colorFillAlter, borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+                        <div style={{ padding: '16px 12px', background: token.colorFillAlter, borderBottom: `1px solid ${token.colorCardBorder}` }}>
                             <Row gutter={8} style={{ textAlign: 'center' }}>
                                 <Col span={8}><Statistic title={<Text style={{fontSize: '10px'}}>SUPPLIERS</Text>} value={suppliers.length} valueStyle={{ fontSize: '14px', fontWeight: 'bold' }} /></Col>
                                 <Col span={8}><Statistic title={<Text style={{fontSize: '10px'}}>OUTSTANDING</Text>} value={totalBalanceDue} valueStyle={{ fontSize: '14px', fontWeight: 'bold', color: totalBalanceDue > 0 ? token.colorError : token.colorSuccess }} formatter={() => formatCurrency(totalBalanceDue, profile?.currency)} /></Col>
                                 <Col span={8}><Statistic title={<Text style={{fontSize: '10px'}}>REFUNDS</Text>} value={totalGlobalRefunds} valueStyle={{ fontSize: '14px', fontWeight: 'bold', color: token.colorWarning }} formatter={() => formatCurrency(totalGlobalRefunds, profile?.currency)} /></Col>
                             </Row>
                         </div>
-                        <div style={{ padding: '12px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+                        <div style={{ padding: '12px', borderBottom: `1px solid ${token.colorCardBorder}` }}>
                             {(() => {
                                 const limits = getPlanLimits(profile?.subscription_tier);
                                 const isFeatureLocked = !limits.allow_supplier_management;
@@ -964,7 +1042,28 @@ const SupplierDashboard = () => {
                             })()}
                         </div>
                         {loading ? <div style={{textAlign: 'center', padding: '20px'}}><Spin/></div> :
-                            <div style={{ height: 'calc(100vh - 310px)', overflowY: 'auto' }} className="custom-scrollbar">
+                            <div style={{ height: 'calc(100vh - 280px)', overflowY: 'auto' }} className="custom-scrollbar">
+                                {/* NAYA IZAFA: All Suppliers (Summary) Row on Desktop Sidebar */}
+                                <div 
+                                    onClick={() => setSelectedSupplierId('all')}
+                                    style={{
+                                        padding: '12px 16px',
+                                        cursor: 'pointer',
+                                        borderBottom: `1px solid ${token.colorCardBorder}`,
+                                        background: selectedSupplierId === 'all' ? (isDarkMode ? 'rgba(26, 182, 201, 0.15)' : token.colorMenuSelectedBg) : 'transparent',
+                                        borderLeft: selectedSupplierId === 'all' ? `3px solid ${token.colorPrimary}` : 'none',
+                                        transition: 'all 0.2s ease',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                    }}
+                                >
+                                    <Text strong style={{ color: selectedSupplierId === 'all' ? token.colorPrimary : 'inherit' }}>
+                                        All Suppliers (Summary)
+                                    </Text>
+                                    <ShopOutlined style={{ color: selectedSupplierId === 'all' ? token.colorPrimary : token.colorTextSecondary }} />
+                                </div>
+
                                 <Table 
                                     dataSource={filteredSuppliers} 
                                     rowKey="id" 
@@ -990,7 +1089,7 @@ const SupplierDashboard = () => {
                                                     <div style={{ textAlign: 'right' }}>
                                                         <Text 
                                                             strong 
-                                                            style={{ fontSize: '12px', color: (record.balance_due - record.credit_balance) > 0 ? token.colorError : (record.balance_due - record.credit_balance) < 0 ? token.colorSuccess : token.colorTextSecondary }}
+                                                            style={{ fontSize: '12px', color: (record.balance_due - record.credit_balance) > 0 ? token.colorAmountNegative : (record.balance_due - record.credit_balance) < 0 ? token.colorAmountPositive : token.colorTextSecondary }}
                                                         >
                                                             {formatCurrency(Math.abs(record.balance_due - record.credit_balance), profile?.currency)}
                                                         </Text>
@@ -1208,6 +1307,7 @@ const SupplierDashboard = () => {
             </Modal>
         </Layout>
         </>
+        </ConfigProvider>
     );
 };
 

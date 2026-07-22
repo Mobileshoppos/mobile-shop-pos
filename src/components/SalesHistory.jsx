@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Table, Typography, Tag, App, Button, Tooltip, Space, theme, Input, DatePicker, Select, Radio, Row, Col } from 'antd';
+import { Card, Table, Typography, Tag, App, Button, Tooltip, Space, theme, Input, DatePicker, Select, Radio, Row, Col, ConfigProvider } from 'antd';
 import { PrinterOutlined, ReloadOutlined, HistoryOutlined, FilterOutlined, UndoOutlined, RollbackOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
@@ -486,7 +486,6 @@ const SalesHistory = () => {
       dataIndex: 'invoice_id',
       key: 'invoice_id',
       width: 110,
-      align: 'center',
       render: (text, record) => <Text code strong>{text || record.sale_id.slice(0, 8)}</Text>
     },
     {
@@ -497,7 +496,7 @@ const SalesHistory = () => {
       render: (text) => dayjs(text).format('DD MMM YY, hh:mm A'),
     },
     { title: 'Customer', dataIndex: 'customer_name', key: 'customer_name', width: 200 },
-    { title: 'Total Items', dataIndex: 'total_items', key: 'total_items', align: 'center', width: 100 },
+    { title: 'Total Items', dataIndex: 'total_items', key: 'total_items', width: 100 },
     {
       title: 'Method',
       dataIndex: 'payment_method',
@@ -510,7 +509,6 @@ const SalesHistory = () => {
       dataIndex: 'total_amount',
       key: 'total_amount',
       render: (amount) => formatCurrency(amount, profile?.currency),
-      align: 'right',
       width: 110,
     },
     {
@@ -522,16 +520,14 @@ const SalesHistory = () => {
           {status.toUpperCase()}
         </Tag>
       ),
-      align: 'center',
       width: 120,
     },
-    { title: 'Salesperson', dataIndex: 'salesperson_name', key: 'salesperson_name', width: 120 },
+    { title: <div>Handled<br/>by</div>, dataIndex: 'salesperson_name', key: 'salesperson_name', width: 120 },
     {
-      title: 'Audit / Note',
+      title: 'Note',
       dataIndex: 'notes',
       key: 'notes',
       width: 120,
-      align: 'center',
       render: (notes) => notes ? (
         <Tooltip title={notes}>
           <Tag color="purple" style={{ cursor: 'pointer', margin: 0 }}>View Audit</Tag>
@@ -541,8 +537,7 @@ const SalesHistory = () => {
     {
       title: 'Actions',
       key: 'actions',
-      width: 80, 
-      align: 'center',
+      width: 80,
       render: (_, record) => (
         <Space>
           <Tooltip title="Reprint Receipt">
@@ -559,38 +554,39 @@ const SalesHistory = () => {
 
   // 2. Columns for Items Sold View
   const itemsColumns = [
-    { title: 'Invoice #', dataIndex: 'invoice_id', key: 'inv_id', width: 110, align: 'center', render: (text) => <Text code strong>{text}</Text> },
+    { title: 'Invoice #', dataIndex: 'invoice_id', key: 'inv_id', width: 110, render: (text) => <Text code strong>{text}</Text> },
     { title: 'Date & Time', dataIndex: 'date', key: 'date', width: 140, render: (text) => dayjs(text).format('DD MMM YY, hh:mm A') },
     { title: 'Product Name', dataIndex: 'product_name', key: 'p_name', width: 220, render: (text) => <Text strong>{text}</Text> },
     { title: 'Brand', dataIndex: 'brand', key: 'brand', width: 100 },
-    { title: 'Qty Sold', dataIndex: 'quantity', key: 'qty', align: 'center', width: 90, render: (val) => <Tag color="blue">{val}</Tag> },
-    { title: 'Sale Price', dataIndex: 'price', key: 'price', align: 'right', width: 110, render: (val) => formatCurrency(val, profile?.currency) },
+    { title: 'Qty Sold', dataIndex: 'quantity', key: 'qty', width: 90, render: (val) => <Tag color="blue">{val}</Tag> },
+    { title: 'Sale Price', dataIndex: 'price', key: 'price', width: 110, render: (val) => formatCurrency(val, profile?.currency) },
     { title: 'Customer', dataIndex: 'customer_name', key: 'cust_name', width: 180 },
-    { title: 'Salesperson', dataIndex: 'salesperson_name', key: 'sp_name', width: 120 }
+    { title: <div>Handled<br/>by</div>, dataIndex: 'salesperson_name', key: 'sp_name', width: 120 }
   ];
 
   // 3. Columns for Returns View
   const returnsColumns = [
     { title: 'Date & Time', dataIndex: 'date', key: 'date', width: 140, render: (text) => dayjs(text).format('DD MMM YY, hh:mm A') },
-    { title: 'Original Inv #', dataIndex: 'invoice_id', key: 'inv_id', width: 110, align: 'center', render: (text) => <Text code strong>{text}</Text> },
+    { title: 'Original Inv #', dataIndex: 'invoice_id', key: 'inv_id', width: 110, render: (text) => <Text code strong>{text}</Text> },
     { title: 'Product Name', dataIndex: 'product_name', key: 'p_name', width: 220, render: (text) => <Text strong>{text}</Text> },
     { title: 'Brand', dataIndex: 'brand', key: 'brand', width: 100 },
-    { title: 'Qty Returned', dataIndex: 'quantity', key: 'qty', align: 'center', width: 110, render: (val) => <Tag color="orange">{val}</Tag> },
-    { title: 'Refunded', dataIndex: 'refund_amount', key: 'refund', align: 'right', width: 110, render: (val) => <Text strong style={{ color: token.colorAmountNegative }}>{formatCurrency(val, profile?.currency)}</Text> },
-    { title: 'Condition', dataIndex: 'condition', key: 'cond', align: 'center', width: 120, render: (text) => <Tag color={text === 'Resellable' ? 'green' : 'volcano'}>{text}</Tag> },
+    { title: 'Qty', dataIndex: 'quantity', key: 'qty', width: 110, render: (val) => <Tag color="orange">{val}</Tag> },
+    { title: 'Refunded', dataIndex: 'refund_amount', key: 'refund', width: 110, render: (val) => <Text strong style={{ color: token.colorAmountNegative }}>{formatCurrency(val, profile?.currency)}</Text> },
+    { title: 'Condition', dataIndex: 'condition', key: 'cond', width: 120, render: (text) => <Tag color={text === 'Resellable' ? 'green' : 'volcano'}>{text}</Tag> },
     { title: 'Customer', dataIndex: 'customer_name', key: 'cust_name', width: 180 },
-    { title: 'Staff', dataIndex: 'salesperson_name', key: 'sp_name', width: 120 },
+    { title: <div>Handled<br/>by</div>, dataIndex: 'salesperson_name', key: 'sp_name', width: 120 },
     { title: 'Reason', dataIndex: 'reason', key: 'reason', ellipsis: true }
   ];
 
   return (
+    <ConfigProvider theme={{ components: { Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg, headerColor: token.colorCardColumnsTitleText, colorText: token.colorCardDetailsText } } }}>
     <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
       {isMobile && (
         <Title level={2} style={{ marginBottom: '16px', marginLeft: '8px', fontSize: '23px' }}>
           <HistoryOutlined /> Sales History
         </Title>
       )}
-      <Card styles={{ body: { paddingTop: '16px' } }}> {/* <--- NAYA IZAFA: Extra header aur spacing khatam karke space save ki */}
+      <Card style={{ background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}` }} styles={{ body: { paddingTop: '16px' } }}> {/* <--- NAYA IZAFA: Extra header aur spacing khatam karke space save ki */}
         <Space wrap style={{ marginBottom: '18px', width: '100%', justifyContent: 'space-between' }}>
           <Space wrap>
             {/* NAYA IZAFA: Radio buttons ki jagah compact Dropdown switcher lagaya, space bachaane ke liye */}
@@ -715,7 +711,7 @@ const SalesHistory = () => {
 
         {/* --- NAYA IZAFA: Collapsible Advanced Filters UI (Brand, Category, Payment Method) --- */}
         {showAdvancedFilters && (
-            <Card size="small" style={{ marginBottom: '20px', background: token.colorFillAlter, border: `1px dashed ${token.colorBorder}` }}>
+            <Card size="small" style={{ marginBottom: '20px', background: token.colorFillAlter, border: `1px dashed ${token.colorCardBorder}` }}>
                 <Row gutter={[16, 8]}>
                     <Col xs={12} sm={8} md={6}>
                         <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '4px' }}>Product Category</Text>
@@ -781,6 +777,7 @@ const SalesHistory = () => {
         />
       </Card>
     </div>
+    </ConfigProvider>
   );
 };
 
