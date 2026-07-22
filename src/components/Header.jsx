@@ -37,6 +37,7 @@ import RegisterClosingModal from './RegisterClosingModal';
 import VoucherSearchModal from './VoucherSearchModal'; // <--- NAYA IZAFA
 import { db } from '../db';
 import { getPlanLimits } from '../config/subscriptionPlans';
+import { supabase } from '../supabaseClient'; // <-- Naya: System Announcements fetch karne ke liye import kiya
 
 const { Header } = Layout;
 const { Text } = Typography;
@@ -58,6 +59,9 @@ const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
   const { pendingCount, stuckCount, retryAll, isSyncing, syncAllData, processSyncQueue, isOnline, exportEmergencyBackup } = useSync();
   const { message, modal } = App.useApp(); // <--- YEH NAYI LINE HAI
   const [isSyncModalOpen, setIsSyncModalOpen] = React.useState(false);
+
+  // --- Point 5 State (Broadcast Announcement to User) ---
+  const [activeAnnouncement, setActiveAnnouncement] = React.useState(null);
 
   // NAYA: Manual Sync Function (Upload & Download)
   const handleManualSync = async () => {
@@ -151,6 +155,48 @@ const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
   const [isClosingModalVisible, setIsClosingModalVisible] = React.useState(false);
   const [isVoucherSearchOpen, setIsVoucherSearchOpen] = React.useState(false); // <--- NAYA IZAFA
 
+  // Supabase se sab se aakhri active system announcement ko load karne wala effect (With LocalStorage dismiss check)
+  React.useEffect(() => {
+    const fetchActiveAnnouncement = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('system_announcements')
+          .select('*')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(1); // Sirf sab se aakhri active notification uthayein
+        
+        if (!error && data && data.length > 0) {
+          const latestAnnouncement = data[0];
+          
+          // Check karein ke kya user is announcement ko pehle hi dismiss kar chuka hai?
+          const dismissedList = JSON.parse(localStorage.getItem('dismissed_announcements') || '[]');
+          if (!dismissedList.includes(latestAnnouncement.id)) {
+            setActiveAnnouncement(latestAnnouncement);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load active announcement:', err);
+      }
+    };
+
+    if (profile) {
+      fetchActiveAnnouncement();
+    }
+  }, [profile]);
+
+  // Announcement ko dismiss karne aur uski ID localStorage mein save karne ka function
+  const handleDismissAnnouncement = () => {
+    if (activeAnnouncement) {
+      const dismissedList = JSON.parse(localStorage.getItem('dismissed_announcements') || '[]');
+      if (!dismissedList.includes(activeAnnouncement.id)) {
+        dismissedList.push(activeAnnouncement.id);
+        localStorage.setItem('dismissed_announcements', JSON.stringify(dismissedList));
+      }
+      setActiveAnnouncement(null);
+    }
+  };
+
   // --- NAYA IZAFA: Keyboard Shortcut to Open Search Modal ---
   React.useEffect(() => {
     const handleGlobalKeyDown = (e) => {
@@ -216,6 +262,24 @@ const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
   };
 return (
     <>
+      {/* --- Point 5: Global System Announcement Banner (Theme-Aware & Dismissible) --- */}
+      {activeAnnouncement && (
+        <Alert
+          message={<Text strong style={{ color: token.colorTextHeading }}>{activeAnnouncement.title}</Text>}
+          description={<Text style={{ color: token.colorText }}>{activeAnnouncement.message}</Text>}
+          type="info"
+          showIcon
+          closable
+          onClose={handleDismissAnnouncement} // <-- Naya dismiss handler lagaya
+          style={{ 
+            margin: '8px 24px 0px 24px', 
+            borderRadius: token.borderRadiusLG,
+            background: token.colorFillAlter,
+            border: `1px solid ${token.colorBorder}`
+          }}
+        />
+      )}
+
       <Header style={{ 
   padding: '0 24px', 
   background: token.colorHeaderBg, 

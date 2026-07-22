@@ -50,16 +50,27 @@ serve(async (req) => {
       const { data: profiles, error: profErr } = await supabaseAdmin.from('profiles').select('*')
       if (profErr) throw profErr
 
-      // Auth aur Profiles ke data ko jorna
+      // Database se active product count aur activity stats mangwana
+      const { data: activityStats, error: actErr } = await supabaseAdmin.rpc('get_shops_activity')
+      if (actErr) throw actErr
+
+      // Auth, Profiles aur Activity stats ke data ko jorna
       result = authUsers.users.map(u => {
         const p = profiles.find(p => p.user_id === u.id)
+        const stat = activityStats?.find(s => s.target_user_id === u.id)
+        
         return {
           id: u.id,
           email: u.email,
           created_at: u.created_at,
           shop_name: p?.shop_name || 'No Shop Name',
           subscription_tier: p?.subscription_tier || 'free',
-          is_super_admin: p?.is_super_admin || false
+          is_super_admin: p?.is_super_admin || false,
+          is_suspended: p?.is_suspended || false, // <-- Naya column dukan block status ke liye
+          active_products_count: stat?.active_products_count || 0, // <-- Naya field: Active Products
+          last_active_at: stat?.last_active_at || p?.updated_at || u.created_at, // <-- Naya field: Last Activity
+          subscription_expires_at: p?.subscription_expires_at || null, // <-- Naya field: Subscription Expiry Date
+          scheduled_deletion_at: p?.scheduled_deletion_at || null // <-- NAYA IZAFA: Soft Delete / Grace Period timestamp
         }
       })
     }
@@ -76,34 +87,86 @@ serve(async (req) => {
       result = { success: true, message: `Plan successfully updated to ${new_plan}` }
     }
 
-    // --- ACTION 3: USER KO HAMESHA KE LIYE DELETE KARNA (WITH IMAGES) ---
+    // --- ACTION 3: USER KO DELETE SCHEDULE KARNA (YA AGAR PEHLE SE SCHEDULED HAI TO FORCE DELETE KARNA) ---
     else if (action === 'delete_user') {
-      const { target_user_id } = payload
+      const { target_user_id, force_delete } = payload
       
-      // Hissa A: Database ke andar se us user ki tasveeron ke naam mangwana
-      const { data: fileNames, error: rpcErr } = await supabaseAdmin
-        .rpc('get_user_image_names', { target_uid: target_user_id })
-      
-      if (rpcErr) throw rpcErr
+      // Agar Super Admin hamesha ke liye foran data saaf karna chahe (Hard Delete)
+      if (force_delete === true) {
+        // Hissa A: Database ke andar se us user ki tasveeron ke naam mangwana
+        const { data: fileNames, error: rpcErr } = await supabaseAdmin
+          .rpc('get_user_image_names', { target_uid: target_user_id })
+        
+        if (rpcErr) throw rpcErr
 
-      // Hissa B: Agar tasveerein mojood hain, to unhein Storage API se delete karna (Tukron mein)
-      if (fileNames && fileNames.length > 0) {
-        const chunkSize = 100; // Ek waqt mein 100 tasveerein delete karega
-        for (let i = 0; i < fileNames.length; i += chunkSize) {
-          const chunk = fileNames.slice(i, i + chunkSize);
-          const { error: storageErr } = await supabaseAdmin.storage
-            .from('product-images')
-            .remove(chunk);
-            
-          if (storageErr) console.error(`Storage delete error for chunk ${i}:`, storageErr);
+        // Hissa B: Agar tasveerein mojood hain, to unhein Storage API se delete karna (Tukron mein)
+        if (fileNames && fileNames.length > 0) {
+          const chunkSize = 100; // Ek waqt mein 100 tasveerein delete karega
+          for (let i = 0; i < fileNames.length; i += chunkSize) {
+            const chunk = fileNames.slice(i, i + chunkSize);
+            const { error: storageErr } = await supabaseAdmin.storage
+              .from('product-images')
+              .remove(chunk);
+              
+            if (storageErr) console.error(`Storage delete error for chunk ${i}:`, storageErr);
+          }
         }
+
+        // Hissa B: Ab us user ko Auth se delete kar dein (Jis se Database khud saaf ho jayega)
+        const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(target_user_id)
+        if (delErr) throw delErr
+
+        result = { success: true, message: 'User and all associated images deleted permanently' }
+      } else {
+        // Agar normal delete click kiya jaye, to 60 din ki date set karein aur access suspend karein
+        const sixtyDaysFromNow = new Date()
+        sixtyDaysFromNow.setDate(sixtyDaysFromNow.getDate() + 60)
+        const expiryStr = sixtyDaysFromNow.toISOString()
+
+        const { error: updateErr } = await supabaseAdmin
+          .from('profiles')
+          .update({ scheduled_deletion_at: expiryStr, is_suspended: true }) // Dukan-dar ko suspend kar dein taake login na kar sake
+          .eq('user_id', target_user_id)
+        
+        if (updateErr) throw updateErr
+        result = { success: true, message: 'User scheduled for deletion in 60 days. Login access has been suspended.' }
       }
+    }
 
-      // Hissa B: Ab us user ko Auth se delete kar dein (Jis se Database khud saaf ho jayega)
-      const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(target_user_id)
-      if (delErr) throw delErr
+    // --- ACTION 4: KISI SHOP KO SUSPEND (BLOCK) YA UNSUSPEND (ACTIVE) KARNA ---
+    else if (action === 'toggle_suspension') {
+      const { target_user_id, is_suspended } = payload
+      const { error: updateErr } = await supabaseAdmin
+        .from('profiles')
+        .update({ is_suspended: is_suspended })
+        .eq('user_id', target_user_id)
+      
+      if (updateErr) throw updateErr
+      result = { success: true, message: `Shop status successfully updated to ${is_suspended ? 'Suspended' : 'Active'}` }
+    }
 
-      result = { success: true, message: 'User and all associated images deleted successfully' }
+    // --- ACTION 5: KISI SHOP KI SUBSCRIPTION EXPIRY DATE UPDATE KARNA ---
+    else if (action === 'update_expiry') {
+      const { target_user_id, expiry_date } = payload
+      const { error: updateErr } = await supabaseAdmin
+        .from('profiles')
+        .update({ subscription_expires_at: expiry_date })
+        .eq('user_id', target_user_id)
+      
+      if (updateErr) throw updateErr
+      result = { success: true, message: 'Subscription expiry date successfully updated' }
+    }
+
+    // --- ACTION 6: DELETED USER KO RESTORE KARNA (UNDO DELETE) ---
+    else if (action === 'restore_user') {
+      const { target_user_id } = payload
+      const { error: updateErr } = await supabaseAdmin
+        .from('profiles')
+        .update({ scheduled_deletion_at: null, is_suspended: false }) // Expiry khatam karein aur dukan ko wapis active karein
+        .eq('user_id', target_user_id)
+      
+      if (updateErr) throw updateErr
+      result = { success: true, message: 'User successfully restored and activated' }
     }
     
     // Agar koi ghalat order aaye
