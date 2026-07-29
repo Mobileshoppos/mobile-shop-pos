@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -39,12 +40,12 @@ const SubscriptionPage = () => {
     priceYearly: 0,
     description: 'Perfect for starting out with all basic features.',
     features: [
-      'Limited items',
-      'Limited products models',
-      'Built-in walk-in customer',
-      'Built-in cash supplier',
-      'Customer management',
-      'Price control'
+      '50,000 Active stock items',
+      '10,000 Product models',
+      'Walk-in customer only',
+      'Cash purchase supplier only',
+      '1 Billing Counter',
+      '0 Staff Seats (Owner only)'
     ],
     buttonText: 'Start for Free',
   };
@@ -57,21 +58,14 @@ const SubscriptionPage = () => {
       priceYearly: 12950,
       description: 'Perfect for growing shops. More items, more staff, more sales.',
       features: [
-        'Offline-first technology',
-        '2,500 Active stock items',
-        '100 Product models',
-        '1000 Customers',
-        '20 Suppliers',
-        'Expenses management',
-        'Damaged stock repoting',
-        'Screen lock with encrypted PIN',
-        'Secure login with one time token',
-        '1 Staff seat (with encrypted PIN system)',
+        'Offline-First Technology',
+        'Point of Sale (POS)',
+        'Customer & Supplier management',
+        '1 Staff Account (Encrypted PIN)',
         'Reports & analytics',
-        'Counters built-in plus 1',
-        'Low stock alert',
-        'Track fast selling & slow moving products',
-        'Custom size barcode generator '
+        'Warranty system',
+        '1 Billing Counter',
+        'Bank & Wallet Accounts'
       ],
       buttonText: 'Go to Growth',
       isPopular: false
@@ -80,19 +74,15 @@ const SubscriptionPage = () => {
       key: 'pro',
       title: 'Pro',
       priceMonthly: 2399,
-      priceYearly: 25909,
+      priceYearly: 25999,
       description: 'Advanced tools for growing businesses that require more staff and dedicated support.',
       features: [
-        '15,000 Active stock items',
-        '300 Product models',
-        '3,000 Customers',
-        '100 Suppliers',
-        '4 Staff seats',
-        'Priority support',
-        'Custom reports',
+        '2 Staff Accounts (Encrypted PIN)',
+        'Priority support & Custom reports',
         'Warranty system',
-        'Advanced settings',
-        'Counters  3'
+        '3 Billing Counters',
+        'Wholesale & Retail Pricing',
+        'Rack & Shelf Location'
       ],
       buttonText: 'Get Pro Power',
       isPopular: true,
@@ -102,18 +92,18 @@ const SubscriptionPage = () => {
       key: 'scale',
       title: 'Scale',
       priceMonthly: 4599,
-      priceYearly: 49669,
+      priceYearly: 49999,
       description: 'Unrestricted resources for large-scale operations requiring maximum capacity and speed.',
       features: [
-        'Unlimited stock items',
-        'Unlimited product models',
-        'Unlimited customers',
-        'Unlimited suppliers',
-        'Up to 10 Staff seats',
-        'Priority support',
-        'Custom reports',
-        'Unlimited everything',
-        'Counters up to 10'
+        '4 Staff Accounts (Encrypted PIN)',
+        'Priority support & free setup',
+        'All features unlocked',
+        'Up to 10 Billing Counters',
+        'Batch & Expiry Tracking',
+        'FBR POS Integration',
+        'Financial Balance Sheet',
+        'Stock Flow Audit Logs',
+        'Master Data Export'
       ],
       buttonText: 'Get Scale Power',
       isPopular: false
@@ -223,28 +213,39 @@ const SubscriptionPage = () => {
                   <Text type="secondary">/{billingCycle === 'monthly' ? 'month' : 'year'}</Text>
                   {/* Discount Tag */}
                   {billingCycle === 'yearly' && price > 0 && (
-                    <Tag color="green" style={{ marginLeft: 10, verticalAlign: 'middle' }}>10% OFF</Tag>
+                    <Tag color="green" style={{ marginLeft: 10, verticalAlign: 'middle' }}>UPTO 10% OFF</Tag>
                   )}
                 </div>
 
                 {/* ACTION BUTTON */}
-                <Button 
-                  type={isPopular ? 'primary' : 'default'}
-                  block 
-                  size="large"
-                  style={{ 
-                    marginBottom: '24px', 
-                    height: '48px', 
-                    fontWeight: 600,
-                    backgroundColor: isPopular ? (plan.highlightColor || token.colorPrimary) : 'transparent',
-                    borderColor: isPopular ? (plan.highlightColor || token.colorPrimary) : undefined,
-                    color: isPopular ? '#fff' : undefined
-                  }}
-                  disabled={isCurrent || (plan.key === 'free')}
-                  onClick={() => handleUpgradeClick(plan)}
-                >
-                  {isCurrent ? 'Current Plan' : plan.buttonText}
-                </Button>
+                <div style={{ marginBottom: '24px' }}>
+                  <Button 
+                    type={isPopular ? 'primary' : 'default'}
+                    block 
+                    size="large"
+                    style={{ 
+                      height: '48px', 
+                      fontWeight: 600,
+                      backgroundColor: isPopular ? (plan.highlightColor || token.colorPrimary) : 'transparent',
+                      borderColor: isPopular ? (plan.highlightColor || token.colorPrimary) : undefined,
+                      color: isPopular ? '#fff' : undefined,
+                      marginBottom: (isCurrent && profile?.subscription_expires_at) ? '6px' : '0'
+                    }}
+                    disabled={isCurrent || (plan.key === 'free')}
+                    onClick={() => handleUpgradeClick(plan)}
+                  >
+                    {isCurrent ? 'Current Plan' : plan.buttonText}
+                  </Button>
+                  
+                  {/* NAYA IZAFA: Expiry Date Display */}
+                  {isCurrent && profile?.subscription_expires_at && (
+                    <div style={{ textAlign: 'center' }}>
+                      <Text type="secondary" style={{ fontSize: '12px' }}>
+                        ⏳ Expires on: <Text strong style={{ color: token.colorText }}>{dayjs(profile.subscription_expires_at).format('DD MMM YYYY')}</Text>
+                      </Text>
+                    </div>
+                  )}
+                </div>
 
                 {(plan.key === 'pro' || plan.key === 'scale') && (
                   <Text strong style={{ display: 'block', marginBottom: '10px', fontSize: '21px' }}>
@@ -309,13 +310,24 @@ const SubscriptionPage = () => {
               <Title level={2} style={{ margin: 0, display: 'inline-block' }}>0</Title>
               <Text type="secondary">/forever</Text>
             </div>
-            <Button 
-              size="large"
-              disabled={currentTier === 'free'}
-              style={{ width: '100%', maxWidth: isMobile ? '100%' : '200px' }}
-            >
-              {currentTier === 'free' ? 'Current Plan' : freePlan.buttonText}
-            </Button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMobile ? 'flex-start' : 'flex-end' }}>
+              <Button 
+                size="large"
+                disabled={currentTier === 'free'}
+                style={{ width: '100%', maxWidth: isMobile ? '100%' : '200px', marginBottom: (currentTier === 'free' && profile?.subscription_expires_at) ? '6px' : '0' }}
+              >
+                {currentTier === 'free' ? 'Current Plan' : freePlan.buttonText}
+              </Button>
+              
+              {/* NAYA IZAFA: Expiry Date Display for Free Plan */}
+              {currentTier === 'free' && profile?.subscription_expires_at && (
+                <div style={{ width: '100%', maxWidth: isMobile ? '100%' : '200px', textAlign: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: '11px' }}>
+                    ⏳ Valid till: <Text strong>{dayjs(profile.subscription_expires_at).format('DD MMM YYYY')}</Text>
+                  </Text>
+                </div>
+              )}
+            </div>
           </Col>
         </Row>
       </Card>

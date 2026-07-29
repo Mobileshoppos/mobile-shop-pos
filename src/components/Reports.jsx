@@ -2204,8 +2204,15 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 },
                 {
                   key: 'flow',
-                  label: <Text strong style={{ color: token.colorPrimary }}>Stock Flow Audit</Text>,
-                  children: (
+                  label: <Text strong style={{ color: limits.allow_stock_flow_audit ? token.colorPrimary : token.colorTextDisabled }}>{limits.allow_stock_flow_audit ? '' : <LockOutlined style={{ color: '#faad14', marginRight: '4px' }} />}Stock Flow Audit</Text>,
+                  children: !limits.allow_stock_flow_audit ? (
+                    <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+                        <LockOutlined style={{ fontSize: '48px', color: '#faad14', marginBottom: '16px' }} />
+                        <Title level={4}>Advanced Stock Flow Audit</Title>
+                        <Text type="secondary" style={{ display: 'block', marginBottom: '16px' }}>This enterprise feature tracks every single movement of your inventory (Opening, Receipts, Issuance, Adjustments, Closing). Available exclusively on the Scale Plan.</Text>
+                        <Button type="primary" onClick={() => navigate('/subscription')}>Upgrade to Scale Plan</Button>
+                    </div>
+                  ) : (
                     <div style={{ paddingTop: '8px' }}>
                       <Table 
                         dataSource={getFilteredStockFlowItems()} 
@@ -3566,8 +3573,17 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
     },
     {
       key: 'balance_sheet',
-      label: <span><TableOutlined /> Balance Sheet</span>,
-      children: <BalanceSheet />, // <--- NAYA IZAFA
+      label: <span style={{ color: limits.allow_balance_sheet ? 'inherit' : token.colorTextDisabled }}><TableOutlined /> {limits.allow_balance_sheet ? '' : <LockOutlined style={{ color: '#faad14' }} />} Balance Sheet</span>,
+      children: !limits.allow_balance_sheet ? (
+        <div style={{ padding: '60px 20px', textAlign: 'center' }}>
+            <LockOutlined style={{ fontSize: '64px', color: '#faad14', marginBottom: '20px' }} />
+            <Title level={3}>Financial Balance Sheet</Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: '24px', fontSize: '16px' }}>The complete financial statement including Assets, Liabilities, and Equity is an enterprise-grade feature available exclusively on the Scale Plan.</Text>
+            <Button type="primary" size="large" onClick={() => navigate('/subscription')}>Upgrade to Scale Plan</Button>
+        </div>
+      ) : (
+        <BalanceSheet />
+      ),
     },
   ];
 
@@ -3684,9 +3700,21 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 },
                 {
                   key: '2',
-                  label: 'Export All Tabs (Master Excel)',
+                  label: limits.allow_master_export ? 'Export All Tabs (Master Excel)' : <span><LockOutlined style={{ color: '#faad14' }} /> Master Export (Scale Plan)</span>,
                   icon: <FileExcelOutlined />,
-                  onClick: handleMasterExport,
+                  onClick: () => {
+                    if (!limits.allow_master_export) {
+                      modal.confirm({
+                        title: 'Enterprise Feature Locked',
+                        content: 'Master Excel Export is available on the Scale Plan. Please upgrade to download your entire business database in one click.',
+                        okText: 'View Plans',
+                        cancelText: 'Close',
+                        onOk: () => navigate('/subscription')
+                      });
+                      return;
+                    }
+                    handleMasterExport();
+                  },
                 },
                 {
                   type: 'divider',

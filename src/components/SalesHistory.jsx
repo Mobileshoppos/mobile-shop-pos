@@ -9,13 +9,13 @@ import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
 import { printThermalReceipt } from '../utils/thermalPrinter';
 import { useSync } from '../context/SyncContext';
-import DataExport from '../components/DataExport'; // <--- NAYA IZAFA
-import dayjs from 'dayjs'; // <--- NAYA IZAFA: dayjs ko import kiya taake crash hal ho jaye
+import DataExport from '../components/DataExport';
+import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 
 const SalesHistory = () => {
-  const { token } = theme.useToken(); // Control Center Connection
+  const { token } = theme.useToken();
   const { profile } = useAuth();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { message } = App.useApp();

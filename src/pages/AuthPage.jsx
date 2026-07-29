@@ -1,14 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout, Modal, Space, Divider, Checkbox, theme, ConfigProvider } from 'antd';
 import { LockOutlined, MailOutlined, AppstoreOutlined, KeyOutlined, UserOutlined } from '@ant-design/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { darkThemeTokens } from '../theme/themeConfig';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 const { Content } = Layout;
 
 const AuthPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Agar URL mein ?tab=signup ho to Tab 2 (Sign Up) khulega, warna Tab 1 (Login)
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') === 'signup' ? '2' : '1');
+  
+  // Jab bhi URL badle to Tab bhi khud badal jaye
+  useEffect(() => {
+    const tabFromUrl = searchParams.get('tab');
+    if (tabFromUrl === 'signup') setActiveTab('2');
+    else if (tabFromUrl === 'login') setActiveTab('1');
+  }, [searchParams]);
+
   const { token } = theme.useToken(); // Control Center Connection
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { message } = AntApp.useApp();
@@ -18,6 +30,10 @@ const AuthPage = () => {
   const [isTokenModalVisible, setIsTokenModalVisible] = useState(false);
   const [otpStep, setOtpStep] = useState(false); 
   const [tokenEmail, setTokenEmail] = useState('');
+  // --- NAYA IZAFA: Magic Link States ---
+  const [isMagicLinkModalVisible, setIsMagicLinkModalVisible] = useState(false);
+  const [magicLinkOtpStep, setMagicLinkOtpStep] = useState(false);
+  const [magicLinkEmail, setMagicLinkEmail] = useState('');
 
   const handleLogin = async (values) => {
     try {
@@ -139,6 +155,54 @@ const AuthPage = () => {
       setLoading(false);
     }
   };
+
+  // --- NAYA FUNCTION: Magic Link (Email OTP) Request ---
+  const handleMagicLinkRequest = async (values) => {
+    try {
+      setLoading(true);
+      setMagicLinkEmail(values.email);
+      
+      const { error } = await supabase.auth.signInWithOtp({ 
+        email: values.email,
+        options: {
+          shouldCreateUser: false // Sirf mojooda user login ho sake
+        }
+      });
+      
+      if (error) throw error;
+
+      message.success(`A 6-digit code has been sent to ${values.email}`);
+      setMagicLinkOtpStep(true);
+    } catch (error) {
+      console.error("Magic Link Request Error:", error);
+      message.error(error.message || "Failed to send code.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- NAYA FUNCTION: Magic Link OTP Verify ---
+  const handleVerifyMagicLinkOtp = async (values) => {
+    try {
+      setLoading(true);
+
+      const { error } = await supabase.auth.verifyOtp({
+        email: magicLinkEmail,
+        token: values.otp,
+        type: 'email' 
+      });
+
+      if (error) throw error;
+
+      message.success("Login successful!");
+      window.location.href = "/";
+      
+    } catch (error) {
+      message.error("Invalid Code. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
   
   const loginForm = (
     <Form onFinish={handleLogin} layout="vertical">
@@ -163,8 +227,17 @@ const AuthPage = () => {
         block 
         icon={<KeyOutlined />} 
         onClick={() => { setIsTokenModalVisible(true); setOtpStep(false); }}
+        style={{ marginBottom: '8px' }}
       >
         Login with Terminal Token
+      </Button>
+      {/* NAYA IZAFA: Magic Link Button */}
+      <Button 
+        block 
+        icon={<MailOutlined />} 
+        onClick={() => { setIsMagicLinkModalVisible(true); setMagicLinkOtpStep(false); }}
+      >
+        Login with Email OTP
       </Button>
     </Form>
   );
@@ -208,43 +281,129 @@ const AuthPage = () => {
     <ConfigProvider theme={{ algorithm: theme.darkAlgorithm, token: darkThemeTokens }}>
       <Layout style={{ minHeight: '100vh', background: darkThemeTokens.colorBgLayout }}>
         <Content style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: isMobile ? '12px 8px' : '20px' }}>
-          {/* --- TABDEELI: Card se saari hardcoded styles hata di hain --- */}
-          <Card style={{ width: 400, maxWidth: '100%', background: darkThemeTokens.colorBgContainer, borderColor: darkThemeTokens.colorBorderSecondary }}>
-            {/* --- TABDEELI: Title se hardcoded color hata diya hai --- */}
-            <Title level={3} style={{ textAlign: 'center', color: darkThemeTokens.colorTextHeading }}>
-              <AppstoreOutlined style={{ marginRight: '8px', color: darkThemeTokens.colorPrimary }} /> SadaPos
-            </Title>
-          <Tabs 
-            defaultActiveKey="1" 
-            centered
-            items={[
-              {
-                label: 'Login',
-                key: '1',
-                children: loginForm,
-              },
-              {
-                label: 'Sign Up',
-                key: '2',
-                children: signupForm,
-              },
-            ]}
-          />
-          <Divider style={{ margin: '12px 0' }} />
-          <div style={{ textAlign: 'center' }}>
-            <Space size="small" split={<Divider type="vertical" />}>
-              <Typography.Link href="https://www.sadapos.com/privacy-policy" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
-                Privacy
-              </Typography.Link>
-              <Typography.Link href="https://www.sadapos.com/terms-of-service" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
-                Terms
-              </Typography.Link>
-              <Typography.Link href="https://www.sadapos.com/refunds-policy" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
-                Refund
-              </Typography.Link>
-            </Space>
+          {/* --- NAYA IZAFA: 2-Column Split Layout (Left: Marketing, Right: Auth Form) --- */}
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: isMobile ? 'column' : 'row', 
+            width: isMobile ? '100%' : '90%', 
+            maxWidth: '1200px', 
+            background: darkThemeTokens.colorBgContainer, 
+            borderRadius: '16px', 
+            overflow: 'hidden', 
+            border: `1px solid ${darkThemeTokens.colorBorderSecondary}`,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.2)'
+          }}>
+
+            {/* LEFT SIDE - Marketing Banner (Sirf bari screen par nazar aayega) */}
+            {!isMobile && (
+              <div style={{ 
+                flex: 1, 
+                padding: '40px', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                justifyContent: 'space-between',
+                background: `linear-gradient(135deg, ${darkThemeTokens.colorBgElevated} 0%, ${darkThemeTokens.colorBgLayout} 100%)`,
+                borderRight: `1px solid ${darkThemeTokens.colorBorderSecondary}`
+              }}>
+                <div>
+                  <Title level={1} style={{ color: darkThemeTokens.colorPrimary, margin: 0, fontWeight: 900, fontSize: '42px', letterSpacing: '1px' }}>
+                    SadaPOS
+                  </Title>
+                  <div style={{ marginTop: '24px' }}>
+                    <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                      Complete Shop Management
+                    </Text>
+                    <Title level={2} style={{ color: darkThemeTokens.colorTextHeading, marginTop: '8px', marginBottom: '16px', fontWeight: 700 }}>
+                      POS & Inventory Software
+                    </Title>
+                    <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '16px', lineHeight: '1.6', display: 'block' }}>
+                      All-in-one solution for point of sale, inventory tracking, invoicing, and reporting — built specifically for Pakistani businesses.
+                    </Text>
+                  </div>
+
+                  <div style={{ marginTop: '40px' }}>
+                    <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>
+                      Everything you need in one place
+                    </Text>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '16px' }}>
+                      {['Point of Sale', 'Inventory Management', 'Invoicing', 'Customer Ledger', 'Profit Reports', 'Multi-Counter', 'Offline-First'].map(tag => (
+                        <div key={tag} style={{ 
+                          padding: '6px 16px', 
+                          borderRadius: '20px', 
+                          border: `1px solid ${darkThemeTokens.colorBorderSecondary}`,
+                          background: 'rgba(255,255,255,0.03)',
+                          color: darkThemeTokens.colorTextHeading,
+                          fontSize: '13px'
+                        }}>
+                          {tag}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '40px', paddingTop: '24px', borderTop: `1px solid ${darkThemeTokens.colorBorderSecondary}` }}>
+                  <div>
+                    <Title level={3} style={{ margin: 0, color: darkThemeTokens.colorTextHeading }}>500+</Title>
+                    <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase' }}>Shops</Text>
+                  </div>
+                  <div>
+                    <Title level={3} style={{ margin: 0, color: darkThemeTokens.colorTextHeading }}>99.9%</Title>
+                    <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase' }}>Uptime</Text>
+                  </div>
+                  <div>
+                    <Title level={3} style={{ margin: 0, color: darkThemeTokens.colorTextHeading }}>24/7</Title>
+                    <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase' }}>Offline Sync</Text>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* RIGHT SIDE - Auth Form (Login/Signup) */}
+            <div style={{ flex: 1, padding: isMobile ? '24px 16px' : '40px 40px 20px 40px', display: 'flex', flexDirection: 'column' }}>
+              {/* Mobile par title dikhane ke liye */}
+              {isMobile && (
+                <Title level={3} style={{ textAlign: 'center', color: darkThemeTokens.colorTextHeading, marginBottom: '24px' }}>
+                  <AppstoreOutlined style={{ marginRight: '8px', color: darkThemeTokens.colorPrimary }} /> SadaPOS
+                </Title>
+              )}
+              <Tabs 
+                activeKey={activeTab}
+                onChange={(key) => {
+                  setActiveTab(key);
+                  // URL ko tab ke hisaab se update karein
+                  setSearchParams({ tab: key === '2' ? 'signup' : 'login' });
+                }} 
+                centered
+                items={[
+                  {
+                    label: 'Login',
+                    key: '1',
+                    children: loginForm,
+                  },
+                  {
+                    label: 'Sign Up',
+                    key: '2',
+                    children: signupForm,
+                  },
+                ]}
+              />
+              <Divider style={{ margin: '12px 0' }} />
+              <div style={{ textAlign: 'center' }}>
+                <Space size="small" split={<Divider type="vertical" />}>
+                  <Typography.Link href="https://www.sadapos.com/privacy-policy" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+                    Privacy
+                  </Typography.Link>
+                  <Typography.Link href="https://www.sadapos.com/terms-of-service" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+                    Terms
+                  </Typography.Link>
+                  <Typography.Link href="https://www.sadapos.com/refunds-policy" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+                    Refund
+                  </Typography.Link>
+                </Space>
+              </div>
+            </div>
           </div>
-        </Card>
         <Modal
           title="Reset Your Password"
           open={isModalVisible}
@@ -304,6 +463,52 @@ const AuthPage = () => {
               </Button>
               <Button type="link" onClick={() => setOtpStep(false)} block style={{ marginTop: '8px' }}>
                 Back to Token
+              </Button>
+            </Form>
+          )}
+        </Modal>
+
+        {/* --- NAYA IZAFA: Magic Link Modal --- */}
+        <Modal
+          title="Login with Email OTP"
+          open={isMagicLinkModalVisible}
+          onCancel={() => setIsMagicLinkModalVisible(false)}
+          footer={null}
+          destroyOnHidden
+        >
+          {!magicLinkOtpStep ? (
+            <Form onFinish={handleMagicLinkRequest} layout="vertical">
+              <p style={{ fontSize: '13px', color: token.colorTextSecondary }}>
+                Enter your registered email address. We will send you a 6-digit code to securely log in without a password.
+              </p>
+              <Form.Item 
+                name="email" 
+                label="Email Address" 
+                rules={[{ required: true, type: 'email', message: 'Please enter a valid email!' }]}
+              >
+                <Input prefix={<MailOutlined />} placeholder="your@email.com" />
+              </Form.Item>
+              <Button type="primary" htmlType="submit" loading={loading} block>
+                Send Code
+              </Button>
+            </Form>
+          ) : (
+            <Form onFinish={handleVerifyMagicLinkOtp} layout="vertical">
+              <p style={{ fontSize: '13px' }}>
+                Enter the <b>6-digit code</b> sent to {magicLinkEmail}.
+              </p>
+              <Form.Item name="otp" label="Verification Code" rules={[{ required: true, len: 6, message: 'Must be 6 digits' }]}>
+                <Input 
+                  placeholder="123456" 
+                  maxLength={6} 
+                  style={{ textAlign: 'center', fontSize: '24px', letterSpacing: '8px', fontWeight: 'bold' }} 
+                />
+              </Form.Item>
+              <Button type="primary" htmlType="submit" loading={loading} block size="large">
+                Verify & Login
+              </Button>
+              <Button type="link" onClick={() => setMagicLinkOtpStep(false)} block style={{ marginTop: '8px' }}>
+                Back to Email
               </Button>
             </Form>
           )}

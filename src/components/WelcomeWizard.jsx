@@ -7,7 +7,26 @@ import DataService from '../DataService';
 
 const { Title, Text } = Typography;
 
+// --- NAYA IZAFA: Auto-Detect Currency Logic ---
+const guessUserCurrency = () => {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone; // Browser se location nikalna
+    if (tz.includes('Karachi')) return 'PKR';
+    if (tz.includes('Kolkata') || tz.includes('Calcutta')) return 'INR';
+    if (tz.includes('Dhaka')) return 'BDT';
+    if (tz.includes('Dubai') || tz.includes('Abu_Dhabi')) return 'AED';
+    if (tz.includes('Riyadh') || tz.includes('Qatar') || tz.includes('Kuwait')) return 'SAR';
+    if (tz.includes('London')) return 'GBP';
+    if (tz.includes('Europe/')) return 'EUR';
+    return 'USD'; // Agar samajh na aaye to default USD
+  } catch (e) {
+    return 'USD';
+  }
+};
+
 const WelcomeWizard = () => {
+  const defaultCurrency = guessUserCurrency(); // Yahan hum ne check kiya ke user kahan se hai
+
   const { profile, updateProfile } = useAuth();
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
@@ -59,7 +78,8 @@ const WelcomeWizard = () => {
         <Text type="secondary">Let's quickly set up your basic shop details.</Text>
       </div>
 
-      <Form layout="vertical" onFinish={handleSave} initialValues={{ currency: 'PKR', business_type: 'Mobile Shop' }}>
+      {/* 'PKR' ki jagah hum ne 'defaultCurrency' laga diya jo oopar calculate hua hai */}
+      <Form layout="vertical" onFinish={handleSave} initialValues={{ currency: defaultCurrency, business_type: 'Mobile Shop' }}>
         
         {/* NAYA IZAFA: 2-Column Layout (Row aur Col ka istemal) */}
         <Row gutter={16}>
@@ -100,11 +120,16 @@ const WelcomeWizard = () => {
 
           <Col xs={24} sm={12}>
             <Form.Item name="currency" label="Default Currency" rules={[{ required: true }]}>
-              <Select prefix={<GlobalOutlined />}>
+              {/* showSearch lagane se user type kar ke bhi currency dhoond sakega */}
+              <Select prefix={<GlobalOutlined />} showSearch optionFilterProp="children">
                 <Select.Option value="PKR">PKR - Pakistani Rupee</Select.Option>
-                <Select.Option value="USD">USD - US Dollar</Select.Option>
+                <Select.Option value="INR">INR - Indian Rupee</Select.Option>
+                <Select.Option value="BDT">BDT - Bangladeshi Taka</Select.Option>
                 <Select.Option value="AED">AED - UAE Dirham</Select.Option>
                 <Select.Option value="SAR">SAR - Saudi Riyal</Select.Option>
+                <Select.Option value="USD">USD - US Dollar</Select.Option>
+                <Select.Option value="GBP">GBP - British Pound</Select.Option>
+                <Select.Option value="EUR">EUR - Euro</Select.Option>
               </Select>
             </Form.Item>
           </Col>
