@@ -30,7 +30,7 @@ const BalanceSheet = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [message]);
 
   // --- THEME CONFIGURATIONS ---
   const themes = {
@@ -49,7 +49,6 @@ const BalanceSheet = () => {
     const shopName = profile?.shop_name || 'My Shop';
     const dateStr = dayjs(data.date).format('DD MMM YYYY, hh:mm A');
     
-    // Excel ke liye HTML Table banayenge taake colors aur design barkarar rahein
     let htmlContent = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
       <head><meta charset="utf-8"><style>
@@ -89,6 +88,10 @@ const BalanceSheet = () => {
           <td>Inventory (Stock Value)</td><td class="amount">${data.assets.inventory}</td>
           <td></td><td></td>
         </tr>
+        <tr>
+          <td>Fixed Assets (Shop/Equipment)</td><td class="amount">${data.assets.fixedAssets || 0}</td>
+          <td></td><td></td>
+        </tr>
         <tr class="total-row">
           <td>Total Assets</td><td class="amount">${data.totalAssets}</td>
           <td>Total Liabilities & Equity</td><td class="amount">${data.totalLiabilitiesAndEquity}</td>
@@ -102,6 +105,7 @@ const BalanceSheet = () => {
         <tr><td>Bank & Wallets</td><td class="amount">${data.assets.bank}</td></tr>
         <tr><td>Accounts Receivable</td><td class="amount">${data.assets.receivables}</td></tr>
         <tr><td>Inventory (Stock Value)</td><td class="amount">${data.assets.inventory}</td></tr>
+        <tr><td>Fixed Assets (Shop/Equipment)</td><td class="amount">${data.assets.fixedAssets || 0}</td></tr>
         <tr class="total-row"><td>Total Assets</td><td class="amount">${data.totalAssets}</td></tr>
         <tr><td colspan="2"></td></tr>
         <tr><td colspan="2" style="font-weight:bold; background:#eeeeee;">LIABILITIES & EQUITY</td></tr>
@@ -113,7 +117,6 @@ const BalanceSheet = () => {
 
     htmlContent += `</table></body></html>`;
     
-    // Download as XLS file
     const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -131,15 +134,12 @@ const BalanceSheet = () => {
     const curr = profile?.currency || '';
     const asOfDate = dayjs(data.date).format('DD MMM YYYY, hh:mm A');
 
-    // Convert hex to RGB for jsPDF
     const hexToRgb = (hex) => {
       const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
       return result ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)] : [0,0,0];
     };
     const primaryRgb = hexToRgb(currentTheme.primary);
-    const textRgb = hexToRgb(currentTheme.text);
 
-    // Header
     doc.setFillColor(...primaryRgb);
     doc.rect(0, 0, 210, 40, 'F');
     doc.setFontSize(22);
@@ -159,6 +159,7 @@ const BalanceSheet = () => {
           ['Bank & Wallets', formatCurrency(data.assets.bank, curr), 'Total Equity', formatCurrency(data.equity, curr)],
           ['Accounts Receivable', formatCurrency(data.assets.receivables, curr), '', ''],
           ['Inventory (Stock Value)', formatCurrency(data.assets.inventory, curr), '', ''],
+          ['Fixed Assets (Shop/Equipment)', formatCurrency(data.assets.fixedAssets || 0, curr), '', ''],
         ],
         foot: [['Total Assets', formatCurrency(data.totalAssets, curr), 'Total Liab. & Equity', formatCurrency(data.totalLiabilitiesAndEquity, curr)]],
         theme: 'grid',
@@ -175,6 +176,7 @@ const BalanceSheet = () => {
           ['Bank & Wallets', formatCurrency(data.assets.bank, curr)],
           ['Accounts Receivable', formatCurrency(data.assets.receivables, curr)],
           ['Inventory (Stock Value)', formatCurrency(data.assets.inventory, curr)],
+          ['Fixed Assets (Shop/Equipment)', formatCurrency(data.assets.fixedAssets || 0, curr)],
           [{ content: 'Total Assets', styles: { fontStyle: 'bold' } }, { content: formatCurrency(data.totalAssets, curr), styles: { fontStyle: 'bold' } }],
           [{ content: 'LIABILITIES & EQUITY', colSpan: 2, styles: { fillColor: [230,230,230], fontStyle: 'bold', textColor: [0,0,0] } }],
           ['Accounts Payable', formatCurrency(data.liabilities.payables, curr)],
@@ -192,7 +194,6 @@ const BalanceSheet = () => {
 
   if (loading || !data) return <div style={{ textAlign: 'center', padding: '50px' }}><Spin size="large" /></div>;
 
-  // --- RENDER SCREEN TEMPLATES ---
   const renderTemplate = () => {
     const curr = profile?.currency || '';
     
@@ -232,6 +233,7 @@ const BalanceSheet = () => {
               <div style={rowStyle}><span>Bank & Wallets</span><span>{formatCurrency(data.assets.bank, curr)}</span></div>
               <div style={rowStyle}><span>Accounts Receivable</span><span>{formatCurrency(data.assets.receivables, curr)}</span></div>
               <div style={rowStyle}><span>Inventory (Stock Value)</span><span>{formatCurrency(data.assets.inventory, curr)}</span></div>
+              <div style={rowStyle}><span>Fixed Assets (Shop/Equipment)</span><span>{formatCurrency(data.assets.fixedAssets || 0, curr)}</span></div>
               <div style={{ height: '45px' }}></div> {/* Spacer to align totals */}
               <div style={totalStyle}><span>Total Assets</span><span style={{ color: currentTheme.primary }}>{formatCurrency(data.totalAssets, curr)}</span></div>
             </Col>
@@ -243,6 +245,7 @@ const BalanceSheet = () => {
               <div style={rowStyle}><span>Total Equity (Net Worth)</span><span>{formatCurrency(data.equity, curr)}</span></div>
               <div style={{ height: '45px' }}></div>
               <div style={{ height: '45px' }}></div>
+              <div style={{ height: '45px' }}></div> {/* Extra spacer for balancing Fixed Assets row */}
               <div style={totalStyle}><span>Total Liab. & Equity</span><span style={{ color: currentTheme.primary }}>{formatCurrency(data.totalLiabilitiesAndEquity, curr)}</span></div>
             </Col>
           </Row>
@@ -263,6 +266,7 @@ const BalanceSheet = () => {
           <div style={rowStyle}><span>Bank & Wallets</span><span>{formatCurrency(data.assets.bank, curr)}</span></div>
           <div style={rowStyle}><span>Accounts Receivable</span><span>{formatCurrency(data.assets.receivables, curr)}</span></div>
           <div style={rowStyle}><span>Inventory (Stock Value)</span><span>{formatCurrency(data.assets.inventory, curr)}</span></div>
+          <div style={rowStyle}><span>Fixed Assets (Shop/Equipment)</span><span>{formatCurrency(data.assets.fixedAssets || 0, curr)}</span></div>
           <div style={{ ...totalStyle, background: template === 'executive' ? '#262626' : '#fafafa' }}>
             <span>Total Assets</span><span style={{ color: currentTheme.text }}>{formatCurrency(data.totalAssets, curr)}</span>
           </div>

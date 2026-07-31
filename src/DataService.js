@@ -2907,13 +2907,24 @@ async addCustomer(customerData) {
     }
 
     // 4. Assets (Aasaasay)
+    // --- NAYA IZAFA: Fixed Assets ki total qeemat nikalna (UPDATED FOR CURRENT VALUE) ---
+    const fixedAssetsList = await db.fixed_assets.toArray();
+    // Sirf Active assets ki current_value jama karein, Disposed ki nahi
+    const totalFixedAssets = fixedAssetsList
+        .filter(a => a.status !== 'Disposed')
+        .reduce((sum, a) => {
+            const val = a.current_value !== undefined && a.current_value !== null ? Number(a.current_value) : Number(a.cost_amount);
+            return sum + (val || 0);
+        }, 0);
+
     const assets = {
         cash: totalCash,
         bank: totalBank,
         receivables: ledger.grandTotalReceivable, // Customers + Staff Advances
-        inventory: inventory.totalAssetValue
+        inventory: inventory.totalAssetValue,
+        fixedAssets: totalFixedAssets // <--- NAYA IZAFA
     };
-    const totalAssets = assets.cash + assets.bank + assets.receivables + assets.inventory;
+    const totalAssets = assets.cash + assets.bank + assets.receivables + assets.inventory + assets.fixedAssets;
     
     // 5. Liabilities (Wajibat)
     const liabilities = {
@@ -5287,6 +5298,212 @@ async addCustomer(customerData) {
   async deletePaymentAccount(id) {
     await db.payment_accounts.delete(id);
     await db.sync_queue.add({ table_name: 'payment_accounts', action: 'delete', data: { id } });
+    return true;
+  },
+
+  // --- NAYA IZAFA: FIXED ASSETS FUNCTIONS ---
+  
+  // 1. Saare assets mangwana (With Automatic Depreciation Calculator & Manual Respect)
+  async getFixedAssets() {
+    const assets = await db.fixed_assets.toArray();
+    const now = new Date();
+    
+    const calculatedAssets = assets.map(asset => {
+      // Disposed ya Sold asset ki value hamesha 0 hogi
+      if (asset.status === 'Disposed' || asset.status === 'Sold') {
+        return { ...asset, current_value: 0 };
+      }
+      
+      // AGAR MODE 'manual' HAI YA MODE SET NAHI HAI TO USER KI MANUAL CURRENT_VALUE KO RESPECT KAREIN!
+      const mode = asset.depreciation_mode || 'manual';
+      if (mode === 'manual') {
+        const manualVal = asset.current_value !== undefined && asset.current_value !== null 
+          ? Number(asset.current_value) 
+          : Number(asset.cost_amount);
+        return { ...asset, current_value: manualVal };
+      }
+      
+      // SIRF TAB AUTO-CALCULATE KAREIN JAB MODE 'auto' HO!
+      if (mode === 'auto' && asset.useful_life_years && Number(asset.useful_life_years) > 0) {
+        const cost = Number(asset.cost_amount) || 0;
+        const salvage = Number(asset.salvage_value) || 0;
+        const lifeYears = Number(asset.useful_life_years);
+        
+        const purchaseDate = new Date(asset.purchase_date || asset.created_at);
+        const diffDays = Math.max(0, (now.getTime() - purchaseDate.getTime()) / (1000 * 3600 * 24));
+        
+        const totalDepreciable = Math.max(0, cost - salvage);
+        const dailyDepreciation = totalDepreciable / (lifeYears * 365.25);
+        const accumulatedDepreciation = diffDays * dailyDepreciation;
+        
+        const calculatedValue = Math.max(salvage, Math.round(cost - accumulatedDepreciation));
+        return { ...asset, current_value: calculatedValue };
+      }
+      
+      const defaultVal = asset.current_value !== undefined && asset.current_value !== null 
+        ? Number(asset.current_value) 
+        : Number(asset.cost_amount);
+      return { ...asset, current_value: defaultVal };
+    });
+
+    return calculatedAssets.sort((a, b) => new Date(b.purchase_date) - new Date(a.purchase_date));
+  },
+
+  // 2. Naya asset add karna (With Smart Funding Check & Depreciation Mode)
+  async addFixedAsset(assetData) {
+    if (!assetData.id) assetData.id = crypto.randomUUID();
+    assetData.local_id = assetData.id;
+    assetData.created_at = new Date().toISOString();
+    assetData.updated_at = new Date().toISOString();
+    
+    // NAYA IZAFA: Default values for Advanced Fields & Depreciation Mode
+    assetData.status = assetData.status || 'Active';
+    assetData.funding_source = assetData.funding_source || 'Cash';
+    assetData.depreciation_mode = assetData.depreciation_mode || 'manual';
+    assetData.useful_life_years = assetData.useful_life_years ? Number(assetData.useful_life_years) : 5;
+    assetData.salvage_value = Number(assetData.salvage_value) || 0;
+    assetData.current_value = assetData.current_value !== undefined && assetData.current_value !== null 
+      ? assetData.current_value 
+      : assetData.cost_amount;
+
+    // Local DB mein save karein
+    await db.fixed_assets.add(assetData);
+
+    // Sync Queue mein daalein (Cloud ke liye)
+    await db.sync_queue.add({
+      table_name: 'fixed_assets',
+      action: 'create',
+      data: assetData
+    });
+
+    // --- NAYA IZAFA: Conditional Cash Deduction (Sirf Cash/Bank par paise katenge) ---
+    // Agar Owner Capital ya Existing Asset ho to cash NAHI katega!
+    if (assetData.funding_source === 'Cash' || assetData.funding_source === 'Bank') {
+        const session = localStorage.getItem('active_register_session') ? JSON.parse(localStorage.getItem('active_register_session')) : null;
+        const selectedMethod = assetData.funding_source === 'Bank' ? (assetData.payment_method || 'Bank') : 'Cash';
+
+        const adjustmentData = {
+          id: crypto.randomUUID(),
+          local_id: crypto.randomUUID(),
+          voucher_no: `ASSET-${assetData.id.slice(0,6).toUpperCase()}`,
+          user_id: assetData.user_id, 
+          amount: Number(assetData.cost_amount),
+          type: 'Out',
+          payment_method: selectedMethod,
+          notes: `Asset Purchased: ${assetData.asset_name}`,
+          created_at: assetData.created_at,
+          register_id: session ? session.register_id : null,
+          session_id: session ? session.id : null,
+          staff_id: session ? session.staff_id : null
+        };
+
+        await db.cash_adjustments.add(adjustmentData);
+        await db.sync_queue.add({
+          table_name: 'cash_adjustments',
+          action: 'create',
+          data: adjustmentData
+        });
+    }
+    
+    // Signal bhejein taake Dashboard aur Day Book foran update ho jaye
+    window.dispatchEvent(new CustomEvent('local-db-updated'));
+
+    return assetData;
+  },
+
+  // 3. Asset ko edit/update karna
+  async updateFixedAsset(id, updates) {
+    updates.updated_at = new Date().toISOString();
+
+    // 1. Get the old asset data (purana asset ka data nikalain)
+    const oldAsset = await db.fixed_assets.get(id);
+    if (!oldAsset) throw new Error("Fixed Asset not found for update.");
+
+    // 2. Perform the update on the fixed_assets table in local DB (fixed_assets table update karein)
+    await db.fixed_assets.update(id, updates);
+
+    // 3. Add the fixed_assets update to the sync queue (sync queue mein bhi dalein)
+    await db.sync_queue.add({
+      table_name: 'fixed_assets',
+      action: 'update',
+      data: { id, ...updates }
+    });
+
+    // 4. --- NAYA IZAFA: Update linked Cash Adjustment ---
+    // Ab hum is asset se judi cash adjustment ko dhoond kar update karenge
+    const voucherToFind = `ASSET-${id.slice(0,6).toUpperCase()}`;
+    const linkedAdjustment = await db.cash_adjustments.where('voucher_no').equals(voucherToFind).first();
+
+    if (linkedAdjustment) {
+      // Check karein ke kya amount ya payment method tabdeel hua hai
+      const oldAmount = Number(oldAsset.cost_amount) || 0;
+      const newAmount = Number(updates.cost_amount || oldAsset.cost_amount) || 0; 
+      const amountChanged = newAmount !== oldAmount;
+
+      const oldPaymentMethod = oldAsset.payment_method;
+      const newPaymentMethod = updates.payment_method || oldPaymentMethod;
+      const paymentMethodChanged = newPaymentMethod !== oldPaymentMethod;
+
+      const oldAssetName = oldAsset.asset_name;
+      const newAssetName = updates.asset_name || oldAssetName;
+      const assetNameChanged = newAssetName !== oldAssetName;
+
+      if (amountChanged || paymentMethodChanged || assetNameChanged) {
+        const adjustmentUpdates = {
+          amount: newAmount,
+          payment_method: newPaymentMethod,
+          notes: `Asset Purchased: ${newAssetName} (Updated)`, // Notes bhi update karein
+          updated_at: new Date().toISOString()
+        };
+
+        // Cash adjustment record ko local DB mein update karein
+        await db.cash_adjustments.update(linkedAdjustment.id, adjustmentUpdates);
+
+        // Cash adjustment update ko bhi sync queue mein dalein
+        await db.sync_queue.add({
+          table_name: 'cash_adjustments',
+          action: 'update',
+          data: { id: linkedAdjustment.id, ...adjustmentUpdates }
+        });
+      }
+    }
+    
+    // Signal bhejein taake Dashboard aur Day Book foran update ho jaye
+    window.dispatchEvent(new CustomEvent('local-db-updated'));
+
+    return true;
+  },
+
+  // 4. Asset delete karna
+  async deleteFixedAsset(id) {
+    // Local delete
+    await db.fixed_assets.delete(id);
+    
+    // Sync Queue
+    await db.sync_queue.add({
+      table_name: 'fixed_assets',
+      action: 'delete',
+      data: { id }
+    });
+
+    // --- NAYA IZAFA: Auto Cash Refund (Paise Wapis Aana) ---
+    // Jab asset delete ho, to uski cash adjustment bhi delete kar dein taake paise wapis aa jayein
+    const voucherToFind = `ASSET-${id.slice(0,6).toUpperCase()}`;
+    const linkedAdjustment = await db.cash_adjustments.where('voucher_no').equals(voucherToFind).first();
+    
+    if (linkedAdjustment) {
+        await db.cash_adjustments.delete(linkedAdjustment.id);
+        await db.sync_queue.add({
+            table_name: 'cash_adjustments',
+            action: 'delete',
+            data: { id: linkedAdjustment.id }
+        });
+    }
+    
+    // Signal bhejein taake Dashboard aur Day Book foran update ho jaye
+    window.dispatchEvent(new CustomEvent('local-db-updated'));
+    // ----------------------------------------------------------
+    
     return true;
   },
 

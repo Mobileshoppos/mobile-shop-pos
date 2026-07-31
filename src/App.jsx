@@ -42,8 +42,9 @@ import About from './pages/About';
 import { useStaff } from './context/StaffContext';
 import LockScreen from './components/LockScreen';
 import { setLoggerNotification } from './utils/logger';
-import { useRegisterSW } from 'virtual:pwa-register/react'; // NAYA IZAFA: PWA Update ke liye
+import { useRegisterSW } from 'virtual:pwa-register/react';
 import ControlCenter from './pages/ControlCenter';
+import FixedAssets from './pages/FixedAssets';
 
 // NAYA SECURITY GUARD: Sirf Owner ko aane dega
 const OwnerOnly = ({ children }) => {
@@ -262,6 +263,12 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route path="expenses" element={
           <PermissionGuard permission="can_manage_expenses">
             <Expenses />
+          </PermissionGuard>
+        } />
+
+        <Route path="/fixed-assets" element={
+          <PermissionGuard permission="can_manage_fixed_assets">
+            <FixedAssets />
           </PermissionGuard>
         } />
 

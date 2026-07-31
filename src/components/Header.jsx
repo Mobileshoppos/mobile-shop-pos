@@ -433,7 +433,7 @@ return (
                   )}
                   {location.pathname === '/categories' && (
                      <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <TagsOutlined style={{ marginRight: '8px' }} /> Categories & Attributes
+                       <TagsOutlined style={{ marginRight: '8px' }} /> Product Categories
                      </span>
                   )}
                   {location.pathname === '/purchases' && (
@@ -499,6 +499,12 @@ return (
                   {location.pathname === '/reports' && (
                      <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <PieChartOutlined style={{ marginRight: '8px' }} /> Reports
+                     </span>
+                  )}
+                  {/* --- NAYA IZAFA: Fixed Assets ka title Header mein --- */}
+                  {location.pathname === '/fixed-assets' && (
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                       <DatabaseOutlined style={{ marginRight: '8px' }} /> Fixed Assets
                      </span>
                   )}
                 </>

@@ -24,13 +24,14 @@ const permissionOptions = [
   { label: 'Manage Purchases', value: 'can_manage_purchases' },
   { label: 'Manage Suppliers', value: 'can_manage_suppliers' },
 
-  // --- Right Column (5 Items) ---
+  // --- Right Column (6 Items) ---
   { label: 'Manage Expenses', value: 'can_manage_expenses' },
   { label: 'Manage Exp. Categories', value: 'can_manage_expense_categories' },
+  { label: 'Manage Fixed Assets', value: 'can_manage_fixed_assets' }, // <--- NAYA IZAFA
   { label: 'Manage Shop Profile', value: 'can_manage_profile' },
   { label: 'Edit/Delete Inventory', value: 'can_edit_inventory' },
   { label: 'Manage Customers', value: 'can_manage_people' },
-  { label: 'Set Credit Limits', value: 'can_set_credit_limit' } // <--- NAYA IZAFA
+  { label: 'Set Credit Limits', value: 'can_set_credit_limit' }
 ];
 
 const StaffManagement = () => {

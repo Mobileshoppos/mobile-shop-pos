@@ -7,7 +7,7 @@ export const db = new Dexie('MobileShopDB');
 // Note: Hum sirf wohi columns likhte hain jin se hamein search ya filter karna ho.
 // Baqi data khud ba khud save ho jata hai.
 
-db.version(64).stores({
+db.version(68).stores({
   // --- Business Data Tables (Jo Supabase se sync honge) ---
   
   // Naya: Custom Accounts (Bank, Cash, Wallets)
@@ -80,5 +80,8 @@ db.version(64).stores({
   register_sessions: 'id, user_id, register_id, staff_id, opened_at, closed_at',
 
   // Active Cart: Page refresh par data bachane ke liye (Sirf Local)
-  active_cart: 'id'
+  active_cart: 'id',
+
+  // NAYA IZAFA: Fixed Assets (Dukan ke mustaqil aasaasay)
+  fixed_assets: 'id, local_id, user_id, asset_name, category, purchase_date, payment_method, updated_at, status, current_value, serial_number, location, funding_source, useful_life_years, salvage_value, depreciation_mode'
 });

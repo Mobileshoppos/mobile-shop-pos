@@ -1674,7 +1674,7 @@ const SettingsPage = () => {
                   <Divider />
 
                   {/* 4. Categories Shortcuts */}
-                  <Title level={5} style={{ fontSize: '14px' }}>Categories</Title>
+                  <Title level={5} style={{ fontSize: '14px' }}>Product Categories</Title>
                   <Row align="middle" gutter={[16, 16]} style={{ marginBottom: '8px' }}>
                     <Col xs={12} sm={8}><Text>Add New Category</Text></Col>
                     <Col xs={12} sm={16}>

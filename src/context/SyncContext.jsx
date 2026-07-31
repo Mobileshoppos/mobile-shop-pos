@@ -225,6 +225,10 @@ export const SyncProvider = ({ children }) => {
       const { data: ledger } = await supabase.from('staff_ledger').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('staff_ledger', ledger, pendingIds);
 
+      // 10. Fixed Assets (NAYA IZAFA)
+      const { data: fixedAssets } = await supabase.from('fixed_assets').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('fixed_assets', fixedAssets, pendingIds);
+
       // Professional Way: Agli dafa ke liye wahi waqt save karein jo sync shuru hone par server ne bataya tha
       await db.user_settings.put({ id: 'last_sync', value: serverNow });
       console.log('Syncing completed successfully!');
@@ -653,6 +657,16 @@ export const SyncProvider = ({ children }) => {
                     .upsert([item.data], { onConflict: 'id' });
                 error = supError;
             }
+            // --- NAYA IZAFA: Cash Adjustments Update & Delete ---
+            else if (item.table_name === 'cash_adjustments' && item.action === 'update') {
+                const { id, ...updates } = item.data;
+                const { error: supError } = await supabase.from('cash_adjustments').update(updates).eq('id', id);
+                error = supError;
+            }
+            else if (item.table_name === 'cash_adjustments' && item.action === 'delete') {
+                const { error: supError } = await supabase.from('cash_adjustments').delete().eq('id', item.data.id);
+                error = supError;
+            }
 
             // --- Daily Closings Sync (UUID Simplified) ---
             else if (item.table_name === 'daily_closings' && item.action === 'create') {
@@ -844,6 +858,21 @@ export const SyncProvider = ({ children }) => {
             }
             else if (item.table_name === 'staff_ledger' && item.action === 'delete') {
                 const { error: supError } = await supabase.from('staff_ledger').delete().eq('id', item.data.id);
+                error = supError;
+            }
+
+            // --- NAYA IZAFA: Fixed Assets Upload Logic ---
+            else if (item.table_name === 'fixed_assets' && item.action === 'create') {
+                const { error: supError } = await supabase.from('fixed_assets').upsert([item.data], { onConflict: 'id' });
+                error = supError;
+            }
+            else if (item.table_name === 'fixed_assets' && item.action === 'update') {
+                const { id, ...updates } = item.data;
+                const { error: supError } = await supabase.from('fixed_assets').update(updates).eq('id', id);
+                error = supError;
+            }
+            else if (item.table_name === 'fixed_assets' && item.action === 'delete') {
+                const { error: supError } = await supabase.from('fixed_assets').delete().eq('id', item.data.id);
                 error = supError;
             }
 

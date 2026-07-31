@@ -54,19 +54,20 @@ const menuItems = [
       icon: <AppstoreOutlined />,
       label: 'Product Mgmt',
       children: [
-        { key: '/categories', icon: <TagsOutlined />, label: <Link to="/categories">Categories</Link> },
+        { key: '/categories', icon: <TagsOutlined />, label: <Link to="/categories">Product Categories</Link> },
         { key: '/purchases', icon: <FileTextOutlined />, label: <Link to="/purchases">Purchase Orders</Link> },
       ]
     },
 
-    // 3. People Group
+    // 3. People & Team Group
     {
       key: 'people',
       icon: <TeamOutlined />,
-      label: 'Partners',
+      label: 'Partners & Team',
       children: [
         { key: '/customers', icon: <UserSwitchOutlined />, label: <Link to="/customers">Customers</Link> },
         { key: '/suppliers', icon: <ShopOutlined />, label: <Link to="/suppliers">Suppliers</Link> },
+        { key: '/staff', icon: <TeamOutlined />, label: <Link to="/staff">Staff / Team</Link> }, // <--- YAHAN MOVED
       ]
     },
 
@@ -79,6 +80,7 @@ const menuItems = [
         { key: '/sales-history', icon: <HistoryOutlined />, label: <Link to="/sales-history">Sales History</Link> },
         { key: '/expenses', icon: <DollarCircleOutlined />, label: <Link to="/expenses">Expenses</Link> },
         { key: '/expense-categories', icon: <FileProtectOutlined />, label: <Link to="/expense-categories">Exp. Categories</Link> },
+        { key: '/fixed-assets', icon: <DatabaseOutlined />, label: <Link to="/fixed-assets">Fixed Assets</Link> },
         { key: '/damaged-stock', icon: <AlertOutlined />, label: <Link to="/damaged-stock">Damaged Stock</Link> },
       ]
     },
@@ -94,7 +96,6 @@ const menuItems = [
       icon: <SettingOutlined />,
       label: 'Settings',
       children: [
-        { key: '/staff', icon: <TeamOutlined />, label: <Link to="/staff">Staff / Team</Link> },
         { key: '/profile', icon: <ProfileOutlined />, label: <Link to="/profile">Profile</Link> },
         { key: '/subscription', icon: <CreditCardOutlined />, label: <Link to="/subscription">Subscription</Link> },
         { key: '/settings', icon: <ToolOutlined />, label: <Link to="/settings">App Settings</Link> },
@@ -166,6 +167,7 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
             if (child.key === '/sales-history' && !can('can_view_sales_history')) return false;
             if (child.key === '/expenses' && !can('can_manage_expenses')) return false;
             if (child.key === '/expense-categories' && !can('can_manage_expense_categories')) return false;
+            if (child.key === '/fixed-assets' && !can('can_manage_fixed_assets')) return false; // <--- UPDATED
             if (child.key === '/damaged-stock' && !can('can_edit_inventory')) return false;
             if (child.key === '/profile' && !can('can_manage_profile')) return false;
 
