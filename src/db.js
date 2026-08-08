@@ -7,7 +7,7 @@ export const db = new Dexie('MobileShopDB');
 // Note: Hum sirf wohi columns likhte hain jin se hamein search ya filter karna ho.
 // Baqi data khud ba khud save ho jata hai.
 
-db.version(68).stores({
+db.version(69).stores({
   // --- Business Data Tables (Jo Supabase se sync honge) ---
   
   // Naya: Custom Accounts (Bank, Cash, Wallets)
@@ -37,7 +37,7 @@ db.version(68).stores({
   expenses: 'id, local_id, voucher_no, category_id, expense_date, user_id, staff_id, payment_method, updated_at, register_id, session_id',
   expense_categories: 'id, local_id, user_id',
 
-  inventory: 'id, local_id, product_id, purchase_id, status, user_id, staff_id, variant_id, imei, available_qty, sold_qty, updated_at, purchase_price, batch_number, expiry_date', 
+  inventory: 'id, local_id, product_id, purchase_id, status, user_id, staff_id, variant_id, imei, available_qty, sold_qty, updated_at, purchase_price, batch_number, expiry_date, warehouse_id', 
   customer_payments: 'id, local_id, voucher_no, customer_id, user_id, staff_id, payment_method, updated_at, register_id, session_id',
   sale_returns: 'id, local_id, sale_id, customer_id, user_id, updated_at, created_at, staff_id, tax_refunded, register_id, session_id, fbr_invoice_number',
   sale_return_items: 'id, return_id, inventory_id',
@@ -83,5 +83,9 @@ db.version(68).stores({
   active_cart: 'id',
 
   // NAYA IZAFA: Fixed Assets (Dukan ke mustaqil aasaasay)
-  fixed_assets: 'id, local_id, user_id, asset_name, category, purchase_date, payment_method, updated_at, status, current_value, serial_number, location, funding_source, useful_life_years, salvage_value, depreciation_mode'
+  fixed_assets: 'id, local_id, user_id, asset_name, category, purchase_date, payment_method, updated_at, status, current_value, serial_number, location, funding_source, useful_life_years, salvage_value, depreciation_mode',
+
+  // NAYA IZAFA: Warehouses / Godowns
+  warehouses: 'id, local_id, user_id, name, is_default, updated_at',
+  stock_transfers: 'id, local_id, voucher_no, user_id, from_warehouse_id, to_warehouse_id, product_id, created_at'
 });

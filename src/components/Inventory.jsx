@@ -53,7 +53,7 @@ const formatPriceRange = (min, max, currency) => {
   return `${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`;
 };
 
-const ProductList = ({ isSingleColumn, showArchived, products, categories, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged, refFirstStock, onPrintBarcode, onViewLedger }) => {
+const ProductList = ({ isSingleColumn, showArchived, products, categories, warehouses, filterWarehouse, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged, onTransferStock, refFirstStock, onPrintBarcode, onViewLedger }) => {
   const { token } = theme.useToken(); // Control Center Connection
   const { profile } = useAuth();
   const limits = getPlanLimits(profile?.subscription_tier); // <--- NAYA IZAFA: Yahan limits ko define kar diya
@@ -86,21 +86,29 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, loadi
 
       for (const variant of variants) {
         const attributesKey = createStableAttributeKey(variant.item_attributes);
-        // NAYA IZAFA: Batch aur Expiry ko key mein shamil kiya taake alag alag rows banein
+        // FIX: Warehouse ko key se nikaal diya taake row ek hi banay
         const key = `${attributesKey}-${variant.sale_price}-${variant.purchase_price}-${variant.batch_number || 'nobatch'}-${variant.expiry_date || 'noexp'}`;
 
         if (itemsMap.has(key)) {
           const existing = itemsMap.get(key);
-          existing.display_quantity += (variant.available_qty || 0); // 1 ki jagah available_qty jama karein
+          existing.display_quantity += (variant.available_qty || 0); 
           existing.ids.push(variant.id);
           if (variant.imei) existing.imeis.push(variant.imei);
+          
+          // NAYA IZAFA: Location wise hisaab rakhna
+          const whKey = variant.warehouse_id || 'default';
+          existing.locations[whKey] = (existing.locations[whKey] || 0) + (variant.available_qty || 0);
+
         } else {
-          itemsMap.set(key, {
+          const newVariant = {
             ...variant,
-            display_quantity: variant.available_qty || 0, // 1 ki jagah available_qty rakhein
+            display_quantity: variant.available_qty || 0, 
             ids: [variant.id],
             imeis: variant.imei ? [variant.imei] : [],
-          });
+            locations: {} // NAYA IZAFA
+          };
+          newVariant.locations[variant.warehouse_id || 'default'] = variant.available_qty || 0;
+          itemsMap.set(key, newVariant);
         }
       }
       return Array.from(itemsMap.values());
@@ -356,6 +364,17 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, loadi
                                 🛡️ {variant.warranty_days}
                               </Tag>
                             )}
+                            
+                            {/* --- NAYA IZAFA: Location Wise Breakdown Tags --- */}
+                            {variant.locations && Object.entries(variant.locations).map(([whId, qty]) => {
+                               if (qty <= 0) return null;
+                               const whName = whId === 'default' ? 'Main Shop' : (warehouses?.find(w => w.id === whId)?.name || 'Main Shop');
+                               return (
+                                 <Tag key={whId} color="purple" style={{ margin: 0, fontSize: '11px', padding: '1px 6px', border: 'none', background: token.colorFillAlter, lineHeight: '1.2' }}>
+                                   🏠 {whName}: {qty}
+                                 </Tag>
+                               );
+                            })}
                           </div>
                         )}
                       </div>
@@ -394,6 +413,17 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, loadi
                           onClick={() => onMarkDamaged(variant)} 
                           title="Mark as Damaged/Defective"
                         />
+                        {/* --- NAYA IZAFA: Transfer Button --- */}
+                        <Tooltip title={filterWarehouse === 'all' ? "Select a specific Location/Godown from the top filter to transfer stock." : "Transfer Stock to another Godown/Shop"}>
+                          <Button 
+                            type="text" 
+                            disabled={filterWarehouse === 'all'}
+                            icon={<span style={{fontSize: '16px'}}>⇄</span>} 
+                            size="small" 
+                            style={{ color: filterWarehouse === 'all' ? token.colorTextDisabled : token.colorInfo, fontSize: '16px' }} 
+                            onClick={() => onTransferStock({ ...variant, product_name: product.name })} 
+                          />
+                        </Tooltip>
                       </div>
                     )}
                   </div>
@@ -463,6 +493,13 @@ const Inventory = () => {
   const [totalModelCount, setTotalModelCount] = useState(0); // <--- NAYA: Total Models ki ginti
   const [categories, setCategories] = useState([]);
   const [categoryTree, setCategoryTree] = useState([]); // NAYA IZAFA: TreeSelect ke liye
+  const [warehouses, setWarehouses] = useState([]); // <--- NAYA IZAFA
+  const [filterWarehouse, setFilterWarehouse] = useState('all'); // <--- NAYA IZAFA
+  
+  // Transfer Modal States
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferItem, setTransferItem] = useState(null);
+  const [transferForm] = Form.useForm();
   
   // NAYA IZAFA: Flat categories ko Tree mein badalne ka function
   const buildCategoryTree = (flatCategories) => {
@@ -653,6 +690,13 @@ const Inventory = () => {
         });
 
         setGlobalSearchMap(vMap);
+        
+        // NAYA IZAFA: Load Warehouses
+        if (DataService.getWarehouses) {
+            const whData = await DataService.getWarehouses();
+            setWarehouses(whData);
+        }
+
         const localCategories = await db.categories.toArray();
         if (localCategories.length > 0) {
             const visibleCategories = localCategories.filter(cat => cat.is_visible !== false);
@@ -689,7 +733,7 @@ const Inventory = () => {
         const allModelsCount = await db.products.count();
         setTotalModelCount(allModelsCount);
 
-        const { productsData } = await DataService.getInventoryData(showArchived);
+        const { productsData } = await DataService.getInventoryData(showArchived, filterWarehouse);
         let filteredProducts = productsData;
 
         // === CHANGE 1: UPDATED SEARCH (Tags & Attributes bhi dhoondega) ===
@@ -778,7 +822,7 @@ const Inventory = () => {
       } catch (error) { message.error("Error fetching products: " + error.message); setProducts([]); } finally { setLoading(false); }
     }, 300);
     return () => clearTimeout(searchHandler);
-  }, [user, searchText, filterCategory, filterAttributes, priceRange, sortBy, message, showLowStockOnly, location, refreshTrigger, showArchived]);
+  }, [user, searchText, filterCategory, filterWarehouse, filterAttributes, priceRange, sortBy, message, showLowStockOnly, location, refreshTrigger, showArchived]);
 
   const handleResetFilters = () => {
     setSearchText(''); setFilterCategory(null); setFilterAttributes({}); setPriceRange([null, null]); setSortBy('name_asc');
@@ -1063,6 +1107,25 @@ const Inventory = () => {
     }
   };
 
+  // --- NAYA IZAFA: Transfer Stock Handler ---
+  const handleTransferOk = async (values) => {
+    try {
+      if (!transferItem || !transferItem.ids) return;
+      
+      // Agar IMEI hai to qty hamesha 1 hogi, warna form se aayegi
+      const qtyToTransfer = transferItem.imei ? 1 : values.quantity;
+      
+      await DataService.transferStock(transferItem.ids[0], values.to_warehouse_id, qtyToTransfer, values.notes, activeStaff?.id);
+      
+      message.success('Stock transferred successfully!');
+      setIsTransferModalOpen(false);
+      transferForm.resetFields();
+      setRefreshTrigger(prev => prev + 1);
+    } catch (error) {
+      message.error(error.message);
+    }
+  };
+
   const handleMarkDamagedOk = async (values) => {
     try {
       if (!damagedItem || !damagedItem.ids) return;
@@ -1141,7 +1204,7 @@ const Inventory = () => {
       <div style={{ marginBottom: '18px', padding: isMobile ? '0 8px' : '0' }}>
         <Row gutter={[8, 8]} align="middle">
           {/* 1. Search Box (Sab se bada) */}
-          <Col xs={24} sm={8} md={9}>
+          <Col xs={24} sm={8} md={7}>
           <div ref={refSearch}>
             <Input 
               id="inv-search-input"
@@ -1153,6 +1216,19 @@ const Inventory = () => {
               allowClear 
             />
             </div>
+          </Col>
+
+          {/* NAYA IZAFA: Location/Warehouse Select */}
+          <Col xs={12} sm={6} md={4}>
+            <Select
+              style={{ width: '100%' }}
+              value={filterWarehouse}
+              onChange={(value) => setFilterWarehouse(value)}
+              options={[
+                { value: 'all', label: 'All Locations' },
+                ...warehouses.map(w => ({ value: w.id, label: w.name }))
+              ]}
+            />
           </Col>
 
           {/* 2. Category Select (TreeSelect) */}
@@ -1183,7 +1259,7 @@ const Inventory = () => {
           </Col>
 
           {/* 4. Action Buttons (Filter Toggle & Reset) */}
-          <Col xs={24} sm={4} md={7} style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
+          <Col xs={24} sm={4} md={5} style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
           
              {/* Reset Button */}
              <Tooltip title="Reset All Filters">
@@ -1402,6 +1478,8 @@ const Inventory = () => {
         isSingleColumn={isSingleColumn} // <--- NAYA IZAFA
         products={products} 
         categories={categories}
+        warehouses={warehouses} // <--- NAYA IZAFA
+        filterWarehouse={filterWarehouse} // <--- NAYA IZAFA
         loading={loading} 
         onDelete={handleDeleteProduct} 
         onAddStock={handleAddStockClick}
@@ -1411,6 +1489,11 @@ const Inventory = () => {
             setDamagedItem(variant);
             damagedForm.setFieldsValue({ quantity: 1 });
             setIsDamagedModalOpen(true);
+        }}
+        onTransferStock={(variant) => {
+            setTransferItem(variant);
+            transferForm.setFieldsValue({ quantity: 1 });
+            setIsTransferModalOpen(true);
         }}
         refFirstStock={refFirstStock}
         showArchived={showArchived}
@@ -1789,7 +1872,42 @@ const Inventory = () => {
   />
 )}
 
-{/* DAMAGED STOCK MODAL */}
+{/* --- NAYA IZAFA: TRANSFER STOCK MODAL --- */}
+      <Modal
+        title="Transfer Stock"
+        open={isTransferModalOpen}
+        onOk={transferForm.submit}
+        onCancel={() => setIsTransferModalOpen(false)}
+        okText="Transfer Now"
+      >
+        <Form form={transferForm} layout="vertical" onFinish={handleTransferOk}>
+          <Text type="secondary" style={{display: 'block', marginBottom: '15px'}}>
+            Product: <b>{transferItem?.product_name}</b><br/>
+            Current Location: <b>{warehouses.find(w => w.id === transferItem?.warehouse_id)?.name || 'Main Shop'}</b><br/>
+            Available to transfer: <b>{transferItem?.display_quantity} units</b>
+          </Text>
+          
+          <Form.Item name="to_warehouse_id" label="Transfer To (Destination)" rules={[{ required: true, message: 'Please select destination' }]}>
+            <Select placeholder="Select Godown/Shop">
+              {warehouses.filter(w => w.id !== transferItem?.warehouse_id).map(w => (
+                <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          {!transferItem?.imei && (
+            <Form.Item name="quantity" label="Quantity to Transfer" rules={[{ required: true }]}>
+              <InputNumber min={1} max={transferItem?.display_quantity} style={{ width: '100%' }} />
+            </Form.Item>
+          )}
+
+          <Form.Item name="notes" label="Transfer Notes (Optional)">
+            <Input.TextArea placeholder="e.g. Sent via driver Ali" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* DAMAGED STOCK MODAL */}
       <Modal
         title={<span><AlertOutlined style={{color: token.colorError}} /> Mark Stock as Damaged</span>}
         open={isDamagedModalOpen}
@@ -1839,6 +1957,7 @@ const Inventory = () => {
         visible={isLedgerModalOpen}
         onClose={() => setIsLedgerModalOpen(false)}
         product={selectedProductForLedger}
+        warehouses={warehouses} // <--- NAYA IZAFA: Godowns ka data modal ko bheja
       />
 
     </div>

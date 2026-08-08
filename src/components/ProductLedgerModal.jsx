@@ -9,7 +9,7 @@ import DataExport from './DataExport'; // <--- NAYA IZAFA
 
 const { Text, Title } = Typography;
 
-const ProductLedgerModal = ({ visible, onClose, product }) => {
+const ProductLedgerModal = ({ visible, onClose, product, warehouses }) => {
     const { token } = theme.useToken();
     const { profile } = useAuth();
     const [loading, setLoading] = useState(false);
@@ -131,15 +131,18 @@ const ProductLedgerModal = ({ visible, onClose, product }) => {
                     if (inv.batch_number) batchInfo += ` | B.No: ${inv.batch_number}`;
                     if (inv.expiry_date) batchInfo += ` | Exp: ${dayjs(inv.expiry_date).format('DD/MM/YY')}`;
 
+                    // NAYA IZAFA: Warehouse ka naam nikalna
+                    const whName = warehouses?.find(w => w.id === inv.warehouse_id)?.name || 'Main Shop';
+                    
                     history.push({
                         id: `pur-${inv.id}`,
                         date: purchase?.purchase_date || inv.created_at,
                         type: 'Purchase',
                         qty: `+${originalQty}`,
-                        numericQty: originalQty, // <--- NAYA IZAFA: Calculation ke liye
-                        amount: (inv.purchase_price || 0) * originalQty, // <--- NAYA IZAFA: Value
+                        numericQty: originalQty, 
+                        amount: (inv.purchase_price || 0) * originalQty, 
                         color: 'blue',
-                        details: `Purchased (Inv: ${purchase?.invoice_id || 'N/A'})${batchInfo}`
+                        details: `Purchased into ${whName} (Inv: ${purchase?.invoice_id || 'N/A'})${batchInfo}`
                     });
                 }
                 
@@ -188,7 +191,35 @@ const ProductLedgerModal = ({ visible, onClose, product }) => {
                 });
             }
 
-            // 3. --- NAYA IZAFA: RUNNING BALANCE CALCULATION ---
+            // 3. --- NAYA IZAFA: Fetch Stock Transfers ---
+            const transfers = await db.stock_transfers.where('product_id').equals(product.id).toArray();
+            for (const tr of transfers) {
+                const fromWh = warehouses?.find(w => w.id === tr.from_warehouse_id)?.name || 'Main Shop';
+                const toWh = warehouses?.find(w => w.id === tr.to_warehouse_id)?.name || 'Main Shop';
+                
+                // NAYA IZAFA: Staff ka naam nikalna
+                let staffName = 'Owner / Admin';
+                if (tr.staff_id) {
+                    const staff = await db.staff_members.get(tr.staff_id);
+                    if (staff) staffName = staff.name;
+                }
+
+                // NAYA IZAFA: Voucher No
+                const vNo = tr.voucher_no || `TRF-${tr.id.slice(0,6).toUpperCase()}`;
+                
+                history.push({
+                    id: `trf-${tr.id}`,
+                    date: tr.created_at,
+                    type: 'Transfer',
+                    qty: `0`, // Global balance change nahi hota, sirf jagah badalti hai
+                    numericQty: 0, 
+                    amount: 0, 
+                    color: 'geekblue',
+                    details: `Transferred ${tr.quantity} units from ${fromWh} to ${toWh} (Ref: ${vNo}). Handled by: ${staffName}. ${tr.notes ? `Notes: ${tr.notes}` : ''}`
+                });
+            }
+
+            // 4. --- NAYA IZAFA: RUNNING BALANCE CALCULATION ---
             // Pehle purani tareekh se nayi tareekh ki taraf sort karein taake balance sahi jama ho
             history.sort((a, b) => new Date(a.date) - new Date(b.date));
             
@@ -295,9 +326,33 @@ const ProductLedgerModal = ({ visible, onClose, product }) => {
                                     </Tag>
                                 </Descriptions.Item>
                                 <Descriptions.Item label="Current Stock">
-                                    <Tag style={{ fontSize: '14px', backgroundColor: 'transparent', color: token.colorCardDetailsText, borderColor: token.colorCardBorder, fontWeight: 'bold' }}>
-                                        {product?.quantity} Units
-                                    </Tag>
+                                    <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                                        <Text strong style={{ fontSize: '14px', color: token.colorCardHeadingsText }}>
+                                            {product?.quantity} Units <span style={{ fontSize: '11px', fontWeight: 'normal', color: token.colorCardColumnsTitleText }}>(Total)</span>
+                                        </Text>
+                                        {/* --- NAYA IZAFA: Location Wise Breakdown (Compact & Aligned) --- */}
+                                        <Space wrap size={4}>
+                                            {(() => {
+                                                const stockByLoc = {};
+                                                product?.groupedVariants?.forEach(v => {
+                                                    if (v.locations) {
+                                                        Object.entries(v.locations).forEach(([whId, qty]) => {
+                                                            stockByLoc[whId] = (stockByLoc[whId] || 0) + qty;
+                                                        });
+                                                    }
+                                                });
+                                                return Object.entries(stockByLoc).map(([whId, qty]) => {
+                                                    if (qty <= 0) return null;
+                                                    const whName = whId === 'default' ? 'Main Shop' : (warehouses?.find(w => w.id === whId)?.name || 'Main Shop');
+                                                    return (
+                                                        <Tag key={whId} color="purple" style={{ margin: 0, fontSize: '11px', padding: '0 6px', border: 'none', background: token.colorFillAlter }}>
+                                                            🏠 {whName}: <b>{qty}</b>
+                                                        </Tag>
+                                                    );
+                                                });
+                                            })()}
+                                        </Space>
+                                    </Space>
                                 </Descriptions.Item>
 
                                 {/* Row 3 */}
@@ -331,14 +386,15 @@ const ProductLedgerModal = ({ visible, onClose, product }) => {
                                 size="small"
                                 value={viewTransactionType}
                                 onChange={(val) => setViewTransactionType(val)}
-                                style={{ width: '130px' }}
+                                style={{ width: '140px' }}
                                 styles={{ popup: { root: { zIndex: 2000 } } }}
                             >
                                 <Select.Option value="all">All Types</Select.Option>
-                                <Select.Option value="Sale">Only Sales</Select.Option>
-                                <Select.Option value="Purchase">Only Purchases</Select.Option>
-                                <Select.Option value="Damaged">Only Damaged</Select.Option>
-                                <Select.Option value="Returned">Only Returns</Select.Option>
+                                <Select.Option value="Sale">Sales</Select.Option>
+                                <Select.Option value="Purchase">Purchases</Select.Option>
+                                <Select.Option value="Damaged">Damaged</Select.Option>
+                                <Select.Option value="Returned">Returns</Select.Option>
+                                <Select.Option value="Transfer">Transfers</Select.Option>
                             </Select>
                             
                             {/* Date Filter */}
@@ -433,10 +489,11 @@ const ProductLedgerModal = ({ visible, onClose, product }) => {
                         styles={{ popup: { root: { zIndex: 2000 } } }}
                     >
                         <Select.Option value="all">All Transactions</Select.Option>
-                        <Select.Option value="Sale">Only Sales</Select.Option>
-                        <Select.Option value="Purchase">Only Purchases</Select.Option>
-                        <Select.Option value="Damaged">Only Damaged Stock</Select.Option>
-                        <Select.Option value="Returned">Only Supplier Returns</Select.Option>
+                        <Select.Option value="Sale">Sales Only</Select.Option>
+                        <Select.Option value="Purchase">Purchases Only</Select.Option>
+                        <Select.Option value="Damaged">Damaged Stock Only</Select.Option>
+                        <Select.Option value="Returned">Supplier Returns Only</Select.Option>
+                        <Select.Option value="Transfer">Stock Transfers Only</Select.Option>
                     </Select>
                 </Form.Item>
 

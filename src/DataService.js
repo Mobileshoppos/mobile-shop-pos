@@ -636,18 +636,28 @@ const DataService = {
     }
   },
 
-  // Hum ne parameter 'showArchivedOnly' add kiya hai
-  async getInventoryData(showArchivedOnly = false) { 
+  // Hum ne parameter 'showArchivedOnly' aur 'warehouseId' add kiya hai
+  async getInventoryData(showArchivedOnly = false, warehouseId = 'all') { 
     const allProducts = await db.products.toArray();
     const categories = await db.categories.toArray();
     
     // Agar showArchivedOnly true hai, to sirf 'false' wale dikhao. Warna 'true' wale.
     const products = allProducts.filter(p => showArchivedOnly ? p.is_active === false : p.is_active !== false);
     
-        const availableItems = await db.inventory
+    let availableItems = await db.inventory
         .where('status').anyOf('Available', 'available')
         .filter(item => item.available_qty > 0)
         .toArray();
+
+    // --- NAYA IZAFA: Warehouse (Location) Filter ---
+    if (warehouseId !== 'all') {
+        // Agar kisi purane item ka warehouse_id null hai, to wo automatically Main Shop (Default) ka hissa mana jayega
+        const defaultWh = await db.warehouses.filter(w => w.is_default).first();
+        availableItems = availableItems.filter(item => 
+            item.warehouse_id === warehouseId || 
+            (!item.warehouse_id && warehouseId === defaultWh?.id)
+        );
+    }
 
     // 2. Categories Map
     const categoryMap = {};
@@ -1597,6 +1607,7 @@ async addCustomer(customerData) {
                 wholesale_price: item.wholesale_price, // <--- NAYA IZAFA
                 imei: item.imei,
                 item_attributes: item.item_attributes,
+                warehouse_id: item.warehouse_id, // <--- NAYA IZAFA: Warehouse Update
                 status: (Number(item.quantity) - alreadyUsed) <= 0 ? 'Sold' : 'Available'
             });
         } else {
@@ -1619,7 +1630,8 @@ async addCustomer(customerData) {
                 item_attributes: item.item_attributes,
                 user_id: purchaseToUpdate.user_id,
                 status: 'Available',
-                supplier_id: supplier_id
+                supplier_id: supplier_id,
+                warehouse_id: item.warehouse_id // <--- NAYA IZAFA: Naye item ka Warehouse
             });
             // Sync queue ke liye ID update kar dein taake mismatch na ho
             item.id = newItemId;
@@ -2425,15 +2437,25 @@ async addCustomer(customerData) {
   },
 
   // --- UPDATED: Professional Inventory & Assets Report (With Potential Profit & Brand Logic) ---
-  async getInventoryReport(startDateStr, endDateStr) {
+  // NAYA IZAFA: warehouseId parameter add kiya gaya
+  async getInventoryReport(startDateStr, endDateStr, warehouseId = 'all') {
     // --- PLAN GUARD: Free users ko dummy data do (Marketing) ---
     const settings = await db.user_settings.toCollection().first();
     if (!settings || settings.subscription_tier === 'free') return { totalUnits: 450, totalAssetValue: 1250000, totalPotentialProfit: 250000, totalDamagedLoss: 4500, categoryValuation: [{name: 'Android', value: 800000, qty: 30}, {name: 'iPhone', value: 400000, qty: 10}], brandValuation: [{name: 'Samsung', value: 500000}, {name: 'Apple', value: 400000}], lowStockItems: [], outOfStockItems: [], slowMovingItems: [], stockFlowItems: [] };
     // --------------------------------------------
     const products = await db.products.toArray();
     const categories = await db.categories.toArray();
-    const inventory = await db.inventory.where('status').anyOf('Available', 'available').toArray();
+    let inventory = await db.inventory.where('status').anyOf('Available', 'available').toArray();
     
+    // --- NAYA IZAFA: Warehouse Filter for Reports ---
+    if (warehouseId !== 'all') {
+        const defaultWh = await db.warehouses.filter(w => w.is_default).first();
+        inventory = inventory.filter(item => 
+            item.warehouse_id === warehouseId || 
+            (!item.warehouse_id && warehouseId === defaultWh?.id)
+        );
+    }
+
     // 1. Basic Maps
     const catMap = {};
     categories.forEach(c => catMap[c.id] = c.name);
@@ -5504,6 +5526,103 @@ async addCustomer(customerData) {
     window.dispatchEvent(new CustomEvent('local-db-updated'));
     // ----------------------------------------------------------
     
+    return true;
+  },
+
+  // --- NAYA IZAFA: WAREHOUSES (GODOWNS) FUNCTIONS ---
+  
+  async getWarehouses() {
+    const warehouses = await db.warehouses.toArray();
+    // Default warehouse sab se upar aaye
+    return warehouses.sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0));
+  },
+
+  async addWarehouse(warehouseData) {
+    if (!warehouseData.id) warehouseData.id = crypto.randomUUID();
+    warehouseData.local_id = warehouseData.id;
+    warehouseData.created_at = new Date().toISOString();
+    warehouseData.updated_at = new Date().toISOString();
+    
+    await db.warehouses.add(warehouseData);
+    await db.sync_queue.add({ table_name: 'warehouses', action: 'create', data: warehouseData });
+    return warehouseData;
+  },
+
+  async updateWarehouse(id, updates) {
+    updates.updated_at = new Date().toISOString();
+    await db.warehouses.update(id, updates);
+    await db.sync_queue.add({ table_name: 'warehouses', action: 'update', data: { id, ...updates } });
+    return true;
+  },
+
+  async deleteWarehouse(id) {
+    await db.warehouses.delete(id);
+    await db.sync_queue.add({ table_name: 'warehouses', action: 'delete', data: { id } });
+    return true;
+  },
+
+  // --- NAYA IZAFA: STOCK TRANSFER FUNCTION ---
+  async transferStock(inventoryId, toWarehouseId, transferQty, notes, staffId) {
+    const item = await db.inventory.get(inventoryId);
+    if (!item) throw new Error("Item not found");
+    if (transferQty > item.available_qty) throw new Error("Not enough stock to transfer");
+
+    // NAYA IZAFA: Voucher Number Generate Karein
+    const { generateInvoiceId } = await import('./utils/idGenerator');
+    const shortId = await generateInvoiceId();
+    const voucherNo = `TRF-${shortId}`;
+
+    const transferRecord = {
+        id: crypto.randomUUID(),
+        local_id: crypto.randomUUID(),
+        voucher_no: voucherNo, // <--- NAYA IZAFA
+        user_id: item.user_id,
+        from_warehouse_id: item.warehouse_id,
+        to_warehouse_id: toWarehouseId,
+        product_id: item.product_id,
+        inventory_id: item.id,
+        quantity: transferQty,
+        notes: notes,
+        staff_id: staffId,
+        created_at: new Date().toISOString()
+    };
+
+    // 1. Transfer record save karein
+    await db.stock_transfers.add(transferRecord);
+    await db.sync_queue.add({ table_name: 'stock_transfers', action: 'create', data: transferRecord });
+
+    // 2. Inventory Update karein
+    if (item.imei || transferQty === item.available_qty) {
+        // Pura item transfer ho raha hai (Ya IMEI hai jiski qty hamesha 1 hoti hai)
+        await db.inventory.update(item.id, { warehouse_id: toWarehouseId });
+        await db.sync_queue.add({ table_name: 'inventory', action: 'update', data: { id: item.id, warehouse_id: toWarehouseId } });
+    } else {
+        // Bulk item ka kuch hissa transfer ho raha hai (Split row)
+        const newAvail = item.available_qty - transferQty;
+        const newQty = item.quantity - transferQty; // Total quantity bhi kam karni hogi
+        
+        await db.inventory.update(item.id, { available_qty: newAvail, quantity: newQty });
+        await db.sync_queue.add({ table_name: 'inventory', action: 'update', data: { id: item.id, available_qty: newAvail, quantity: newQty } });
+
+        const newItemId = crypto.randomUUID();
+        const newItem = {
+            ...item,
+            id: newItemId,
+            local_id: newItemId,
+            warehouse_id: toWarehouseId,
+            quantity: transferQty,
+            available_qty: transferQty,
+            sold_qty: 0,
+            returned_qty: 0,
+            damaged_qty: 0,
+            updated_at: new Date().toISOString()
+        };
+        await db.inventory.add(newItem);
+        await db.sync_queue.add({ table_name: 'inventory', action: 'create', data: newItem });
+    }
+
+    // Signal bhejein taake UI foran update ho
+    window.dispatchEvent(new CustomEvent('local-db-updated'));
     return true;
   },
 

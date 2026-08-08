@@ -12,8 +12,18 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
     const limits = getPlanLimits(profile?.subscription_tier); // <--- NAYA IZAFA
     const { message, modal } = App.useApp(); // <--- NAYA IZAFA: modal ko add kiya
     const [variants, setVariants] = useState([]);
+    const [warehouses, setWarehouses] = useState([]); // <--- NAYA IZAFA
     const [loading, setLoading] = useState(false);
     const [selectedVariants, setSelectedVariants] = useState([]);
+
+    // NAYA IZAFA: Load warehouses
+    useEffect(() => {
+        const loadWh = async () => {
+            const wh = await db.warehouses.toArray();
+            setWarehouses(wh);
+        };
+        loadWh();
+    }, []);
 
     useEffect(() => {
         if (product) {
@@ -21,9 +31,17 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
                 setLoading(true);
                 try {
                     // *** NAYA CODE (Local DB) ***
+                    // NAYA IZAFA: Sirf Main Shop ka data uthana hai
+                    const whData = await db.warehouses.toArray();
+                    const mainShop = whData.find(w => w.is_default);
+                    const mainShopId = mainShop ? mainShop.id : null;
+
                     const data = await db.inventory
                         .where('product_id').equals(product.id)
-                        .filter(item => item.status === 'Available' || item.status === 'available') // Case safety
+                        .filter(item => 
+                            (item.status === 'Available' || item.status === 'available') && 
+                            (!mainShopId || item.warehouse_id === mainShopId || !item.warehouse_id) // Sirf Main Shop
+                        )
                         .toArray();
                     
                     // Error check ki zaroorat nahi kyunke Dexie empty array dega agar kuch na mila
@@ -35,7 +53,7 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
                         // NAYA IZAFA: Agar IMEI hai to har item ki alag row banegi, warna bulk items group ho jayenge
                         const key = item.imei 
                             ? `${item.product_id}-${item.imei}` 
-                            : `${item.product_id}-${attributesKey}-${item.sale_price}-${item.wholesale_price}-${item.batch_number || 'nobatch'}-${item.expiry_date || 'noexp'}`;
+                            : `${item.product_id}-${attributesKey}-${item.sale_price}-${item.wholesale_price}-${item.batch_number || 'nobatch'}-${item.expiry_date || 'noexp'}-${item.warehouse_id || 'nowarehouse'}`;
 
                         if (!grouped[key]) {
                             grouped[key] = { ...item, inventory_ids: [], stock: 0, key: key };
@@ -166,7 +184,8 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
                                 Exp: {new Date(record.expiry_date).toLocaleDateString()}
                             </Tag>
                         )}
-                    </div>
+
+                        </div>
                 );
             }
         },

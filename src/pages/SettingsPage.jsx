@@ -102,6 +102,12 @@ const SettingsPage = () => {
   // Form handle karne ke liye simple states
   const [regName, setRegName] = useState('');
   const [regType, setRegType] = useState('counter');
+
+  // --- NAYA IZAFA: Warehouses / Godowns States ---
+  const [warehouses, setWarehouses] = useState([]);
+  const [isWarehouseModalVisible, setIsWarehouseModalVisible] = useState(false);
+  const [editingWarehouse, setEditingWarehouse] = useState(null);
+  const [warehouseName, setWarehouseName] = useState('');
   
   // --- NAYA IZAFA: Payment Accounts States ---
   const [paymentAccounts, setPaymentAccounts] = useState([]);
@@ -143,6 +149,12 @@ const SettingsPage = () => {
     if (DataService.getPaymentAccounts) {
         const accountsData = await DataService.getPaymentAccounts();
         setPaymentAccounts(accountsData);
+    }
+
+    // NAYA IZAFA: Warehouses load karein
+    if (DataService.getWarehouses) {
+        const whData = await DataService.getWarehouses();
+        setWarehouses(whData);
     }
   };
 
@@ -201,6 +213,50 @@ const SettingsPage = () => {
     await db.registers.delete(id);
     await db.sync_queue.add({ table_name: 'registers', action: 'delete', data: { id } });
     message.success("Node deleted successfully");
+    loadRegisters();
+  };
+
+  // --- NAYA IZAFA: Warehouse Handle Karne Ke Functions ---
+  const handleAddWarehouse = async () => {
+    if (!warehouseName) { message.error("Please enter a warehouse name"); return; }
+    
+    const newWh = {
+      id: editingWarehouse ? editingWarehouse.id : crypto.randomUUID(),
+      user_id: user.id,
+      name: warehouseName,
+      is_default: editingWarehouse ? editingWarehouse.is_default : (warehouses.length === 0), // Pehla godown default banega
+      updated_at: new Date().toISOString()
+    };
+
+    if (editingWarehouse) {
+      await DataService.updateWarehouse(editingWarehouse.id, newWh);
+      message.success("Warehouse updated");
+    } else {
+      await DataService.addWarehouse(newWh);
+      message.success("New Warehouse created");
+    }
+
+    setWarehouseName('');
+    setEditingWarehouse(null);
+    setIsWarehouseModalVisible(false);
+    loadRegisters();
+  };
+
+  const deleteWarehouse = async (id, isDefault) => {
+    if (isDefault) {
+        message.error("Cannot delete the default warehouse.");
+        return;
+    }
+
+    // Check if stock exists in this warehouse
+    const stockCount = await db.inventory.where('warehouse_id').equals(id).count();
+    if (stockCount > 0) {
+        message.error(`Cannot delete! There are ${stockCount} items currently in this warehouse. Transfer them first.`);
+        return;
+    }
+
+    await DataService.deleteWarehouse(id);
+    message.success("Warehouse deleted successfully");
     loadRegisters();
   };
 
@@ -1459,6 +1515,72 @@ const SettingsPage = () => {
                     <div style={{ marginTop: '16px' }}>
                       <Text strong>Node Name</Text>
                       <Input placeholder="e.g. Front Counter" value={regName} onChange={e => setRegName(e.target.value)} style={{ marginTop: '8px', marginBottom: '16px' }} />
+                    </div>
+                  </Modal>
+
+                  <Divider style={{ margin: '32px 0' }} />
+
+                  {/* --- NAYA IZAFA: Warehouses / Godowns Section --- */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <div>
+                      <Title level={4} style={{ margin: 0, fontSize: '16px' }}>Warehouses & Godowns</Title>
+                      <Text type="secondary">Manage your shop locations and godowns for stock tracking.</Text>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <Button 
+                        type="primary" 
+                        icon={<PlusOutlined />} 
+                        onClick={() => { setEditingWarehouse(null); setWarehouseName(''); setIsWarehouseModalVisible(true); }}
+                      >
+                        Add Warehouse
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Row gutter={[16, 16]}>
+                    {warehouses.map((wh) => (
+                      <Col xs={24} sm={12} md={8} key={wh.id}>
+                        <Card size="small" actions={
+                          wh.is_default
+                          ?[
+                              <EditOutlined key="edit" onClick={() => { setEditingWarehouse(wh); setWarehouseName(wh.name); setIsWarehouseModalVisible(true); }} />
+                            ]
+                          :[
+                              <EditOutlined key="edit" onClick={() => { setEditingWarehouse(wh); setWarehouseName(wh.name); setIsWarehouseModalVisible(true); }} />,
+                              <Popconfirm title="Delete this warehouse?" onConfirm={() => deleteWarehouse(wh.id, wh.is_default)}>
+                                <DeleteOutlined key="delete" style={{ color: token.colorError }} />
+                              </Popconfirm>
+                            ]
+                        }>
+                          <Card.Meta 
+                            avatar={<DatabaseOutlined style={{ fontSize: '24px', color: token.colorInfo }} />}
+                            title={
+                              <Space>
+                                {wh.name}
+                                {wh.is_default && <Tag color="blue" style={{ fontSize: '10px', margin: 0 }}>Default</Tag>}
+                              </Space>
+                            }
+                            description="Stock Location"
+                          />
+                        </Card>
+                      </Col>
+                    ))}
+                    {warehouses.length === 0 && (
+                      <Col span={24}>
+                        <Alert message="No Warehouses Defined" description="Please add at least one warehouse or shop location." type="warning" showIcon />
+                      </Col>
+                    )}
+                  </Row>
+
+                  <Modal
+                    title={editingWarehouse ? "Edit Warehouse" : "Add New Warehouse"}
+                    open={isWarehouseModalVisible}
+                    onCancel={() => setIsWarehouseModalVisible(false)}
+                    onOk={handleAddWarehouse}
+                  >
+                    <div style={{ marginTop: '16px' }}>
+                      <Text strong>Warehouse Name</Text>
+                      <Input placeholder="e.g. Main Shop, Godown 1" value={warehouseName} onChange={e => setWarehouseName(e.target.value)} style={{ marginTop: '8px', marginBottom: '16px' }} />
                     </div>
                   </Modal>
 

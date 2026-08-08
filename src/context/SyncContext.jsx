@@ -144,6 +144,13 @@ export const SyncProvider = ({ children }) => {
       const { data: registers } = await supabase.from('registers').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('registers', registers, pendingIds);
 
+      // 1.2 Warehouses (Godowns)
+      const { data: warehouses } = await supabase.from('warehouses').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('warehouses', warehouses, pendingIds);
+      
+      const { data: stockTransfers } = await supabase.from('stock_transfers').select('*').eq('user_id', user.id).gt('created_at', lastSyncTime);
+      await smartPut('stock_transfers', stockTransfers, pendingIds);
+
       const { data: registerSessions } = await supabase.from('register_sessions').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('register_sessions', registerSessions, pendingIds);
 
@@ -399,6 +406,11 @@ export const SyncProvider = ({ children }) => {
             else if (item.table_name === 'inventory' && item.action === 'update') {
                 const { id, ...updates } = item.data;
                 const { error: supError } = await supabase.from('inventory').update(updates).eq('id', id);
+                error = supError;
+            }
+            // --- NAYA IZAFA: Inventory Create (For Stock Transfer Split) ---
+            else if (item.table_name === 'inventory' && item.action === 'create') {
+                const { error: supError } = await supabase.from('inventory').insert([item.data]);
                 error = supError;
             }
 
@@ -717,6 +729,25 @@ export const SyncProvider = ({ children }) => {
                     .from('expenses')
                     .delete()
                     .eq('id', item.data.id);
+                error = supError;
+            }
+
+            // --- Warehouses & Stock Transfers Sync ---
+            else if (item.table_name === 'warehouses' && item.action === 'create') {
+                const { error: supError } = await supabase.from('warehouses').upsert([item.data], { onConflict: 'id' });
+                error = supError;
+            }
+            else if (item.table_name === 'warehouses' && item.action === 'update') {
+                const { id, ...updates } = item.data;
+                const { error: supError } = await supabase.from('warehouses').update(updates).eq('id', id);
+                error = supError;
+            }
+            else if (item.table_name === 'warehouses' && item.action === 'delete') {
+                const { error: supError } = await supabase.from('warehouses').delete().eq('id', item.data.id);
+                error = supError;
+            }
+            else if (item.table_name === 'stock_transfers' && item.action === 'create') {
+                const { error: supError } = await supabase.from('stock_transfers').upsert([item.data], { onConflict: 'id' });
                 error = supError;
             }
 

@@ -47,7 +47,7 @@ const getDeviceLetter = async () => {
 
 // 2. Helper Function: Yeh check karega ke kya yeh number KISI BHI voucher mein istemal to nahi hua?
 const isIdInUse = async (baseId) => {
-  const [sales, pur, exp, cPay, sPay, cOut, sRef, adj] = await Promise.all([
+  const [sales, pur, exp, cPay, sPay, cOut, sRef, adj, trf] = await Promise.all([
     db.sales.where('invoice_id').equals(baseId).count(),
     db.purchases.where('invoice_id').equals(`PUR-${baseId}`).count(),
     db.expenses.where('voucher_no').equals(`EXP-${baseId}`).count(),
@@ -56,11 +56,12 @@ const isIdInUse = async (baseId) => {
     db.supplier_payments.where('voucher_no').equals(`PAY-${baseId}`).count(),
     db.credit_payouts.where('voucher_no').equals(`PAY-${baseId}`).count(),
     db.supplier_refunds.where('voucher_no').equals(`RCPT-${baseId}`).count(),
-    db.cash_adjustments.where('voucher_no').equals(`ADJ-${baseId}`).count()
+    db.cash_adjustments.where('voucher_no').equals(`ADJ-${baseId}`).count(),
+    db.stock_transfers.where('voucher_no').equals(`TRF-${baseId}`).count() // <--- NAYA IZAFA
   ]);
   
   // Agar kisi ek table mein bhi yeh number mil gaya, to iska matlab yeh istemal ho chuka hai (Clash)
-  return (sales + pur + exp + cPay + sPay + cOut + sRef + adj) > 0;
+  return (sales + pur + exp + cPay + sPay + cOut + sRef + adj + trf) > 0;
 };
 
 // 3. Main Function: Naya Voucher Number Banana

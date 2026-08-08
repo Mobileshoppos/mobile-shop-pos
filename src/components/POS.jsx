@@ -146,6 +146,7 @@ const POS = () => {
   const [displayedProducts, setDisplayedProducts] = useState([]);
   const [popularCategories, setPopularCategories] = useState([]);
   const [activeCategoryId, setActiveCategoryId] = useState(null);
+  const [defaultWarehouseId, setDefaultWarehouseId] = useState(null); // <--- NAYA IZAFA: Default Godown ID
   // --- NAYA IZAFA: Auto-Save Cart Persistence ---
   useEffect(() => {
     if (cart.length > 0) {
@@ -165,7 +166,10 @@ const POS = () => {
   useEffect(() => {
     const handleRefresh = async () => {
       try {
-        const { productsData } = await DataService.getInventoryData();
+        // NAYA IZAFA: Refresh mein bhi sirf Main Shop ka data layein
+        const whData = await db.warehouses.toArray();
+        const mainShop = whData.find(w => w.is_default);
+        const { productsData } = await DataService.getInventoryData(false, mainShop ? mainShop.id : 'all');
         setAllProducts(productsData);
         
         if (!searchTerm && !activeCategoryId) {
@@ -293,7 +297,14 @@ const POS = () => {
       setAvailableGroups(groups);
 
       // 2. Products Local DB se layein (Wohi DataService jo Inventory mein use kiya tha)
-      const { productsData } = await DataService.getInventoryData();
+      // NAYA IZAFA: Pehle Default Warehouse dhoondein
+      const whData = await db.warehouses.toArray();
+      const mainShop = whData.find(w => w.is_default);
+      const mainShopId = mainShop ? mainShop.id : null;
+      setDefaultWarehouseId(mainShopId);
+
+      // Ab DataService ko batayein ke sirf Main Shop ka data laye
+      const { productsData } = await DataService.getInventoryData(false, mainShopId || 'all');
       setAllProducts(productsData);
       
       // 3. Categories Local DB se layein
@@ -933,7 +944,8 @@ const POS = () => {
                         (item.available_qty || 0) > 0 &&
                         JSON.stringify(item.item_attributes || {}) === JSON.stringify(cartItem.item_attributes || {}) &&
                         (item.batch_number || null) === (cartItem.batch_number || null) &&
-                        (item.expiry_date || null) === (cartItem.expiry_date || null)
+                        (item.expiry_date || null) === (cartItem.expiry_date || null) &&
+                        (item.warehouse_id || null) === (cartItem.warehouse_id || null) // <--- NAYA IZAFA: Sirf usi location ka maal dhoondo jahan se sale ho rahi hai
                     )
                     .toArray();
 
@@ -1145,7 +1157,11 @@ const POS = () => {
         setSaleNotes(''); // <--- NAYA IZAFA: Agli sale ke liye saaf kar dein
         await DataService.clearActiveCart(); // Persistence saaf karein
         
-        const { productsData } = await DataService.getInventoryData();
+        // NAYA IZAFA: Sale mukammal hone ke baad bhi sirf Main Shop ka data refresh karein
+        const whData = await db.warehouses.toArray();
+        const mainShop = whData.find(w => w.is_default);
+        const { productsData } = await DataService.getInventoryData(false, mainShop ? mainShop.id : 'all');
+        
         setAllProducts(productsData);
         setDisplayedProducts(productsData);
 

@@ -459,6 +459,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
   
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
+  const [warehouses, setWarehouses] = useState([]); // <--- NAYA IZAFA
   const [purchaseItems, setPurchaseItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -517,10 +518,12 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
       setLoading(true);
       const loadData = async () => {
         try {
-          const [suppliersData, productsData] = await Promise.all([
+          const [suppliersData, productsData, warehousesData] = await Promise.all([
             DataService.getSuppliers(),
-            getProductsWithCategory()
+            getProductsWithCategory(),
+            DataService.getWarehouses ? DataService.getWarehouses() : [] // <--- NAYA IZAFA
           ]);
+          setWarehouses(warehousesData || []);
 
           let allSuppliers = suppliersData || [];
           
@@ -559,16 +562,29 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
               }
 
               if (cashSupplier) {
-                setTimeout(() => { form.setFieldsValue({ supplier_id: cashSupplier.id }); }, 100);
+                setTimeout(() => { 
+                    const defaultWh = warehousesData?.find(w => w.is_default);
+                    form.setFieldsValue({ 
+                        supplier_id: cashSupplier.id,
+                        warehouse_id: defaultWh ? defaultWh.id : null // <--- NAYA IZAFA
+                    }); 
+                }, 100);
               }
           } else {
               // EDIT MODE: Load Existing Data
               setSuppliers(allSuppliers);
               setProducts(productsData || []);
               
+              // Draft mein agar purana data hai jisme warehouse nahi tha, to usay default shop par set karein
+              const defaultWh = warehousesData?.find(w => w.is_default);
+              const draftWhId = (editingItems && editingItems.length > 0 && editingItems[0].warehouse_id) 
+                                ? editingItems[0].warehouse_id 
+                                : (defaultWh ? defaultWh.id : null);
+
               form.setFieldsValue({
                   supplier_id: editingPurchase.supplier_id,
-                  invoice_id: editingPurchase.invoice_id, // <--- Added
+                  invoice_id: editingPurchase.invoice_id,
+                  warehouse_id: draftWhId, // <--- NAYA IZAFA (Safe Load)
                   notes: editingPurchase.notes,
                   amount_paid: editingPurchase.amount_paid,
                   payment_method: 'Cash' 
@@ -760,31 +776,44 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
   // --- SAVE LOGIC (UPDATED FOR EDITING) ---
   const handleSavePurchase = async () => {
     try {
-      // Hum ne 'invoice_id' ko validation list mein add kiya hai
-      const values = await form.validateFields(['supplier_id', 'invoice_id', 'notes']);
+      // Hum ne 'warehouse_id' ko validation list mein add kiya hai
+      const values = await form.validateFields(['supplier_id', 'invoice_id', 'warehouse_id', 'notes']);
       if (purchaseItems.length === 0) { message.error("Please add at least one item."); return; }
       
       setIsSubmitting(true);
       const purchaseId = editingPurchase ? editingPurchase.id : crypto.randomUUID();
 
+      // --- NAYA IZAFA: Draft / Null Fallback Logic ---
+      let finalWarehouseId = values.warehouse_id;
+      if (!finalWarehouseId) {
+          const defaultWh = warehouses.find(w => w.is_default);
+          finalWarehouseId = defaultWh ? defaultWh.id : null;
+      }
+
+      // Har item ke sath warehouse_id attach karein
+      const itemsWithLocation = purchaseItems.map(({ name, brand, categories, category_is_imei_based, ...item }) => ({
+          ...item,
+          warehouse_id: finalWarehouseId // <--- NAYA IZAFA (Safe Fallback)
+      }));
+
       const payload = {
         p_local_id: purchaseId,
         p_supplier_id: values.supplier_id,
-        p_invoice_id: values.invoice_id || null, // <--- Added
+        p_invoice_id: values.invoice_id || null,
         p_notes: values.notes || null,
-        p_inventory_items: purchaseItems.map(({ name, brand, categories, category_is_imei_based, ...item }) => item),
-        staff_id: activeStaff?.id // <--- NAYA IZAFA
+        p_inventory_items: itemsWithLocation,
+        staff_id: activeStaff?.id
       };
 
       if (editingPurchase) {
           // --- EDIT MODE (Offline Ready) ---
           await DataService.updatePurchaseFully(editingPurchase.id, {
               supplier_id: values.supplier_id,
-              invoice_id: values.invoice_id, // <--- Added
+              invoice_id: values.invoice_id,
               notes: values.notes,
               amount_paid: editingPurchase.amount_paid || 0, // Purani payment mehfooz rakhein
-              items: purchaseItems,
-              staff_id: activeStaff?.id // <--- NAYA IZAFA
+              items: itemsWithLocation, // <--- NAYA IZAFA
+              staff_id: activeStaff?.id 
           });
           message.success("Purchase updated successfully!");
       } else {
@@ -953,7 +982,19 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
                     <Input placeholder="e.g. INV-9988" />
                 </Form.Item>
             </Col>
-            <Col span={24}>
+            {/* --- NAYA IZAFA: Warehouse Selection --- */}
+            <Col span={12}>
+                <Form.Item name="warehouse_id" label="Receive To (Location)" rules={[{ required: true, message: 'Please select a location' }]}>
+                    <Select placeholder="Select Godown / Shop">
+                        {warehouses.map(wh => (
+                            <Option key={wh.id} value={wh.id}>
+                                {wh.name} {wh.is_default ? '(Default)' : ''}
+                            </Option>
+                        ))}
+                    </Select>
+                </Form.Item>
+            </Col>
+            <Col span={12}>
                 <Form.Item name="notes" label="Internal Notes">
                     <Input.TextArea rows={1} placeholder="Any extra information about this purchase..." />
                 </Form.Item>

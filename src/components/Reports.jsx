@@ -135,6 +135,10 @@ const Reports = () => {
   const [auditStaff, setAuditStaff] = useState('all');
   const [auditDiscrepancy, setAuditDiscrepancy] = useState('all'); // 'all', 'discrepancy', 'matched'
 
+  // --- NAYA IZAFA: Inventory Warehouse Filter States ---
+  const [inventoryWarehouse, setInventoryWarehouse] = useState('all');
+  const [warehouses, setWarehouses] = useState([]);
+
   // --- NAYA IZAFA: Daily Profit & Loss Ledger State ---
   const [dailyPLList, setDailyPLList] = useState([]);
   
@@ -227,9 +231,13 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
   };
 
   // --- NAYA IZAFA: Common Center Text Plugin (For all Doughnut charts) ---
-  const invCenterTextPlugin = (label, totalValue) => ({
+  // FIX: Ab hum data direct options se uthayenge taake animation kharab na ho
+  const invCenterTextPlugin = {
     id: 'invCenterText',
-    beforeDraw: (chart) => {
+    beforeDraw: (chart, args, options) => {
+      const { label, totalValue } = options;
+      if (totalValue === undefined || !label) return;
+
       const { ctx, chartArea: { left, right, top, bottom } } = chart;
       ctx.save();
       const centerX = (left + right) / 2;
@@ -245,7 +253,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
       ctx.fillText(formatCurrency(totalValue, profile?.currency), centerX, centerY + 10);
       ctx.restore();
     }
-  });
+  };
 
   // --- NAYA IZAFA: EXCEL EXPORT LOGIC ---
   const downloadExcel = (dataSheets, fileName) => {
@@ -864,6 +872,12 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         setLoading(true);
       }
       try {
+        // NAYA IZAFA: Warehouses load karein
+        if (DataService.getWarehouses) {
+            const whData = await DataService.getWarehouses();
+            setWarehouses(whData);
+        }
+
         const startDate = dateRange[0].format('YYYY-MM-DD');
         const endDate = dateRange[1].format('YYYY-MM-DD');
 
@@ -900,7 +914,8 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
               resolvedEnd = dayjs(flowCustomDates[1]).format('YYYY-MM-DD');
           }
 
-          const data = await DataService.getInventoryReport(resolvedStart, resolvedEnd);
+          // NAYA IZAFA: inventoryWarehouse filter pass karein
+          const data = await DataService.getInventoryReport(resolvedStart, resolvedEnd, inventoryWarehouse);
           setInventoryData(data);
         }
         else if (activeTab === 'ledgers') {
@@ -1027,7 +1042,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             // NAYA IZAFA: Background mein data download hone par Reports page ko Live Refresh karna
             window.addEventListener('local-db-updated', fetchReportData);
             return () => window.removeEventListener('local-db-updated', fetchReportData);
-          }, [dateRange, activeTab, selectedRegForLedger, selectedAccountType, flowDateType, flowCustomDates]); // <--- NAYA IZAFA: dynamic stock flow audit reload
+          }, [dateRange, activeTab, selectedRegForLedger, selectedAccountType, flowDateType, flowCustomDates, inventoryWarehouse]); // <--- NAYA IZAFA: inventoryWarehouse add kiya
 
   // --- NAYA IZAFA: Independent Daily P&L Table Calculator (Reacts to Local Filters) ---
   useEffect(() => {
@@ -1513,28 +1528,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
       }]
     };
 
-    // Simplified Expense Center Text (No VOID/Frequency Confusion)
-    const expCenterTextPlugin = {
-      id: 'expCenterText',
-      beforeDraw: (chart) => {
-        const { ctx, chartArea: { left, right, top, bottom } } = chart;
-        ctx.save();
-        const centerX = (left + right) / 2;
-        const centerY = (top + bottom) / 2;
-        ctx.fillStyle = token.colorCardHeadingsText;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = '11px sans-serif';
-        ctx.globalAlpha = 0.6;
-        ctx.fillText('Total Expenses', centerX, centerY - 12);
-        
-        const total = expenseChartData.datasets[0].data.reduce((a, b) => a + b, 0);
-        ctx.font = 'bold 15px sans-serif';
-        ctx.globalAlpha = 1;
-        ctx.fillText(formatCurrency(total, profile?.currency), centerX, centerY + 10);
-        ctx.restore();
-      }
-    };
+    // expCenterTextPlugin hata diya gaya hai kyunke ab hum global invCenterTextPlugin use karenge
 
     // 3. Statement Table Data (Damaged Loss shamil kiya gaya)
     const summaryData = [
@@ -1596,8 +1590,17 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 {profitLossData.expenseBreakdown?.length > 0 ? (
                   <Doughnut 
                     data={expenseChartData} 
-                    options={doughnutOptions} // doughnutOptions mein legend pehle hi Left par hai
-                    plugins={[expCenterTextPlugin]}
+                    options={{
+                      ...doughnutOptions,
+                      plugins: {
+                        ...doughnutOptions.plugins,
+                        invCenterText: { 
+                          label: 'Total Expenses', 
+                          totalValue: profitLossData.totalExpenses 
+                        }
+                      }
+                    }} 
+                    plugins={[invCenterTextPlugin]}
                   />
                 ) : (
                   <Empty description="No expenses recorded" />
@@ -1810,6 +1813,23 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
 
     return (
       <div style={{ marginTop: '16px' }}>
+        {/* --- NAYA IZAFA: Warehouse Filter Dropdown --- */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+            <Space>
+                <Text type="secondary" style={{ fontSize: '14px' }}>Location Filter:</Text>
+                <Select
+                    value={inventoryWarehouse}
+                    onChange={(val) => setInventoryWarehouse(val)}
+                    style={{ width: '200px' }}
+                >
+                    <Select.Option value="all">All Locations (Total)</Select.Option>
+                    {warehouses.map(w => (
+                        <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>
+                    ))}
+                </Select>
+            </Space>
+        </div>
+
         {/* Row 1: Asset KPI Cards */}
         <Row gutter={[16, 16]} style={{ marginBottom: '16px' }}>
           <Col xs={24} sm={12} md={{ flex: '1 1 0' }}>
@@ -1852,8 +1872,14 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
               <div style={{ height: 280, display: 'flex', justifyContent: 'center' }}>
                 <Doughnut 
                   data={catChartData} 
-                  options={doughnutOptions} 
-                  plugins={[invCenterTextPlugin('Total Assets', inventoryData.totalAssetValue)]} 
+                  options={{
+                    ...doughnutOptions,
+                    plugins: {
+                      ...doughnutOptions.plugins,
+                      invCenterText: { label: 'Total Assets', totalValue: inventoryData.totalAssetValue }
+                    }
+                  }} 
+                  plugins={[invCenterTextPlugin]} 
                 />
               </div>
             </Card>
@@ -1863,8 +1889,14 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
               <div style={{ height: 280, display: 'flex', justifyContent: 'center' }}>
                 <Doughnut 
                   data={brandChartData} 
-                  options={doughnutOptions} 
-                  plugins={[invCenterTextPlugin('Total Assets', inventoryData.totalAssetValue)]} 
+                  options={{
+                    ...doughnutOptions,
+                    plugins: {
+                      ...doughnutOptions.plugins,
+                      invCenterText: { label: 'Total Assets', totalValue: inventoryData.totalAssetValue }
+                    }
+                  }} 
+                  plugins={[invCenterTextPlugin]} 
                 />
               </div>
             </Card>
@@ -2658,8 +2690,14 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
               <div style={{ height: 280, display: 'flex', justifyContent: 'center' }}>
                 <Doughnut 
                   data={flowChartData} 
-                  options={doughnutOptions} 
-                  plugins={[invCenterTextPlugin('Net Movement', auditData.totalIn - auditData.totalOut)]} 
+                  options={{
+                    ...doughnutOptions,
+                    plugins: {
+                      ...doughnutOptions.plugins,
+                      invCenterText: { label: 'Net Movement', totalValue: auditData.totalIn - auditData.totalOut }
+                    }
+                  }} 
+                  plugins={[invCenterTextPlugin]} 
                 />
               </div>
             </Card>
