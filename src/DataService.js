@@ -871,7 +871,7 @@ const DataService = {
   },
 
   // --- INVENTORY ADJUSTMENT (DAMAGED STOCK) - SMART VERSION ---
-  async markItemAsDamaged(inventoryIds, totalQtyToMark, notes = "", staffId = null) {
+  async markItemAsDamaged(inventoryIds, totalQtyToMark, notes = "", staffId = null, adjustmentType = "Damaged") {
     let remainingToMark = totalQtyToMark;
 
     // Hum un tamam IDs par loop chalayenge jo is product ki hain
@@ -896,6 +896,7 @@ const DataService = {
         available_qty: newAvailable,
         damaged_qty: newDamaged,
         adjustment_notes: notes,
+        adjustment_type: adjustmentType, // <--- NAYA IZAFA
         status: newStatus,
         staff_id: staffId, // <--- NAYA IZAFA
         updated_at: new Date().toISOString()
@@ -911,9 +912,48 @@ const DataService = {
         data: { id: invId, ...updates }
       });
 
+      // --- NAYA IZAFA: Audit Trail Log Save Karna ---
+      const adjId = crypto.randomUUID();
+      const adjLog = {
+        id: adjId,
+        local_id: adjId,
+        inventory_id: invId,
+        product_id: item.product_id,
+        user_id: item.user_id,
+        staff_id: staffId,
+        adjustment_type: adjustmentType,
+        quantity: takeFromThisRow,
+        notes: notes,
+        created_at: new Date().toISOString()
+      };
+      await db.inventory_adjustments.add(adjLog);
+      await db.sync_queue.add({
+        table_name: 'inventory_adjustments',
+        action: 'create',
+        data: adjLog
+      });
+      // ----------------------------------------------
+
       remainingToMark -= takeFromThisRow;
     }
 
+    return true;
+  },
+
+  // --- NAYA IZAFA: BULK INVENTORY ADJUSTMENT ---
+  // Yeh function ek hi waqt mein multiple items (Cart) ko handle karega
+  async processBulkAdjustments(adjustmentItems, staffId = null) {
+    // adjustmentItems ek list (array) hogi jis mein har item ki details hongi
+    for (const item of adjustmentItems) {
+      // Hum apna hi purana function har item ke liye bari bari call kar rahe hain
+      await this.markItemAsDamaged(
+        item.ids, 
+        item.qtyToMark, 
+        item.notes, 
+        staffId, 
+        item.adjustmentType
+      );
+    }
     return true;
   },
 
@@ -2061,13 +2101,24 @@ async addCustomer(customerData) {
     });
     const totalExpenses = filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
-    // --- NAYA IZAFA: Date-wise Damaged Stock Loss ---
+    // --- NAYA IZAFA: Date-wise Damaged Stock Loss (Using Audit Trail) ---
     const allInventory = await db.inventory.toArray();
-    const damagedInRange = allInventory.filter(i => {
-        const d = new Date(i.updated_at).getTime();
-        return Number(i.damaged_qty || 0) > 0 && d >= start && d <= end;
+    const invMap = {}; allInventory.forEach(i => invMap[i.id] = i.purchase_price || 0);
+    
+    const allAdjustments = await db.inventory_adjustments.toArray();
+    const adjInRange = allAdjustments.filter(a => {
+        const d = new Date(a.created_at).getTime();
+        return d >= start && d <= end;
     });
-    const damagedLoss = precise(damagedInRange.reduce((sum, i) => sum + (Number(i.purchase_price || 0) * Number(i.damaged_qty || 0)), 0));
+    
+    let damagedLoss = 0;
+    adjInRange.forEach(a => {
+        const price = invMap[a.inventory_id] || 0;
+        const val = price * a.quantity;
+        if (a.adjustment_type === 'Restored') damagedLoss -= val; // Wapis aagaya to loss kam ho gaya
+        else damagedLoss += val; // Nuqsan hua
+    });
+    damagedLoss = precise(damagedLoss);
 
     // F. Final Calculation (Damaged Loss ko Net Profit se minus kiya gaya)
     const grossProfit = totalRevenue - totalCost;
@@ -4280,35 +4331,41 @@ async addCustomer(customerData) {
   async getDamagedStockReport() {
     const damagedItems = await db.inventory.filter(i => (i.damaged_qty || 0) > 0).toArray();
     
-    // Pehle hi saare products, suppliers aur PURCHASES fetch kar lete hain
+    // Pehle hi saare products, suppliers, PURCHASES aur STAFF fetch kar lete hain
     const productIds = damagedItems.map(i => i.product_id).filter(id => id);
     const supplierIds = damagedItems.map(i => i.supplier_id).filter(id => id);
-    const purchaseIds = damagedItems.map(i => i.purchase_id).filter(id => id); // <--- NAYA
+    const purchaseIds = damagedItems.map(i => i.purchase_id).filter(id => id); 
+    const staffIds = damagedItems.map(i => i.staff_id).filter(id => id); // <--- NAYA IZAFA: Staff ID
     
     // Batch fetching logic (UUIDs ke saath)
-    const[allProducts, allSuppliers, allPurchases] = await Promise.all([
+    const[allProducts, allSuppliers, allPurchases, allStaff] = await Promise.all([
         db.products.where('id').anyOf(productIds).toArray(),
         db.suppliers.where('id').anyOf(supplierIds).toArray(),
-        db.purchases.where('id').anyOf(purchaseIds).toArray() // <--- NAYA
+        db.purchases.where('id').anyOf(purchaseIds).toArray(), 
+        db.staff_members.where('id').anyOf(staffIds).toArray() // <--- NAYA IZAFA: Staff Data
     ]);
 
     const productMap = {};
     allProducts.forEach(p => productMap[p.id] = p);
     const supplierMap = {};
     allSuppliers.forEach(s => supplierMap[s.id] = s);
-    const purchaseMap = {}; // <--- NAYA
+    const purchaseMap = {}; 
     allPurchases.forEach(p => purchaseMap[p.id] = p);
+    const staffMap = {}; // <--- NAYA IZAFA
+    allStaff.forEach(s => staffMap[s.id] = s);
 
     const report = damagedItems.map((item) => {
       const product = productMap[item.product_id];
       const supplier = supplierMap[item.supplier_id];
-      const purchase = purchaseMap[item.purchase_id]; // <--- NAYA
+      const purchase = purchaseMap[item.purchase_id]; 
+      const staff = staffMap[item.staff_id]; // <--- NAYA IZAFA
       
       return {
         ...item,
         product_name: product?.name || 'Unknown',
         brand: product?.brand || '',
         supplier_name: supplier?.name || 'N/A',
+        staff_name: item.staff_id ? (staff?.name || 'Unknown Staff') : 'Owner', // <--- NAYA IZAFA: Sirf Owner
         // Yahan UUID ki bajaye asal Invoice ID set kar rahe hain
         invoice_id: purchase ? (purchase.invoice_id || purchase.id.slice(0,8)) : item.purchase_id,
         total_loss: (item.damaged_qty || 0) * (item.purchase_price || 0)
@@ -4328,9 +4385,11 @@ async addCustomer(customerData) {
       throw new Error("Invalid revert quantity.");
     }
 
+    const newDamagedQty = (item.damaged_qty || 0) - qtyToRevert;
     const updates = {
       available_qty: (item.available_qty || 0) + qtyToRevert,
-      damaged_qty: (item.damaged_qty || 0) - qtyToRevert,
+      damaged_qty: newDamagedQty,
+      adjustment_type: newDamagedQty === 0 ? null : item.adjustment_type, // <--- FIX: Agar kuch damaged bacha hai to tag mat hatao
       status: 'Available', 
       staff_id: staffId, // <--- NAYA IZAFA
       updated_at: new Date().toISOString()
@@ -4345,6 +4404,28 @@ async addCustomer(customerData) {
       action: 'update',
       data: { id: inventoryId, ...updates }
     });
+
+    // --- NAYA IZAFA: Audit Trail Log for Restore ---
+    const adjId = crypto.randomUUID();
+    const adjLog = {
+      id: adjId,
+      local_id: adjId,
+      inventory_id: inventoryId,
+      product_id: item.product_id,
+      user_id: item.user_id,
+      staff_id: staffId,
+      adjustment_type: 'Restored',
+      quantity: qtyToRevert,
+      notes: 'Reverted back to available stock',
+      created_at: new Date().toISOString()
+    };
+    await db.inventory_adjustments.add(adjLog);
+    await db.sync_queue.add({
+      table_name: 'inventory_adjustments',
+      action: 'create',
+      data: adjLog
+    });
+    // -----------------------------------------------
 
     return true;
   },
@@ -5617,6 +5698,11 @@ async addCustomer(customerData) {
             damaged_qty: 0,
             updated_at: new Date().toISOString()
         };
+        
+        // --- NAYA IZAFA: Faltu columns ko yahan se nikaal dein taake error na aaye ---
+        delete newItem.barcode;
+        delete newItem.product_name;
+        
         await db.inventory.add(newItem);
         await db.sync_queue.add({ table_name: 'inventory', action: 'create', data: newItem });
     }

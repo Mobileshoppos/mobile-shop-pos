@@ -146,19 +146,7 @@ const ProductLedgerModal = ({ visible, onClose, product, warehouses }) => {
                     });
                 }
                 
-                // B. Damaged Record
-                if (inv.damaged_qty > 0) {
-                    history.push({
-                        id: `dmg-${inv.id}`,
-                        date: inv.updated_at,
-                        type: 'Damaged',
-                        qty: `-${inv.damaged_qty}`,
-                        numericQty: -inv.damaged_qty, // <--- NAYA IZAFA
-                        amount: (inv.purchase_price || 0) * inv.damaged_qty, // <--- NAYA IZAFA
-                        color: 'volcano',
-                        details: `Marked as damaged (${inv.adjustment_notes || 'No reason'})`
-                    });
-                }
+                // Purana Damaged Logic Hata Diya Gaya (Ab hum Audit Trail se layenge)
 
                 // C. Supplier Return Record
                 if (inv.returned_qty > 0 && inv.status === 'Returned') {
@@ -188,6 +176,39 @@ const ProductLedgerModal = ({ visible, onClose, product, warehouses }) => {
                     amount: (si.price_at_sale || 0) * (si.quantity || 1), // <--- NAYA IZAFA
                     color: 'green',
                     details: `Sold to Customer (Inv: ${sale?.invoice_id || 'N/A'})`
+                });
+            }
+
+            // 2.5 --- NAYA IZAFA: Fetch Adjustment Logs (Audit Trail) ---
+            const adjustments = await db.inventory_adjustments.where('product_id').equals(product.id).toArray();
+            for (const adj of adjustments) {
+                // Purchase price nikalne ke liye
+                const invItem = await db.inventory.get(adj.inventory_id);
+                const price = invItem ? (invItem.purchase_price || 0) : 0;
+                
+                let tagColor = 'red';
+                let prefix = '-';
+                let numericMultiplier = -1;
+
+                if (adj.adjustment_type === 'Expired') tagColor = 'orange';
+                if (adj.adjustment_type === 'Lost') tagColor = 'volcano';
+                if (adj.adjustment_type === 'Internal Use') tagColor = 'purple';
+                
+                if (adj.adjustment_type === 'Restored') {
+                    tagColor = 'green';
+                    prefix = '+';
+                    numericMultiplier = 1;
+                }
+
+                history.push({
+                    id: `adj-${adj.id}`,
+                    date: adj.created_at,
+                    type: adj.adjustment_type,
+                    qty: `${prefix}${adj.quantity}`,
+                    numericQty: adj.quantity * numericMultiplier, 
+                    amount: price * adj.quantity, 
+                    color: tagColor,
+                    details: `${adj.adjustment_type === 'Restored' ? 'Reverted to stock' : 'Marked as ' + adj.adjustment_type} ${adj.notes ? '(' + adj.notes + ')' : ''}`
                 });
             }
 

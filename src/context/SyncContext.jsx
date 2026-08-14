@@ -151,6 +151,10 @@ export const SyncProvider = ({ children }) => {
       const { data: stockTransfers } = await supabase.from('stock_transfers').select('*').eq('user_id', user.id).gt('created_at', lastSyncTime);
       await smartPut('stock_transfers', stockTransfers, pendingIds);
 
+      // NAYA IZAFA: Download Adjustments History
+      const { data: invAdjustments } = await supabase.from('inventory_adjustments').select('*').eq('user_id', user.id).gt('created_at', lastSyncTime);
+      await smartPut('inventory_adjustments', invAdjustments, pendingIds);
+
       const { data: registerSessions } = await supabase.from('register_sessions').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('register_sessions', registerSessions, pendingIds);
 
@@ -405,12 +409,17 @@ export const SyncProvider = ({ children }) => {
             // Inventory Update
             else if (item.table_name === 'inventory' && item.action === 'update') {
                 const { id, ...updates } = item.data;
+                delete updates.barcode; // <--- NAYA IZAFA: Faltu column saaf karein
+                delete updates.product_name; // <--- NAYA IZAFA: Faltu column saaf karein
                 const { error: supError } = await supabase.from('inventory').update(updates).eq('id', id);
                 error = supError;
             }
             // --- NAYA IZAFA: Inventory Create (For Stock Transfer Split) ---
             else if (item.table_name === 'inventory' && item.action === 'create') {
-                const { error: supError } = await supabase.from('inventory').insert([item.data]);
+                const cleanData = { ...item.data }; // <--- NAYA IZAFA: Data copy karein
+                delete cleanData.barcode; // <--- NAYA IZAFA: Faltu column saaf karein
+                delete cleanData.product_name; // <--- NAYA IZAFA: Faltu column saaf karein
+                const { error: supError } = await supabase.from('inventory').insert([cleanData]);
                 error = supError;
             }
 
@@ -748,6 +757,11 @@ export const SyncProvider = ({ children }) => {
             }
             else if (item.table_name === 'stock_transfers' && item.action === 'create') {
                 const { error: supError } = await supabase.from('stock_transfers').upsert([item.data], { onConflict: 'id' });
+                error = supError;
+            }
+            // NAYA IZAFA: Upload Adjustments History
+            else if (item.table_name === 'inventory_adjustments' && item.action === 'create') {
+                const { error: supError } = await supabase.from('inventory_adjustments').insert([item.data]);
                 error = supError;
             }
 

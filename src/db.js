@@ -37,7 +37,7 @@ db.version(69).stores({
   expenses: 'id, local_id, voucher_no, category_id, expense_date, user_id, staff_id, payment_method, updated_at, register_id, session_id',
   expense_categories: 'id, local_id, user_id',
 
-  inventory: 'id, local_id, product_id, purchase_id, status, user_id, staff_id, variant_id, imei, available_qty, sold_qty, updated_at, purchase_price, batch_number, expiry_date, warehouse_id', 
+  inventory: 'id, local_id, product_id, purchase_id, status, user_id, staff_id, variant_id, imei, available_qty, sold_qty, updated_at, purchase_price, batch_number, expiry_date, warehouse_id, adjustment_type', 
   customer_payments: 'id, local_id, voucher_no, customer_id, user_id, staff_id, payment_method, updated_at, register_id, session_id',
   sale_returns: 'id, local_id, sale_id, customer_id, user_id, updated_at, created_at, staff_id, tax_refunded, register_id, session_id, fbr_invoice_number',
   sale_return_items: 'id, return_id, inventory_id',
@@ -87,5 +87,8 @@ db.version(69).stores({
 
   // NAYA IZAFA: Warehouses / Godowns
   warehouses: 'id, local_id, user_id, name, is_default, updated_at',
-  stock_transfers: 'id, local_id, voucher_no, user_id, from_warehouse_id, to_warehouse_id, product_id, created_at'
+  stock_transfers: 'id, local_id, voucher_no, user_id, from_warehouse_id, to_warehouse_id, product_id, created_at',
+  
+  // NAYA IZAFA: Audit Trail for Damaged/Expired/Lost stock
+  inventory_adjustments: 'id, local_id, inventory_id, product_id, user_id, staff_id, created_at'
 });

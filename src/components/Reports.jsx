@@ -314,12 +314,14 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         const startDateStr = start.format('YYYY-MM-DD');
         const endDateStr = end.format('YYYY-MM-DD');
 
-        const [allSales, allReturns, allExpenses, allInventory] = await Promise.all([
+        const [allSales, allReturns, allExpenses, allInventory, allAdjustments] = await Promise.all([
             db.sales.where('created_at').between(new Date(startMs).toISOString(), new Date(endMs).toISOString()).toArray(),
             db.sale_returns.where('created_at').between(new Date(startMs).toISOString(), new Date(endMs).toISOString()).toArray(),
             db.expenses.where('expense_date').between(startDateStr, endDateStr).toArray(),
-            db.inventory.where('updated_at').between(new Date(startMs).toISOString(), new Date(endMs).toISOString()).toArray()
+            db.inventory.toArray(), // Pura inventory chahiye price ke liye
+            db.inventory_adjustments.where('created_at').between(new Date(startMs).toISOString(), new Date(endMs).toISOString()).toArray()
         ]);
+        const invMap = {}; allInventory.forEach(i => invMap[i.id] = i.purchase_price || 0);
 
         const salesIds = allSales.map(s => s.id);
         const saleItems = await db.sale_items.where('sale_id').anyOf(salesIds).toArray();
@@ -359,11 +361,13 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             }
             const netCogs = Math.max(0, cogs - returnCost);
 
-            const dayDamaged = allInventory.filter(i => {
-                const dDate = new Date(i.updated_at).toISOString().split('T')[0];
-                return dDate === dateStr && Number(i.damaged_qty || 0) > 0;
+            const dayAdjs = allAdjustments.filter(a => new Date(a.created_at).toISOString().split('T')[0] === dateStr);
+            let damagedLoss = 0;
+            dayAdjs.forEach(a => {
+                const price = invMap[a.inventory_id] || 0;
+                if (a.adjustment_type === 'Restored') damagedLoss -= (price * a.quantity);
+                else damagedLoss += (price * a.quantity);
             });
-            const damagedLoss = dayDamaged.reduce((sum, i) => sum + (Number(i.purchase_price || 0) * Number(i.damaged_qty || 0)), 0);
 
             const grandTotal = grossSales - refunds - discounts;
             const netProfit = grandTotal - netCogs - expensesAmt - damagedLoss;
@@ -1073,12 +1077,14 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         const startDateStr = start.format('YYYY-MM-DD');
         const endDateStr = end.format('YYYY-MM-DD');
 
-        const [allSales, allReturns, allExpenses, allInventory] = await Promise.all([
+        const [allSales, allReturns, allExpenses, allInventory, allAdjustments] = await Promise.all([
             db.sales.where('created_at').between(new Date(startMs).toISOString(), new Date(endMs).toISOString()).toArray(),
             db.sale_returns.where('created_at').between(new Date(startMs).toISOString(), new Date(endMs).toISOString()).toArray(),
             db.expenses.where('expense_date').between(startDateStr, endDateStr).toArray(),
-            db.inventory.where('updated_at').between(new Date(startMs).toISOString(), new Date(endMs).toISOString()).toArray()
+            db.inventory.toArray(), // Pura inventory chahiye price ke liye
+            db.inventory_adjustments.where('created_at').between(new Date(startMs).toISOString(), new Date(endMs).toISOString()).toArray()
         ]);
+        const invMap = {}; allInventory.forEach(i => invMap[i.id] = i.purchase_price || 0);
 
         const salesIds = allSales.map(s => s.id);
         const saleItems = await db.sale_items.where('sale_id').anyOf(salesIds).toArray();
@@ -1120,11 +1126,13 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             }
             const netCogs = Math.max(0, cogs - returnCost);
 
-            const dayDamaged = allInventory.filter(i => {
-                const dDate = new Date(i.updated_at).toISOString().split('T')[0];
-                return dDate === dateStr && Number(i.damaged_qty || 0) > 0;
+            const dayAdjs = allAdjustments.filter(a => new Date(a.created_at).toISOString().split('T')[0] === dateStr);
+            let damagedLoss = 0;
+            dayAdjs.forEach(a => {
+                const price = invMap[a.inventory_id] || 0;
+                if (a.adjustment_type === 'Restored') damagedLoss -= (price * a.quantity);
+                else damagedLoss += (price * a.quantity);
             });
-            const damagedLoss = dayDamaged.reduce((sum, i) => sum + (Number(i.purchase_price || 0) * Number(i.damaged_qty || 0)), 0);
 
             const grandTotal = grossSales - refunds - discounts;
             const netProfit = grandTotal - netCogs - expensesAmt - damagedLoss;

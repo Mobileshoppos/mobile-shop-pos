@@ -13,6 +13,7 @@ import { useStaff } from '../context/StaffContext';
 import { db } from '../db';
 import { useTheme } from '../context/ThemeContext';
 import AddPurchaseForm from './AddPurchaseForm';
+import StockAdjustmentModal from '../components/StockAdjustmentModal';
 import ProductImageUpload from '../components/ProductImageUpload';
 import BarcodePrinter from '../components/BarcodePrinter';
 import ProductLedgerModal from '../components/ProductLedgerModal';
@@ -410,7 +411,7 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
                           icon={<AlertOutlined />} 
                           size="small" 
                           style={{ fontSize: '16px' }} 
-                          onClick={() => onMarkDamaged(variant)} 
+                          onClick={() => onMarkDamaged({ ...variant, product_name: product.name })} 
                           title="Mark as Damaged/Defective"
                         />
                         {/* --- NAYA IZAFA: Transfer Button --- */}
@@ -494,7 +495,7 @@ const Inventory = () => {
   const [categories, setCategories] = useState([]);
   const [categoryTree, setCategoryTree] = useState([]); // NAYA IZAFA: TreeSelect ke liye
   const [warehouses, setWarehouses] = useState([]); // <--- NAYA IZAFA
-  const [filterWarehouse, setFilterWarehouse] = useState('all'); // <--- NAYA IZAFA
+  const [filterWarehouse, setFilterWarehouse] = useState(null); // <--- NAYA IZAFA (Default set karne ke liye null kiya)
   
   // Transfer Modal States
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -588,10 +589,9 @@ const Inventory = () => {
   const [editingItem, setEditingItem] = useState(null);
   const [editForm] = Form.useForm();
 
-  // Damaged Stock States
-  const [isDamagedModalOpen, setIsDamagedModalOpen] = useState(false);
-  const [damagedItem, setDamagedItem] = useState(null);
-  const [damagedForm] = Form.useForm();
+  // Stock Adjustment States (Naya Modal)
+  const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
+  const [adjustmentItem, setAdjustmentItem] = useState(null);
 
   // NAYA IZAFA: Barcode Printer State
   const [isBarcodePrinterOpen, setIsBarcodePrinterOpen] = useState(false);
@@ -695,6 +695,11 @@ const Inventory = () => {
         if (DataService.getWarehouses) {
             const whData = await DataService.getWarehouses();
             setWarehouses(whData);
+            // Agar filter pehli dafa load ho raha hai, to Default (Main Shop) set karein
+            if (filterWarehouse === null) {
+                const defaultWh = whData.find(w => w.is_default);
+                setFilterWarehouse(defaultWh ? defaultWh.id : 'all');
+            }
         }
 
         const localCategories = await db.categories.toArray();
@@ -1131,7 +1136,7 @@ const Inventory = () => {
       if (!damagedItem || !damagedItem.ids) return;
       
       // Tamam IDs ki list bhejein (DataService ab loops handle kar lega aur staffId bhi save karega)
-      await DataService.markItemAsDamaged(damagedItem.ids, values.quantity, values.notes, activeStaff?.id);
+      await DataService.markItemAsDamaged(damagedItem.ids, values.quantity, values.notes, activeStaff?.id, values.adjustment_type);
       
       message.success('Stock adjusted! Damaged quantity recorded.');
       setIsDamagedModalOpen(false);
@@ -1203,8 +1208,8 @@ const Inventory = () => {
 
       <div style={{ marginBottom: '18px', padding: isMobile ? '0 8px' : '0' }}>
         <Row gutter={[8, 8]} align="middle">
-          {/* 1. Search Box (Sab se bada) */}
-          <Col xs={24} sm={8} md={7}>
+          {/* 1. Search Box (Thora chota kiya UI theek karne ke liye) */}
+          <Col xs={24} sm={12} md={6} lg={5}>
           <div ref={refSearch}>
             <Input 
               id="inv-search-input"
@@ -1219,10 +1224,10 @@ const Inventory = () => {
           </Col>
 
           {/* NAYA IZAFA: Location/Warehouse Select */}
-          <Col xs={12} sm={6} md={4}>
+          <Col xs={12} sm={6} md={4} lg={4}>
             <Select
               style={{ width: '100%' }}
-              value={filterWarehouse}
+              value={filterWarehouse || 'all'}
               onChange={(value) => setFilterWarehouse(value)}
               options={[
                 { value: 'all', label: 'All Locations' },
@@ -1232,7 +1237,7 @@ const Inventory = () => {
           </Col>
 
           {/* 2. Category Select (TreeSelect) */}
-          <Col xs={12} sm={6} md={4}>
+          <Col xs={12} sm={6} md={4} lg={4}>
             <TreeSelect
               showSearch
               style={{ width: '100%' }}
@@ -1248,7 +1253,7 @@ const Inventory = () => {
           </Col>
 
           {/* 3. Sort Select */}
-          <Col xs={12} sm={6} md={4}>
+          <Col xs={12} sm={6} md={4} lg={3}>
             <Select value={sortBy} onChange={(v) => setSortBy(v)} style={{ width: '100%' }}>
                 <Option value="name_asc">Name (A-Z)</Option>
                 <Option value="price_asc">Price: Low to High</Option>
@@ -1258,8 +1263,8 @@ const Inventory = () => {
             </Select>
           </Col>
 
-          {/* 4. Action Buttons (Filter Toggle & Reset) */}
-          <Col xs={24} sm={4} md={5} style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
+          {/* 4. Action Buttons (Icons aur New Product Button) */}
+          <Col xs={24} sm={24} md={6} lg={8} style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           
              {/* Reset Button */}
              <Tooltip title="Reset All Filters">
@@ -1486,9 +1491,8 @@ const Inventory = () => {
         onQuickEdit={handleQuickEditClick}
         onEditProductModel={handleEditProductModelClick}
         onMarkDamaged={(variant) => {
-            setDamagedItem(variant);
-            damagedForm.setFieldsValue({ quantity: 1 });
-            setIsDamagedModalOpen(true);
+            setAdjustmentItem(variant);
+            setIsAdjustmentModalOpen(true);
         }}
         onTransferStock={(variant) => {
             setTransferItem(variant);
@@ -1907,42 +1911,22 @@ const Inventory = () => {
         </Form>
       </Modal>
 
-      {/* DAMAGED STOCK MODAL */}
-      <Modal
-        title={<span><AlertOutlined style={{color: token.colorError}} /> Mark Stock as Damaged</span>}
-        open={isDamagedModalOpen}
-        onOk={damagedForm.submit}
-        onCancel={() => setIsDamagedModalOpen(false)}
-        okText="Confirm Adjustment"
-        okButtonProps={{ danger: true }}
-      >
-        <Form form={damagedForm} layout="vertical" onFinish={handleMarkDamagedOk}>
-          {/* NAYA IZAFA: Hidden submit button taake Enter dabane se form save ho jaye */}
-          <button type="submit" style={{ display: 'none' }} />
-          <Text type="secondary" style={{display: 'block', marginBottom: '15px'}}>
-            Product: <b>{damagedItem?.product_name}</b><br/>
-            Available: <b>{damagedItem?.display_quantity} units</b>
-          </Text>
-          
-          <Form.Item name="quantity" label="Quantity to mark as Damaged" rules={[{ required: true }]}>
-            <InputNumber min={1} max={damagedItem?.display_quantity} style={{ width: '100%' }} />
-          </Form.Item>
-
-          <Form.Item
-            name="notes" 
-            label="Reason" 
-            rules={[{ required: true, message: 'Please provide a reason for adjustment' }]}
-          >
-            <Input.TextArea placeholder="e.g. Screen broken, Water damage..." />
-          </Form.Item>
-          
-          <Alert
-            message="This will reduce your available stock. You can revert this action from the Damaged Stock Report page if needed." 
-            type="info" 
-            showIcon
-         />
-        </Form>
-      </Modal>
+      {/* NAYA IZAFA: Stock Adjustment Modal */}
+      {isAdjustmentModalOpen && (
+        <StockAdjustmentModal 
+          visible={isAdjustmentModalOpen}
+          onCancel={() => {
+            setIsAdjustmentModalOpen(false);
+            setAdjustmentItem(null);
+          }}
+          onSuccess={() => {
+            setIsAdjustmentModalOpen(false);
+            setAdjustmentItem(null);
+            setRefreshTrigger(prev => prev + 1); // List ko refresh karein
+          }}
+          initialItem={adjustmentItem}
+        />
+      )}
 
       {/* NAYA IZAFA: Barcode Printer Component */}
       <BarcodePrinter 

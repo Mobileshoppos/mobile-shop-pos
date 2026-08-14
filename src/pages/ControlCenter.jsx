@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Select, Typography, Tag, Space, App, Card, Switch, DatePicker, Row, Col, Input, theme } from 'antd';
-import { DeleteOutlined, SafetyCertificateOutlined, NotificationOutlined } from '@ant-design/icons';
+import { Table, Button, Select, Typography, Tag, Space, App, Card, Switch, DatePicker, Row, Col, Input, theme, Tooltip } from 'antd';
+import { DeleteOutlined, SafetyCertificateOutlined, NotificationOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs'; // <-- Calendar dates format karne ke liye import kiya
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +14,30 @@ const ControlCenter = () => {
   const { token } = theme.useToken(); // <-- Theme tokens tak rasayi hasil ki
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // --- NAYA IZAFA: Filter States ---
+  const [searchText, setSearchText] = useState('');
+  const [filterPlan, setFilterPlan] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+
+  // --- NAYA IZAFA: Real-time Smart Filter Logic ---
+  const filteredUsers = users.filter(u => {
+    const q = searchText.toLowerCase().trim();
+    const matchSearch = !q || 
+      (u.shop_name && u.shop_name.toLowerCase().includes(q)) ||
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.phone_number && u.phone_number.includes(q)) ||
+      (u.phone && u.phone.includes(q));
+
+    const matchPlan = filterPlan === 'all' || u.subscription_tier === filterPlan;
+
+    let matchStatus = true;
+    if (filterStatus === 'active') matchStatus = !u.is_suspended && !u.scheduled_deletion_at;
+    else if (filterStatus === 'suspended') matchStatus = u.is_suspended && !u.scheduled_deletion_at;
+    else if (filterStatus === 'pending_deletion') matchStatus = !!u.scheduled_deletion_at;
+
+    return matchSearch && matchPlan && matchStatus;
+  });
 
   // --- Point 5 State Variables (System Announcements) ---
   const [announcements, setAnnouncements] = useState([]);
@@ -226,6 +250,12 @@ const ControlCenter = () => {
       render: (text) => <Text strong style={{ whiteSpace: 'nowrap' }}>{text}</Text> 
     },
     { title: 'Email', dataIndex: 'email', key: 'email' },
+    { 
+      title: 'Phone No.', 
+      dataIndex: 'phone_number', 
+      key: 'phone_number', 
+      render: (phone, record) => <Text>{phone || record.phone || 'N/A'}</Text> 
+    },
     { title: 'Current Plan', dataIndex: 'subscription_tier', key: 'plan', render: (plan) => <Tag color={plan === 'scale' ? 'purple' : plan === 'pro' ? 'gold' : plan === 'growth' ? 'green' : 'blue'}>{plan?.toUpperCase()}</Tag> },
     { title: 'Joined On', dataIndex: 'created_at', key: 'created_at', render: (date) => new Date(date).toLocaleDateString() },
     { 
@@ -351,12 +381,64 @@ const ControlCenter = () => {
         <Text type="secondary" style={{ display: 'block', marginBottom: '24px' }}>
           Manage all registered shops, update their subscription plans, and securely delete abandoned accounts.
         </Text>
+        {/* --- NAYA IZAFA: Super Admin Filters Bar --- */}
+        <Row gutter={[12, 12]} align="middle" style={{ marginBottom: 16 }}>
+          <Col xs={24} sm={10} md={8}>
+            <Input 
+              placeholder="Search by shop name, email, or phone..." 
+              prefix={<SearchOutlined style={{ color: token.colorTextSecondary }} />}
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              allowClear
+            />
+          </Col>
+          <Col xs={12} sm={6} md={5}>
+            <Select 
+              value={filterPlan} 
+              onChange={setFilterPlan} 
+              style={{ width: '100%' }}
+            >
+              <Option value="all">All Plans</Option>
+              <Option value="free">Free Plan</Option>
+              <Option value="growth">Growth Plan</Option>
+              <Option value="pro">Pro Plan</Option>
+              <Option value="scale">Scale Plan</Option>
+            </Select>
+          </Col>
+          <Col xs={12} sm={6} md={5}>
+            <Select 
+              value={filterStatus} 
+              onChange={setFilterStatus} 
+              style={{ width: '100%' }}
+            >
+              <Option value="all">All Status</Option>
+              <Option value="active">Active Shops</Option>
+              <Option value="suspended">Suspended Shops</Option>
+              <Option value="pending_deletion">Pending Deletion</Option>
+            </Select>
+          </Col>
+          <Col xs={24} sm={2} md={2}>
+            <Tooltip title="Reset Filters">
+              <Button 
+                icon={<ReloadOutlined />} 
+                onClick={() => {
+                  setSearchText('');
+                  setFilterPlan('all');
+                  setFilterStatus('all');
+                }}
+              />
+            </Tooltip>
+          </Col>
+        </Row>
+
+        {/* --- NAYA IZAFA: Smooth Horizontal Scroll & Filtered Data --- */}
         <Table 
-          dataSource={users} 
+          dataSource={filteredUsers} 
           columns={columns} 
           rowKey="id" 
           loading={loading}
           pagination={{ pageSize: 10 }}
+          scroll={{ x: 'max-content' }}
         />
       </Card>
 
