@@ -64,6 +64,7 @@ serve(async (req) => {
           email: u.email,
           created_at: u.created_at,
           shop_name: p?.shop_name || 'No Shop Name',
+          phone_number: p?.phone_number || u.phone || null, // <-- NAYA IZAFA: Phone Number shamil kiya
           subscription_tier: p?.subscription_tier || 'free',
           is_super_admin: p?.is_super_admin || false,
           is_suspended: p?.is_suspended || false, // <-- Naya column dukan block status ke liye

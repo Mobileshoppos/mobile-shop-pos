@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useLocation, Link } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme, DatePicker, Tooltip, TreeSelect } from 'antd';
-import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined, LockOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined, CalendarOutlined, WarningOutlined } from '@ant-design/icons';
+import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme, DatePicker, Tooltip, TreeSelect, Switch } from 'antd';
+import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined, LockOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined, CalendarOutlined, WarningOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -390,7 +390,7 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
                           size="small" 
                           style={{ color: token.colorSuccess, fontSize: '16px' }} 
                           onClick={() => onAddStock(variant)} 
-                          title="Add Stock / Add New Variants"
+                          title="Create Purchase Invoice to Add Stock"
                         />
                         <Button 
                           type="text" 
@@ -438,7 +438,9 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
                       borderRadius: '6px',
                       border: '1px dashed #d9d9d9'
                   }}>
-                      <Text type="secondary" style={{ display: 'block', marginBottom: '8px' }}>No stock added yet</Text>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: '8px' }}>
+                        No stock available. Create a Purchase Invoice to receive stock for this and other items.
+                      </Text>
                       
                       {/* Sirf Owner stock add kar sake */}
                       {can('can_edit_inventory') && (
@@ -448,7 +450,7 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
                           icon={<PlusOutlined />} 
                           onClick={() => onAddStock(product)} 
                         >
-                          Add First Stock
+                          Create Purchase Invoice
                         </Button>
                       )}
                   </div>
@@ -607,6 +609,57 @@ const Inventory = () => {
   const [showFilters, setShowFilters] = useState(false);
   
   const [productForm] = Form.useForm();
+
+  // NAYA IZAFA: Quick Category Modal States
+  const [isQuickCategoryModalOpen, setIsQuickCategoryModalOpen] = useState(false);
+  const [quickCategoryForm] = Form.useForm();
+
+  const handleQuickCategoryOk = async (values) => {
+    try {
+      const isDuplicate = await DataService.checkDuplicateCategory(values.name);
+      if (isDuplicate) {
+        message.error(`Category "${values.name}" already exists!`);
+        return;
+      }
+      const payload = {
+        name: values.name,
+        is_imei_based: values.is_imei_based || false,
+        parent_id: values.parent_id || null,
+        user_id: user.id
+      };
+      const newCat = await DataService.addProductCategory(payload);
+
+      // NAYA IZAFA: Custom Fields (Attributes) ko bhi sath hi save karein
+      if (values.attributes_list && values.attributes_list.length > 0) {
+        for (const attr of values.attributes_list) {
+          const attrPayload = {
+            category_id: newCat.id,
+            attribute_name: attr.attribute_name,
+            attribute_type: attr.attribute_type,
+            is_required: attr.is_required !== undefined ? attr.is_required : true,
+            options: attr.attribute_type === 'select' && attr.options ? attr.options : null,
+          };
+          await DataService.addCategoryAttribute(attrPayload);
+        }
+      }
+
+      message.success('Category & Custom Fields added successfully!');
+
+      // List ko foran refresh karein
+      const localCategories = await db.categories.toArray();
+      const visibleCategories = localCategories.filter(cat => cat.is_visible !== false);
+      setCategories(visibleCategories);
+      setCategoryTree(buildCategoryTree(visibleCategories));
+
+      // Nayi category ko dropdown mein auto-select karein
+      productForm.setFieldValue('category_id', newCat.id);
+      
+      setIsQuickCategoryModalOpen(false);
+      quickCategoryForm.resetFields();
+    } catch (error) {
+      message.error('Error adding category: ' + error.message);
+    }
+  };
   
   const [editingProduct, setEditingProduct] = useState(null);
   const [nameSuggestions, setNameSuggestions] = useState([]);
@@ -1545,135 +1598,142 @@ const Inventory = () => {
         onCancel={handleProductModalCancel} 
         okText={isImageUploading ? "Uploading..." : "Save Model"}
         okButtonProps={{ disabled: isImageUploading }}
-        width="70%" // <--- NAYA IZAFA: Pop-up ki churai 70% kar di
+        width={isMobile ? '95%' : '80%'} 
+        style={{ top: 20 }} 
       >
         <Form form={productForm} layout="vertical" onFinish={handleProductOk} style={{marginTop: '24px'}}>
-          {/* NAYA IZAFA: Hidden submit button taake Enter dabane se form save ho jaye */}
           <button type="submit" style={{ display: 'none' }} />
           
-          {/* NAYA IZAFA: Product Name aur Category ko ek hi row mein kar diya */}
+          {/* === VISIBLE SECTION: Product Name, Category, Brand === */}
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} md={8}>
               <Form.Item name="name" label="Product Name" rules={[{ required: true }]}>
-                <Input 
-                  ref={productNameInputRef} 
-                  placeholder="e.g. Apple 17" 
-                />
+                <Input ref={productNameInputRef} placeholder="e.g. Apple 17" />
               </Form.Item>
             </Col>
-            <Col span={12}>
-              <Form.Item 
-                name="category_id" 
-                label="Category" 
-                rules={[{ required: true }]}
-                extra={<span>Can't find your category? <Link to="/categories">Create a new one here</Link></span>}
-              >
-                <TreeSelect
-                  showSearch
-                  styles={{ popup: { root: { maxHeight: 400, overflow: 'auto' } } }} // <--- NAYA IZAFA: Warning fix
-                  placeholder="Select Category..."
-                  allowClear
-                  treeDefaultExpandAll
-                  treeData={categoryTree}
-                  treeNodeFilterProp="title"
-                />
+            <Col xs={24} md={8}>
+              <Form.Item label="Category" required>
+                <Space.Compact style={{ width: '100%' }}>
+                  <Form.Item name="category_id" noStyle rules={[{ required: true, message: 'Please select a category' }]}>
+                    <TreeSelect
+                      showSearch
+                      styles={{ popup: { root: { maxHeight: 400, overflow: 'auto' } } }} 
+                      placeholder="Select Category..."
+                      allowClear
+                      treeDefaultExpandAll
+                      treeData={categoryTree}
+                      treeNodeFilterProp="title"
+                    />
+                  </Form.Item>
+                  <Tooltip title="Add New Category">
+                    <Button icon={<PlusOutlined />} onClick={() => setIsQuickCategoryModalOpen(true)} />
+                  </Tooltip>
+                </Space.Compact>
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item name="brand" label="Brand" rules={[{ required: true }]}>
+                <Input placeholder="e.g. Apple, Samsung" />
               </Form.Item>
             </Col>
           </Row>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="brand" label="Brand" rules={[{ required: true }]}><Input /></Form.Item>
-            </Col>
-            {limits.allow_stock_location && (
-              <Col span={12}>
-                <Form.Item name="rack_location" label="Stock Location (Rack/Shelf)" tooltip="e.g. Shelf A, Counter 2">
-                  <Input placeholder="e.g. Shelf A" />
-                </Form.Item>
-              </Col>
-            )}
-          </Row>
-          
-          {profile?.fbr_integration_enabled && (
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item 
-                  name="hs_code" 
-                  label="HS Code (FBR)" 
-                  tooltip="Must be exactly 4 digits, a dot, and 4 digits (e.g., 8517.1219)"
-                  rules={[
-                    { required: true, message: 'HS Code is required for FBR' },
-                    { pattern: /^\d{4}\.\d{4}$/, message: 'Format must be XXXX.XXXX (e.g. 0101.2100)' }
-                  ]}
-                  help={<a href="https://www.fbr.gov.pk/customs-tariff/131175" target="_blank" rel="noopener noreferrer">Find your HS Code here</a>}
-                >
-                  <Input placeholder="0000.0000" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item 
-                  name="uom" 
-                  label="Unit of Measure (FBR)"
-                  rules={[{ required: true, message: 'UOM is required for FBR' }]}
-                >
-                  <Select placeholder="Select UOM">
-                    <Option value="Numbers, pieces, units">Numbers, pieces, units</Option>
-                    <Option value="KG">KG</Option>
-                    <Option value="MT">MT (Metric Ton)</Option>
-                    <Option value="SqY">SqY (Square Yard)</Option>
-                    <Option value="Liters">Liters</Option>
-                    <Option value="Meters">Meters</Option>
-                  </Select>
-                </Form.Item>
-              </Col>
-            </Row>
-          )}
-
-          <Row gutter={16}>
-            <Col span={12}>
-                <Form.Item name="purchase_price" label="Default Purchase Price">
-                    <InputNumber style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
-                </Form.Item>
-            </Col>
-            <Col span={12}>
-                <Form.Item name="sale_price" label="Default Sale Price">
-                    <InputNumber style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
-                </Form.Item>
-            </Col>
-            {profile?.warranty_system_enabled !== false && (
-                <Col span={12}>
-                    <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)" tooltip="How many days warranty do you usually give to customers for this product?">
-                        <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
+          {/* === COLLAPSED ADVANCED SECTION === */}
+          <Collapse ghost style={{ marginTop: '8px', background: token.colorFillAlter, borderRadius: '8px', border: `1px solid ${token.colorBorderSecondary}` }}>
+            <Collapse.Panel header={<Text strong>Advanced Settings (Prices, Limits, FBR, Image)</Text>} key="1">
+              
+              <Row gutter={16}>
+                <Col xs={24} md={12}>
+                    <Form.Item name="purchase_price" label="Default Purchase Price">
+                        <InputNumber style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
                     </Form.Item>
                 </Col>
-            )}
-            <Col span={profile?.warranty_system_enabled !== false ? 12 : 24}>
-                <Form.Item 
-                    name="low_stock_threshold" 
-                    label="Low Stock Warning At" 
-                    tooltip="If set, this will override the global low stock limit from Settings for this specific product. Leave empty to use global settings."
-                >
-                    <InputNumber style={{ width: '100%' }} min={1} placeholder={`Default: ${profile?.low_stock_threshold || 5}`} />
-                </Form.Item>
-            </Col>
-          </Row>
+                <Col xs={24} md={12}>
+                    <Form.Item name="sale_price" label="Default Sale Price">
+                        <InputNumber style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
+                    </Form.Item>
+                </Col>
+              </Row>
 
-          {/* NAYA IZAFA: Product Level Price Drop Limit */}
-          <Row gutter={16}>
-            <Col span={24}>
-                <Form.Item 
-                    name="price_drop_limit" 
-                    label="Max Price Drop Limit (%)" 
-                    tooltip="Override the global price drop limit for this specific product. E.g., put 0 to block any discount, or 50 for clearance items."
-                >
-                    <InputNumber style={{ width: '100%' }} min={0} max={100} addonAfter="%" placeholder={`Default: ${profile?.price_drop_limit || 5}%`} />
-                </Form.Item>
-            </Col>
-          </Row>
+              <Row gutter={16}>
+                {profile?.warranty_system_enabled !== false && (
+                    <Col xs={24} md={12}>
+                        <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)" tooltip="How many days warranty do you usually give to customers for this product?">
+                            <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
+                        </Form.Item>
+                    </Col>
+                )}
+                <Col xs={24} md={profile?.warranty_system_enabled !== false ? 12 : 24}>
+                    <Form.Item 
+                        name="low_stock_threshold" 
+                        label="Low Stock Warning At" 
+                        tooltip="If set, this will override the global low stock limit from Settings for this specific product. Leave empty to use global settings."
+                    >
+                        <InputNumber style={{ width: '100%' }} min={1} placeholder={`Default: ${profile?.low_stock_threshold || 5}`} />
+                    </Form.Item>
+                </Col>
+              </Row>
 
-          <Form.Item name="image_url" label="Product Image">
-            <ProductImageUpload onUploading={setIsImageUploading} />
-          </Form.Item>
+              <Row gutter={16}>
+                {limits.allow_stock_location && (
+                  <Col xs={24} md={12}>
+                    <Form.Item name="rack_location" label="Stock Location (Rack/Shelf)" tooltip="e.g. Shelf A, Counter 2">
+                      <Input placeholder="e.g. Shelf A" />
+                    </Form.Item>
+                  </Col>
+                )}
+                <Col xs={24} md={limits.allow_stock_location ? 12 : 24}>
+                    <Form.Item 
+                        name="price_drop_limit" 
+                        label="Max Price Drop Limit (%)" 
+                        tooltip="Override the global price drop limit for this specific product. E.g., put 0 to block any discount, or 50 for clearance items."
+                    >
+                        <InputNumber style={{ width: '100%' }} min={0} max={100} addonAfter="%" placeholder={`Default: ${profile?.price_drop_limit || 5}%`} />
+                    </Form.Item>
+                </Col>
+              </Row>
+
+              {profile?.fbr_integration_enabled && (
+                <Row gutter={16}>
+                  <Col xs={24} md={12}>
+                    <Form.Item 
+                      name="hs_code" 
+                      label="HS Code (FBR)" 
+                      tooltip="Must be exactly 4 digits, a dot, and 4 digits (e.g., 8517.1219)"
+                      rules={[
+                        { required: true, message: 'HS Code is required for FBR' },
+                        { pattern: /^\d{4}\.\d{4}$/, message: 'Format must be XXXX.XXXX (e.g. 0101.2100)' }
+                      ]}
+                      help={<a href="https://www.fbr.gov.pk/customs-tariff/131175" target="_blank" rel="noopener noreferrer">Find your HS Code here</a>}
+                    >
+                      <Input placeholder="0000.0000" />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item 
+                      name="uom" 
+                      label="Unit of Measure (FBR)"
+                      rules={[{ required: true, message: 'UOM is required for FBR' }]}
+                    >
+                      <Select placeholder="Select UOM">
+                        <Option value="Numbers, pieces, units">Numbers, pieces, units</Option>
+                        <Option value="KG">KG</Option>
+                        <Option value="MT">MT (Metric Ton)</Option>
+                        <Option value="SqY">SqY (Square Yard)</Option>
+                        <Option value="Liters">Liters</Option>
+                        <Option value="Meters">Meters</Option>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                </Row>
+              )}
+
+              <Form.Item name="image_url" label="Product Image" style={{ marginBottom: 0 }}>
+                <ProductImageUpload onUploading={setIsImageUploading} />
+              </Form.Item>
+
+            </Collapse.Panel>
+          </Collapse>
         </Form>
       </Modal>
 
@@ -1769,94 +1829,104 @@ const Inventory = () => {
         onCancel={handleProductEditModalCancel}
         okText={isImageUploading ? "Uploading..." : "Update"}
         okButtonProps={{ disabled: isImageUploading }}
+        width={isMobile ? '95%' : '80%'} 
+        style={{ top: 20 }} 
       >
         <Form form={productEditForm} layout="vertical" onFinish={handleProductModelUpdate}>
-          {/* NAYA IZAFA: Hidden submit button taake Enter dabane se form save ho jaye */}
           <button type="submit" style={{ display: 'none' }} />
-          <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
+          
+          {/* VISIBLE SECTION */}
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} md={12}>
+              <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
               <Form.Item name="brand" label="Brand"><Input /></Form.Item>
             </Col>
-            {limits.allow_stock_location && (
-              <Col span={12}>
-                <Form.Item name="rack_location" label="Stock Location (Rack/Shelf)" tooltip="e.g. Shelf A, Counter 2">
-                  <Input placeholder="e.g. Shelf A" />
-                </Form.Item>
-              </Col>
-            )}
           </Row>
-          
-          {profile?.fbr_integration_enabled && (
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item 
-                  name="hs_code" 
-                  label="HS Code (FBR)"
-                  tooltip="Must be exactly 4 digits, a dot, and 4 digits (e.g., 8517.1219)"
-                  rules={[
-                    { required: true, message: 'HS Code is required for FBR' },
-                    { pattern: /^\d{4}\.\d{4}$/, message: 'Format must be XXXX.XXXX (e.g. 0101.2100)' }
-                  ]}
-                  help={<a href="https://www.fbr.gov.pk/customs-tariff/131175" target="_blank" rel="noopener noreferrer">Find your HS Code here</a>}
-                >
-                  <Input placeholder="0000.0000" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item 
-                  name="uom" 
-                  label="Unit of Measure (FBR)"
-                  rules={[{ required: true, message: 'UOM is required for FBR' }]}
-                >
-                  <Select placeholder="Select UOM">
-                    <Option value="Numbers, pieces, units">Numbers, pieces, units</Option>
-                    <Option value="KG">KG</Option>
-                    <Option value="MT">MT (Metric Ton)</Option>
-                    <Option value="SqY">SqY (Square Yard)</Option>
-                    <Option value="Liters">Liters</Option>
-                    <Option value="Meters">Meters</Option>
-                  </Select>
-                </Form.Item>
-              </Col>
-            </Row>
-          )}
 
-          <Row gutter={16}>
-            {profile?.warranty_system_enabled !== false && (
-                <Col span={12}>
-                  <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)">
-                    <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
-                  </Form.Item>
+          {/* COLLAPSED ADVANCED SECTION */}
+          <Collapse ghost style={{ marginTop: '8px', background: token.colorFillAlter, borderRadius: '8px', border: `1px solid ${token.colorBorderSecondary}` }}>
+            <Collapse.Panel header={<Text strong>Advanced Settings (Limits, FBR, Image)</Text>} key="1">
+              
+              <Row gutter={16}>
+                {limits.allow_stock_location && (
+                  <Col xs={24} md={12}>
+                    <Form.Item name="rack_location" label="Stock Location (Rack/Shelf)" tooltip="e.g. Shelf A, Counter 2">
+                      <Input placeholder="e.g. Shelf A" />
+                    </Form.Item>
+                  </Col>
+                )}
+                <Col xs={24} md={limits.allow_stock_location ? 12 : 24}>
+                    <Form.Item 
+                        name="price_drop_limit" 
+                        label="Max Price Drop Limit (%)" 
+                        tooltip="Override the global price drop limit for this specific product."
+                    >
+                        <InputNumber style={{ width: '100%' }} min={0} max={100} addonAfter="%" placeholder={`Default: ${profile?.price_drop_limit || 5}%`} />
+                    </Form.Item>
                 </Col>
-            )}
-            <Col span={profile?.warranty_system_enabled !== false ? 12 : 24}>
-                <Form.Item 
-                    name="low_stock_threshold" 
-                    label="Low Stock Warning At" 
-                    tooltip="If set, this will override the global low stock limit from Settings for this specific product. Leave empty to use global settings."
-                >
-                    <InputNumber style={{ width: '100%' }} min={1} placeholder={`Default: ${profile?.low_stock_threshold || 5}`} />
-                </Form.Item>
-            </Col>
-          </Row>
+              </Row>
 
-          {/* NAYA IZAFA: Product Level Price Drop Limit */}
-          <Row gutter={16}>
-            <Col span={24}>
-                <Form.Item 
-                    name="price_drop_limit" 
-                    label="Max Price Drop Limit (%)" 
-                    tooltip="Override the global price drop limit for this specific product. E.g., put 0 to block any discount, or 50 for clearance items."
-                >
-                    <InputNumber style={{ width: '100%' }} min={0} max={100} addonAfter="%" placeholder={`Default: ${profile?.price_drop_limit || 5}%`} />
-                </Form.Item>
-            </Col>
-          </Row>
+              <Row gutter={16}>
+                {profile?.warranty_system_enabled !== false && (
+                    <Col xs={24} md={12}>
+                      <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)">
+                        <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
+                      </Form.Item>
+                    </Col>
+                )}
+                <Col xs={24} md={profile?.warranty_system_enabled !== false ? 12 : 24}>
+                    <Form.Item 
+                        name="low_stock_threshold" 
+                        label="Low Stock Warning At" 
+                        tooltip="If set, this will override the global low stock limit from Settings for this specific product. Leave empty to use global settings."
+                    >
+                        <InputNumber style={{ width: '100%' }} min={1} placeholder={`Default: ${profile?.low_stock_threshold || 5}`} />
+                    </Form.Item>
+                </Col>
+              </Row>
+              
+              {profile?.fbr_integration_enabled && (
+                <Row gutter={16}>
+                  <Col xs={24} md={12}>
+                    <Form.Item 
+                      name="hs_code" 
+                      label="HS Code (FBR)"
+                      tooltip="Must be exactly 4 digits, a dot, and 4 digits (e.g., 8517.1219)"
+                      rules={[
+                        { required: true, message: 'HS Code is required for FBR' },
+                        { pattern: /^\d{4}\.\d{4}$/, message: 'Format must be XXXX.XXXX (e.g. 0101.2100)' }
+                      ]}
+                      help={<a href="https://www.fbr.gov.pk/customs-tariff/131175" target="_blank" rel="noopener noreferrer">Find your HS Code here</a>}
+                    >
+                      <Input placeholder="0000.0000" />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item 
+                      name="uom" 
+                      label="Unit of Measure (FBR)"
+                      rules={[{ required: true, message: 'UOM is required for FBR' }]}
+                    >
+                      <Select placeholder="Select UOM">
+                        <Option value="Numbers, pieces, units">Numbers, pieces, units</Option>
+                        <Option value="KG">KG</Option>
+                        <Option value="MT">MT (Metric Ton)</Option>
+                        <Option value="SqY">SqY (Square Yard)</Option>
+                        <Option value="Liters">Liters</Option>
+                        <Option value="Meters">Meters</Option>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                </Row>
+              )}
 
-          <Form.Item name="image_url" label="Product Image">
-            <ProductImageUpload onUploading={setIsImageUploading} />
-          </Form.Item>
+              <Form.Item name="image_url" label="Product Image" style={{ marginBottom: 0 }}>
+                <ProductImageUpload onUploading={setIsImageUploading} />
+              </Form.Item>
+            </Collapse.Panel>
+          </Collapse>
         </Form>
       </Modal>
       
@@ -1943,6 +2013,120 @@ const Inventory = () => {
         product={selectedProductForLedger}
         warehouses={warehouses} // <--- NAYA IZAFA: Godowns ka data modal ko bheja
       />
+
+      {/* NAYA IZAFA: Upgraded Quick Add Category Modal */}
+      <Modal
+        title="Add New Category"
+        open={isQuickCategoryModalOpen}
+        onCancel={() => {
+          setIsQuickCategoryModalOpen(false);
+          quickCategoryForm.resetFields();
+        }}
+        onOk={() => quickCategoryForm.submit()}
+        okText="Save & Select"
+        width={isMobile ? '95%' : '80%'}
+        style={{ top: 20 }}
+      >
+        <Form form={quickCategoryForm} layout="vertical" onFinish={handleQuickCategoryOk} style={{ marginTop: '24px' }}>
+          <button type="submit" style={{ display: 'none' }} />
+          
+          <Row gutter={16}>
+            <Col xs={24} md={8}>
+              <Form.Item name="name" label="Category Name" rules={[{ required: true, message: 'Please enter category name' }]}>
+                <Input placeholder="e.g. Smartphones, Audio" />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={8}>
+              <Form.Item name="parent_id" label="Parent Category (Optional)" tooltip="Select a main category if you want to make this a sub-category.">
+                <TreeSelect
+                  showSearch
+                  placeholder="None (Main Category)"
+                  allowClear
+                  treeDefaultExpandAll
+                  treeData={categoryTree}
+                  treeNodeFilterProp="title"
+                />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={8}>
+              <Form.Item name="is_imei_based" label="Stock Tracking Type" valuePropName="checked" tooltip="Enable this if items in this category need to be tracked individually.">
+                <Switch checkedChildren="Per-Item (IMEI/Serial)" unCheckedChildren="By Quantity (Bulk)" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* DYNAMIC ATTRIBUTES BUILDER */}
+          <div style={{ marginTop: '24px', padding: '16px', background: token.colorFillAlter, borderRadius: '8px', border: `1px solid ${token.colorBorderSecondary}` }}>
+             <Title level={5} style={{ marginTop: 0 }}>Custom Fields / Options (Optional)</Title>
+             <Text type="secondary" style={{ display: 'block', marginBottom: '16px', fontSize: '13px' }}>
+                Add specific details you want to track for items in this category (e.g., Color, Storage, Size).
+             </Text>
+
+             <Form.List name="attributes_list">
+                {(fields, { add, remove }) => (
+                  <>
+                    {fields.map(({ key, name, ...restField }) => (
+                      <Card size="small" key={key} style={{ marginBottom: 12, border: `1px dashed ${token.colorBorder}` }} bodyStyle={{ padding: '12px' }}>
+                        <Row gutter={12} align="top">
+                          <Col xs={24} sm={7}>
+                            <Form.Item {...restField} name={[name, 'attribute_name']} label="Field Name" rules={[{ required: true, message: 'Missing name' }]} style={{ marginBottom: isMobile ? 12 : 0 }}>
+                              <Input placeholder="e.g. Color" />
+                            </Form.Item>
+                          </Col>
+                          
+                          <Col xs={24} sm={6}>
+                            <Form.Item {...restField} name={[name, 'attribute_type']} label="Input Type" rules={[{ required: true }]} style={{ marginBottom: isMobile ? 12 : 0 }}>
+                              <Select>
+                                <Option value="text">Text</Option>
+                                <Option value="number">Number</Option>
+                                <Option value="select">Select (Dropdown)</Option>
+                              </Select>
+                            </Form.Item>
+                          </Col>
+
+                          <Col xs={24} sm={8}>
+                            <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => {
+                               const prevType = prevValues.attributes_list?.[name]?.attribute_type;
+                               const currType = currentValues.attributes_list?.[name]?.attribute_type;
+                               return prevType !== currType;
+                            }}>
+                              {({ getFieldValue }) => {
+                                const type = getFieldValue(['attributes_list', name, 'attribute_type']);
+                                if (type === 'select') {
+                                  return (
+                                    <Form.Item {...restField} name={[name, 'options']} label="Options (Tags)" rules={[{ required: true, message: 'Add options' }]} style={{ marginBottom: 0 }}>
+                                      <Select mode="tags" style={{ width: '100%' }} placeholder="Type & Enter" open={false} />
+                                    </Form.Item>
+                                  );
+                                }
+                                return (
+                                  <Form.Item {...restField} name={[name, 'is_required']} label="Required?" valuePropName="checked" style={{ marginBottom: 0 }}>
+                                     <Switch checkedChildren="Yes" unCheckedChildren="No" />
+                                  </Form.Item>
+                                );
+                              }}
+                            </Form.Item>
+                          </Col>
+
+                          <Col xs={24} sm={3} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingTop: isMobile ? 0 : '30px' }}>
+                            <Button type="text" danger icon={<MinusCircleOutlined />} onClick={() => remove(name)} />
+                          </Col>
+                        </Row>
+                      </Card>
+                    ))}
+                    <Form.Item style={{ marginBottom: 0 }}>
+                      <Button type="dashed" onClick={() => add({ attribute_type: 'text', is_required: true })} block icon={<PlusOutlined />}>
+                        Add Custom Field
+                      </Button>
+                    </Form.Item>
+                  </>
+                )}
+             </Form.List>
+          </div>
+        </Form>
+      </Modal>
 
     </div>
   );

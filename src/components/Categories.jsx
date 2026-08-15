@@ -3,7 +3,7 @@ import {
   Typography, Table, Button, Modal, Form, Input, App as AntApp,
   Space, Popconfirm, Tooltip, Row, Col, Card, Empty, Select, Switch, Tag, theme
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, MobileOutlined, TagsOutlined, LockOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, MobileOutlined, TagsOutlined, LockOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom'; // Naya Import
@@ -27,6 +27,7 @@ const Categories = () => {
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
+  const [hasProducts, setHasProducts] = useState(false); // NAYA IZAFA
   const [categoryForm] = Form.useForm();
   const categoryNameInputRef = useRef(null); // NAYA IZAFA
   
@@ -140,14 +141,33 @@ const Categories = () => {
   const showCategoryModal = async (category = null) => {
     setEditingCategory(category);
     if (category) {
+      // NAYA IZAFA: Check karein ke kya is category mein koi product ban chuka hai?
+      const prodCount = await db.products.where('category_id').equals(category.id).count();
+      setHasProducts(prodCount > 0);
+
+      // Pehle category ke attributes mangwayein taake form mein load ho sakein
+      const attrs = await DataService.getCategoryAttributes(category.id);
+      
+      // Attributes ko form ke hisaab se format karein
+      const formattedAttrs = attrs.map(attr => ({
+        ...attr,
+        options: Array.isArray(attr.options) ? attr.options : []
+      }));
+
       categoryForm.setFieldsValue({ 
         name: category.name, 
         is_imei_based: category.is_imei_based,
-        parent_id: category.parent_id || null // NAYA IZAFA
+        parent_id: category.parent_id || null,
+        attributes_list: formattedAttrs // <--- NAYA IZAFA: Attributes list
       });
     } else {
+      setHasProducts(false); // NAYA IZAFA: Nayi category ke liye false
       categoryForm.resetFields();
-      categoryForm.setFieldsValue({ is_imei_based: false, parent_id: null }); // NAYA IZAFA
+      categoryForm.setFieldsValue({ 
+        is_imei_based: false, 
+        parent_id: null,
+        attributes_list: [] // <--- NAYA IZAFA: Khali list naye ke liye
+      });
     }
     setIsCategoryModalOpen(true);
   };
@@ -171,24 +191,76 @@ const Categories = () => {
         ]);
         return;
       }
-      // NAYA IZAFA: parent_id ko theek tarah set karna
-      const payload = {
-        ...values,
+
+      // 1. Category Payload
+      const categoryPayload = {
+        name: values.name,
+        is_imei_based: values.is_imei_based,
         parent_id: values.parent_id || null 
       };
 
+      let finalCategoryId;
+
+      // 2. Save Category
       if (editingCategory) {
-        // Update (Offline)
-        await DataService.updateProductCategory(editingCategory.id, payload);
+        await DataService.updateProductCategory(editingCategory.id, categoryPayload);
+        finalCategoryId = editingCategory.id;
         message.success('Category updated successfully!');
       } else {
-        // Add (Offline)
-        const newCat = { ...payload, user_id: user.id };
-        await DataService.addProductCategory(newCat);
+        const newCat = { ...categoryPayload, user_id: user.id };
+        const savedCat = await DataService.addProductCategory(newCat);
+        finalCategoryId = savedCat.id; // Nayi ID
         message.success('Category added successfully!');
       }
+
+      // 3. Save Attributes (Ek hi waqt mein)
+      if (values.attributes_list && values.attributes_list.length > 0) {
+        // Pehle purane attributes nikaalein (agar edit ho raha hai)
+        let existingAttrs = [];
+        if (editingCategory) {
+           existingAttrs = await DataService.getCategoryAttributes(finalCategoryId);
+        }
+
+        const submittedAttrIds = values.attributes_list.map(a => a.id).filter(id => id);
+
+        // Delete wo attributes jo user ne form se hata diye
+        for (const extAttr of existingAttrs) {
+           if (!submittedAttrIds.includes(extAttr.id)) {
+               await DataService.deleteCategoryAttribute(extAttr.id);
+           }
+        }
+
+        // Add / Update
+        for (const attr of values.attributes_list) {
+            const attrPayload = {
+               category_id: finalCategoryId,
+               attribute_name: attr.attribute_name,
+               attribute_type: attr.attribute_type,
+               is_required: attr.is_required !== undefined ? attr.is_required : true,
+               options: attr.attribute_type === 'select' && attr.options ? attr.options : null,
+            };
+
+            if (attr.id) {
+               await DataService.updateCategoryAttribute(attr.id, attrPayload);
+            } else {
+               await DataService.addCategoryAttribute(attrPayload);
+            }
+        }
+      } else if (editingCategory) {
+         // Agar saare attributes delete kar diye
+         const existingAttrs = await DataService.getCategoryAttributes(finalCategoryId);
+         for (const extAttr of existingAttrs) {
+             await DataService.deleteCategoryAttribute(extAttr.id);
+         }
+      }
+
       handleCategoryModalCancel();
       getCategories();
+      
+      // Agar pehle se koi select thi to uske attributes refresh karein
+      if (selectedCategory && (selectedCategory.id === finalCategoryId || !editingCategory)) {
+         getAttributesForCategory(selectedCategory.id);
+      }
     } catch (error) { message.error('Error saving category: ' + error.message); }
   };
 
@@ -305,13 +377,12 @@ const Categories = () => {
 
   const attributeColumns = [
     { 
-      title: 'Attribute Name', 
+      title: 'Field Name', 
       dataIndex: 'attribute_name', 
       key: 'attribute_name',
       render: (text, record) => (
         <Space direction="vertical" size={0}>
-          <Text>{text}</Text>
-          {/* NAYA IZAFA: Virasat ka Tag */}
+          <Text strong>{text}</Text>
           {record.is_inherited && (
             <Tag color="purple" style={{ margin: 0, fontSize: '10px', lineHeight: '14px', border: 'none' }}>
               From: {record.source_category_name}
@@ -320,8 +391,26 @@ const Categories = () => {
         </Space>
       )
     },
-    { title: 'Type', dataIndex: 'attribute_type', key: 'attribute_type', render: type => <Tag>{type.toUpperCase()}</Tag> },
-    { title: 'Required', dataIndex: 'is_required', key: 'is_required', render: req => req ? <Tag color="success">Yes</Tag> : <Tag>No</Tag> },
+    {
+      title: 'Details & Options',
+      key: 'details',
+      render: (_, record) => (
+        <Space direction="vertical" size={4}>
+          <Space>
+            <Tag color="blue">{record.attribute_type.toUpperCase()}</Tag>
+            {record.is_required ? <Tag color="error">Required</Tag> : <Tag color="default">Optional</Tag>}
+          </Space>
+          {/* Agar Select type hai to uske Tags (Options) yahan show honge */}
+          {record.attribute_type === 'select' && record.options && record.options.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+              {record.options.map(opt => (
+                <Tag key={opt} style={{ margin: 0, background: token.colorFillAlter }}>{opt}</Tag>
+              ))}
+            </div>
+          )}
+        </Space>
+      )
+    },
     {
         title: 'Actions', key: 'actions', width: 120, align: 'center',
         render: (_, record) => {
@@ -427,40 +516,21 @@ const Categories = () => {
               {selectedCategory ? (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <Title level={4} style={{ margin: 0 }}>Attributes for: <Text style={{ color: token.colorSuccess }}>{selectedCategory.name}</Text></Title>
-                    {(() => {
-                      const limits = getPlanLimits(profile?.subscription_tier);
-                      const isLocked = !limits.allow_custom_categories;
-                      return (
-                        <Button 
-                          id="attr-add-btn"
-                          type="primary" 
-                          icon={isLocked ? <LockOutlined /> : <PlusOutlined />} 
-                          onClick={() => {
-                            if (isLocked) {
-                              modal.confirm({
-                                title: 'Attribute Management',
-                                content: 'Creating custom attributes for categories requires a Growth or Pro plan.',
-                                okText: 'View Plans',
-                                cancelText: 'Close',
-                                onOk: () => navigate('/subscription')
-                              });
-                            } else {
-                              showAttributeModal();
-                            }
-                          }}
-                          style={isLocked ? { 
-                            color: token.colorTextDisabled, 
-                            backgroundColor: token.colorFillTertiary, 
-                            borderColor: token.colorBorder 
-                          } : {}}
-                        >
-                          Add New
-                        </Button>
-                      );
-                    })()}
+                    <Title level={4} style={{ margin: 0 }}>Custom Fields for: <Text style={{ color: token.colorSuccess }}>{selectedCategory.name}</Text></Title>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                       Click "Edit" on the left to modify fields.
+                    </Text>
                 </div>
-                <Table columns={attributeColumns} dataSource={attributes} loading={loadingAttributes} rowKey="id" size="small" pagination={false} scroll={{ x: true }} />
+                {/* NAYA IZAFA: Actions column hata diya gaya hai (Sirf view only table) */}
+                <Table 
+                  columns={attributeColumns.filter(col => col.key !== 'actions')} 
+                  dataSource={attributes} 
+                  loading={loadingAttributes} 
+                  rowKey="id" 
+                  size="small" 
+                  pagination={false} 
+                  scroll={{ x: true }} 
+                />
               </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px' }}>
@@ -472,53 +542,144 @@ const Categories = () => {
         </Col>
       </Row>
 
-      <Modal title={editingCategory ? 'Edit Category' : 'Add New Category'} open={isCategoryModalOpen} onCancel={handleCategoryModalCancel} onOk={() => categoryForm.submit()} okText="Save">
+      <Modal 
+        title={editingCategory ? 'Edit Category' : 'Add New Category'} 
+        open={isCategoryModalOpen} 
+        onCancel={handleCategoryModalCancel} 
+        onOk={() => categoryForm.submit()} 
+        okText="Save"
+        width={isMobile ? '95%' : '80%'} // <--- NAYA IZAFA: Modal ki churai barha di
+        style={{ top: 20 }} // <--- NAYA IZAFA: Modal ko screen ke top par le aaye
+      >
         <Form form={categoryForm} layout="vertical" onFinish={handleCategoryModalOk} style={{ marginTop: '24px' }}>
           {/* NAYA IZAFA: Enter dabane se form save karne ke liye hidden button */}
           <button type="submit" style={{ display: 'none' }} />
           
-          <Form.Item 
-              name="name" 
-              label="Category Name" 
-              rules={[{ required: true }]}
-              help={editingCategory ? "Note: Renaming will update all existing products in this category." : ""}
-          >
-    <Input ref={categoryNameInputRef} placeholder="e.g. Smartphones, Audio, Accessories" />
-        </Form.Item>
-
-          {/* NAYA IZAFA: Parent Category Select Dropdown */}
-          <Form.Item 
-              name="parent_id" 
-              label="Parent Category (Optional)"
-              tooltip="Select a main category if you want to make this a sub-category."
-          >
-              <Select 
-                  allowClear 
-                  placeholder="None (Main Category)"
-                  showSearch
-                  optionFilterProp="children"
+          {/* NAYA IZAFA: 3 fields ko ek hi row mein kar diya (Mobile par automatically neechay aayenge) */}
+          <Row gutter={16}>
+            <Col xs={24} md={8}>
+              <Form.Item 
+                  name="name" 
+                  label="Category Name" 
+                  rules={[{ required: true }]}
+                  help={editingCategory ? "Renaming updates existing products." : ""}
               >
-                  {rawCategories
-                      .filter(cat => cat.id !== editingCategory?.id) // Khud ko parent banane se rokna
-                      .map(cat => (
-                          <Option key={cat.id} value={cat.id}>{cat.name}</Option>
-                      ))
-                  }
-              </Select>
-          </Form.Item>
+                <Input ref={categoryNameInputRef} placeholder="e.g. Smartphones, Audio" />
+              </Form.Item>
+            </Col>
 
-          <Form.Item 
-            name="is_imei_based" 
-            label="Stock Tracking Type"
-            valuePropName="checked"
-            tooltip={editingCategory ? "Tracking type cannot be changed once products are created." : "Enable this if items in this category need to be tracked individually."}
-          >
-            <Switch 
-                checkedChildren="Per-Item (IMEI/Serial)" 
-                unCheckedChildren="By Quantity (Bulk)" 
-                disabled={!!editingCategory}
-            />
-          </Form.Item>
+            <Col xs={24} md={8}>
+              <Form.Item 
+                  name="parent_id" 
+                  label="Parent Category (Optional)"
+                  tooltip="Select a main category if you want to make this a sub-category."
+              >
+                  <Select 
+                      allowClear 
+                      placeholder="None (Main Category)"
+                      showSearch
+                      optionFilterProp="children"
+                  >
+                      {rawCategories
+                          .filter(cat => cat.id !== editingCategory?.id) // Khud ko parent banane se rokna
+                          .map(cat => (
+                              <Option key={cat.id} value={cat.id}>{cat.name}</Option>
+                          ))
+                      }
+                  </Select>
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={8}>
+              <Form.Item 
+                name="is_imei_based" 
+                label="Stock Tracking Type"
+                valuePropName="checked"
+                tooltip={hasProducts ? "Tracking type cannot be changed because products already exist in this category." : "Enable this if items in this category need to be tracked individually."}
+              >
+                <Switch 
+                    checkedChildren="Per-Item (IMEI/Serial)" 
+                    unCheckedChildren="By Quantity (Bulk)" 
+                    disabled={hasProducts} // <--- NAYA IZAFA: Sirf tab disable hoga jab products ban chuke hon
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* === NAYA IZAFA: DYNAMIC ATTRIBUTES BUILDER === */}
+          <div style={{ marginTop: '24px', padding: '16px', background: token.colorFillAlter, borderRadius: '8px', border: `1px solid ${token.colorBorderSecondary}` }}>
+             <Title level={5} style={{ marginTop: 0 }}>Custom Fields / Options (Optional)</Title>
+             <Text type="secondary" style={{ display: 'block', marginBottom: '16px', fontSize: '13px' }}>
+                Add specific details you want to track for items in this category (e.g., Color, Storage, Size).
+             </Text>
+
+             <Form.List name="attributes_list">
+                {(fields, { add, remove }) => (
+                  <>
+                    {fields.map(({ key, name, ...restField }) => (
+                      <Card size="small" key={key} style={{ marginBottom: 12, border: `1px dashed ${token.colorBorder}` }} bodyStyle={{ padding: '12px' }}>
+                        <Row gutter={12} align="top">
+                          {/* Hidden ID field for updates */}
+                          <Form.Item {...restField} name={[name, 'id']} hidden><Input /></Form.Item>
+                          
+                          <Col xs={24} sm={7}>
+                            <Form.Item {...restField} name={[name, 'attribute_name']} label="Field Name" rules={[{ required: true, message: 'Missing name' }]} style={{ marginBottom: isMobile ? 12 : 0 }}>
+                              <Input placeholder="e.g. Color" />
+                            </Form.Item>
+                          </Col>
+                          
+                          <Col xs={24} sm={6}>
+                            <Form.Item {...restField} name={[name, 'attribute_type']} label="Input Type" rules={[{ required: true }]} style={{ marginBottom: isMobile ? 12 : 0 }}>
+                              <Select>
+                                <Option value="text">Text</Option>
+                                <Option value="number">Number</Option>
+                                <Option value="select">Select (Dropdown)</Option>
+                              </Select>
+                            </Form.Item>
+                          </Col>
+
+                          <Col xs={24} sm={8}>
+                            {/* Conditional rendering inside Form.List using shouldUpdate */}
+                            <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => {
+                               const prevType = prevValues.attributes_list?.[name]?.attribute_type;
+                               const currType = currentValues.attributes_list?.[name]?.attribute_type;
+                               return prevType !== currType;
+                            }}>
+                              {({ getFieldValue }) => {
+                                const type = getFieldValue(['attributes_list', name, 'attribute_type']);
+                                if (type === 'select') {
+                                  return (
+                                    <Form.Item {...restField} name={[name, 'options']} label="Options (Tags)" rules={[{ required: true, message: 'Add options' }]} style={{ marginBottom: 0 }}>
+                                      <Select mode="tags" style={{ width: '100%' }} placeholder="Type & Enter" open={false} />
+                                    </Form.Item>
+                                  );
+                                }
+                                return (
+                                  <Form.Item {...restField} name={[name, 'is_required']} label="Required?" valuePropName="checked" style={{ marginBottom: 0 }}>
+                                     <Switch checkedChildren="Yes" unCheckedChildren="No" />
+                                  </Form.Item>
+                                );
+                              }}
+                            </Form.Item>
+                          </Col>
+
+                          <Col xs={24} sm={3} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingTop: isMobile ? 0 : '30px' }}>
+                            <Button type="text" danger icon={<MinusCircleOutlined />} onClick={() => remove(name)} />
+                          </Col>
+                        </Row>
+                      </Card>
+                    ))}
+                    <Form.Item style={{ marginBottom: 0 }}>
+                      <Button type="dashed" onClick={() => add({ attribute_type: 'text', is_required: true })} block icon={<PlusOutlined />}>
+                        Add Custom Field
+                      </Button>
+                    </Form.Item>
+                  </>
+                )}
+             </Form.List>
+          </div>
+          {/* ============================================== */}
+
         </Form>
       </Modal>
 
