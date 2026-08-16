@@ -25,7 +25,8 @@ import {
   InfoCircleOutlined,
   MenuUnfoldOutlined,
   MenuFoldOutlined,
-  LockOutlined
+  LockOutlined,
+  PlusOutlined
 } from '@ant-design/icons';
 import { theme } from 'antd'; 
 import { supabase } from '../supabaseClient';
@@ -56,6 +57,7 @@ const menuItems = [
       children: [
         { key: '/categories', icon: <TagsOutlined />, label: <Link to="/categories">Product Categories</Link> },
         { key: '/purchases', icon: <FileTextOutlined />, label: <Link to="/purchases">Purchase Orders</Link> },
+        { key: '/purchases/new', icon: <PlusOutlined />, label: <Link to="/purchases/new">Add Purchase</Link> },
       ]
     },
 

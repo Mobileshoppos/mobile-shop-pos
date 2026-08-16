@@ -157,7 +157,7 @@ const Purchases = () => {
     };
 
     const handleOpenAddModal = () => {
-        setIsAddModalVisible(true);
+        navigate('/purchases/new');
     };
 
     // --- NAYA IZAFA: Export ke liye columns ---
@@ -503,14 +503,7 @@ const Purchases = () => {
                 />
             )}
 
-            {isAddModalVisible && (
-    <AddPurchaseForm
-        visible={isAddModalVisible}
-        onCancel={() => setIsAddModalVisible(false)}
-        onPurchaseCreated={handlePurchaseCreated}
-        isMobile={isMobile}
-    />
-)}
+            {/* AddPurchaseForm modal has been removed from here and moved to a separate page */}
         </div>
     );
 };

@@ -17,6 +17,7 @@ import Profile from './pages/Profile';
 import AuthPage from './pages/AuthPage'; 
 import Purchases from './components/Purchases';
 import PurchaseDetails from './components/PurchaseDetails';
+import AddPurchaseForm from './components/AddPurchaseForm';
 import SupplierDashboard from './components/SupplierDashboard';
 import SalesHistory from './components/SalesHistory';
 import SettingsPage from './pages/SettingsPage';
@@ -294,6 +295,18 @@ const AppRoutes = ({ isDarkMode, toggleTheme }) => {
         <Route path="purchases" element={
           <PermissionGuard permission="can_manage_purchases">
             <Purchases />
+          </PermissionGuard>
+        } />
+        
+        <Route path="purchases/new" element={
+          <PermissionGuard permission="can_manage_purchases">
+            <AddPurchaseForm />
+          </PermissionGuard>
+        } />
+
+        <Route path="purchases/edit" element={
+          <PermissionGuard permission="can_manage_purchases">
+            <AddPurchaseForm />
           </PermissionGuard>
         } />
         

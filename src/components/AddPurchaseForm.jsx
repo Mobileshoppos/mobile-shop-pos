@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Collapse, Tag, Tooltip, Tabs
+  Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Collapse, Tag, Tooltip, Tabs, Card, theme, ConfigProvider
 } from 'antd';
 import { DeleteOutlined, BarcodeOutlined, EditOutlined, UserAddOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
@@ -11,7 +11,8 @@ import { formatCurrency } from '../utils/currencyFormatter';
 import { useSync } from '../context/SyncContext';
 import { db } from '../db';
 import { useTheme } from '../context/ThemeContext';
-import { useNavigate } from 'react-router-dom';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getPlanLimits } from '../config/subscriptionPlans';
 
 const { Title, Text } = Typography;
@@ -19,6 +20,7 @@ const { Option } = Select;
 
 // --- ITEM DETAIL MODAL (Chota Modal) ---
 const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialValues, existingItems, editingItemIndex }) => {
+  const { token } = theme.useToken();
   const { profile } = useAuth();
   const { isDarkMode } = useTheme();
   const limits = getPlanLimits(profile?.subscription_tier);
@@ -280,7 +282,9 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
     <Modal
       title={<>Details for: <Typography.Text type="success">{product?.name}</Typography.Text></>}
       open={visible} onCancel={onCancel} onOk={handleOk} okText={initialValues ? "Update Item" : "Add to List"}
-      width={isImeiCategory ? 800 : 520} destroyOnHidden
+      width={800}
+      style={{ top: 20 }}
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" autoComplete="off" style={{ marginTop: '24px' }} onValuesChange={handleValuesChange}>
         {isImeiCategory ? (
@@ -330,7 +334,6 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         </Form.Item>
                     </Col>
                     )}
-                    {/* ------------------------------------- */}
 
                     {attributes.map(attr => <Col span={12} key={attr.id}>{renderAttributeField(attr)}</Col>)}
                 </Row>
@@ -348,20 +351,71 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
         ) : (
             <>
                 <Row gutter={16}>
-                    <Col span={isWholesaleActive ? 8 : 12}><Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
-                    <Col span={isWholesaleActive ? 8 : 12}><Form.Item name="sale_price" label={isWholesaleActive ? "Retail Price" : "Sale Price"} rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    {/* Row 1: Purchase Price, Sale Price, Wholesale (if enabled), aur Total Quantity */}
+                    <Col xs={24} sm={isWholesaleActive ? 6 : 8}>
+                        <Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}>
+                            <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
+                        </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={isWholesaleActive ? 6 : 8}>
+                        <Form.Item name="sale_price" label={isWholesaleActive ? "Retail Price" : "Sale Price"} rules={[{ required: true }]}>
+                            <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
+                        </Form.Item>
+                    </Col>
                     {isWholesaleActive && (
-                        <Col span={8}><Form.Item name="wholesale_price" label="Wholesale Price"><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                        <Col xs={24} sm={6}>
+                            <Form.Item name="wholesale_price" label="Wholesale Price">
+                                <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
+                            </Form.Item>
+                        </Col>
                     )}
-                    
+                    <Col xs={24} sm={isWholesaleActive ? 6 : 8}>
+                        <Form.Item 
+                            name="quantity" 
+                            label="Total Quantity" 
+                            rules={[{ required: true }]}
+                            help={(initialValues?.sold_qty > 0 || initialValues?.returned_qty > 0) ? 
+                                <Text type="warning" style={{fontSize: '12px'}}>
+                                    {`Min required: ${(initialValues.sold_qty || 0) + (initialValues.returned_qty || 0)} (Already sold/returned)`}
+                                </Text> : null}
+                        >
+                            <InputNumber 
+                                style={{ width: '100%' }} 
+                                min={(initialValues?.sold_qty || 0) + (initialValues?.returned_qty || 0) || 1} 
+                            />
+                        </Form.Item>
+                    </Col>
+
+                    {/* Row 2: Barcode, Batch, Expiry, Warranty */}
+                    <Col xs={24} sm={8}>
+                        <Form.Item label="Variant Barcode" tooltip="Assign a unique barcode to this variant.">
+                            <Space.Compact style={{ width: '100%' }}>
+                                <Form.Item name="barcode" noStyle>
+                                    <Input prefix={<BarcodeOutlined />} placeholder="Scan or type barcode" disabled={isBarcodeLocked} style={disabledInputStyle} />
+                                </Form.Item>
+                                <Button 
+                                    onClick={() => {
+                                        const catName = product?.category_name || 'ITM';
+                                        const prefix = catName.substring(0, 3).toUpperCase();
+                                        const randomNum = Math.floor(10000 + Math.random() * 90000);
+                                        form.setFieldValue('barcode', `${prefix}-${randomNum}`);
+                                    }}
+                                    disabled={isBarcodeLocked}
+                                >
+                                    Generate
+                                </Button>
+                            </Space.Compact>
+                        </Form.Item>
+                    </Col>
+
                     {isBatchExpiryEnabled && (
                         <>
-                            <Col span={12}>
+                            <Col xs={24} sm={8}>
                                 <Form.Item name="batch_number" label="Batch / Lot Number" tooltip="Optional: Enter batch number for tracking">
                                     <Input placeholder="e.g. BATCH-001" />
                                 </Form.Item>
                             </Col>
-                            <Col span={12}>
+                            <Col xs={24} sm={8}>
                                 <Form.Item name="expiry_date" label="Expiry Date" tooltip="Optional: When does this item expire?">
                                     <Input type="date" style={{ width: '100%' }} />
                                 </Form.Item>
@@ -369,9 +423,8 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         </>
                     )}
 
-                    {/* --- NAYA CODE: Bulk Warranty Check --- */}
                     {profile?.warranty_system_enabled !== false && (
-                    <Col span={12}>
+                    <Col xs={24} sm={8}>
                         <Form.Item shouldUpdate={(prev, curr) => prev.warranty_days !== curr.warranty_days}>
                             {({ getFieldValue }) => {
                                 const supplierDays = getFieldValue('warranty_days') || 0;
@@ -392,51 +445,17 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         </Form.Item>
                     </Col>
                     )}
-                    {/* ------------------------------------- */}
+                </Row>
 
-                    <Col span={12}>
-    <Form.Item 
-        name="quantity" 
-        label="Total Quantity" 
-        rules={[{ required: true }]}
-        // User ko batane ke liye ke kitne bik chuke hain
-        help={(initialValues?.sold_qty > 0 || initialValues?.returned_qty > 0) ? 
-            <Text type="warning" style={{fontSize: '12px'}}>
-                {`Min required: ${(initialValues.sold_qty || 0) + (initialValues.returned_qty || 0)} (Already sold/returned)`}
-            </Text> : null}
-    >
-        <InputNumber 
-            style={{ width: '100%' }} 
-            // Safety Lock: Bikay hue maal se kam nahi karne dega
-            min={(initialValues?.sold_qty || 0) + (initialValues?.returned_qty || 0) || 1} 
-        />
-    </Form.Item>
-</Col>
-                    <Col span={12}>
-                        <Form.Item label="Variant Barcode" tooltip="Assign a unique barcode to this variant.">
-                            <Space.Compact style={{ width: '100%' }}>
-                                <Form.Item name="barcode" noStyle>
-                                    <Input prefix={<BarcodeOutlined />} placeholder="Scan or type barcode" disabled={isBarcodeLocked} style={disabledInputStyle} />
-                                </Form.Item>
-                                <Button 
-                                    onClick={() => {
-                                        const catName = product?.category_name || 'ITM';
-                                        const prefix = catName.substring(0, 3).toUpperCase();
-                                        const randomNum = Math.floor(10000 + Math.random() * 90000);
-                                        form.setFieldValue('barcode', `${prefix}-${randomNum}`);
-                                    }}
-                                    disabled={isBarcodeLocked}
-                                >
-                                    Generate
-                                </Button>
-                            </Space.Compact>
-                        </Form.Item>
-                    </Col>
-                </Row>
-                <Divider>Attributes</Divider>
-                <Row gutter={16}>
-                    {attributes.map(attr => <Col span={12} key={attr.id}>{renderAttributeField(attr)}</Col>)}
-                </Row>
+                {/* Professional Title instead of "Attributes" */}
+                {attributes && attributes.length > 0 && (
+                    <>
+                        <Divider style={{ margin: '16px 0 12px 0' }}>Product Specifications</Divider>
+                        <Row gutter={16}>
+                            {attributes.map(attr => <Col xs={24} sm={12} key={attr.id}>{renderAttributeField(attr)}</Col>)}
+                        </Row>
+                    </>
+                )}
             </>
         )}
       </Form>
@@ -445,21 +464,40 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
 };
 
 // --- MAIN FORM COMPONENT ---
-// Yahan hum ne 'editingPurchase' aur 'editingItems' props add kiye hain
-const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, editingPurchase, editingItems }) => {
+const AddPurchaseForm = () => {
+  const { token } = theme.useToken();
+  const isMobile = useMediaQuery('(max-width: 768px)');
+  const location = useLocation();
+  // Ab data props ki bajaye URL state se aayega
+  const { 
+    initialData, 
+    editingPurchase, 
+    editingItems 
+  } = location.state || {};
+  
+  const visible = true; // Page hamesha visible hota hai
+  
   const { profile } = useAuth();
   const { activeStaff } = useStaff(); // <--- NAYA IZAFA
   const limits = getPlanLimits(profile?.subscription_tier);
   const isWholesaleActive = profile?.wholesale_pricing_enabled && limits.allow_wholesale_pricing;
   const { message, modal } = App.useApp();
   const navigate = useNavigate();
+  
+  const onCancel = () => {
+    navigate(-1); // Pichle page par wapis jane ke liye
+  };
+
+  const onPurchaseCreated = () => {
+    navigate(-1); // Pichle page par wapis jane ke liye
+  };
   const { refetchStockCount } = useAuth();
   const { syncAllData, processSyncQueue } = useSync();
   const [form] = Form.useForm();
   
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
-  const [warehouses, setWarehouses] = useState([]); // <--- NAYA IZAFA
+  const [warehouses, setWarehouses] = useState([]);
   const [purchaseItems, setPurchaseItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -521,7 +559,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
           const [suppliersData, productsData, warehousesData] = await Promise.all([
             DataService.getSuppliers(),
             getProductsWithCategory(),
-            DataService.getWarehouses ? DataService.getWarehouses() : [] // <--- NAYA IZAFA
+            DataService.getWarehouses ? DataService.getWarehouses() : []
           ]);
           setWarehouses(warehousesData || []);
 
@@ -566,7 +604,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
                     const defaultWh = warehousesData?.find(w => w.is_default);
                     form.setFieldsValue({ 
                         supplier_id: cashSupplier.id,
-                        warehouse_id: defaultWh ? defaultWh.id : null // <--- NAYA IZAFA
+                        warehouse_id: defaultWh ? defaultWh.id : null
                     }); 
                 }, 100);
               }
@@ -584,7 +622,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
               form.setFieldsValue({
                   supplier_id: editingPurchase.supplier_id,
                   invoice_id: editingPurchase.invoice_id,
-                  warehouse_id: draftWhId, // <--- NAYA IZAFA (Safe Load)
+                  warehouse_id: draftWhId,
                   notes: editingPurchase.notes,
                   amount_paid: editingPurchase.amount_paid,
                   payment_method: 'Cash' 
@@ -793,7 +831,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
       // Har item ke sath warehouse_id attach karein
       const itemsWithLocation = purchaseItems.map(({ name, brand, categories, category_is_imei_based, ...item }) => ({
           ...item,
-          warehouse_id: finalWarehouseId // <--- NAYA IZAFA (Safe Fallback)
+          warehouse_id: finalWarehouseId
       }));
 
       const payload = {
@@ -812,7 +850,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
               invoice_id: values.invoice_id,
               notes: values.notes,
               amount_paid: editingPurchase.amount_paid || 0, // Purani payment mehfooz rakhein
-              items: itemsWithLocation, // <--- NAYA IZAFA
+              items: itemsWithLocation,
               staff_id: activeStaff?.id 
           });
           message.success("Purchase updated successfully!");
@@ -936,15 +974,16 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
   ];
 
   return (
+    <ConfigProvider theme={{ components: { Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg, headerColor: token.colorCardColumnsTitleText, colorText: token.colorCardDetailsText } } }}>
     <>
-      <Modal
-        title={editingPurchase ? `Edit Purchase #${editingPurchase.invoice_id || editingPurchase.id.slice(0, 8)}` : "Create New Purchase Invoice"} 
-        open={visible} onCancel={onCancel} width={1000}
-        footer={[ <Button key="back" onClick={onCancel}>Cancel</Button>, <Button key="submit" type="primary" loading={isSubmitting} onClick={handleSavePurchase}>{editingPurchase ? "Update Purchase" : "Save Purchase"}</Button> ]}
+      <div style={{ padding: isMobile ? '12px 0' : '4px 0', width: '100%' }}>
+      <Card
+        styles={{ body: { padding: isMobile ? '12px' : '20px' } }}
+        style={{ borderRadius: '8px', background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}` }}
       >
-        <Form form={form} layout="vertical" style={{ marginTop: '24px' }}>
+        <Form form={form} layout="vertical" style={{ marginTop: '0px' }}>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} md={12} lg={6}>
                 <Form.Item label="Supplier" required>
                     <Space.Compact style={{ width: '100%' }}>
                         <Form.Item name="supplier_id" noStyle rules={[{ required: true, message: 'Please select a supplier' }]}>
@@ -977,13 +1016,13 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
                     </div>
                 )}
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12} lg={6}>
                 <Form.Item name="invoice_id" label="Supplier Invoice #" tooltip="Enter the bill number from your supplier. If left empty, a unique ID will be generated.">
                     <Input placeholder="e.g. INV-9988" />
                 </Form.Item>
             </Col>
             {/* --- NAYA IZAFA: Warehouse Selection --- */}
-            <Col span={12}>
+            <Col xs={24} md={12} lg={6}>
                 <Form.Item name="warehouse_id" label="Receive To (Location)" rules={[{ required: true, message: 'Please select a location' }]}>
                     <Select placeholder="Select Godown / Shop">
                         {warehouses.map(wh => (
@@ -994,14 +1033,14 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
                     </Select>
                 </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12} lg={6}>
                 <Form.Item name="notes" label="Internal Notes">
-                    <Input.TextArea rows={1} placeholder="Any extra information about this purchase..." />
+                    <Input placeholder="Any extra information about this purchase..." />
                 </Form.Item>
             </Col>
           </Row>
-          <Divider />
-          <Title level={5}>Add Products to Invoice</Title>
+          
+          <Title level={5} style={{ marginTop: '8px', color: token.colorCardHeadingsText }}>Add Products to Invoice</Title>
           <Space.Compact style={{ width: '100%' }}>
               <Form.Item name="product_id" noStyle>
                   <Select showSearch placeholder="Search and select a product to add" style={{ width: '100%' }} loading={loading}
@@ -1009,29 +1048,40 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
                       options={(products || []).map(p => ({ value: p.id, label: `${p.name} - ${p.brand}` }))}
                   />
               </Form.Item>
-              <Button type="primary" onClick={handleAddItemClick}>Add to List</Button>
+              <Button type="primary" onClick={handleAddItemClick}>
+                  {isMobile ? "Add" : "Add to List"}
+              </Button>
           </Space.Compact>
-          <Divider />
-          <Title level={5}>Items in this Purchase</Title>
+          <Title level={5} style={{ marginTop: '16px', color: token.colorCardHeadingsText }}>Items in this Purchase</Title>
           <Table
             columns={columns} 
             dataSource={purchaseItems}
             rowKey={(record) => record.id || record.temp_id}
             pagination={false}
+            scroll={{ x: 'max-content' }}
+            size={isMobile ? "small" : "middle"}
             summary={pageData => {
               const total = pageData.reduce((sum, item) => sum + ((item.quantity || 0) * (item.purchase_price || 0)), 0);
               return (
-                <Table.Summary.Row>
-                  <Table.Summary.Cell index={0} colSpan={3}><Text strong>Total Amount</Text></Table.Summary.Cell>
-                  <Table.Summary.Cell index={1} align="right"><Text strong type="danger">{formatCurrency(total, profile?.currency)}</Text></Table.Summary.Cell>
+                <Table.Summary.Row style={{ background: token.colorFillAlter }}>
+                  <Table.Summary.Cell index={0} colSpan={3}><Text strong style={{ color: token.colorCardHeadingsText }}>Total Amount</Text></Table.Summary.Cell>
+                  <Table.Summary.Cell index={1} align="right"><Text strong style={{ color: token.colorAmountNegative }}>{formatCurrency(total, profile?.currency)}</Text></Table.Summary.Cell>
                   <Table.Summary.Cell index={2}></Table.Summary.Cell>
                 </Table.Summary.Row>
               );
             }}
           />
           {/* Payment Record UI yahan se hata diya gaya hai */}
+          
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
+            <Button key="back" onClick={onCancel}>Cancel</Button>
+            <Button key="submit" type="primary" loading={isSubmitting} onClick={handleSavePurchase}>
+              {editingPurchase ? "Update Purchase" : "Save Purchase"}
+            </Button>
+          </div>
         </Form>
-      </Modal>
+      </Card>
+      </div>
       {isItemModalVisible && 
         <AddItemModal 
           visible={isItemModalVisible} 
@@ -1140,6 +1190,7 @@ const AddPurchaseForm = ({ visible, onCancel, onPurchaseCreated, initialData, ed
         </Form>
       </Modal>
     </>
+    </ConfigProvider>
   );
 };
 

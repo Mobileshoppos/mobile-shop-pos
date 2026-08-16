@@ -491,7 +491,17 @@ return (
                        <TeamOutlined style={{ marginRight: '8px' }} /> Staff Management
                      </span>
                   )}
-                  {location.pathname.startsWith('/purchases/') && (
+                  {location.pathname === '/purchases/new' && (
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                       <FileTextOutlined style={{ marginRight: '8px' }} /> Create Purchase
+                     </span>
+                  )}
+                  {location.pathname === '/purchases/edit' && (
+                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+                       <FileTextOutlined style={{ marginRight: '8px' }} /> Edit Purchase
+                     </span>
+                  )}
+                  {location.pathname.startsWith('/purchases/') && location.pathname !== '/purchases/new' && location.pathname !== '/purchases/edit' && (
                      <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
                        <FileTextOutlined style={{ marginRight: '8px' }} /> Purchase Details
                      </span>

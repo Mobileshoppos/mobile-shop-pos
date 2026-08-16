@@ -44,7 +44,7 @@ const SalesHistory = () => {
   const [filterCategory, setFilterCategory] = useState(null);
   const [filterBrand, setFilterBrand] = useState(null);
   const [filterPaymentMethod, setFilterPaymentMethod] = useState('all');
-  const [historyDateRangeType, setHistoryDateRangeType] = useState('this_month'); // <--- NAYA IZAFA: Quick Period filter state
+  const [historyDateRangeType, setHistoryDateRangeType] = useState('this_month');
 
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
@@ -92,7 +92,7 @@ const SalesHistory = () => {
 
         setCategories(allCategories);
         setStaffList(allStaff);
-        setAccountsList(allRawAccounts.filter(a => a.is_active !== false)); // <--- NAYA IZAFA
+        setAccountsList(allRawAccounts.filter(a => a.is_active !== false));
 
         // Brands list dynamically nikalna
         const uniqueBrands = Array.from(new Set(allProducts.map(p => p.brand).filter(b => b)));
@@ -367,7 +367,7 @@ const SalesHistory = () => {
           shopName: profile?.shop_name || 'My Shop',
           shopAddress: profile?.address || '',
           shopPhone: profile?.phone_number || '',
-          shopLogo: profile?.shop_logo || null, // <--- NAYA IZAFA: Reprint par Logo ka URL shamil kiya
+          shopLogo: profile?.shop_logo || null,
           saleId: sale.id,
           invoice_id: sale.invoice_id,
           saleDate: sale.created_at || sale.sale_date,
@@ -383,7 +383,6 @@ const SalesHistory = () => {
           // --- NAYA IZAFA: FBR Receipt Data ---
           fbrInvoiceNumber: sale.fbr_invoice_number,
           fbrFeeApplied: sale.fbr_fee_applied,
-          // ----------------------------------
 
           grandTotal: sale.total_amount,
           amountPaid: sale.amount_paid_at_sale,

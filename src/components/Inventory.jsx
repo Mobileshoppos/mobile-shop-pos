@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useSearchParams, useLocation, Link } from 'react-router-dom';
+import { useSearchParams, useLocation, Link, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme, DatePicker, Tooltip, TreeSelect, Switch } from 'antd';
 import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined, LockOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined, CalendarOutlined, WarningOutlined, MinusCircleOutlined } from '@ant-design/icons';
@@ -479,6 +479,7 @@ const Inventory = () => {
 
   const { isDarkMode } = useTheme();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const navigate = useNavigate(); // NAYA IZAFA
   const [searchParams] = useSearchParams();
   const { processSyncQueue } = useSync();
   const showLowStockOnly = searchParams.get('low_stock') === 'true';
@@ -918,8 +919,8 @@ const Inventory = () => {
         barcode: fetchedBarcode || null 
     };
     
-    setPurchaseInitialData(dataToPass);
-    setIsPurchaseModalOpen(true);
+    // NAYA IZAFA: Ab modal nahi khulega, direct page par bhejeinge data ke sath
+    navigate('/purchases/new', { state: { initialData: dataToPass } });
   };
 
   // --- 1. PRODUCT EDIT HANDLERS ---
@@ -1930,21 +1931,7 @@ const Inventory = () => {
         </Form>
       </Modal>
       
-      {/* MODAL 3: ADD STOCK (PURCHASE FORM) */}
-{isPurchaseModalOpen && (
-  <AddPurchaseForm 
-    visible={isPurchaseModalOpen}
-    onCancel={() => { setIsPurchaseModalOpen(false); setPurchaseInitialData(null); }}
-    onPurchaseCreated={() => { 
-        setIsPurchaseModalOpen(false); 
-        setPurchaseInitialData(null);
-        // Stock update karne ke liye queue process karein
-        processSyncQueue(); 
-        setRefreshTrigger(prev => prev + 1);
-    }}
-    initialData={purchaseInitialData}
-  />
-)}
+      {/* MODAL 3: ADD STOCK (PURCHASE FORM) - Removed because it is now a full page */}
 
 {/* --- NAYA IZAFA: TRANSFER STOCK MODAL --- */}
       <Modal

@@ -325,7 +325,7 @@ const PurchaseDetails = () => {
     };
     const handlePaymentSubmit = async (values) => { try { if (values.amount > purchase.balance_due) { notification.warning({ message: 'Warning', description: 'Payment amount cannot be greater than the balance due.' }); return; } const vNo = await generateInvoiceId(); const paymentData = { local_id: crypto.randomUUID(), voucher_no: `PAY-${vNo}`, amount: values.amount, payment_date: values.payment_date.format('YYYY-MM-DD'), payment_method: values.payment_method, notes: values.notes || null, supplier_id: purchase.supplier_id, purchase_id: purchase.id, staff_id: activeStaff?.id, register_id: activeSession ? activeSession.register_id : defaultCounterId, session_id: activeSession ? activeSession.id : null }; await DataService.recordPurchasePayment(paymentData); notification.success({ message: 'Success', description: 'Payment recorded successfully!' }); setIsPaymentModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to record payment.' }); } };
 const showEditModal = () => {
-        setIsEditModalVisible(true);
+        navigate('/purchases/edit', { state: { editingPurchase: purchase, editingItems: items } });
     };
     const handleUpdateSubmit = async (values) => { try { const updatedData = { notes: values.notes, items: editingItems, }; await DataService.updatePurchase(id, updatedData); notification.success({ message: 'Success', description: 'Purchase updated successfully!' }); setIsEditModalVisible(false); fetchDetails(); } catch (error) { notification.error({ message: 'Error', description: 'Failed to update purchase.' }); } };
     const handleItemChange = (itemId, field, value) => { setEditingItems(currentItems => currentItems.map(item => item.id === itemId ? { ...item, [field]: value } : item )); };
@@ -513,20 +513,7 @@ const showEditModal = () => {
         </Select.OptGroup>
     </Select>
 </Form.Item><Form.Item name="notes" label="Notes (Optional)"><Input.TextArea rows={2} /></Form.Item></Form></Modal>
-{/* --- NAYA EDIT FORM (AddPurchaseForm ko hi use karega) --- */}
-        {isEditModalVisible && (
-            <AddPurchaseForm
-                visible={isEditModalVisible}
-                onCancel={() => setIsEditModalVisible(false)}
-                onPurchaseCreated={() => {
-                    setIsEditModalVisible(false);
-                    fetchDetails(); // Data refresh karein
-                }}
-                initialData={null}
-                editingPurchase={purchase} // Purana data bhejein
-                editingItems={items}       // Purane items bhejein
-            />
-        )}
+{/* --- NAYA EDIT FORM (AddPurchaseForm ab page ban chuka hai, is liye yahan se modal hata diya gaya hai) --- */}
             <Modal title="Return Items to Supplier" open={isReturnModalVisible} onCancel={() => setIsReturnModalVisible(false)} onOk={returnForm.submit} okText="Process Return" width={1000} okButtonProps={{ danger: true }}><Form form={returnForm} layout="vertical" onFinish={handleReturnSubmit} style={{ marginTop: '24px' }}><Form.Item name="return_date" label="Return Date" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="notes" label="Reason for Return (Optional)"><Input.TextArea rows={2} placeholder="e.g., Damaged items, wrong model, etc." /></Form.Item><Title level={5} style={{ marginTop: '16px' }}>Select Items to Return</Title><Table 
     dataSource={items.filter(i => i.status !== 'Returned' && i.available_qty > 0)} 
     rowKey="id" 
