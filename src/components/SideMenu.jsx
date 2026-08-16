@@ -243,9 +243,16 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
     // ThemeConfig ke border color ke saath fading line
     background: `linear-gradient(to bottom, ${token.colorHeaderBorder} 80%, transparent 100%) no-repeat right / 1px 100%, ${token.colorSiderBg}`,
     borderRight: 'none',
+    height: '100vh',
+    position: 'sticky',
+    top: 0,
+    left: 0,
+    zIndex: 100,
+    overflowY: 'auto',
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
     ...(isMobile && {
         position: 'fixed',
-        height: '100vh',
         zIndex: 1000,
     }),
   };

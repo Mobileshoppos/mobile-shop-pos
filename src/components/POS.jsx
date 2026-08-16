@@ -10,7 +10,6 @@ import { generateSaleReceipt } from '../utils/receiptGenerator';
 import { printThermalReceipt } from '../utils/thermalPrinter';
 import SelectVariantModal from './SelectVariantModal';
 import DraftBillsModal from '../components/DraftBillsModal';
-import AddPurchaseForm from '../components/AddPurchaseForm';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { db } from '../db';
 import dayjs from 'dayjs';
@@ -20,6 +19,7 @@ import { generateInvoiceId } from '../utils/idGenerator';
 import { useTheme } from '../context/ThemeContext';
 import { getPlanLimits } from '../config/subscriptionPlans';
 import { useStaff } from '../context/StaffContext';
+import { useNavigate } from 'react-router-dom';
 
 const { Title, Text } = Typography;
 // Global Countries List
@@ -61,6 +61,7 @@ const formatPriceRange = (min, max, currency) => {
 };
 
 const POS = () => {
+  const navigate = useNavigate(); // <--- NAYA IZAFA
   const { token } = theme.useToken(); // Control Center Connection
   const { isDarkMode } = useTheme();
   const [viewMode, setViewMode] = useState('list'); // NAYA IZAFA: Ab Default List View kar diya gaya hai
@@ -1430,6 +1431,10 @@ const POS = () => {
       setDiscount(heldBill.discount || 0);
       setDiscountType(heldBill.discount_type || 'Amount');
       message.success("Draft resumed for Sale!");
+      
+      await DataService.deleteHeldBill(heldBill.id);
+      setIsDraftModalOpen(false);
+      refreshHeldCount();
     } else {
       // Purchase Logic: Items ko bilkul NAYA bana kar bhejein (Safai)
       const formattedForPurchase = heldBill.cart.map(item => ({
@@ -1449,20 +1454,14 @@ const POS = () => {
         damaged_qty: 0
       }));
       
-      // NAYA: Draft ID ko state mein save karein taake baad mein delete ho sakay
-      setDraftPurchaseItems(formattedForPurchase);
-      setIsPurchaseModalVisible(true);
-      
-      // Draft ko yahan delete karne ke bajaye, sirf band karein
-      // Hum isay 'onPurchaseCreated' par delete karenge (Neeche wala step dekhein)
-      window.currentDraftId = heldBill.id; 
+      // Draft ko delete karein kyunkeh ab hum usay naye page par bhej rahe hain
+      await DataService.deleteHeldBill(heldBill.id);
       setIsDraftModalOpen(false);
-      return; 
+      refreshHeldCount();
+      
+      // Naye page par navigate karein aur items pass karein
+      navigate('/purchases/new', { state: { editingItems: formattedForPurchase } });
     }
-    
-    await DataService.deleteHeldBill(heldBill.id);
-    setIsDraftModalOpen(false);
-    refreshHeldCount();
   };
 
   return (
@@ -2505,26 +2504,6 @@ const POS = () => {
         profile={profile}
         customers={customers}
         allProducts={allProducts}
-      />
-
-      {/* NAYA IZAFA: Purchase Form Modal */}
-      <AddPurchaseForm 
-        visible={isPurchaseModalVisible}
-        onCancel={() => setIsPurchaseModalVisible(false)}
-        onPurchaseCreated={async () => {
-          setIsPurchaseModalVisible(false);
-          setDraftPurchaseItems([]);
-          
-          // NAYA: Agar yeh kisi draft se aaya tha, to ab delete karein
-          if (window.currentDraftId) {
-            await DataService.deleteHeldBill(window.currentDraftId);
-            window.currentDraftId = null;
-            refreshHeldCount();
-          }
-          
-          refetchStockCount();
-        }}
-        editingItems={draftPurchaseItems} // Draft wale items yahan pass ho jayenge
       />
 
       {/* --- ADMIN PIN MODAL FOR DISCOUNT OVERRIDE --- */}

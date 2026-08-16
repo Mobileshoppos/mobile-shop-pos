@@ -518,7 +518,8 @@ const SupplierDashboard = () => {
             if (selectIdAfterFetch) {
                 setSelectedSupplierId(selectIdAfterFetch);
             } else if (data && data.length > 0 && !selectedSupplierId) {
-                setSelectedSupplierId('all'); // <--- NAYA IZAFA: Default selection is now master summary sheet for both desktop and mobile
+                // Desktop par default 'all' rahega, mobile par main screen (null) dikhegi
+                setSelectedSupplierId(isMobile ? null : 'all');
             }
         } catch (error) { notification.error({ message: 'Error', description: 'Failed to fetch suppliers list.' });
         } finally { setLoading(false); }
@@ -677,6 +678,16 @@ const SupplierDashboard = () => {
                             />
                         }
                     >
+                        {isMobile && (
+                            <Button
+                                type="text"
+                                icon={<ArrowLeftOutlined />}
+                                onClick={() => setSelectedSupplierId(null)}
+                                style={{ marginBottom: '16px', padding: 0, height: 'auto' }}
+                            >
+                                Back to Supplier List
+                            </Button>
+                        )}
                         <Table 
                             dataSource={filteredSuppliers}
                             rowKey="id"
