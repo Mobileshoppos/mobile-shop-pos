@@ -14,6 +14,7 @@ import { db } from '../db';
 import { useTheme } from '../context/ThemeContext';
 import AddPurchaseForm from './AddPurchaseForm';
 import StockAdjustmentModal from '../components/StockAdjustmentModal';
+import { DemoDataHelper } from '../utils/DemoDataHelper'; // <--- NAYA IZAFA
 import ProductImageUpload from '../components/ProductImageUpload';
 import BarcodePrinter from '../components/BarcodePrinter';
 import ProductLedgerModal from '../components/ProductLedgerModal';
@@ -610,6 +611,58 @@ const Inventory = () => {
   const [showFilters, setShowFilters] = useState(false);
   
   const [productForm] = Form.useForm();
+
+  // --- NAYA IZAFA: Demo Mode Guard for New Product Model ---
+  const handleAddNewProductModelClick = async () => {
+    try {
+      const demoCount = await db.products.filter(p => p.is_dummy === true || p.name?.includes('Demo')).count();
+      if (demoCount > 0) {
+        modal.confirm({
+          title: 'Ready to add your real products?',
+          content: 'You are currently exploring in Demo Mode. To keep your real inventory, sales, and accounting 100% clean and accurate, please clear the demo data first.',
+          okText: 'Clear Demo Data & Add Product',
+          okType: 'primary',
+          cancelText: 'Keep Exploring',
+          onOk: async () => {
+            const hide = message.loading('Clearing demo data...', 0);
+            try {
+              await DemoDataHelper.removeDemoData();
+              hide();
+              message.success('Demo data cleared! You can now add your real products.');
+              setIsProductModalOpen(true);
+            } catch (err) {
+              hide();
+              message.error('Failed to clear demo data: ' + err.message);
+            }
+          }
+        });
+        return;
+      }
+    } catch (e) {
+      console.error("Demo check error:", e);
+    }
+
+    const limits = getPlanLimits(profile?.subscription_tier);
+    const currentModelCount = totalModelCount;
+    const isLimitReached = currentModelCount >= limits.max_models;
+
+    if (isLimitReached) {
+      modal.confirm({
+        title: 'Product Model Limit Reached',
+        content: (
+          <div>
+            <p>You have reached your plan's limit of <b>{limits.max_models} product models</b>.</p>
+            <p>Please upgrade your subscription to add more models.</p>
+          </div>
+        ),
+        okText: 'View Plans',
+        cancelText: 'Close',
+        onOk: () => window.location.href = '/subscription'
+      });
+    } else {
+      setIsProductModalOpen(true);
+    }
+  };
 
   // NAYA IZAFA: Quick Category Modal States
   const [isQuickCategoryModalOpen, setIsQuickCategoryModalOpen] = useState(false);
@@ -1223,24 +1276,7 @@ const Inventory = () => {
             type="primary" 
             size="middle" 
             icon={isLimitReached ? <LockOutlined /> : null}
-            onClick={() => {
-              if (isLimitReached) {
-                modal.confirm({
-                  title: 'Product Model Limit Reached',
-                  content: (
-                    <div>
-                      <p>You have reached your plan's limit of <b>{limits.max_models} product models</b>.</p>
-                      <p>Please upgrade your subscription to add more models.</p>
-                    </div>
-                  ),
-                  okText: 'View Plans',
-                  cancelText: 'Close',
-                  onOk: () => window.location.href = '/subscription'
-                });
-              } else {
-                setIsProductModalOpen(true);
-              }
-            }} 
+            onClick={handleAddNewProductModelClick} 
             style={{ 
               width: '100%', 
               marginTop: '10px',
@@ -1449,24 +1485,7 @@ const Inventory = () => {
                    ref={refAddModel} 
                    type="primary" 
                    icon={isLimitReached ? <LockOutlined /> : <PlusOutlined />}
-                   onClick={() => {
-                     if (isLimitReached) {
-                       modal.confirm({
-                         title: 'Product Model Limit Reached',
-                         content: (
-                           <div>
-                             <p>You have reached your plan's limit of <b>{limits.max_models} product models</b>.</p>
-                             <p>Please upgrade your subscription to add more models.</p>
-                           </div>
-                         ),
-                         okText: 'View Plans',
-                         cancelText: 'Close',
-                         onOk: () => window.location.href = '/subscription'
-                       });
-                     } else {
-                       setIsProductModalOpen(true);
-                     }
-                   }}
+                   onClick={handleAddNewProductModelClick}
                    style={{
                        // Naya: Glow logic agar koi product na ho
                        boxShadow: (!isLimitReached && products.length === 0) ? `0 0 15px ${token.colorPrimary}` : 'none',
@@ -1639,102 +1658,110 @@ const Inventory = () => {
             </Col>
           </Row>
 
-          {/* === COLLAPSED ADVANCED SECTION === */}
-          <Collapse ghost style={{ marginTop: '8px', background: token.colorFillAlter, borderRadius: '8px', border: `1px solid ${token.colorBorderSecondary}` }}>
-            <Collapse.Panel header={<Text strong>Advanced Settings (Prices, Limits, FBR, Image)</Text>} key="1">
-              
-              <Row gutter={16}>
-                <Col xs={24} md={12}>
-                    <Form.Item name="purchase_price" label="Default Purchase Price">
-                        <InputNumber style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
-                    </Form.Item>
-                </Col>
-                <Col xs={24} md={12}>
-                    <Form.Item name="sale_price" label="Default Sale Price">
-                        <InputNumber style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
-                    </Form.Item>
-                </Col>
-              </Row>
+          {/* === COLLAPSED ADVANCED SECTION (Updated to Ant Design v5 items standard) === */}
+          <Collapse 
+            ghost 
+            style={{ marginTop: '8px', background: token.colorFillAlter, borderRadius: '8px', border: `1px solid ${token.colorBorderSecondary}` }}
+            items={[
+              {
+                key: '1',
+                label: <Text strong>Advanced Settings (Prices, Limits, FBR, Image)</Text>,
+                children: (
+                  <>
+                    <Row gutter={16}>
+                      <Col xs={24} md={12}>
+                          <Form.Item name="purchase_price" label="Default Purchase Price">
+                              <InputNumber style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
+                          </Form.Item>
+                      </Col>
+                      <Col xs={24} md={12}>
+                          <Form.Item name="sale_price" label="Default Sale Price">
+                              <InputNumber style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
+                          </Form.Item>
+                      </Col>
+                    </Row>
 
-              <Row gutter={16}>
-                {profile?.warranty_system_enabled !== false && (
-                    <Col xs={24} md={12}>
-                        <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)" tooltip="How many days warranty do you usually give to customers for this product?">
-                            <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
-                        </Form.Item>
-                    </Col>
-                )}
-                <Col xs={24} md={profile?.warranty_system_enabled !== false ? 12 : 24}>
-                    <Form.Item 
-                        name="low_stock_threshold" 
-                        label="Low Stock Warning At" 
-                        tooltip="If set, this will override the global low stock limit from Settings for this specific product. Leave empty to use global settings."
-                    >
-                        <InputNumber style={{ width: '100%' }} min={1} placeholder={`Default: ${profile?.low_stock_threshold || 5}`} />
-                    </Form.Item>
-                </Col>
-              </Row>
+                    <Row gutter={16}>
+                      {profile?.warranty_system_enabled !== false && (
+                          <Col xs={24} md={12}>
+                              <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)" tooltip="How many days warranty do you usually give to customers for this product?">
+                                  <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
+                              </Form.Item>
+                          </Col>
+                      )}
+                      <Col xs={24} md={profile?.warranty_system_enabled !== false ? 12 : 24}>
+                          <Form.Item 
+                              name="low_stock_threshold" 
+                              label="Low Stock Warning At" 
+                              tooltip="If set, this will override the global low stock limit from Settings for this specific product. Leave empty to use global settings."
+                          >
+                              <InputNumber style={{ width: '100%' }} min={1} placeholder={`Default: ${profile?.low_stock_threshold || 5}`} />
+                          </Form.Item>
+                      </Col>
+                    </Row>
 
-              <Row gutter={16}>
-                {limits.allow_stock_location && (
-                  <Col xs={24} md={12}>
-                    <Form.Item name="rack_location" label="Stock Location (Rack/Shelf)" tooltip="e.g. Shelf A, Counter 2">
-                      <Input placeholder="e.g. Shelf A" />
-                    </Form.Item>
-                  </Col>
-                )}
-                <Col xs={24} md={limits.allow_stock_location ? 12 : 24}>
-                    <Form.Item 
-                        name="price_drop_limit" 
-                        label="Max Price Drop Limit (%)" 
-                        tooltip="Override the global price drop limit for this specific product. E.g., put 0 to block any discount, or 50 for clearance items."
-                    >
-                        <InputNumber style={{ width: '100%' }} min={0} max={100} addonAfter="%" placeholder={`Default: ${profile?.price_drop_limit || 5}%`} />
-                    </Form.Item>
-                </Col>
-              </Row>
+                    <Row gutter={16}>
+                      {limits.allow_stock_location && (
+                        <Col xs={24} md={12}>
+                          <Form.Item name="rack_location" label="Stock Location (Rack/Shelf)" tooltip="e.g. Shelf A, Counter 2">
+                            <Input placeholder="e.g. Shelf A" />
+                          </Form.Item>
+                        </Col>
+                      )}
+                      <Col xs={24} md={limits.allow_stock_location ? 12 : 24}>
+                          <Form.Item 
+                              name="price_drop_limit" 
+                              label="Max Price Drop Limit (%)" 
+                              tooltip="Override the global price drop limit for this specific product. E.g., put 0 to block any discount, or 50 for clearance items."
+                          >
+                              <InputNumber style={{ width: '100%' }} min={0} max={100} addonAfter="%" placeholder={`Default: ${profile?.price_drop_limit || 5}%`} />
+                          </Form.Item>
+                      </Col>
+                    </Row>
 
-              {profile?.fbr_integration_enabled && (
-                <Row gutter={16}>
-                  <Col xs={24} md={12}>
-                    <Form.Item 
-                      name="hs_code" 
-                      label="HS Code (FBR)" 
-                      tooltip="Must be exactly 4 digits, a dot, and 4 digits (e.g., 8517.1219)"
-                      rules={[
-                        { required: true, message: 'HS Code is required for FBR' },
-                        { pattern: /^\d{4}\.\d{4}$/, message: 'Format must be XXXX.XXXX (e.g. 0101.2100)' }
-                      ]}
-                      help={<a href="https://www.fbr.gov.pk/customs-tariff/131175" target="_blank" rel="noopener noreferrer">Find your HS Code here</a>}
-                    >
-                      <Input placeholder="0000.0000" />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} md={12}>
-                    <Form.Item 
-                      name="uom" 
-                      label="Unit of Measure (FBR)"
-                      rules={[{ required: true, message: 'UOM is required for FBR' }]}
-                    >
-                      <Select placeholder="Select UOM">
-                        <Option value="Numbers, pieces, units">Numbers, pieces, units</Option>
-                        <Option value="KG">KG</Option>
-                        <Option value="MT">MT (Metric Ton)</Option>
-                        <Option value="SqY">SqY (Square Yard)</Option>
-                        <Option value="Liters">Liters</Option>
-                        <Option value="Meters">Meters</Option>
-                      </Select>
-                    </Form.Item>
-                  </Col>
-                </Row>
-              )}
+                    {profile?.fbr_integration_enabled && (
+                      <Row gutter={16}>
+                        <Col xs={24} md={12}>
+                          <Form.Item 
+                            name="hs_code" 
+                            label="HS Code (FBR)" 
+                            tooltip="Must be exactly 4 digits, a dot, and 4 digits (e.g., 8517.1219)"
+                            rules={[
+                              { required: true, message: 'HS Code is required for FBR' },
+                              { pattern: /^\d{4}\.\d{4}$/, message: 'Format must be XXXX.XXXX (e.g. 0101.2100)' }
+                            ]}
+                            help={<a href="https://www.fbr.gov.pk/customs-tariff/131175" target="_blank" rel="noopener noreferrer">Find your HS Code here</a>}
+                          >
+                            <Input placeholder="0000.0000" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item 
+                            name="uom" 
+                            label="Unit of Measure (FBR)"
+                            rules={[{ required: true, message: 'UOM is required for FBR' }]}
+                          >
+                            <Select placeholder="Select UOM">
+                              <Option value="Numbers, pieces, units">Numbers, pieces, units</Option>
+                              <Option value="KG">KG</Option>
+                              <Option value="MT">MT (Metric Ton)</Option>
+                              <Option value="SqY">SqY (Square Yard)</Option>
+                              <Option value="Liters">Liters</Option>
+                              <Option value="Meters">Meters</Option>
+                            </Select>
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    )}
 
-              <Form.Item name="image_url" label="Product Image" style={{ marginBottom: 0 }}>
-                <ProductImageUpload onUploading={setIsImageUploading} />
-              </Form.Item>
-
-            </Collapse.Panel>
-          </Collapse>
+                    <Form.Item name="image_url" label="Product Image" style={{ marginBottom: 0 }}>
+                      <ProductImageUpload onUploading={setIsImageUploading} />
+                    </Form.Item>
+                  </>
+                )
+              }
+            ]}
+          />
         </Form>
       </Modal>
 
@@ -1846,88 +1873,97 @@ const Inventory = () => {
             </Col>
           </Row>
 
-          {/* COLLAPSED ADVANCED SECTION */}
-          <Collapse ghost style={{ marginTop: '8px', background: token.colorFillAlter, borderRadius: '8px', border: `1px solid ${token.colorBorderSecondary}` }}>
-            <Collapse.Panel header={<Text strong>Advanced Settings (Limits, FBR, Image)</Text>} key="1">
-              
-              <Row gutter={16}>
-                {limits.allow_stock_location && (
-                  <Col xs={24} md={12}>
-                    <Form.Item name="rack_location" label="Stock Location (Rack/Shelf)" tooltip="e.g. Shelf A, Counter 2">
-                      <Input placeholder="e.g. Shelf A" />
-                    </Form.Item>
-                  </Col>
-                )}
-                <Col xs={24} md={limits.allow_stock_location ? 12 : 24}>
-                    <Form.Item 
-                        name="price_drop_limit" 
-                        label="Max Price Drop Limit (%)" 
-                        tooltip="Override the global price drop limit for this specific product."
-                    >
-                        <InputNumber style={{ width: '100%' }} min={0} max={100} addonAfter="%" placeholder={`Default: ${profile?.price_drop_limit || 5}%`} />
-                    </Form.Item>
-                </Col>
-              </Row>
+          {/* COLLAPSED ADVANCED SECTION (Updated to Ant Design v5 items standard) */}
+          <Collapse 
+            ghost 
+            style={{ marginTop: '8px', background: token.colorFillAlter, borderRadius: '8px', border: `1px solid ${token.colorBorderSecondary}` }}
+            items={[
+              {
+                key: '1',
+                label: <Text strong>Advanced Settings (Limits, FBR, Image)</Text>,
+                children: (
+                  <>
+                    <Row gutter={16}>
+                      {limits.allow_stock_location && (
+                        <Col xs={24} md={12}>
+                          <Form.Item name="rack_location" label="Stock Location (Rack/Shelf)" tooltip="e.g. Shelf A, Counter 2">
+                            <Input placeholder="e.g. Shelf A" />
+                          </Form.Item>
+                        </Col>
+                      )}
+                      <Col xs={24} md={limits.allow_stock_location ? 12 : 24}>
+                          <Form.Item 
+                              name="price_drop_limit" 
+                              label="Max Price Drop Limit (%)" 
+                              tooltip="Override the global price drop limit for this specific product."
+                          >
+                              <InputNumber style={{ width: '100%' }} min={0} max={100} addonAfter="%" placeholder={`Default: ${profile?.price_drop_limit || 5}%`} />
+                          </Form.Item>
+                      </Col>
+                    </Row>
 
-              <Row gutter={16}>
-                {profile?.warranty_system_enabled !== false && (
-                    <Col xs={24} md={12}>
-                      <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)">
-                        <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
-                      </Form.Item>
-                    </Col>
-                )}
-                <Col xs={24} md={profile?.warranty_system_enabled !== false ? 12 : 24}>
-                    <Form.Item 
-                        name="low_stock_threshold" 
-                        label="Low Stock Warning At" 
-                        tooltip="If set, this will override the global low stock limit from Settings for this specific product. Leave empty to use global settings."
-                    >
-                        <InputNumber style={{ width: '100%' }} min={1} placeholder={`Default: ${profile?.low_stock_threshold || 5}`} />
-                    </Form.Item>
-                </Col>
-              </Row>
-              
-              {profile?.fbr_integration_enabled && (
-                <Row gutter={16}>
-                  <Col xs={24} md={12}>
-                    <Form.Item 
-                      name="hs_code" 
-                      label="HS Code (FBR)"
-                      tooltip="Must be exactly 4 digits, a dot, and 4 digits (e.g., 8517.1219)"
-                      rules={[
-                        { required: true, message: 'HS Code is required for FBR' },
-                        { pattern: /^\d{4}\.\d{4}$/, message: 'Format must be XXXX.XXXX (e.g. 0101.2100)' }
-                      ]}
-                      help={<a href="https://www.fbr.gov.pk/customs-tariff/131175" target="_blank" rel="noopener noreferrer">Find your HS Code here</a>}
-                    >
-                      <Input placeholder="0000.0000" />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} md={12}>
-                    <Form.Item 
-                      name="uom" 
-                      label="Unit of Measure (FBR)"
-                      rules={[{ required: true, message: 'UOM is required for FBR' }]}
-                    >
-                      <Select placeholder="Select UOM">
-                        <Option value="Numbers, pieces, units">Numbers, pieces, units</Option>
-                        <Option value="KG">KG</Option>
-                        <Option value="MT">MT (Metric Ton)</Option>
-                        <Option value="SqY">SqY (Square Yard)</Option>
-                        <Option value="Liters">Liters</Option>
-                        <Option value="Meters">Meters</Option>
-                      </Select>
-                    </Form.Item>
-                  </Col>
-                </Row>
-              )}
+                    <Row gutter={16}>
+                      {profile?.warranty_system_enabled !== false && (
+                          <Col xs={24} md={12}>
+                            <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)">
+                              <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
+                            </Form.Item>
+                          </Col>
+                      )}
+                      <Col xs={24} md={profile?.warranty_system_enabled !== false ? 12 : 24}>
+                          <Form.Item 
+                              name="low_stock_threshold" 
+                              label="Low Stock Warning At" 
+                              tooltip="If set, this will override the global low stock limit from Settings for this specific product. Leave empty to use global settings."
+                          >
+                              <InputNumber style={{ width: '100%' }} min={1} placeholder={`Default: ${profile?.low_stock_threshold || 5}`} />
+                          </Form.Item>
+                      </Col>
+                    </Row>
+                    
+                    {profile?.fbr_integration_enabled && (
+                      <Row gutter={16}>
+                        <Col xs={24} md={12}>
+                          <Form.Item 
+                            name="hs_code" 
+                            label="HS Code (FBR)" 
+                            tooltip="Must be exactly 4 digits, a dot, and 4 digits (e.g., 8517.1219)"
+                            rules={[
+                              { required: true, message: 'HS Code is required for FBR' },
+                              { pattern: /^\d{4}\.\d{4}$/, message: 'Format must be XXXX.XXXX (e.g. 0101.2100)' }
+                            ]}
+                            help={<a href="https://www.fbr.gov.pk/customs-tariff/131175" target="_blank" rel="noopener noreferrer">Find your HS Code here</a>}
+                          >
+                            <Input placeholder="0000.0000" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item 
+                            name="uom" 
+                            label="Unit of Measure (FBR)"
+                            rules={[{ required: true, message: 'UOM is required for FBR' }]}
+                          >
+                            <Select placeholder="Select UOM">
+                              <Option value="Numbers, pieces, units">Numbers, pieces, units</Option>
+                              <Option value="KG">KG</Option>
+                              <Option value="MT">MT (Metric Ton)</Option>
+                              <Option value="SqY">SqY (Square Yard)</Option>
+                              <Option value="Liters">Liters</Option>
+                              <Option value="Meters">Meters</Option>
+                            </Select>
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    )}
 
-              <Form.Item name="image_url" label="Product Image" style={{ marginBottom: 0 }}>
-                <ProductImageUpload onUploading={setIsImageUploading} />
-              </Form.Item>
-            </Collapse.Panel>
-          </Collapse>
+                    <Form.Item name="image_url" label="Product Image" style={{ marginBottom: 0 }}>
+                      <ProductImageUpload onUploading={setIsImageUploading} />
+                    </Form.Item>
+                  </>
+                )
+              }
+            ]}
+          />
         </Form>
       </Modal>
       

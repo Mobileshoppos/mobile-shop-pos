@@ -7,14 +7,14 @@ export const db = new Dexie('MobileShopDB');
 // Note: Hum sirf wohi columns likhte hain jin se hamein search ya filter karna ho.
 // Baqi data khud ba khud save ho jata hai.
 
-db.version(69).stores({
+db.version(70).stores({
   // --- Business Data Tables (Jo Supabase se sync honge) ---
   
   // Naya: Custom Accounts (Bank, Cash, Wallets)
   payment_accounts: 'id, local_id, user_id, type, is_active, updated_at',
   
   // Products: ID, Category, Name aur Barcode se search karne ke liye
-  products: 'id, local_id, category_id, name, barcode, user_id, is_active, updated_at, image_url, rack_location', 
+  products: 'id, local_id, category_id, name, barcode, user_id, is_active, updated_at, image_url, rack_location, is_dummy', 
   
   // Categories
   categories: 'id, local_id, user_id, parent_id, name, updated_at',
@@ -30,7 +30,7 @@ db.version(69).stores({
   purchase_items: 'id, purchase_id, product_id', // Purchase ke andar kya items thay
   
   // Sales (Farokht)
-  sales: 'id, local_id, invoice_id, customer_id, sale_date, user_id, payment_method, updated_at, created_at, staff_id, tax_amount, tax_rate_applied, register_id, session_id, fbr_invoice_number',
+  sales: 'id, local_id, invoice_id, customer_id, sale_date, user_id, payment_method, updated_at, created_at, staff_id, tax_amount, tax_rate_applied, register_id, session_id, fbr_invoice_number, is_dummy',
   sale_items: 'id, local_id, sale_id, product_id, product_name_snapshot, inventory_id, purchase_price, batch_number, expiry_date',
   
   // Expenses (Akhrajat)

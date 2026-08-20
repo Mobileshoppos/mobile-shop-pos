@@ -24,7 +24,8 @@ import {
   TeamOutlined,
   SyncOutlined,
   LockOutlined,
-  DownloadOutlined
+  DownloadOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { useStaff } from '../context/StaffContext';
@@ -38,6 +39,7 @@ import VoucherSearchModal from './VoucherSearchModal'; // <--- NAYA IZAFA
 import { db } from '../db';
 import { getPlanLimits } from '../config/subscriptionPlans';
 import { supabase } from '../supabaseClient'; // <-- Naya: System Announcements fetch karne ke liye import kiya
+import { DemoDataHelper } from '../utils/DemoDataHelper'; // <--- NAYA IZAFA
 
 const { Header } = Layout;
 const { Text } = Typography;
@@ -155,6 +157,48 @@ const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
   const [isClosingModalVisible, setIsClosingModalVisible] = React.useState(false);
   const [isVoucherSearchOpen, setIsVoucherSearchOpen] = React.useState(false); // <--- NAYA IZAFA
 
+  // --- NAYA IZAFA: Demo Data State & Delete Logic ---
+  const [hasDemoData, setHasDemoData] = React.useState(false);
+
+  React.useEffect(() => {
+    const checkDemoData = async () => {
+      try {
+        // FIX: .where ki jagah .filter use kiya taake schema error na aaye
+        const count = await db.products.filter(p => p.is_dummy === true).count();
+        setHasDemoData(count > 0);
+      } catch (e) {
+        console.error("Demo check error:", e);
+      }
+    };
+    checkDemoData();
+    window.addEventListener('local-db-updated', checkDemoData);
+    return () => window.removeEventListener('local-db-updated', checkDemoData);
+  }, []);
+
+  const handleDeleteDemoData = () => {
+    modal.confirm({
+      title: 'Delete Demo Data?',
+      content: 'This will permanently remove only the pre-loaded sample products, demo stock, and demo sales. Any real products, purchases, or customers you created manually will remain completely safe.',
+      okText: 'Yes, Delete Demo Data',
+      okType: 'danger',
+      cancelText: 'Keep Exploring',
+      onOk: async () => {
+        const hide = message.loading('Deleting demo data...', 0);
+        try {
+          await DemoDataHelper.removeDemoData();
+          setHasDemoData(false);
+          hide();
+          message.success('Demo data deleted successfully!');
+          setTimeout(() => window.location.reload(), 1000); // Reload to clear UI
+        } catch (err) {
+          hide();
+          message.error('Failed to delete demo data: ' + err.message);
+        }
+      }
+    });
+  };
+  // --------------------------------------------------
+
   // Supabase se sab se aakhri active system announcement ko load karne wala effect (With LocalStorage dismiss check)
   React.useEffect(() => {
     const fetchActiveAnnouncement = async () => {
@@ -200,6 +244,9 @@ const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
   // --- NAYA IZAFA: Keyboard Shortcut to Open Search Modal ---
   React.useEffect(() => {
     const handleGlobalKeyDown = (e) => {
+      // FIX: Agar e.key undefined ho to foran return karein taake toLowerCase crash na ho
+      if (!e.key) return;
+
       // Input, Textarea ya Select mein typing karte waqt shortcut kaam na kare
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) && !window.isRecordingShortcut) {
         return;
@@ -542,6 +589,29 @@ return (
                   style={{ border: `1px solid ${token.colorHeaderBorder}`, color: token.colorHeaderIcon }}
                 />
               </Tooltip>
+
+              {/* --- NAYA IZAFA: Compact Delete Demo Data Button (With Tooltip) --- */}
+              {hasDemoData && (
+                <Tooltip title="Demo Mode Active: You are exploring with sample data. Click here to delete all demo data.">
+                  <Button 
+                    danger 
+                    type="primary" 
+                    shape={isMobile ? "circle" : "default"}
+                    icon={<DeleteOutlined />} 
+                    onClick={handleDeleteDemoData}
+                    style={{ 
+                      borderRadius: isMobile ? undefined : '6px', 
+                      fontWeight: 500, 
+                      fontSize: '13px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    {!isMobile && "Delete Demo Data"}
+                  </Button>
+                </Tooltip>
+              )}
               
               {!isMobile && (
                 <>

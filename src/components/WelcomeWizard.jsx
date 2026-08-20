@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { Modal, Form, Input, Select, Button, Typography, Space, App, Row, Col } from 'antd';
+import { Modal, Form, Input, Select, Button, Typography, Space, App, Row, Col, Checkbox, theme } from 'antd';
 import { ShopOutlined, GlobalOutlined, PhoneOutlined, HomeOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import bcrypt from 'bcryptjs';
 import DataService from '../DataService';
+import { DemoDataHelper } from '../utils/DemoDataHelper';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 const { Title, Text } = Typography;
 
@@ -25,6 +27,8 @@ const guessUserCurrency = () => {
 };
 
 const WelcomeWizard = () => {
+  const { token } = theme.useToken(); // Control Center Theme Tokens
+  const isMobile = useMediaQuery('(max-width: 768px)'); // Mobile Screen Detection
   const defaultCurrency = guessUserCurrency(); // Yahan hum ne check kiya ke user kahan se hai
 
   const { profile, updateProfile } = useAuth();
@@ -49,11 +53,30 @@ const WelcomeWizard = () => {
         is_setup_completed: true,
         updated_at: new Date().toISOString(),
       };
+      
+      // FIX: Supabase ko bhejne se pehle isay list se nikaal dein taake error na aaye
+      delete updates.load_demo_data;
+
       const { success, error } = await updateProfile(updates);
       if (success) {
-        // NAYA IZAFA: User ke business ke hisaab se categories banayein
         await DataService.initializeUserCategories(profile.user_id, values.business_type);
-        message.success('Welcome! Your shop is ready. Please open a shift to start selling.');
+        
+        if (values.load_demo_data) {
+          message.loading({ content: 'Generating demo data...', key: 'demoData', duration: 0 });
+          try {
+            // FIX: values.business_type bhi pass kar diya taake business ke mutabiq items banein
+            await DemoDataHelper.injectDemoData(profile.user_id, values.currency, values.business_type);
+            message.success({ content: 'Demo data loaded successfully!', key: 'demoData', duration: 2 });
+            message.success('Welcome! Your shop is ready.');
+            // FIX: Zabardasti page reload nahi karenge taake browser ka warning pop-up na aaye
+            window.dispatchEvent(new CustomEvent('local-db-updated'));
+          } catch (demoErr) {
+            message.error({ content: 'Demo data failed: ' + demoErr.message, key: 'demoData', duration: 5 });
+          }
+        } else {
+          message.success('Welcome! Your shop is ready.');
+          window.dispatchEvent(new CustomEvent('local-db-updated'));
+        }
       } else {
         throw error;
       }
@@ -71,7 +94,8 @@ const WelcomeWizard = () => {
       maskClosable={false}
       footer={null}
       centered
-      width="70%" // NAYA IZAFA: Width 500 se 70% kar di gayi hai
+      width={isMobile ? '96%' : '650px'} // FIX: Mobile par 96% khula aur Desktop par 650px
+      style={{ top: isMobile ? 12 : undefined }}
     >
       <div style={{ textAlign: 'center', marginBottom: 24 }}>
         <Title level={3} style={{ margin: 0 }}>Welcome to Your Shop! 🎉</Title>
@@ -79,7 +103,8 @@ const WelcomeWizard = () => {
       </div>
 
       {/* 'PKR' ki jagah hum ne 'defaultCurrency' laga diya jo oopar calculate hua hai */}
-      <Form layout="vertical" onFinish={handleSave} initialValues={{ currency: defaultCurrency, business_type: 'Mobile Shop' }}>
+      {/* FIX: load_demo_data: true lazmi paas karna hai taake form ko pata ho */}
+      <Form layout="vertical" onFinish={handleSave} initialValues={{ currency: defaultCurrency, business_type: 'Mobile Shop', load_demo_data: true }}>
         
         {/* NAYA IZAFA: 2-Column Layout (Row aur Col ka istemal) */}
         <Row gutter={16}>
@@ -153,6 +178,29 @@ const WelcomeWizard = () => {
             >
               <Input.Password prefix={<LockOutlined />} placeholder="e.g. 123456" maxLength={6} />
             </Form.Item>
+          </Col>
+
+          {/* --- NAYA IZAFA: Demo Data Checkbox (Theme-Aware & Aligned) --- */}
+          <Col xs={24}>
+            <div style={{ 
+              background: token.colorFillAlter, 
+              padding: '12px 16px', 
+              borderRadius: token.borderRadiusLG, 
+              border: `1px solid ${token.colorBorder}` 
+            }}>
+              <Form.Item name="load_demo_data" valuePropName="checked" style={{ marginBottom: 0 }}>
+                <Checkbox style={{ alignItems: 'flex-start', width: '100%' }}>
+                  <div style={{ marginLeft: '6px', marginTop: '-2px' }}>
+                    <Text strong style={{ color: token.colorPrimary, display: 'block', fontSize: '14px' }}>
+                      Load Demo Data (Recommended for new users)
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '3px', lineHeight: 1.4 }}>
+                      Add sample products, inventory, and a demo sale so you can explore the app instantly. You can delete this data anytime with one click.
+                    </Text>
+                  </div>
+                </Checkbox>
+              </Form.Item>
+            </div>
           </Col>
         </Row>
 

@@ -64,7 +64,8 @@ const KeyboardShortcuts = () => {
       if (event.altKey) keys.push('alt');
       if (event.shiftKey) keys.push('shift');
 
-      if (['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) return;
+      // FIX: Check karein ke event.key mojood hai ya nahi taake crash na ho
+      if (!event.key || ['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) return;
 
       keys.push(event.key.toLowerCase());
       const pressedKey = keys.join('+');

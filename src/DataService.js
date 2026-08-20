@@ -5613,7 +5613,27 @@ async addCustomer(customerData) {
   // --- NAYA IZAFA: WAREHOUSES (GODOWNS) FUNCTIONS ---
   
   async getWarehouses() {
-    const warehouses = await db.warehouses.toArray();
+    let warehouses = await db.warehouses.toArray();
+    
+    // Safety Fallback: Agar kisi wajah se warehouse na bana ho, to foran Main Shop banayein
+    if (warehouses.length === 0) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const defaultWh = {
+          id: crypto.randomUUID(),
+          local_id: crypto.randomUUID(),
+          user_id: user.id,
+          name: 'Main Shop',
+          is_default: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        await db.warehouses.add(defaultWh);
+        await db.sync_queue.add({ table_name: 'warehouses', action: 'create', data: defaultWh });
+        warehouses = [defaultWh];
+      }
+    }
+
     // Default warehouse sab se upar aaye
     return warehouses.sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0));
   },
