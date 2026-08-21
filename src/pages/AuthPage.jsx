@@ -9,6 +9,16 @@ import { darkThemeTokens } from '../theme/themeConfig';
 const { Title, Text } = Typography;
 const { Content } = Layout;
 
+// Multicolored Google SVG Icon
+const GoogleIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" style={{ verticalAlign: 'middle', marginRight: '10px' }}>
+    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+  </svg>
+);
+
 const AuthPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   // Agar URL mein ?tab=signup ho to Tab 2 (Sign Up) khulega, warna Tab 1 (Login)
@@ -34,6 +44,79 @@ const AuthPage = () => {
   const [isMagicLinkModalVisible, setIsMagicLinkModalVisible] = useState(false);
   const [magicLinkOtpStep, setMagicLinkOtpStep] = useState(false);
   const [magicLinkEmail, setMagicLinkEmail] = useState('');
+
+  // --- NAYA IZAFA: Dedicated Email Verification Screen States ---
+  const [isVerificationSent, setIsVerificationSent] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
+  const [resendLoading, setResetLoadingState] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Resend Timer countdown effect
+  useEffect(() => {
+    let timer;
+    if (resendCooldown > 0) {
+      timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  // Direct Webmail Inbox URL Helper
+  const getMailProviderUrl = (email) => {
+    if (!email) return null;
+    const lower = email.toLowerCase();
+    if (lower.includes('@gmail.com')) return 'https://mail.google.com';
+    if (lower.includes('@outlook.com') || lower.includes('@hotmail.com') || lower.includes('@live.com')) return 'https://outlook.live.com';
+    if (lower.includes('@yahoo.com')) return 'https://mail.yahoo.com';
+    if (lower.includes('@icloud.com')) return 'https://www.icloud.com/mail';
+    return null;
+  };
+
+  // Direct Webmail Button Name Helper
+  const getMailProviderName = (email) => {
+    if (!email) return 'Open Email App';
+    const lower = email.toLowerCase();
+    if (lower.includes('@gmail.com')) return 'Open Gmail Inbox';
+    if (lower.includes('@outlook.com') || lower.includes('@hotmail.com') || lower.includes('@live.com')) return 'Open Outlook Inbox';
+    if (lower.includes('@yahoo.com')) return 'Open Yahoo Mail';
+    return 'Open Email App';
+  };
+
+  // Resend Verification Email Function
+  const handleResendVerification = async () => {
+    if (!registeredEmail || resendCooldown > 0) return;
+    try {
+      setResetLoadingState(true);
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: registeredEmail
+      });
+      if (error) throw error;
+      message.success('Verification link re-sent! Please check your inbox.');
+      setResendCooldown(60); // 60 seconds cooldown
+    } catch (err) {
+      message.error(err.message || 'Failed to resend email.');
+    } finally {
+      setResetLoadingState(false);
+    }
+  };
+
+  // --- NAYA IZAFA: 1-Click Google OAuth Login ---
+  const handleGoogleLogin = async () => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/`
+        }
+      });
+      if (error) throw error;
+    } catch (error) {
+      console.error("Google Auth Error:", error);
+      message.error(error.message || "Failed to connect with Google.");
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async (values) => {
     try {
@@ -63,7 +146,11 @@ const AuthPage = () => {
         }
       });
       if (error) throw error;
-      message.success('Signup successful! Please check your email to verify your account, then you can login.');
+      
+      // FIX: Toast message ke bajaye screen ko Dedicated Verification View par shift karein
+      setRegisteredEmail(values.email);
+      setIsVerificationSent(true);
+      setResendCooldown(60); // 60 seconds timer
     } catch (error) {
       message.error(error.message);
     } finally {
@@ -359,35 +446,210 @@ const AuthPage = () => {
               </div>
             )}
 
-            {/* RIGHT SIDE - Auth Form (Login/Signup) */}
-            <div style={{ flex: 1, padding: isMobile ? '24px 16px' : '40px 40px 20px 40px', display: 'flex', flexDirection: 'column' }}>
+            {/* RIGHT SIDE - Auth Form (Login/Signup / Check Inbox Screen) */}
+            <div style={{ flex: 1, padding: isMobile ? '24px 16px' : '40px 40px 20px 40px', display: 'flex', flexDirection: 'column', justifyContent: isVerificationSent ? 'center' : 'flex-start' }}>
               {/* Mobile par title dikhane ke liye */}
               {isMobile && (
                 <Title level={3} style={{ textAlign: 'center', color: darkThemeTokens.colorTextHeading, marginBottom: '24px' }}>
                   <AppstoreOutlined style={{ marginRight: '8px', color: darkThemeTokens.colorPrimary }} /> SadaPOS
                 </Title>
               )}
-              <Tabs 
-                activeKey={activeTab}
-                onChange={(key) => {
-                  setActiveTab(key);
-                  // URL ko tab ke hisaab se update karein
-                  setSearchParams({ tab: key === '2' ? 'signup' : 'login' });
-                }} 
-                centered
-                items={[
-                  {
-                    label: 'Login',
-                    key: '1',
-                    children: loginForm,
-                  },
-                  {
-                    label: 'Sign Up',
-                    key: '2',
-                    children: signupForm,
-                  },
-                ]}
-              />
+
+              {!isVerificationSent ? (
+                <>
+                  {/* --- NAYA IZAFA: Prominent 1-Click Google Button --- */}
+                  <Button 
+                    size="large" 
+                    block 
+                    onClick={handleGoogleLogin}
+                    loading={loading}
+                    style={{ 
+                      height: '46px', 
+                      fontSize: '15px', 
+                      fontWeight: 600, 
+                      borderRadius: '8px',
+                      background: 'rgba(255,255,255,0.06)',
+                      borderColor: darkThemeTokens.colorBorderSecondary,
+                      color: darkThemeTokens.colorTextHeading,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: '16px'
+                    }}
+                  >
+                    <GoogleIcon /> Continue with Google
+                  </Button>
+
+                  <Divider style={{ margin: '8px 0 16px 0', fontSize: '12px', color: darkThemeTokens.colorTextSecondary }}>
+                    OR
+                  </Divider>
+
+                  <Tabs 
+                    activeKey={activeTab}
+                    onChange={(key) => {
+                      setActiveTab(key);
+                      setSearchParams({ tab: key === '2' ? 'signup' : 'login' });
+                    }} 
+                    centered
+                    items={[
+                      {
+                        label: 'Login',
+                        key: '1',
+                        children: loginForm,
+                      },
+                      {
+                        label: 'Sign Up',
+                        key: '2',
+                        children: signupForm,
+                      },
+                    ]}
+                  />
+                </>
+              ) : (
+                /* --- NAYA IZAFA: Dedicated 'Check Your Inbox' Enterprise View --- */
+                <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                  {/* Glowing Envelope Icon */}
+                  <div style={{ 
+                    width: '72px', 
+                    height: '72px', 
+                    borderRadius: '50%', 
+                    background: 'rgba(26, 182, 201, 0.12)', 
+                    border: `1px solid ${darkThemeTokens.colorPrimary}`,
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    margin: '0 auto 20px auto' 
+                  }}>
+                    <MailOutlined style={{ fontSize: '32px', color: darkThemeTokens.colorPrimary }} />
+                  </div>
+
+                  <Title level={2} style={{ color: darkThemeTokens.colorTextHeading, margin: '0 0 8px 0', fontSize: '26px', fontWeight: 700 }}>
+                    Check Your Inbox
+                  </Title>
+
+                  <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '14px', display: 'block' }}>
+                    We've sent a verification link to:
+                  </Text>
+
+                  {/* Highlighted Registered Email Tag */}
+                  <div style={{ margin: '12px 0 16px 0' }}>
+                    <span style={{ 
+                      display: 'inline-block',
+                      background: 'rgba(255,255,255,0.06)', 
+                      color: darkThemeTokens.colorPrimary, 
+                      padding: '6px 16px', 
+                      borderRadius: '8px', 
+                      border: `1px solid ${darkThemeTokens.colorBorderSecondary}`,
+                      fontWeight: 600,
+                      fontSize: '15px'
+                    }}>
+                      {registeredEmail}
+                    </span>
+                  </div>
+
+                  <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '13px', lineHeight: '1.5', display: 'block', maxWidth: '380px', margin: '0 auto 20px auto' }}>
+                    Please click the confirmation link in the email to activate your account and start setting up your shop.
+                  </Text>
+
+                  {/* 1-Click Webmail Direct Button (Vibrant Brand Color) */}
+                  {getMailProviderUrl(registeredEmail) ? (
+                    <Button 
+                      type="primary" 
+                      size="large" 
+                      block 
+                      icon={<MailOutlined />}
+                      href={getMailProviderUrl(registeredEmail)}
+                      target="_blank"
+                      style={{ 
+                        height: '46px', 
+                        fontSize: '15px', 
+                        fontWeight: 700, 
+                        borderRadius: '8px',
+                        background: darkThemeTokens.colorPrimary,
+                        borderColor: darkThemeTokens.colorPrimary,
+                        color: '#121212'
+                      }}
+                    >
+                      {getMailProviderName(registeredEmail)}
+                    </Button>
+                  ) : (
+                    <Button 
+                      type="primary" 
+                      size="large" 
+                      block 
+                      icon={<MailOutlined />}
+                      href={`mailto:${registeredEmail}`}
+                      style={{ 
+                        height: '46px', 
+                        fontSize: '15px', 
+                        fontWeight: 700, 
+                        borderRadius: '8px',
+                        background: darkThemeTokens.colorPrimary,
+                        borderColor: darkThemeTokens.colorPrimary,
+                        color: '#121212'
+                      }}
+                    >
+                      Open Email App
+                    </Button>
+                  )}
+
+                  {/* Secondary Action: Already Verified (Direct Login) */}
+                  <Button 
+                    type="default" 
+                    size="large" 
+                    block 
+                    onClick={() => { 
+                      setIsVerificationSent(false); 
+                      setActiveTab('1'); 
+                      setSearchParams({ tab: 'login' }); 
+                    }}
+                    style={{ 
+                      height: '42px', 
+                      fontSize: '14px', 
+                      fontWeight: 600, 
+                      borderRadius: '8px',
+                      marginTop: '10px',
+                      background: 'rgba(255,255,255,0.04)',
+                      borderColor: darkThemeTokens.colorBorderSecondary,
+                      color: darkThemeTokens.colorTextHeading
+                    }}
+                  >
+                    Already verified? Proceed to Login
+                  </Button>
+
+                  {/* Troubleshooting Hint */}
+                  <Text style={{ fontSize: '12px', color: darkThemeTokens.colorTextSecondary, display: 'block', marginTop: '16px' }}>
+                    Can't find the email? Check your <b>Spam</b> or <b>Promotions</b> folder.
+                  </Text>
+
+                  <Divider style={{ margin: '18px 0 14px 0' }} />
+
+                  {/* Resend Action */}
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+                    <Text style={{ color: darkThemeTokens.colorTextSecondary }}>Didn't receive the email?</Text>
+                    <Button 
+                      type="link" 
+                      disabled={resendCooldown > 0} 
+                      loading={resendLoading} 
+                      onClick={handleResendVerification}
+                      style={{ padding: 0, fontSize: '13px', fontWeight: 600, color: darkThemeTokens.colorPrimary }}
+                    >
+                      {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Email'}
+                    </Button>
+                  </div>
+
+                  {/* Back to Sign Up / Change Email */}
+                  <div style={{ marginTop: '6px' }}>
+                    <Button 
+                      type="link" 
+                      onClick={() => { setIsVerificationSent(false); setActiveTab('2'); }} 
+                      style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '12px', padding: 0 }}
+                    >
+                      Wrong email address? Back to Sign Up
+                    </Button>
+                  </div>
+                </div>
+              )}
               <Divider style={{ margin: '12px 0' }} />
               <div style={{ textAlign: 'center' }}>
                 <Space size="small" split={<Divider type="vertical" />}>
