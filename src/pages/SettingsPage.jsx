@@ -86,6 +86,7 @@ const SettingsPage = () => {
   const isPriceChangeLocked = !limits.allow_price_change_control; // <-- NAYA LINK
   const isWholesaleLocked = !limits.allow_wholesale_pricing;
   const isCreditLimitLocked = !limits.allow_customer_credit_limits; // <--- NAYA IZAFA
+  const isBatchExpiryLocked = profile?.subscription_tier !== 'scale'; // <--- NAYA IZAFA: Batch & Expiry Lock
 
   // Naya: Active Tab ki state
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || '1');
@@ -647,8 +648,8 @@ const SettingsPage = () => {
       allow_cart_price_change: allowCartPriceChange,
       price_drop_limit: priceDropLimit, // <--- NAYA IZAFA
       wholesale_pricing_enabled: isWholesaleLocked ? false : wholesalePricingEnabled,
-      enable_batch_expiry: enableBatchExpiry,
-      block_expired_sales: blockExpiredSales,
+      enable_batch_expiry: isBatchExpiryLocked ? false : enableBatchExpiry,
+      block_expired_sales: isBatchExpiryLocked ? false : blockExpiredSales,
       expiry_alert_days: expiryAlertDays, // <--- NAYA IZAFA
       enable_customer_credit_limits: isCreditLimitLocked ? false : enableCustomerCreditLimits, // <--- NAYA IZAFA
       default_credit_limit: defaultCreditLimit, // <--- NAYA IZAFA
@@ -1008,9 +1009,11 @@ const SettingsPage = () => {
                     </Col>
                     <Col xs={24} sm={18}>
                       <Switch 
-                        checked={enableBatchExpiry} 
+                        checked={enableBatchExpiry && !isBatchExpiryLocked} 
                         onChange={setEnableBatchExpiry} 
+                        disabled={isBatchExpiryLocked}
                       />
+                      {isBatchExpiryLocked && <Text type="warning" style={{ display: 'block', fontSize: '12px', marginTop: '4px' }}>Available exclusively on the Scale plan.</Text>}
                     </Col>
                   </Row>
                   <Divider />

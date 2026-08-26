@@ -502,13 +502,21 @@ const Dashboard = () => {
                 
                 {/* --- NAYA IZAFA: Dynamic Accounts Breakdown (Banks & Wallets) --- */}
                 {stats?.accountsBreakdown?.length > 0 ? (
-                  <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
-                    {stats.accountsBreakdown.map((acc, idx) => (
-                      <div key={`acc-${idx}`} style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                        <span style={{ color: 'rgba(255,255,255,0.9)' }}>{acc.name}:</span>
-                        <span style={{ fontWeight: 'bold' }}>{formatCurrency(acc.balance, profile?.currency)}</span>
+                  <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', position: 'relative' }}>
+                    <div className="hide-scrollbar" style={{ maxHeight: '40px', overflowY: 'auto' }}>
+                      {stats.accountsBreakdown.map((acc, idx) => (
+                        <div key={`acc-${idx}`} style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                          <span style={{ color: 'rgba(255,255,255,0.9)' }}>{acc.name}:</span>
+                          <span style={{ fontWeight: 'bold' }}>{formatCurrency(acc.balance, profile?.currency)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {/* NAYA IZAFA: Scroll Indicator Arrow */}
+                    {stats.accountsBreakdown.length > 2 && (
+                      <div style={{ position: 'absolute', bottom: -2, width: '100%', display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+                        <ArrowDownOutlined style={{ fontSize: '11px', color: '#ffffff', opacity: 0.4 }} />
                       </div>
-                    ))}
+                    )}
                   </div>
                 ) : (
                   <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
@@ -519,11 +527,11 @@ const Dashboard = () => {
                 
                 {/* --- NAYA IZAFA: Counters Breakdown --- */}
                 {stats?.countersBreakdown?.length > 0 && (
-                  <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px dashed rgba(255,255,255,0.2)' }}>
+                  <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px dashed rgba(255,255,255,0.2)', position: 'relative' }}>
                     <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         All Counters Cash
                     </div>
-                    <div className="hide-scrollbar" style={{ maxHeight: '60px', overflowY: 'auto' }}>
+                    <div className="hide-scrollbar" style={{ maxHeight: '40px', overflowY: 'auto' }}>
                       {stats.countersBreakdown.map((counter, idx) => (
                         <div key={idx} style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.9)', marginTop: 2 }}>
                           <span>{counter.name}:</span>
@@ -531,6 +539,12 @@ const Dashboard = () => {
                         </div>
                       ))}
                     </div>
+                    {/* NAYA IZAFA: Scroll Indicator Arrow */}
+                    {stats.countersBreakdown.length > 2 && (
+                      <div style={{ position: 'absolute', bottom: -2, width: '100%', display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+                        <ArrowDownOutlined style={{ fontSize: '11px', color: '#ffffff', opacity: 0.4 }} />
+                      </div>
+                    )}
                   </div>
                 )}
               </Card>

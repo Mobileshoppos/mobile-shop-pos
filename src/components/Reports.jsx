@@ -341,9 +341,12 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             const daySales = allSales.filter(s => new Date(s.sale_date || s.created_at).toISOString().split('T')[0] === dateStr);
             const grossSales = daySales.reduce((sum, s) => sum + (Number(s.subtotal) || Number(s.total_amount) || 0), 0);
             const discounts = daySales.reduce((sum, s) => sum + (Number(s.discount) || 0), 0);
-            const taxes = daySales.reduce((sum, s) => sum + (Number(s.tax_amount) || 0), 0);
+            const taxesCollected = daySales.reduce((sum, s) => sum + (Number(s.tax_amount) || 0), 0);
             const dayReturns = allReturns.filter(r => new Date(r.created_at).toISOString().split('T')[0] === dateStr);
             const refunds = dayReturns.reduce((sum, r) => sum + ((Number(r.total_refund_amount) || 0) - (Number(r.tax_refunded) || 0)), 0);
+            const taxesRefunded = dayReturns.reduce((sum, r) => sum + (Number(r.tax_refunded) || 0), 0);
+            const netTaxes = taxesCollected - taxesRefunded;
+            
             const dayExpenses = allExpenses.filter(e => e.expense_date === dateStr);
             const expensesAmt = dayExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
@@ -376,7 +379,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             if (grossSales > 0 || refunds > 0 || expensesAmt > 0 || damagedLoss > 0) {
                 dailyPL.push({
                     key: dateStr, date: formattedDate, gross_sales: grossSales, returns: refunds, discounts: discounts,
-                    taxes: taxes, grand_total: grandTotal, cogs: netCogs, expenses: expensesAmt, damaged_loss: damagedLoss, net_profit: netProfit
+                    taxes: netTaxes, grand_total: grandTotal, cogs: netCogs, expenses: expensesAmt, damaged_loss: damagedLoss, net_profit: netProfit
                 });
             }
             loopDate.setDate(loopDate.getDate() + 1);
@@ -1106,9 +1109,12 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             const daySales = allSales.filter(s => new Date(s.sale_date || s.created_at).toISOString().split('T')[0] === dateStr);
             const grossSales = daySales.reduce((sum, s) => sum + (Number(s.subtotal) || Number(s.total_amount) || 0), 0);
             const discounts = daySales.reduce((sum, s) => sum + (Number(s.discount) || 0), 0);
-            const taxes = daySales.reduce((sum, s) => sum + (Number(s.tax_amount) || 0), 0);
+            const taxesCollected = daySales.reduce((sum, s) => sum + (Number(s.tax_amount) || 0), 0);
             const dayReturns = allReturns.filter(r => new Date(r.created_at).toISOString().split('T')[0] === dateStr);
             const refunds = dayReturns.reduce((sum, r) => sum + ((Number(r.total_refund_amount) || 0) - (Number(r.tax_refunded) || 0)), 0);
+            const taxesRefunded = dayReturns.reduce((sum, r) => sum + (Number(r.tax_refunded) || 0), 0);
+            const netTaxes = taxesCollected - taxesRefunded;
+            
             const dayExpenses = allExpenses.filter(e => e.expense_date === dateStr);
             const expensesAmt = dayExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
@@ -1141,7 +1147,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             if (grossSales > 0 || refunds > 0 || expensesAmt > 0 || damagedLoss > 0) {
                 dailyPL.push({
                     key: dateStr, date: formattedDate, gross_sales: grossSales, returns: refunds, discounts: discounts,
-                    taxes: taxes, grand_total: grandTotal, cogs: netCogs, expenses: expensesAmt, damaged_loss: damagedLoss, net_profit: netProfit
+                    taxes: netTaxes, grand_total: grandTotal, cogs: netCogs, expenses: expensesAmt, damaged_loss: damagedLoss, net_profit: netProfit
                 });
             }
             loopDate.setDate(loopDate.getDate() + 1);
@@ -1321,7 +1327,20 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             >
               <div style={{ height: 300, display: 'flex', justifyContent: 'center' }}>
                 {salesData.categoryBreakdown?.length > 0 ? (
-                  <Doughnut data={doughnutData} options={doughnutOptions} plugins={[centerTextPlugin]} />
+                  <Doughnut 
+                    data={doughnutData} 
+                    options={{
+                      ...doughnutOptions,
+                      plugins: {
+                        ...doughnutOptions.plugins,
+                        invCenterText: { 
+                          label: catChartFilter === 'revenue' ? 'Total Revenue' : 'Total Profit', 
+                          totalValue: doughnutData.datasets[0].data.reduce((a, b) => a + b, 0) 
+                        }
+                      }
+                    }} 
+                    plugins={[invCenterTextPlugin]} 
+                  />
                 ) : (
                   <Empty description="No category data available" />
                 )}
@@ -2249,8 +2268,8 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                     <div style={{ padding: '40px 20px', textAlign: 'center' }}>
                         <LockOutlined style={{ fontSize: '48px', color: '#faad14', marginBottom: '16px' }} />
                         <Title level={4}>Advanced Stock Flow Audit</Title>
-                        <Text type="secondary" style={{ display: 'block', marginBottom: '16px' }}>This enterprise feature tracks every single movement of your inventory (Opening, Receipts, Issuance, Adjustments, Closing). Available exclusively on the Scale Plan.</Text>
-                        <Button type="primary" onClick={() => navigate('/subscription')}>Upgrade to Scale Plan</Button>
+                        <Text type="secondary" style={{ display: 'block', marginBottom: '16px' }}>This advanced feature tracks every single movement of your inventory (Opening, Receipts, Issuance, Adjustments, Closing). Available on the Pro and Scale Plans.</Text>
+                        <Button type="primary" onClick={() => navigate('/subscription')}>Upgrade to Pro Plan</Button>
                     </div>
                   ) : (
                     <div style={{ paddingTop: '8px' }}>
@@ -3746,13 +3765,13 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 },
                 {
                   key: '2',
-                  label: limits.allow_master_export ? 'Export All Tabs (Master Excel)' : <span><LockOutlined style={{ color: '#faad14' }} /> Master Export (Scale Plan)</span>,
+                  label: limits.allow_master_export ? 'Export All Tabs (Master Excel)' : <span><LockOutlined style={{ color: '#faad14' }} /> Master Export (Pro Plan)</span>,
                   icon: <FileExcelOutlined />,
                   onClick: () => {
                     if (!limits.allow_master_export) {
                       modal.confirm({
-                        title: 'Enterprise Feature Locked',
-                        content: 'Master Excel Export is available on the Scale Plan. Please upgrade to download your entire business database in one click.',
+                        title: 'Advanced Feature Locked',
+                        content: 'Master Excel Export is available on the Pro and Scale Plans. Please upgrade to download your entire business database in one click.',
                         okText: 'View Plans',
                         cancelText: 'Close',
                         onOk: () => navigate('/subscription')

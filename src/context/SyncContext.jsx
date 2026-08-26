@@ -1011,7 +1011,7 @@ const retryAll = async () => {
       if (count > 0 && navigator.onLine) {
         processSyncQueue();
       }
-    }, 60000); // Har 1 munute baad check karein taake data server ke sath sync rahe paray
+    }, 3000); // Har 3 seconds baad check karein taake data foran server ke sath sync ho
 
     return () => clearInterval(interval);
   }, []);

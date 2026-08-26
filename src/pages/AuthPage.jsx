@@ -431,7 +431,7 @@ const AuthPage = () => {
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '40px', paddingTop: '24px', borderTop: `1px solid ${darkThemeTokens.colorBorderSecondary}` }}>
                   <div>
-                    <Title level={3} style={{ margin: 0, color: darkThemeTokens.colorTextHeading }}>500+</Title>
+                    <Title level={3} style={{ margin: 0, color: darkThemeTokens.colorTextHeading }}>5000+</Title>
                     <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase' }}>Shops</Text>
                   </div>
                   <div>

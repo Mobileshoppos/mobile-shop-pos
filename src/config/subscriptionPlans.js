@@ -106,8 +106,8 @@ export const SUBSCRIPTION_PLANS = {
     allow_customer_credit_limits: true,
     allow_stock_location: true,
     allow_balance_sheet: false,            // Balance Sheet Locked
-    allow_stock_flow_audit: false,        // Stock Flow Audit Locked
-    allow_master_export: false            // Master Export Locked
+    allow_stock_flow_audit: true,         // UNLOCKED for Pro
+    allow_master_export: true             // UNLOCKED for Pro
   },
 
   scale: {

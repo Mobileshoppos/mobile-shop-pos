@@ -615,18 +615,24 @@ return (
               
               {!isMobile && (
                 <>
-                  {/* 1. Integrated Stock Status (Conditional) - Desktop Only */}
+                  {/* 1. Current Plan Status Badge - Desktop Only */}
                   {(() => {
                     const tier = profile?.subscription_tier?.toLowerCase() || 'free';
-                    const limits = getPlanLimits(tier);
-                    const showBadge = limits.always_show_badge || stockCount >= (limits.max_items * (limits.badge_threshold || 0));
                     
-                    if (!showBadge) return null;
-
-                    const maxItems = limits.max_items;
-                    const isUnlimited = maxItems > 10000;
-                    const isFull = !isUnlimited && stockCount >= maxItems;
-                    const isNearLimit = !isUnlimited && stockCount >= (maxItems * 0.9);
+                    // Har plan ke liye ek khubsoorat rang tay karte hain
+                    let planColor = token.colorTextSecondary; // Free ke liye default color
+                    let planName = 'FREE PLAN';
+                    
+                    if (tier === 'growth') {
+                      planColor = token.colorInfo;
+                      planName = 'GROWTH PLAN';
+                    } else if (tier === 'pro') {
+                      planColor = token.colorSuccess;
+                      planName = 'PRO PLAN';
+                    } else if (tier === 'scale') {
+                      planColor = '#722ed1'; // Scale ke liye Premium Purple color
+                      planName = 'SCALE PLAN';
+                    }
 
                     return (
                       <div 
@@ -641,12 +647,12 @@ return (
                         <Text strong style={{ 
                           display: 'block', 
                           fontSize: '13px', 
-                          color: isFull ? token.colorError : (isNearLimit ? token.colorWarning : token.colorPrimary) 
+                          color: planColor 
                         }}>
-                          {isUnlimited ? 'PRO ACTIVE' : `STOCK: ${stockCount}/${maxItems}`}
+                          {planName}
                         </Text>
                         <Text type="secondary" style={{ fontSize: '10px', letterSpacing: '0.5px' }}>
-                          {isFull ? 'LIMIT REACHED' : 'PLAN STATUS'}
+                          PLAN STATUS
                         </Text>
                       </div>
                     );

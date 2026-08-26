@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Typography, theme } from 'antd';
+import { Layout, Typography, theme, Tooltip, Button } from 'antd'; // <--- NAYA IZAFA: Tooltip & Button
 import dayjs from 'dayjs';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import { BulbOutlined, ShopOutlined, WifiOutlined, DisconnectOutlined } from '@ant-design/icons';
+import { BulbOutlined, ShopOutlined, WifiOutlined, DisconnectOutlined, SunOutlined, MoonOutlined } from '@ant-design/icons'; // <--- NAYA IZAFA: Sun & Moon Icons
 import { useAuth } from '../context/AuthContext';
 import { useSync } from '../context/SyncContext';
+import { useTheme } from '../context/ThemeContext'; // <--- NAYA IZAFA: Theme Context
 
 const { Footer } = Layout;
 const { Text } = Typography;
@@ -14,6 +15,7 @@ const AppFooter = () => {
   const [currentTime, setCurrentTime] = useState(dayjs());
   const { profile } = useAuth();
   const { isOnline } = useSync();
+  const { isDarkMode, toggleTheme } = useTheme(); // <--- NAYA IZAFA: Theme States
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(dayjs()), 60000);
@@ -62,9 +64,22 @@ const AppFooter = () => {
         </Text>
       </div>
 
-      {/* Right Side: Network Status + Clock */}
+      {/* Right Side: Theme Toggle + Network Status + Clock */}
       <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '16px' }}>
         
+        {/* --- NAYA IZAFA: Quick Theme Toggle Button --- */}
+        <Tooltip title="Quick switch. For permanent default theme, visit Settings.">
+          <Button 
+            type="text" 
+            size="small"
+            icon={isDarkMode ? <SunOutlined style={{ color: token.colorWarning, fontSize: '15px' }} /> : <MoonOutlined style={{ color: token.colorPrimary, fontSize: '15px' }} />} 
+            onClick={() => {
+              if (toggleTheme) toggleTheme();
+            }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          />
+        </Tooltip>
+
         {/* Network Status */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {isOnline ? (
