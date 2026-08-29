@@ -845,12 +845,13 @@ const DataService = {
     await db.product_variants.update(variantId, { 
       barcode: updates.barcode, 
       sale_price: updates.sale_price,
-      wholesale_price: updates.wholesale_price // <--- NAYA IZAFA
+      wholesale_price: updates.wholesale_price, // <--- NAYA IZAFA
+      low_stock_threshold: updates.low_stock_threshold // <--- NAYA IZAFA: Variant Threshold
     });
     await db.sync_queue.add({ 
       table_name: 'product_variants', 
       action: 'update', 
-      data: { id: variantId, barcode: updates.barcode, sale_price: updates.sale_price, wholesale_price: updates.wholesale_price } // <--- NAYA IZAFA
+      data: { id: variantId, barcode: updates.barcode, sale_price: updates.sale_price, wholesale_price: updates.wholesale_price, low_stock_threshold: updates.low_stock_threshold } // <--- NAYA IZAFA
     });
 
     // B. Mojooda Stock (Inventory) ki Sale Price update karein (Dexie + Queue)
@@ -2588,26 +2589,66 @@ async addCustomer(customerData) {
       }
     });
 
-    const lowStockItems = products
-        .filter(p => (productStock[p.id] || 0) > 0 && (productStock[p.id] || 0) <= (p.low_stock_threshold || globalThreshold))
-        .map(p => {
-          const vel = velocityMap[p.id] || { v30: 0, v60: 0, v90: 0 };
-          const currentQty = productStock[p.id] || 0;
-          const alertQty = p.low_stock_threshold || globalThreshold;
-          const required = Math.max(0, vel.v30 - currentQty);
-          return {
-            key: p.id,
-            name: p.name,
-            brand: p.brand || '-',
-            qty: currentQty,
-            current_qty: currentQty,
-            alert_qty: alertQty,
-            v30: vel.v30,
-            v60: vel.v60,
-            v90: vel.v90,
-            required: required
-          };
-        });
+    // --- NAYA IZAFA: Variant-Level Low Stock Report Logic ---
+    const allVariantsForReport = await db.product_variants.toArray();
+    const variantMapForReport = {};
+    allVariantsForReport.forEach(v => variantMapForReport[v.id] = v);
+
+    const variantStockForReport = {};
+    inventory.forEach(item => {
+        const qty = Number(item.available_qty) || 0;
+        if (qty > 0) {
+            const key = item.variant_id || `${item.product_id}-${JSON.stringify(item.item_attributes || {})}`;
+            if (!variantStockForReport[key]) {
+                variantStockForReport[key] = {
+                    product_id: item.product_id,
+                    variant_id: item.variant_id,
+                    attributes: item.item_attributes,
+                    qty: 0
+                };
+            }
+            variantStockForReport[key].qty += qty;
+        }
+    });
+
+    const lowStockItems = [];
+    Object.values(variantStockForReport).forEach(vs => {
+        const p = productMap[vs.product_id];
+        if (!p) return;
+
+        const v = vs.variant_id ? variantMapForReport[vs.variant_id] : null;
+        // SMART FALLBACK: Variant Limit -> Product Limit -> Global Limit
+        const alertQty = (v && v.low_stock_threshold !== null && v.low_stock_threshold !== undefined) 
+            ? v.low_stock_threshold 
+            : (p.low_stock_threshold !== null && p.low_stock_threshold !== undefined ? p.low_stock_threshold : globalThreshold);
+
+        if (vs.qty <= alertQty) {
+            let attrStr = '';
+            if (vs.attributes) {
+                const attrs = Object.entries(vs.attributes)
+                    .filter(([k, val]) => val && !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial'))
+                    .map(([k, val]) => val);
+                if (attrs.length > 0) attrStr = ` (${attrs.join(', ')})`;
+            }
+
+            const vel = velocityMap[p.id] || { v30: 0, v60: 0, v90: 0 };
+            const required = Math.max(0, vel.v30 - vs.qty);
+
+            lowStockItems.push({
+                key: vs.variant_id || `${p.id}-${attrStr}`,
+                name: `${p.name}${attrStr}`,
+                brand: p.brand || '-',
+                qty: vs.qty,
+                current_qty: vs.qty,
+                alert_qty: alertQty,
+                v30: vel.v30,
+                v60: vel.v60,
+                v90: vel.v90,
+                required: required
+            });
+        }
+    });
+    // --------------------------------------------------------
 
     // --- NAYA IZAFA: Stock Flow Audit Summary Sheet ---
     const start = startDateStr ? dayjs(startDateStr) : dayjs().startOf('month');
@@ -4008,14 +4049,61 @@ async addCustomer(customerData) {
 
     // stockCounts upar Step 1 mein pehle hi calculate ho chuka hai.
 
-    const lowStockItems = products
-        .map(product => ({
-            ...product,
-            quantity: stockCounts[product.id] || 0 
-        }))
-        // NAYA IZAFA: Per-product threshold check
-        .filter(p => p.quantity <= (p.low_stock_threshold || threshold))
-        .slice(0, 5);
+    // --- NAYA IZAFA: Variant-Level Low Stock Logic ---
+    const allVariantsForDash = await db.product_variants.toArray();
+    const variantMapForDash = {};
+    allVariantsForDash.forEach(v => variantMapForDash[v.id] = v);
+
+    const variantStockForDash = {};
+    Object.values(inventoryMap).forEach(item => {
+        if (item.status === 'Available' && (Number(item.available_qty) || 0) > 0) {
+            const key = item.variant_id || `${item.product_id}-${JSON.stringify(item.item_attributes || {})}`;
+            if (!variantStockForDash[key]) {
+                variantStockForDash[key] = {
+                    product_id: item.product_id,
+                    variant_id: item.variant_id,
+                    attributes: item.item_attributes,
+                    qty: 0
+                };
+            }
+            variantStockForDash[key].qty += (Number(item.available_qty) || 0);
+        }
+    });
+
+    const productMapForAlerts = {};
+    products.forEach(p => productMapForAlerts[p.id] = p);
+
+    let lowStockItemsRaw = [];
+    Object.values(variantStockForDash).forEach(vs => {
+        const p = productMapForAlerts[vs.product_id];
+        if (!p) return;
+
+        const v = vs.variant_id ? variantMapForDash[vs.variant_id] : null;
+        // SMART FALLBACK: Variant Limit -> Product Limit -> Global Limit
+        const alertQty = (v && v.low_stock_threshold !== null && v.low_stock_threshold !== undefined) 
+            ? v.low_stock_threshold 
+            : (p.low_stock_threshold !== null && p.low_stock_threshold !== undefined ? p.low_stock_threshold : threshold);
+
+        if (vs.qty <= alertQty) {
+            let attrStr = '';
+            if (vs.attributes) {
+                const attrs = Object.entries(vs.attributes)
+                    .filter(([k, val]) => val && !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial'))
+                    .map(([k, val]) => val);
+                if (attrs.length > 0) attrStr = ` (${attrs.join(', ')})`;
+            }
+            lowStockItemsRaw.push({
+                ...p,
+                name: `${p.name}${attrStr}`,
+                quantity: vs.qty
+            });
+        }
+    });
+    
+    // Sort by lowest quantity first
+    lowStockItemsRaw.sort((a, b) => a.quantity - b.quantity);
+    const lowStockItems = lowStockItemsRaw.slice(0, 5);
+    // -------------------------------------------------
 
     // --- NAYA IZAFA: Expiring Soon Items ko Product Name ke sath map karna ---
     const productMapForExpiry = {};
@@ -4044,36 +4132,50 @@ async addCustomer(customerData) {
             customer: customerNameMap[s.customer_id] || 'Walk-in Customer'
         }));
 
-    // 10. Top Selling & Most Profitable (Optimized: Using Frozen Purchase Price)
+    // 10. Top Selling & Most Profitable (Variant Supported)
     const productSalesMap = {};
 
     saleItems.forEach(item => {
-        const pid = item.product_id;
+        // --- NAYA IZAFA: Inventory se Variant ki details nikalna ---
+        const invItem = inventoryMap[item.inventory_id];
+        let attrStr = '';
+        if (invItem && invItem.item_attributes) {
+            const attrs = Object.entries(invItem.item_attributes)
+                .filter(([k, val]) => val && !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial'))
+                .map(([k, val]) => val);
+            if (attrs.length > 0) attrStr = ` (${attrs.join(', ')})`;
+        }
+
+        // Key mein Product ID aur Attributes dono shamil karein taake variants alag alag gine jayen
+        const key = `${item.product_id}${attrStr}`;
+        // -------------------------------------------------------------
         
-        // Professional Tareeqa: Seedha sale_item mein mojud purchase_price use karein
-        // Is se database par bojh khatam ho jata hai aur profit hamesha sahi rehta hai
         const costOfThisItem = Number(item.purchase_price) || 0;
         const profit = (Number(item.price_at_sale) - costOfThisItem) * (item.quantity || 1);
 
-        if (!productSalesMap[pid]) {
-            productSalesMap[pid] = { qty: 0, profit: 0 };
+        if (!productSalesMap[key]) {
+            productSalesMap[key] = { 
+                product_id: item.product_id, 
+                attrStr: attrStr, // Variant ka naam mehfooz kiya
+                qty: 0, 
+                profit: 0 
+            };
         }
-        productSalesMap[pid].qty += (item.quantity || 1);
-        productSalesMap[pid].profit += profit;
+        productSalesMap[key].qty += (item.quantity || 1);
+        productSalesMap[key].profit += profit;
     });
 
-    // Tezi ke liye pehle hi Products ki ek list (Map) bana lein
     const productMap = {};
     products.forEach(p => { productMap[String(p.id)] = p; });
 
-    const topSellingProducts = Object.keys(productSalesMap)
-        .map(pid => {
-            // Poore table mein dhoondne ke bajaye seedha list (Map) se uthayen
-            const prod = productMap[String(pid)];
+    const topSellingProducts = Object.values(productSalesMap)
+        .map(data => {
+            const prod = productMap[String(data.product_id)];
             return {
-                name: prod ? prod.name : 'Unknown Item',
-                totalSold: productSalesMap[pid].qty,
-                totalProfit: productSalesMap[pid].profit
+                // NAYA IZAFA: Product ke naam ke sath uske Variant ka naam bhi dikhayein
+                name: prod ? `${prod.name}${data.attrStr}` : `Unknown Item${data.attrStr}`,
+                totalSold: data.qty,
+                totalProfit: data.profit
             };
         });
         // Note: Sorting ab hum Dashboard.jsx mein filter ke mutabiq karenge
@@ -4789,11 +4891,13 @@ async addCustomer(customerData) {
       user_id: billData.user_id, 
       staff_id: billData.staff_id,
       created_at: now,
-      updated_at: now, // Naya Izafa
+      updated_at: now,
       cart: billData.cart,
-      customer_id: billData.customer_id,
+      customer_id: billData.customer_id || null,
+      supplier_id: billData.supplier_id || null, // <--- NAYA IZAFA
+      bill_type: billData.bill_type || 'sale',   // <--- NAYA IZAFA
       discount: billData.discount,
-      discount_type: billData.discountType, // Yahan underscore (_) lagaya
+      discount_type: billData.discountType,
       note: billData.note || 'Held Bill'
     };
     await db.held_bills.add(newHeldBill);
@@ -4851,6 +4955,24 @@ async addCustomer(customerData) {
   async clearActiveCart() {
     await db.active_cart.delete('current');
   },
+
+  // --- NAYA IZAFA: PURCHASE CART PERSISTENCE (Auto-save) ---
+  async saveActivePurchaseCart(cartData) {
+    await db.active_purchase_cart.put({
+      id: 'current',
+      ...cartData,
+      updated_at: new Date().toISOString()
+    });
+  },
+
+  async getActivePurchaseCart() {
+    return await db.active_purchase_cart.get('current');
+  },
+
+  async clearActivePurchaseCart() {
+    await db.active_purchase_cart.delete('current');
+  },
+  // ---------------------------------------------------------
 
   // --- CONFLICT RESOLUTION: Missing Stock Entry ---
   // Yeh function phansi hui sale ko theek karne ke liye missing purchase banayega

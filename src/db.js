@@ -45,7 +45,7 @@ db.version(70).stores({
   credit_payouts: 'id, local_id, voucher_no, customer_id, user_id, staff_id, payment_method, updated_at, register_id, session_id',
   category_attributes: 'id, category_id',
   supplier_payments: 'id, local_id, voucher_no, supplier_id, purchase_id, user_id, staff_id, payment_method, updated_at, register_id, session_id',
-  product_variants: 'id, product_id, barcode',
+  product_variants: 'id, product_id, barcode, low_stock_threshold',
   supplier_refunds: 'id, local_id, voucher_no, supplier_id, refund_date, user_id, staff_id, payment_method, updated_at, register_id, session_id',
   id_mappings: '++id, local_id, server_id, table_name',
   cash_adjustments: 'id, local_id, voucher_no, user_id, staff_id, type, payment_method, created_at, transfer_to, updated_at, register_id, session_id',
@@ -73,7 +73,7 @@ db.version(70).stores({
   secure_keys: 'id',
 
   // Held Bills: Ab yeh Supabase ke saath sync honge
-  held_bills: 'id, quotation_id, user_id, staff_id, customer_id, created_at, updated_at, register_id',
+  held_bills: 'id, quotation_id, user_id, staff_id, customer_id, supplier_id, bill_type, created_at, updated_at, register_id',
   
   // Naya: Multi-Counter Tables
   registers: 'id, user_id, name, type, status, updated_at',
@@ -81,6 +81,7 @@ db.version(70).stores({
 
   // Active Cart: Page refresh par data bachane ke liye (Sirf Local)
   active_cart: 'id',
+  active_purchase_cart: 'id',
 
   // NAYA IZAFA: Fixed Assets (Dukan ke mustaqil aasaasay)
   fixed_assets: 'id, local_id, user_id, asset_name, category, purchase_date, payment_method, updated_at, status, current_value, serial_number, location, funding_source, useful_life_years, salvage_value, depreciation_mode',

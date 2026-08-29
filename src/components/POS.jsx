@@ -124,7 +124,9 @@ const POS = () => {
   // Counter ko update karne wala function
   const refreshHeldCount = async () => {
     const bills = await DataService.getHeldBills();
-    setHeldCount(bills.length);
+    // Sirf 'sale' wale drafts ginein (purane drafts jinme type nahi hai, wo bhi sale hain)
+    const saleDrafts = bills.filter(b => !b.bill_type || b.bill_type === 'sale');
+    setHeldCount(saleDrafts.length);
   };
 
   // Page khulte hi ginti (count) aur adhoora cart (persistence) load karein

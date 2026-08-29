@@ -12,7 +12,7 @@ import { generateQuotationReceipt } from '../utils/receiptGenerator';
 
 const { Text } = Typography;
 
-const DraftBillsModal = ({ visible, onCancel, onResume, onRefresh, profile, customers, allProducts }) => {
+const DraftBillsModal = ({ visible, onCancel, onResume, onRefresh, profile, customers, allProducts, filterType = 'sale' }) => {
   const { token } = theme.useToken();
   const { can } = useStaff(); // Staff permissions check karne ke liye
   const isMobile = useMediaQuery('(max-width: 576px)');
@@ -23,10 +23,15 @@ const DraftBillsModal = ({ visible, onCancel, onResume, onRefresh, profile, cust
   const [searchTerm, setSearchTerm] = useState('');
 
   // Search filter logic
-  const filteredBills = heldBills.filter(bill => 
-    bill.quotation_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    bill.note?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredBills = heldBills.filter(bill => {
+    // 1. Pehle check karein ke kya bill ki type match kar rahi hai? (Sale vs Purchase)
+    const matchType = (bill.bill_type || 'sale') === filterType;
+    if (!matchType) return false;
+
+    // 2. Phir search term (Text) match karein
+    return bill.quotation_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           bill.note?.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   useEffect(() => {
     if (visible) {
@@ -215,7 +220,7 @@ const DraftBillsModal = ({ visible, onCancel, onResume, onRefresh, profile, cust
     <Modal
       title={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '95%' }}>
-          <Space><ClockCircleOutlined /> Held Bills & Quotations</Space>
+          <Space><ClockCircleOutlined /> {filterType === 'purchase' ? 'Purchase Drafts' : 'Held Bills & Quotations'}</Space>
           {heldBills.length > 0 && (
             <Button size="small" type="link" danger onClick={handleClearOldDrafts}>Clear Old (30d+)</Button>
           )}
@@ -281,19 +286,20 @@ const DraftBillsModal = ({ visible, onCancel, onResume, onRefresh, profile, cust
                   </Tag>
 
                   <Space style={{ width: isMobile ? '100%' : 'auto' }}>
-                    <Button 
-                      type="primary" 
-                      icon={<ShoppingCartOutlined />} 
-                      onClick={() => handleSafeResume(bill, 'sale')}
-                      style={{ flex: isMobile ? 1 : 'none' }}
-                    >Sale</Button>
-                    {/* Naya Izafa: Sirf tab dikhao jab ijazat ho */}
-                    {can('can_manage_purchases') && (
-                      <Button 
-                        style={{ background: token.colorSuccess, color: 'white', border: 'none', flex: isMobile ? 1 : 'none' }} 
-                        icon={<ImportOutlined />} 
-                        onClick={() => handleSafeResume(bill, 'purchase')}
-                      >Purchase</Button>
+                    {/* --- NAYA IZAFA: Smart Buttons (Sale ya Purchase) --- */}
+                    {filterType === 'sale' ? (
+                        <Button 
+                          type="primary" 
+                          icon={<ShoppingCartOutlined />} 
+                          onClick={() => handleSafeResume(bill, 'sale')}
+                          style={{ flex: isMobile ? 1 : 'none' }}
+                        >Resume Sale</Button>
+                    ) : (
+                        <Button 
+                          style={{ background: token.colorSuccess, color: 'white', border: 'none', flex: isMobile ? 1 : 'none' }} 
+                          icon={<ImportOutlined />} 
+                          onClick={() => handleSafeResume(bill, 'purchase')}
+                        >Resume Purchase</Button>
                     )}
                   </Space>
                 </div>

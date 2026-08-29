@@ -914,6 +914,66 @@ const Inventory = () => {
         });
         // -------------------------------------------------------
 
+        // --- NAYA IZAFA: LOW STOCK FILTER LOGIC (View All ke liye) ---
+        if (showLowStockOnly) {
+          const globalThreshold = profile?.low_stock_threshold || 5;
+          
+          // 1. Database se Variants table mangwayein taake unki limits mil sakein
+          const allVariantsForFilter = await db.product_variants.toArray();
+          const pvMap = {};
+          allVariantsForFilter.forEach(v => pvMap[v.id] = v);
+
+          filteredProducts = filteredProducts.filter(p => {
+             if (p.variants && p.variants.length > 0) {
+                 // 2. Pehle is product ke tamam variants ka TOTAL stock nikalain (Batches ko jama karein)
+                 const variantTotals = {};
+
+                 p.variants.forEach(v => {
+                     // Group by variant_id ya attributes
+                     const key = v.variant_id || JSON.stringify(v.item_attributes || {});
+                     if (!variantTotals[key]) {
+                         variantTotals[key] = { qty: 0, variant_id: v.variant_id, items: [] };
+                     }
+                     variantTotals[key].qty += (v.available_qty || 0);
+                     variantTotals[key].items.push(v); // <-- Batches ko mehfooz rakhein
+                 });
+
+                 // 3. Check karein aur sirf LOW STOCK variants ko filter karein
+                 let isProductLowStock = false;
+                 const lowStockVariantsOnly = [];
+
+                 Object.values(variantTotals).forEach(vt => {
+                     const pv = vt.variant_id ? pvMap[vt.variant_id] : null;
+                     
+                     // Cascade Logic: Variant -> Product -> Global
+                     const alertQty = (pv && pv.low_stock_threshold !== null && pv.low_stock_threshold !== undefined) 
+                        ? pv.low_stock_threshold 
+                        : (p.low_stock_threshold !== null && p.low_stock_threshold !== undefined ? p.low_stock_threshold : globalThreshold);
+                     
+                     if (vt.qty > 0 && vt.qty <= alertQty) {
+                         isProductLowStock = true;
+                         lowStockVariantsOnly.push(...vt.items); // Sirf low stock batches ko shamil karein
+                     }
+                 });
+
+                 // 4. Agar product low stock hai, to uske variants ki list ko update kar dein
+                 if (isProductLowStock) {
+                     p.variants = lowStockVariantsOnly; // <-- YEH HAI ASAL FIX! (Zayed variants hide ho jayenge)
+                     return true;
+                 }
+                 return false;
+
+             } else {
+                 // Agar bulk product hai (bina variants ke)
+                 const alertQty = (p.low_stock_threshold !== null && p.low_stock_threshold !== undefined) 
+                    ? p.low_stock_threshold 
+                    : globalThreshold;
+                 return (p.quantity || 0) > 0 && (p.quantity || 0) <= alertQty;
+             }
+          });
+        }
+        // -------------------------------------------------------------
+
         const formattedForUI = filteredProducts.map(p => ({
           ...p,
           min_sale_price: p.min_sale_price || p.sale_price,
@@ -1153,7 +1213,8 @@ const Inventory = () => {
               if (dbVariant) {
                   // Form ko update karein taake user ko Barcode nazar aaye
                   editForm.setFieldsValue({
-                      barcode: dbVariant.barcode || ''
+                      barcode: dbVariant.barcode || '',
+                      low_stock_threshold: dbVariant.low_stock_threshold // <--- NAYA IZAFA
                   });
               }
           }
@@ -1199,6 +1260,7 @@ const Inventory = () => {
         barcode: values.barcode || null,
         sale_price: values.sale_price,
         wholesale_price: values.wholesale_price, // <--- NAYA IZAFA
+        low_stock_threshold: values.low_stock_threshold, // <--- NAYA IZAFA: Variant Threshold
         batch_number: values.batch_number || null,                                      // <--- NAYA IZAFA
         expiry_date: values.expiry_date ? values.expiry_date.format('YYYY-MM-DD') : null // <--- NAYA IZAFA
       });
@@ -1470,8 +1532,10 @@ const Inventory = () => {
                     { title: 'In Stock', dataIndex: 'stock' },
                     { title: 'Sale Price', dataIndex: 'price' }
                 ]} 
-                fileName="Inventory_Physical_Stock" 
-                reportTitle="Physical Stock Audit Report" 
+                // --- NAYA IZAFA: Smart Titles based on current view ---
+                fileName={showLowStockOnly ? "Low_Stock_Report" : "Inventory_Physical_Stock"} 
+                reportTitle={showLowStockOnly ? "Low Stock Alert Report" : "Physical Stock Audit Report"} 
+                reportSubtitle={showLowStockOnly ? "Items that have reached their minimum stock limit and need reordering." : ""}
              />
 
              {(() => {
@@ -1831,6 +1895,15 @@ const Inventory = () => {
             <InputNumber style={{ width: '100%' }} />
         </Form.Item>
     )}
+
+    {/* --- NAYA IZAFA: Variant Level Low Stock Limit --- */}
+    <Form.Item 
+        name="low_stock_threshold" 
+        label="Variant Low Stock Limit" 
+        help="Leave empty to use the main product's limit."
+    >
+        <InputNumber style={{ width: '100%' }} min={1} placeholder="e.g. 2" />
+    </Form.Item>
     
     {/* --- NAYA IZAFA: Batch & Expiry in Quick Edit --- */}
     {profile?.enable_batch_expiry && (

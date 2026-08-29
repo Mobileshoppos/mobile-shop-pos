@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Collapse, Tag, Tooltip, Tabs, Card, theme, ConfigProvider
 } from 'antd';
-import { DeleteOutlined, BarcodeOutlined, EditOutlined, UserAddOutlined } from '@ant-design/icons';
+import { DeleteOutlined, BarcodeOutlined, EditOutlined, UserAddOutlined, PauseCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import DraftBillsModal from '../components/DraftBillsModal';
 import DataService from '../DataService';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -507,7 +508,50 @@ const AddPurchaseForm = () => {
   const [supplierForm] = Form.useForm();
   const [selectedProductAttributes, setSelectedProductAttributes] = useState([]);
   const [editingItemIndex, setEditingItemIndex] = useState(null);
+  // --- NAYA IZAFA: Draft Modal States ---
+  const [isDraftModalOpen, setIsDraftModalOpen] = useState(false);
+  const [heldCount, setHeldCount] = useState(0);
+
+  const refreshHeldCount = async () => {
+    const bills = await DataService.getHeldBills();
+    // Sirf purchase drafts count karein
+    const purchaseDrafts = bills.filter(b => b.bill_type === 'purchase');
+    setHeldCount(purchaseDrafts.length);
+  };
+
+  useEffect(() => {
+    refreshHeldCount();
+  }, []);
+  // --------------------------------------
+
   const selectedSupplierId = Form.useWatch('supplier_id', form);
+  const selectedWarehouseId = Form.useWatch('warehouse_id', form);
+  const currentNotes = Form.useWatch('notes', form);
+  const currentInvoiceId = Form.useWatch('invoice_id', form);
+  
+  // --- NAYA IZAFA: Auto-Save Purchase Cart Persistence ---
+  useEffect(() => {
+    // Jab user page band kare to flag wapis false kar dein
+    return () => { window.isPurchaseCartRestored = false; };
+  }, []);
+
+  useEffect(() => {
+    // FIX: Jab tak purana data restore na ho jaye, auto-save ya clear mat karo (Race condition fix)
+    if (!window.isPurchaseCartRestored) return;
+
+    if (!editingPurchase && (purchaseItems.length > 0 || currentNotes || currentInvoiceId)) {
+      DataService.saveActivePurchaseCart({
+        cart: purchaseItems,
+        supplier_id: selectedSupplierId,
+        warehouse_id: selectedWarehouseId,
+        notes: currentNotes,
+        invoice_id: currentInvoiceId
+      });
+    } else if (!editingPurchase && purchaseItems.length === 0) {
+      DataService.clearActivePurchaseCart();
+    }
+  }, [purchaseItems, selectedSupplierId, selectedWarehouseId, currentNotes, currentInvoiceId, editingPurchase]);
+  // -------------------------------------------------------
   
   const totalAmount = purchaseItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.purchase_price || 0)), 0);
 
@@ -597,16 +641,38 @@ const AddPurchaseForm = () => {
               // NAYA IZAFA: Agar bahar se items bheje gaye hain (e.g. from Draft), to load karein
               if (editingItems && editingItems.length > 0) {
                   setPurchaseItems(editingItems);
-              }
-
-              if (cashSupplier) {
-                setTimeout(() => { 
-                    const defaultWh = warehousesData?.find(w => w.is_default);
-                    form.setFieldsValue({ 
-                        supplier_id: cashSupplier.id,
-                        warehouse_id: defaultWh ? defaultWh.id : null
-                    }); 
-                }, 100);
+                  window.isPurchaseCartRestored = true; // <--- FLAG SET
+              } else {
+                  // --- NAYA IZAFA: Restore Auto-Saved Cart ---
+                  const savedCart = await DataService.getActivePurchaseCart();
+                  if (savedCart && (savedCart.cart?.length > 0 || savedCart.supplier_id)) {
+                      setPurchaseItems(savedCart.cart || []);
+                      window.isPurchaseCartRestored = true; // <--- FLAG SET
+                      setTimeout(() => {
+                          form.setFieldsValue({
+                              supplier_id: savedCart.supplier_id || cashSupplier?.id,
+                              warehouse_id: savedCart.warehouse_id || (warehousesData?.find(w => w.is_default)?.id || null),
+                              notes: savedCart.notes,
+                              invoice_id: savedCart.invoice_id
+                          });
+                      }, 200);
+                      // React StrictMode double render fix
+                      if (!window.hasShownRestoreMsg) {
+                          message.info("Your previous unsaved purchase has been restored.");
+                          window.hasShownRestoreMsg = true;
+                      }
+                  } else if (cashSupplier) {
+                      window.isPurchaseCartRestored = true; // <--- FLAG SET
+                      setTimeout(() => { 
+                          const defaultWh = warehousesData?.find(w => w.is_default);
+                          form.setFieldsValue({ 
+                              supplier_id: cashSupplier.id,
+                              warehouse_id: defaultWh ? defaultWh.id : null
+                          }); 
+                      }, 100);
+                  } else {
+                      window.isPurchaseCartRestored = true; // <--- FLAG SET
+                  }
               }
           } else {
               // EDIT MODE: Load Existing Data
@@ -811,6 +877,56 @@ const AddPurchaseForm = () => {
     }
   };
 
+  // --- NAYA IZAFA: Hold Purchase Bill (Save as Draft) ---
+  const handleHoldBill = async () => {
+      if (purchaseItems.length === 0) {
+          message.warning("Please add at least one item to save as draft.");
+          return;
+      }
+      try {
+          const values = form.getFieldsValue();
+          const supplierName = suppliers.find(s => s.id === values.supplier_id)?.name || 'Unknown Supplier';
+          const { data: { user } } = await supabase.auth.getUser();
+          
+          // NAYA IZAFA: Cart items ke sath selected warehouse bhi attach kar dein taake restore hone par yaad rahe
+          const cartWithWarehouse = purchaseItems.map(item => ({
+              ...item,
+              warehouse_id: values.warehouse_id
+          }));
+
+          await DataService.holdBill({
+              cart: cartWithWarehouse,
+              supplier_id: values.supplier_id,
+              bill_type: 'purchase', // <--- NAYA IZAFA: Taake modal ko pata chale yeh purchase hai
+              user_id: user?.id,
+              staff_id: activeStaff?.id || null,
+              note: `Purchase Draft for ${supplierName}`
+          });
+          
+          setPurchaseItems([]);
+          form.resetFields();
+
+          // --- NAYA IZAFA: Form reset hone ke baad Default values wapis lagana ---
+          const cashSup = suppliers.find(s => s.name.toLowerCase() === 'cash purchase');
+          const defaultWh = warehouses.find(w => w.is_default);
+          
+          setTimeout(() => {
+              form.setFieldsValue({
+                  supplier_id: cashSup ? cashSup.id : null,
+                  warehouse_id: defaultWh ? defaultWh.id : null
+              });
+          }, 100);
+          // -----------------------------------------------------------------------
+
+          await DataService.clearActivePurchaseCart();
+          message.success("Purchase saved as draft!");
+          refreshHeldCount(); // Draft count update karein
+          // navigate(-1); <--- HATA DIYA GAYA HAI TAAKE USER ISI PAGE PAR RAHE
+      } catch (error) {
+          message.error("Failed to save draft: " + error.message);
+      }
+  };
+
   // --- SAVE LOGIC (UPDATED FOR EDITING) ---
   const handleSavePurchase = async () => {
     try {
@@ -866,6 +982,7 @@ const AddPurchaseForm = () => {
       // Sync process background mein chalta rahega
       processSyncQueue();
       refetchStockCount();
+      await DataService.clearActivePurchaseCart(); // <--- NAYA IZAFA: Successful save par cart saaf karein
       // Signal bhejein taake Dashboard aur Header foran update hon
       window.dispatchEvent(new CustomEvent('local-db-updated'));
       onPurchaseCreated();
@@ -1073,10 +1190,25 @@ const AddPurchaseForm = () => {
           />
           {/* Payment Record UI yahan se hata diya gaya hai */}
           
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
-            <Button key="back" onClick={onCancel}>Cancel</Button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
+            <Button key="back" onClick={onCancel}>{isMobile ? "Back" : "Cancel"}</Button>
+            
+            {/* --- NAYA IZAFA: View Drafts Button --- */}
+            {!editingPurchase && (
+                <Button key="view_drafts" onClick={() => setIsDraftModalOpen(true)} icon={<ClockCircleOutlined />}>
+                    {isMobile ? `(${heldCount})` : `View Drafts (${heldCount})`}
+                </Button>
+            )}
+
+            {/* --- NAYA IZAFA: Save as Draft Button --- */}
+            {!editingPurchase && (
+                <Button key="hold" onClick={handleHoldBill} disabled={purchaseItems.length === 0} icon={<PauseCircleOutlined />}>
+                    {isMobile ? "" : "Save as Draft"}
+                </Button>
+            )}
+
             <Button key="submit" type="primary" loading={isSubmitting} onClick={handleSavePurchase}>
-              {editingPurchase ? "Update Purchase" : "Save Purchase"}
+              {editingPurchase ? (isMobile ? "Update" : "Update Purchase") : (isMobile ? "Save" : "Save Purchase")}
             </Button>
           </div>
         </Form>
@@ -1189,6 +1321,45 @@ const AddPurchaseForm = () => {
           ]} />
         </Form>
       </Modal>
+
+      {/* --- NAYA IZAFA: Drafts Modal for Purchases --- */}
+      <DraftBillsModal 
+        visible={isDraftModalOpen} 
+        onCancel={() => setIsDraftModalOpen(false)} 
+        onResume={async (heldBill) => {
+          if (purchaseItems.length > 0) {
+            message.warning("Please clear current items first or save them as a draft.");
+            return;
+          }
+          
+          // Draft items ko wapis form mein load karna
+          const formattedForPurchase = heldBill.cart.map(item => ({
+            ...item,
+            id: crypto.randomUUID(), 
+            status: 'Available',
+            sold_qty: 0,
+            returned_qty: 0,
+            damaged_qty: 0
+          }));
+          
+          setPurchaseItems(formattedForPurchase);
+          form.setFieldsValue({
+            supplier_id: heldBill.supplier_id,
+            // NAYA IZAFA: Agar draft mein warehouse hai to wo lagao, warna default Main Shop set kardo
+            warehouse_id: heldBill.cart[0]?.warehouse_id || (warehouses?.find(w => w.is_default)?.id || null),
+          });
+          
+          await DataService.deleteHeldBill(heldBill.id);
+          setIsDraftModalOpen(false);
+          refreshHeldCount();
+          message.success("Purchase Draft resumed!");
+        }}
+        onRefresh={refreshHeldCount} 
+        profile={profile}
+        customers={[]} // Purchase mein customers nahi chahiye
+        allProducts={products}
+        filterType="purchase" // <--- Modal ko batane ke liye ke sirf purchase drafts dikhaye
+      />
     </>
     </ConfigProvider>
   );
