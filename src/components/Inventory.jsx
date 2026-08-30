@@ -85,43 +85,55 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
     const getGroupedVariants = (variants) => {
       if (!variants) return [];
       const itemsMap = new Map();
+      const defaultWhId = warehouses?.find(w => w.is_default)?.id || 'default';
 
       for (const variant of variants) {
         const attributesKey = createStableAttributeKey(variant.item_attributes);
-        // FIX: Warehouse ko key se nikaal diya taake row ek hi banay
         const key = `${attributesKey}-${variant.sale_price}-${variant.purchase_price}-${variant.batch_number || 'nobatch'}-${variant.expiry_date || 'noexp'}`;
+        
+        const whKey = variant.warehouse_id || 'default';
+        const resolvedWhId = whKey === 'default' ? defaultWhId : whKey;
+        // Check karein ke kya yeh item selected location ka hai?
+        const isSelectedLocation = filterWarehouse === 'all' || resolvedWhId === filterWarehouse || whKey === filterWarehouse;
 
         if (itemsMap.has(key)) {
           const existing = itemsMap.get(key);
-          existing.display_quantity += (variant.available_qty || 0); 
+          // Sirf tab add karo jab location match ho
+          if (isSelectedLocation) {
+              existing.display_quantity += (variant.available_qty || 0); 
+          }
           existing.ids.push(variant.id);
           if (variant.imei) existing.imeis.push(variant.imei);
           
-          // NAYA IZAFA: Location wise hisaab rakhna
-          const whKey = variant.warehouse_id || 'default';
           existing.locations[whKey] = (existing.locations[whKey] || 0) + (variant.available_qty || 0);
 
         } else {
           const newVariant = {
             ...variant,
-            display_quantity: variant.available_qty || 0, 
+            display_quantity: isSelectedLocation ? (variant.available_qty || 0) : 0, 
             ids: [variant.id],
             imeis: variant.imei ? [variant.imei] : [],
-            locations: {} // NAYA IZAFA
+            locations: {} 
           };
-          newVariant.locations[variant.warehouse_id || 'default'] = variant.available_qty || 0;
+          newVariant.locations[whKey] = variant.available_qty || 0;
           itemsMap.set(key, newVariant);
         }
       }
       return Array.from(itemsMap.values());
     };
 
-    return products.map(product => ({
-      ...product,
-      groupedVariants: getGroupedVariants(product.variants),
-    }));
+    return products.map(product => {
+      const grouped = getGroupedVariants(product.variants);
+      // Main product ki quantity ko selected location ke hisaab se theek karein
+      const totalFilteredQty = grouped.reduce((sum, v) => sum + v.display_quantity, 0);
+      return {
+        ...product,
+        quantity: totalFilteredQty, 
+        groupedVariants: grouped,
+      };
+    });
 
-  }, [products]);
+  }, [products, filterWarehouse, warehouses]);
 
   if (loading) return <div style={{ textAlign: 'center', padding: '50px' }}><Spin size="large" /></div>;
 
@@ -327,9 +339,9 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
                           })()}
                         </div>
 
-                        {/* ROW 2: Batch, Expiry, Warranty Tags (Aligned with Buy Price, Scrollable) */}
-                        {(variant.batch_number || variant.expiry_date || (profile?.warranty_system_enabled !== false && variant.warranty_days > 0)) && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', height: '18px' }}>
+                        {/* ROW 2: Batch, Expiry, Warranty & Location Tags (Aligned with Buy Price, Scrollable) */}
+                        {(variant.batch_number || variant.expiry_date || (profile?.warranty_system_enabled !== false && variant.warranty_days > 0) || variant.locations) && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', minHeight: '18px' }}>
                             {variant.batch_number && <Tag color="blue" style={{ margin: 0, fontSize: '12px', padding: '1px 6px', color: token.colorText, border: 'none', background: token.colorFillAlter, lineHeight: '1.2' }}>B.No: {variant.batch_number}</Tag>}
                             
                             {variant.expiry_date && (() => {
@@ -370,6 +382,17 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
                             {/* --- NAYA IZAFA: Location Wise Breakdown Tags --- */}
                             {variant.locations && Object.entries(variant.locations).map(([whId, qty]) => {
                                if (qty <= 0) return null;
+                               
+                               // NAYA LOGIC: Hide tag if it matches the selected filterWarehouse
+                               const defaultWh = warehouses?.find(w => w.is_default);
+                               const resolvedFilter = filterWarehouse === 'all' ? 'all' : filterWarehouse;
+                               const resolvedWhId = whId === 'default' ? (defaultWh?.id || 'default') : whId;
+
+                               // Agar 'all' select nahi hai, aur yeh tag selected location ka hi hai, to isay chupa dein
+                               if (resolvedFilter !== 'all' && (whId === resolvedFilter || resolvedWhId === resolvedFilter)) {
+                                   return null; 
+                               }
+
                                const whName = whId === 'default' ? 'Main Shop' : (warehouses?.find(w => w.id === whId)?.name || 'Main Shop');
                                return (
                                  <Tag key={whId} color="purple" style={{ margin: 0, fontSize: '11px', padding: '1px 6px', border: 'none', background: token.colorFillAlter, lineHeight: '1.2' }}>
@@ -845,7 +868,8 @@ const Inventory = () => {
         const allModelsCount = await db.products.count();
         setTotalModelCount(allModelsCount);
 
-        const { productsData } = await DataService.getInventoryData(showArchived, filterWarehouse);
+        // NAYA IZAFA: Hum hamesha 'all' data mangwayenge taake dusre godowns ka pata chal sake
+        const { productsData } = await DataService.getInventoryData(showArchived, 'all');
         let filteredProducts = productsData;
 
         // === CHANGE 1: UPDATED SEARCH (Tags & Attributes bhi dhoondega) ===

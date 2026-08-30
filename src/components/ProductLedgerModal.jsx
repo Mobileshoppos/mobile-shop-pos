@@ -322,7 +322,8 @@ const ProductLedgerModal = ({ visible, onClose, product, warehouses }) => {
             open={visible}
             onCancel={onClose}
             footer={null}
-            width="75%" // <--- NAYA IZAFA: Width 800 se 75% kar di gayi hai
+            width="85%" 
+            style={{ top: 20 }} 
             destroyOnHidden
         >
             {loading ? (
@@ -348,31 +349,38 @@ const ProductLedgerModal = ({ visible, onClose, product, warehouses }) => {
                                 </Descriptions.Item>
                                 <Descriptions.Item label="Current Stock">
                                     <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                                        <Text strong style={{ fontSize: '14px', color: token.colorCardHeadingsText }}>
-                                            {product?.quantity} Units <span style={{ fontSize: '11px', fontWeight: 'normal', color: token.colorCardColumnsTitleText }}>(Total)</span>
-                                        </Text>
-                                        {/* --- NAYA IZAFA: Location Wise Breakdown (Compact & Aligned) --- */}
-                                        <Space wrap size={4}>
-                                            {(() => {
-                                                const stockByLoc = {};
-                                                product?.groupedVariants?.forEach(v => {
-                                                    if (v.locations) {
-                                                        Object.entries(v.locations).forEach(([whId, qty]) => {
-                                                            stockByLoc[whId] = (stockByLoc[whId] || 0) + qty;
-                                                        });
-                                                    }
-                                                });
-                                                return Object.entries(stockByLoc).map(([whId, qty]) => {
-                                                    if (qty <= 0) return null;
-                                                    const whName = whId === 'default' ? 'Main Shop' : (warehouses?.find(w => w.id === whId)?.name || 'Main Shop');
-                                                    return (
-                                                        <Tag key={whId} color="purple" style={{ margin: 0, fontSize: '11px', padding: '0 6px', border: 'none', background: token.colorFillAlter }}>
-                                                            🏠 {whName}: <b>{qty}</b>
-                                                        </Tag>
-                                                    );
-                                                });
-                                            })()}
-                                        </Space>
+                                        {(() => {
+                                            const stockByLoc = {};
+                                            let globalTotal = 0; // <--- NAYA IZAFA: Asli Global Total calculate karne ke liye
+                                            
+                                            product?.groupedVariants?.forEach(v => {
+                                                if (v.locations) {
+                                                    Object.entries(v.locations).forEach(([whId, qty]) => {
+                                                        stockByLoc[whId] = (stockByLoc[whId] || 0) + qty;
+                                                        globalTotal += qty; // Har location ki quantity jama karein
+                                                    });
+                                                }
+                                            });
+                                            
+                                            return (
+                                                <>
+                                                    <Text strong style={{ fontSize: '14px', color: token.colorCardHeadingsText }}>
+                                                        {globalTotal} Units <span style={{ fontSize: '11px', fontWeight: 'normal', color: token.colorCardColumnsTitleText }}>(Global Total)</span>
+                                                    </Text>
+                                                    <Space wrap size={4}>
+                                                        {Object.entries(stockByLoc).map(([whId, qty]) => {
+                                                            if (qty <= 0) return null;
+                                                            const whName = whId === 'default' ? 'Main Shop' : (warehouses?.find(w => w.id === whId)?.name || 'Main Shop');
+                                                            return (
+                                                                <Tag key={whId} color="purple" style={{ margin: 0, fontSize: '11px', padding: '0 6px', border: 'none', background: token.colorFillAlter }}>
+                                                                    🏠 {whName}: <b>{qty}</b>
+                                                                </Tag>
+                                                            );
+                                                        })}
+                                                    </Space>
+                                                </>
+                                            );
+                                        })()}
                                     </Space>
                                 </Descriptions.Item>
 

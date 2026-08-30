@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Collapse, Tag, Tooltip, Tabs, Card, theme, ConfigProvider
+  Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Collapse, Tag, Tooltip, Tabs, Card, theme, ConfigProvider, Empty
 } from 'antd';
-import { DeleteOutlined, BarcodeOutlined, EditOutlined, UserAddOutlined, PauseCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { DeleteOutlined, BarcodeOutlined, EditOutlined, UserAddOutlined, PauseCircleOutlined, ClockCircleOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons';
 import DraftBillsModal from '../components/DraftBillsModal';
 import DataService from '../DataService';
 import { supabase } from '../supabaseClient';
@@ -508,6 +508,42 @@ const AddPurchaseForm = () => {
   const [supplierForm] = Form.useForm();
   const [selectedProductAttributes, setSelectedProductAttributes] = useState([]);
   const [editingItemIndex, setEditingItemIndex] = useState(null);
+
+  // --- NAYA IZAFA: Catalog States ---
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [selectedCatalogVariant, setSelectedCatalogVariant] = useState(null);
+
+  // Jab user left side catalog se kisi item par click karega
+  const handleCatalogItemClick = async (product, variant = null) => {
+      try {
+          const data = await fetchInheritedAttributes(product.category_id);
+          setSelectedProductAttributes(data || []);
+          setSelectedProduct(product);
+          
+          if (variant) {
+              // FIX: Modal 'item_attributes' expect karta hai, is liye hum 'attributes' ko map kar rahe hain
+              const formattedVariant = {
+                  ...variant,
+                  variant_id: variant.id,
+                  item_attributes: variant.attributes || {}
+              };
+              
+              // --- NAYA IZAFA: Purani Variant ID ko delete karein taake Inventory item ko bilkul NAYI ID mile ---
+              delete formattedVariant.id;
+              delete formattedVariant.local_id;
+              // -------------------------------------------------------------------------------------------------
+
+              setSelectedCatalogVariant(formattedVariant);
+          } else {
+              setSelectedCatalogVariant(null);
+          }
+          
+          setIsItemModalVisible(true);
+      } catch (error) {
+          message.error("Error: " + error.message);
+      }
+  };
+  // ----------------------------------
   // --- NAYA IZAFA: Draft Modal States ---
   const [isDraftModalOpen, setIsDraftModalOpen] = useState(false);
   const [heldCount, setHeldCount] = useState(0);
@@ -581,14 +617,20 @@ const AddPurchaseForm = () => {
     try {
       const localProducts = await db.products.toArray();
       const localCategories = await db.categories.toArray();
+      const localVariants = await db.product_variants.toArray(); // <--- NAYA IZAFA: Variants table
       
       const categoryMap = {};
       localCategories.forEach(c => { categoryMap[c.id] = c.is_imei_based; });
 
-      return localProducts.map(p => ({
-        ...p,
-        category_is_imei_based: categoryMap[p.category_id] ?? false
-      }));
+      return localProducts.map(p => {
+        // Is product ke variants dhoondein
+        const pVariants = localVariants.filter(v => v.product_id === p.id);
+        return {
+          ...p,
+          variants: pVariants, // <--- NAYA IZAFA: Variants attach kar diye
+          category_is_imei_based: categoryMap[p.category_id] ?? false
+        };
+      });
     } catch (error) {
       throw new Error("Error fetching products from local storage: " + error.message);
     }
@@ -794,6 +836,7 @@ const AddPurchaseForm = () => {
     setIsItemModalVisible(false);
     setSelectedProduct(null);
     setSelectedProductAttributes([]);
+    setSelectedCatalogVariant(null);
     form.setFieldsValue({ product_id: null });
   };
 
@@ -985,7 +1028,26 @@ const AddPurchaseForm = () => {
       await DataService.clearActivePurchaseCart(); // <--- NAYA IZAFA: Successful save par cart saaf karein
       // Signal bhejein taake Dashboard aur Header foran update hon
       window.dispatchEvent(new CustomEvent('local-db-updated'));
-      onPurchaseCreated();
+      
+      // --- NAYA IZAFA: Naye bill par usi page par rahein, Edit par wapis jayen ---
+      if (editingPurchase) {
+          navigate(-1); // Edit ke baad wapis purane page par
+      } else {
+          // Naye bill ke baad form saaf karein aur Default values lagayen
+          setPurchaseItems([]);
+          form.resetFields();
+
+          const cashSup = suppliers.find(s => s.name.toLowerCase() === 'cash purchase');
+          const defaultWh = warehouses.find(w => w.is_default);
+          
+          setTimeout(() => {
+              form.setFieldsValue({
+                  supplier_id: cashSup ? cashSup.id : null,
+                  warehouse_id: defaultWh ? defaultWh.id : null
+              });
+          }, 100);
+      }
+      // -------------------------------------------------------------------------
 
     } catch (error) {
       if (error.name !== 'ValidationError') { message.error("Failed to save: " + error.message); }
@@ -1091,17 +1153,19 @@ const AddPurchaseForm = () => {
   ];
 
   return (
-    <ConfigProvider theme={{ components: { Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg, headerColor: token.colorCardColumnsTitleText, colorText: token.colorCardDetailsText } } }}>
+   <ConfigProvider theme={{ components: { Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg, headerColor: token.colorCardColumnsTitleText, colorText: token.colorCardDetailsText } } }}>
     <>
       <div style={{ padding: isMobile ? '12px 0' : '4px 0', width: '100%' }}>
-      <Card
-        styles={{ body: { padding: isMobile ? '12px' : '20px' } }}
-        style={{ borderRadius: '8px', background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}` }}
-      >
-        <Form form={form} layout="vertical" style={{ marginTop: '0px' }}>
+      <Form form={form} layout="vertical" style={{ marginTop: '0px' }}>
+        
+        {/* --- TOP ROW: SUPPLIER & DETAILS (FULL WIDTH) --- */}
+        <Card
+          styles={{ body: { padding: isMobile ? '12px' : '16px' } }}
+          style={{ borderRadius: '8px', background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}`, marginBottom: '16px' }}
+        >
           <Row gutter={16}>
             <Col xs={24} md={12} lg={6}>
-                <Form.Item label="Supplier" required>
+                <Form.Item label="Supplier" required style={{ marginBottom: isMobile ? '12px' : '0' }}>
                     <Space.Compact style={{ width: '100%' }}>
                         <Form.Item name="supplier_id" noStyle rules={[{ required: true, message: 'Please select a supplier' }]}>
                             <Select 
@@ -1109,7 +1173,6 @@ const AddPurchaseForm = () => {
                                 loading={loading}
                                 showSearch
                                 filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
-                                // SAFETY LOCK: Agar payment ho chuki hai to supplier badalna mana hai
                                 disabled={editingPurchase && editingPurchase.amount_paid > 0}
                             >
                                 {(suppliers ||[]).map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}
@@ -1124,7 +1187,6 @@ const AddPurchaseForm = () => {
                         </Tooltip>
                     </Space.Compact>
                 </Form.Item>
-                {/* Dukandar ko wazahat dene ke liye niche text */}
                 {editingPurchase && editingPurchase.amount_paid > 0 && (
                     <div style={{ marginTop: '-12px', marginBottom: '12px' }}>
                         <Text type="secondary" style={{ fontSize: '11px' }}>
@@ -1134,13 +1196,12 @@ const AddPurchaseForm = () => {
                 )}
             </Col>
             <Col xs={24} md={12} lg={6}>
-                <Form.Item name="invoice_id" label="Supplier Invoice #" tooltip="Enter the bill number from your supplier. If left empty, a unique ID will be generated.">
+                <Form.Item name="invoice_id" label="Supplier Invoice #" tooltip="Enter the bill number from your supplier. If left empty, a unique ID will be generated." style={{ marginBottom: isMobile ? '12px' : '0' }}>
                     <Input placeholder="e.g. INV-9988" />
                 </Form.Item>
             </Col>
-            {/* --- NAYA IZAFA: Warehouse Selection --- */}
             <Col xs={24} md={12} lg={6}>
-                <Form.Item name="warehouse_id" label="Receive To (Location)" rules={[{ required: true, message: 'Please select a location' }]}>
+                <Form.Item name="warehouse_id" label="Receive To (Location)" rules={[{ required: true, message: 'Please select a location' }]} style={{ marginBottom: isMobile ? '12px' : '0' }}>
                     <Select placeholder="Select Godown / Shop">
                         {warehouses.map(wh => (
                             <Option key={wh.id} value={wh.id}>
@@ -1151,31 +1212,127 @@ const AddPurchaseForm = () => {
                 </Form.Item>
             </Col>
             <Col xs={24} md={12} lg={6}>
-                <Form.Item name="notes" label="Internal Notes">
+                <Form.Item name="notes" label="Internal Notes" style={{ marginBottom: '0' }}>
                     <Input placeholder="Any extra information about this purchase..." />
                 </Form.Item>
             </Col>
           </Row>
-          
-          <Title level={5} style={{ marginTop: '8px', color: token.colorCardHeadingsText }}>Add Products to Invoice</Title>
-          <Space.Compact style={{ width: '100%' }}>
-              <Form.Item name="product_id" noStyle>
-                  <Select showSearch placeholder="Search and select a product to add" style={{ width: '100%' }} loading={loading}
-                      filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
-                      options={(products || []).map(p => ({ value: p.id, label: `${p.name} - ${p.brand}` }))}
-                  />
-              </Form.Item>
-              <Button type="primary" onClick={handleAddItemClick}>
-                  {isMobile ? "Add" : "Add to List"}
-              </Button>
-          </Space.Compact>
-          <Title level={5} style={{ marginTop: '16px', color: token.colorCardHeadingsText }}>Items in this Purchase</Title>
+        </Card>
+
+      <Row gutter={[16, 16]}>
+        
+        {/* --- LEFT SIDE: PRODUCT CATALOG --- */}
+        <Col xs={24} lg={8}>
+          <Card
+            styles={{ body: { padding: '12px', display: 'flex', flexDirection: 'column', height: isMobile ? '400px' : 'calc(100vh - 220px)' } }}
+            style={{ borderRadius: '8px', background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}`, height: '100%' }}
+          >
+            <Input 
+              placeholder="Search products or variants..." 
+              prefix={<SearchOutlined style={{ color: token.colorTextSecondary }} />} 
+              value={catalogSearch}
+              onChange={(e) => setCatalogSearch(e.target.value)}
+              allowClear
+            />
+            <div style={{ flex: 1, overflowY: 'auto', marginTop: '12px', paddingRight: '4px' }} className="hide-scrollbar">
+              <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
+              
+              {products.filter(p => {
+                  if (!catalogSearch) return true;
+                  const lowerSearch = catalogSearch.toLowerCase();
+                  const matchName = p.name?.toLowerCase().includes(lowerSearch);
+                  const matchBrand = p.brand?.toLowerCase().includes(lowerSearch);
+                  const matchVariant = p.variants?.some(v => 
+                      JSON.stringify(v.item_attributes || {}).toLowerCase().includes(lowerSearch) ||
+                      v.barcode?.toLowerCase().includes(lowerSearch)
+                  );
+                  return matchName || matchBrand || matchVariant;
+              }).map(product => (
+                  <div key={product.id} style={{ marginBottom: '12px' }}>
+                      {/* Main Product Name */}
+                      <Text strong style={{ fontSize: '14px', color: token.colorCardHeadingsText, display: 'block', marginBottom: '4px' }}>
+                          {product.name} {product.brand ? `(${product.brand})` : ''}
+                      </Text>
+                      
+                      {/* Variants List */}
+                      {product.variants && product.variants.length > 0 ? (
+                          product.variants.map((variant, idx) => {
+                              let attrStr = '';
+                              // FIX: product_variants table mein column ka naam 'attributes' hai
+                              const variantAttrs = variant.attributes || variant.item_attributes; 
+                              if (variantAttrs) {
+                                  const attrs = Object.entries(variantAttrs)
+                                      .filter(([k, val]) => val && !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial'))
+                                      .map(([k, val]) => val);
+                                  if (attrs.length > 0) attrStr = attrs.join(', ');
+                              }
+                              return (
+                                  <div 
+                                      key={variant.id || idx}
+                                      onClick={() => handleCatalogItemClick(product, variant)}
+                                      style={{ 
+                                          padding: '8px', 
+                                          background: token.colorFillQuaternary, 
+                                          borderRadius: '6px', 
+                                          marginBottom: '4px',
+                                          cursor: 'pointer',
+                                          border: `1px solid ${token.colorBorderSecondary}`,
+                                          display: 'flex',
+                                          justifyContent: 'space-between',
+                                          alignItems: 'center'
+                                      }}
+                                  >
+                                      <Text style={{ fontSize: '13px' }}>{attrStr || 'Standard'}</Text>
+                                      <Button size="small" type="text" icon={<PlusOutlined />} style={{ color: token.colorPrimary }} />
+                                  </div>
+                              );
+                          })
+                      ) : (
+                          /* No variants, just the product */
+                          <div 
+                              onClick={() => handleCatalogItemClick(product, null)}
+                              style={{ 
+                                  padding: '8px', 
+                                  background: token.colorFillQuaternary, 
+                                  borderRadius: '6px', 
+                                  marginBottom: '4px',
+                                  cursor: 'pointer',
+                                  border: `1px solid ${token.colorBorderSecondary}`,
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center'
+                              }}
+                          >
+                              <Text style={{ fontSize: '13px' }}>Standard</Text>
+                              <Button size="small" type="text" icon={<PlusOutlined />} style={{ color: token.colorPrimary }} />
+                          </div>
+                      )}
+                  </div>
+              ))}
+              {products.length === 0 && <Empty description="No products found." style={{ marginTop: '20px' }} />}
+            </div>
+          </Card>
+        </Col>
+
+        {/* --- RIGHT SIDE: INVOICE & CART --- */}
+        <Col xs={24} lg={16}>
+          <Card
+            styles={{ body: { padding: isMobile ? '12px' : '20px', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 220px)' } }}
+            style={{ borderRadius: '8px', background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}`, height: '100%' }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0px', marginBottom: '8px' }}>
+              <Title level={5} style={{ margin: 0, color: token.colorCardHeadingsText }}>Items in this Purchase</Title>
+              <Text type="secondary" style={{ fontSize: '12px' }}>Click items from the left catalog to add</Text>
+          </div>
           <Table
             columns={columns} 
             dataSource={purchaseItems}
             rowKey={(record) => record.id || record.temp_id}
             pagination={false}
-            scroll={{ x: 'max-content' }}
+            scroll={{ x: 'max-content', y: isMobile ? undefined : 'calc(100vh - 380px)' }}
+            style={{ flex: 1 }}
             size={isMobile ? "small" : "middle"}
             summary={pageData => {
               const total = pageData.reduce((sum, item) => sum + ((item.quantity || 0) * (item.purchase_price || 0)), 0);
@@ -1211,8 +1368,11 @@ const AddPurchaseForm = () => {
               {editingPurchase ? (isMobile ? "Update" : "Update Purchase") : (isMobile ? "Save" : "Save Purchase")}
             </Button>
           </div>
-        </Form>
+        </div>
       </Card>
+      </Col>
+      </Row>
+      </Form>
       </div>
       {isItemModalVisible && 
         <AddItemModal 
@@ -1223,7 +1383,7 @@ const AddPurchaseForm = () => {
           attributes={selectedProductAttributes}
           existingItems={purchaseItems}
           editingItemIndex={editingItemIndex}
-          initialValues={editingItemIndex !== null ? purchaseItems[editingItemIndex] : (initialData && !editingPurchase ? { ...initialData, quantity: 1 } : null)}
+          initialValues={editingItemIndex !== null ? purchaseItems[editingItemIndex] : selectedCatalogVariant ? { ...selectedCatalogVariant, quantity: 1 } : (initialData && !editingPurchase ? { ...initialData, quantity: 1 } : null)}
         />
       }
 

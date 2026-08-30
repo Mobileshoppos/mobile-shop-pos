@@ -9,6 +9,8 @@ import { useStaff } from '../context/StaffContext'; // Naya Import
 import { db } from '../db';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { generateQuotationReceipt } from '../utils/receiptGenerator';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const { Text } = Typography;
 
@@ -67,7 +69,93 @@ const DraftBillsModal = ({ visible, onCancel, onResume, onRefresh, profile, cust
     }
   };
 
-  const handlePrintQuotation = (bill) => {
+  const handlePrintQuotation = async (bill) => {
+    // --- NAYA IZAFA: Purchase Order (PO) Print Logic ---
+    if (bill.bill_type === 'purchase') {
+      try {
+        const doc = new jsPDF();
+        const curr = profile?.currency || 'PKR';
+        
+        // Header
+        doc.setFontSize(22);
+        doc.setTextColor(26, 182, 201); // Theme Color
+        doc.text(profile?.shop_name || 'My Shop', 14, 22);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(40, 40, 40);
+        if (profile?.address) doc.text(profile.address, 14, 28);
+        if (profile?.phone_number) doc.text(`Phone: ${profile.phone_number}`, 14, 34);
+
+        // PO Title & Details
+        doc.setFontSize(14);
+        doc.setTextColor(0);
+        doc.text('PURCHASE ORDER (DRAFT)', 14, 48);
+
+        doc.setFontSize(10);
+        doc.setTextColor(80);
+        // Supplier ka naam local DB se nikalna
+        const supplier = bill.supplier_id ? await db.suppliers.get(bill.supplier_id) : null;
+        doc.text(`Supplier: ${supplier ? supplier.name : 'Unknown Supplier'}`, 14, 56);
+        
+        doc.text(`PO Number: ${bill.quotation_id || 'N/A'}`, 130, 48);
+        doc.text(`Date: ${dayjs(bill.created_at).format('DD-MMM-YYYY hh:mm A')}`, 130, 54);
+
+        // Table Data
+        const tableBody = bill.cart.map(item => {
+          // FIX: undefined name issue resolved here (item.name || item.product_name)
+          const itemName = item.name || item.product_name || 'Unknown Item';
+          let attrStr = '';
+          if (item.item_attributes) {
+              attrStr = Object.values(item.item_attributes)
+                  .filter(val => val && !String(val).toLowerCase().includes('imei'))
+                  .join(', ');
+          }
+          const description = attrStr ? `${itemName}\n(${attrStr})` : itemName;
+          
+          return [
+              description,
+              item.quantity,
+              formatCurrency(item.purchase_price || 0, curr),
+              formatCurrency((item.purchase_price || 0) * item.quantity, curr)
+          ];
+        });
+
+        autoTable(doc, {
+          startY: 65,
+          head: [['Item Description', 'Qty', 'Unit Cost', 'Total']],
+          body: tableBody,
+          theme: 'grid',
+          headStyles: { fillColor: [26, 182, 201] },
+          styles: { fontSize: 9, cellPadding: 4 },
+          columnStyles: { 0: { cellWidth: 80 }, 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } }
+        });
+
+        // Totals
+        const finalY = doc.lastAutoTable.finalY;
+        const totalAmount = bill.cart.reduce((sum, item) => sum + ((item.purchase_price || 0) * item.quantity), 0);
+        
+        doc.setFontSize(12);
+        doc.setTextColor(0);
+        doc.text(`ESTIMATED TOTAL:`, 130, finalY + 15, { align: 'right' });
+        doc.text(formatCurrency(totalAmount, curr), 190, finalY + 15, { align: 'right' });
+
+        // Footer Note for PO
+        doc.setFontSize(9);
+        doc.setTextColor(100);
+        doc.text('Important Note:', 14, finalY + 30);
+        doc.text('1. This is a draft purchase order and not a final invoice.', 14, finalY + 36);
+        doc.text('2. Prices and quantities are subject to final confirmation with the supplier.', 14, finalY + 42);
+
+        doc.autoPrint();
+        window.open(doc.output('bloburl'), '_blank');
+      } catch (error) {
+        message.error("Failed to generate Purchase Order PDF");
+        console.error(error);
+      }
+      return;
+    }
+
+    // --- EXISTING LOGIC: Sale Quotation Print ---
     const customer = customers.find(c => c.id === bill.customer_id);
     const subtotal = bill.cart.reduce((sum, item) => sum + (item.sale_price * item.quantity), 0);
     let discountAmount = bill.discount_type === 'Amount' ? (bill.discount || 0) : (subtotal * (bill.discount || 0)) / 100;
@@ -79,7 +167,7 @@ const DraftBillsModal = ({ visible, onCancel, onResume, onRefresh, profile, cust
       shopAddress: profile?.address || '',
       shopPhone: profile?.phone_number || '',
       items: bill.cart.map(item => ({
-        name: item.product_name,
+        name: item.name || item.product_name || 'Unknown Item', // FIX: undefined name issue resolved
         quantity: item.quantity,
         price_at_sale: item.sale_price,
         total: item.sale_price * item.quantity,
