@@ -104,7 +104,8 @@ const WelcomeWizard = () => {
 
       {/* 'PKR' ki jagah hum ne 'defaultCurrency' laga diya jo oopar calculate hua hai */}
       {/* FIX: load_demo_data: true lazmi paas karna hai taake form ko pata ho */}
-      <Form layout="vertical" onFinish={handleSave} initialValues={{ currency: defaultCurrency, business_type: 'Mobile Shop', load_demo_data: true }}>
+      {/* FIX: load_demo_data ko false kiya taake by default uncheck rahe */}
+      <Form layout="vertical" onFinish={handleSave} initialValues={{ currency: defaultCurrency, business_type: 'Mobile Shop', load_demo_data: false }}>
         
         {/* NAYA IZAFA: 2-Column Layout (Row aur Col ka istemal) */}
         <Row gutter={16}>
@@ -138,7 +139,11 @@ const WelcomeWizard = () => {
           </Col>
 
           <Col xs={24} sm={12}>
-            <Form.Item name="phone_number" label="Phone Number">
+            <Form.Item 
+              name="phone_number" 
+              label="Phone Number" 
+              rules={[{ required: true, message: 'Please enter your phone number' }]}
+            >
               <Input prefix={<PhoneOutlined />} placeholder="e.g., 0300-1234567" />
             </Form.Item>
           </Col>
@@ -192,10 +197,10 @@ const WelcomeWizard = () => {
                 <Checkbox style={{ alignItems: 'flex-start', width: '100%' }}>
                   <div style={{ marginLeft: '6px', marginTop: '-2px' }}>
                     <Text strong style={{ color: token.colorPrimary, display: 'block', fontSize: '14px' }}>
-                      Load Demo Data (Recommended for new users)
+                      Want to Load Demo Data? (Optional)
                     </Text>
-                    <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '3px', lineHeight: 1.4 }}>
-                      Add sample products, inventory, and a demo sale so you can explore the app instantly. You can delete this data anytime with one click.
+                    <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '2px', lineHeight: 1.3 }}>
+                      Add sample products and sales to test the app. You can delete this data anytime.
                     </Text>
                   </div>
                 </Checkbox>
