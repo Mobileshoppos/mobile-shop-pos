@@ -9,35 +9,153 @@ import { encryptData, decryptData } from './utils/cryptoUtils'; // <--- NAYA IZA
 
 // --- DEFAULT CATEGORIES BLUEPRINT (Mobile & Electronics) ---
 const DEFAULT_CATEGORIES = [
-  // PARENTS (Main Categories)
-  { name: 'Mobile Phones & Tablets', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
-  { name: 'Computers & Laptops', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
-  { name: 'Accessories & Peripherals', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
-  { name: 'Repair & Spare Parts', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Compatible Brand', attribute_type: 'text', is_required: false } ] },
-  { name: 'Gaming & Entertainment', is_imei_based: false, parent_name: null, attributes: [ { attribute_name: 'Brand', attribute_type: 'text', is_required: false } ] },
+  // PARENTS (Main Categories - Baghair Attributes Ke)
+  { name: 'Mobile Phones & Devices', is_imei_based: false, parent_name: null, attributes: [] },
+  { name: 'Accessories & Audio', is_imei_based: false, parent_name: null, attributes: [] },
+  { name: 'Spare Parts & Repairing', is_imei_based: false, parent_name: null, attributes: [] },
 
-  // SUB-CATEGORIES (Mobile Phones & Tablets)
-  { name: 'Smartphones', is_imei_based: true, parent_name: 'Mobile Phones & Tablets', attributes: [ { attribute_name: 'Condition', attribute_type: 'select', options: 'New,Certified Pre-Owned,Used', is_required: true }, { attribute_name: 'Network Status', attribute_type: 'select', options: 'Unlocked,Carrier Locked', is_required: true }, { attribute_name: 'Storage', attribute_type: 'select', options: '64GB,128GB,256GB,512GB,1TB', is_required: true }, { attribute_name: 'RAM', attribute_type: 'select', options: '4GB,6GB,8GB,12GB,16GB', is_required: true }, { attribute_name: 'Color', attribute_type: 'text', options: null, is_required: false } ] },
-  { name: 'Tablets & iPads', is_imei_based: true, parent_name: 'Mobile Phones & Tablets', attributes: [ { attribute_name: 'Connectivity', attribute_type: 'select', options: 'Wi-Fi Only,Wi-Fi + Cellular', is_required: true }, { attribute_name: 'Storage', attribute_type: 'select', options: '64GB,128GB,256GB,512GB,1TB,2TB', is_required: true }, { attribute_name: 'Condition', attribute_type: 'select', options: 'New,Used', is_required: true } ] },
+  // SUB-CATEGORIES: 1. Mobile Phones & Devices
+  { 
+    name: 'Smartphones (With IMEI)', 
+    is_imei_based: true, 
+    parent_name: 'Mobile Phones & Devices', 
+    attributes: [
+      { attribute_name: 'PTA Status', attribute_type: 'select', options: 'Official PTA,Non-PTA,CPID / Patch,JV / Gevey', is_required: false },
+      { attribute_name: 'RAM', attribute_type: 'select', options: '2GB,3GB,4GB,6GB,8GB,12GB,16GB,24GB', is_required: false },
+      { attribute_name: 'Storage', attribute_type: 'select', options: '16GB,32GB,64GB,128GB,256GB,512GB,1TB', is_required: false },
+      { attribute_name: 'Condition', attribute_type: 'select', options: 'New (Box Pack),Used (With Box),Kit Only (10/10),Used (Body 8/10)', is_required: false },
+      { attribute_name: 'Color', attribute_type: 'text', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Smartphones (By Quantity)', 
+    is_imei_based: false, 
+    parent_name: 'Mobile Phones & Devices', 
+    attributes: [
+      { attribute_name: 'PTA Status', attribute_type: 'select', options: 'Official PTA,Non-PTA,CPID / Patch,JV / Gevey', is_required: false },
+      { attribute_name: 'RAM', attribute_type: 'select', options: '2GB,3GB,4GB,6GB,8GB,12GB,16GB,24GB', is_required: false },
+      { attribute_name: 'Storage', attribute_type: 'select', options: '16GB,32GB,64GB,128GB,256GB,512GB,1TB', is_required: false },
+      { attribute_name: 'Condition', attribute_type: 'select', options: 'New (Box Pack),Used (With Box),Kit Only (10/10),Used (Body 8/10)', is_required: false },
+      { attribute_name: 'Color', attribute_type: 'text', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Keypad & Feature Phones (With IMEI)', 
+    is_imei_based: true, 
+    parent_name: 'Mobile Phones & Devices', 
+    attributes: [
+      { attribute_name: 'Network', attribute_type: 'select', options: '2G (GSM),4G / LTE', is_required: false },
+      { attribute_name: 'Sim Type', attribute_type: 'select', options: 'Dual Sim,Single Sim,3-Sim,4-Sim', is_required: false },
+      { attribute_name: 'Color', attribute_type: 'text', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Keypad & Feature Phones (By Quantity)', 
+    is_imei_based: false, 
+    parent_name: 'Mobile Phones & Devices', 
+    attributes: [
+      { attribute_name: 'Network', attribute_type: 'select', options: '2G (GSM),4G / LTE', is_required: false },
+      { attribute_name: 'Sim Type', attribute_type: 'select', options: 'Dual Sim,Single Sim,3-Sim,4-Sim', is_required: false },
+      { attribute_name: 'Color', attribute_type: 'text', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Tablets & iPads (With IMEI)', 
+    is_imei_based: true, 
+    parent_name: 'Mobile Phones & Devices', 
+    attributes: [
+      { attribute_name: 'Connectivity', attribute_type: 'select', options: 'Wi-Fi Only,Wi-Fi + 4G/Cellular', is_required: false },
+      { attribute_name: 'Storage', attribute_type: 'select', options: '32GB,64GB,128GB,256GB,512GB,1TB,2TB', is_required: false },
+      { attribute_name: 'Condition', attribute_type: 'select', options: 'New (Box Pack),Used / Kit', is_required: false },
+      { attribute_name: 'Color', attribute_type: 'text', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Tablets & iPads (By Quantity)', 
+    is_imei_based: false, 
+    parent_name: 'Mobile Phones & Devices', 
+    attributes: [
+      { attribute_name: 'Connectivity', attribute_type: 'select', options: 'Wi-Fi Only,Wi-Fi + 4G/Cellular', is_required: false },
+      { attribute_name: 'Storage', attribute_type: 'select', options: '32GB,64GB,128GB,256GB,512GB,1TB,2TB', is_required: false },
+      { attribute_name: 'Color', attribute_type: 'text', is_required: false }
+    ] 
+  },
 
-  // SUB-CATEGORIES (Computers & Laptops)
-  { name: 'Laptops & MacBooks', is_imei_based: true, parent_name: 'Computers & Laptops', attributes: [ { attribute_name: 'Processor', attribute_type: 'text', is_required: true }, { attribute_name: 'RAM', attribute_type: 'select', options: '4GB,8GB,16GB,32GB,64GB', is_required: true }, { attribute_name: 'Storage', attribute_type: 'select', options: '256GB SSD,512GB SSD,1TB SSD,2TB SSD', is_required: true }, { attribute_name: 'Condition', attribute_type: 'select', options: 'New,Used,Refurbished', is_required: true } ] },
-  { name: 'Desktop Computers', is_imei_based: true, parent_name: 'Computers & Laptops', attributes: [ { attribute_name: 'Processor', attribute_type: 'text', is_required: true }, { attribute_name: 'RAM', attribute_type: 'select', options: '8GB,16GB,32GB,64GB', is_required: true }, { attribute_name: 'Storage', attribute_type: 'text', is_required: true } ] },
-  { name: 'Networking & Wi-Fi', is_imei_based: true, parent_name: 'Computers & Laptops', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Router,Switch,Modem,Range Extender', is_required: true } ] },
+  // SUB-CATEGORIES: 2. Accessories & Audio
+  { 
+    name: 'Chargers & Power', 
+    is_imei_based: false, 
+    parent_name: 'Accessories & Audio', 
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Wall Charger / Adapter,Data Cable,Power Bank,Car Charger,Wireless Charger', is_required: false },
+      { attribute_name: 'Port / Interface', attribute_type: 'select', options: 'Type-C,Lightning (iPhone),Micro-USB,Dual Port / Multi-Port', is_required: false },
+      { attribute_name: 'Wattage', attribute_type: 'text', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Audio & Handsfree', 
+    is_imei_based: false, 
+    parent_name: 'Accessories & Audio', 
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'TWS Wireless Earbuds,Wireless Neckband,Wired Handsfree,Bluetooth Speaker', is_required: false },
+      { attribute_name: 'Color', attribute_type: 'text', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Protection & Covers', 
+    is_imei_based: false, 
+    parent_name: 'Accessories & Audio', 
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Glass Protector,Matte Protector,Privacy Sheet,Back Cover,Silicone Pouch,Camera Lens Protector', is_required: false },
+      { attribute_name: 'Compatible Model', attribute_type: 'text', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Smartwatches & Wearables', 
+    is_imei_based: false, 
+    parent_name: 'Accessories & Audio', 
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Smartwatch,Fitness Band,Watch Strap / Belt', is_required: false },
+      { attribute_name: 'Color', attribute_type: 'text', is_required: false }
+    ] 
+  },
 
-  // SUB-CATEGORIES (Accessories & Peripherals)
-  { name: 'Wearables & Smartwatches', is_imei_based: true, parent_name: 'Accessories & Peripherals', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Smartwatch,Fitness Tracker', is_required: true }, { attribute_name: 'Case Size', attribute_type: 'text', is_required: false }, { attribute_name: 'Connectivity', attribute_type: 'select', options: 'GPS,GPS + Cellular', is_required: false } ] },
-  { name: 'Audio & Headphones', is_imei_based: false, parent_name: 'Accessories & Peripherals', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'TWS Earbuds,Headphones,Bluetooth Speakers,Wired Earphones', is_required: true } ] },
-  { name: 'Power & Cables', is_imei_based: false, parent_name: 'Accessories & Peripherals', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Wall Charger,Power Bank,Wireless Charger,Data Cable', is_required: true }, { attribute_name: 'Interface', attribute_type: 'select', options: 'USB-C,Lightning,Micro-USB', is_required: false }, { attribute_name: 'Wattage', attribute_type: 'text', is_required: false } ] },
-  { name: 'Protection & Cases', is_imei_based: false, parent_name: 'Accessories & Peripherals', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Protective Case,Screen Protector,Lens Protector', is_required: true }, { attribute_name: 'Compatible Model', attribute_type: 'text', is_required: true } ] },
-
-  // SUB-CATEGORIES (Repair & Spare Parts)
-  { name: 'Spare Parts & Components', is_imei_based: false, parent_name: 'Repair & Spare Parts', attributes: [ { attribute_name: 'Part Type', attribute_type: 'select', options: 'Display/Screen,Battery,Charging Port,Camera Module,Motherboard/IC', is_required: true }, { attribute_name: 'Compatible Model', attribute_type: 'text', is_required: true }, { attribute_name: 'Quality', attribute_type: 'select', options: 'Original/OEM,High Copy,Aftermarket', is_required: false } ] },
-  { name: 'Repair Tools & Equipment', is_imei_based: false, parent_name: 'Repair & Spare Parts', attributes: [ { attribute_name: 'Tool Type', attribute_type: 'select', options: 'Screwdriver Set,Soldering Iron,Microscope,Multimeter,Heat Gun', is_required: true } ] },
-
-  // SUB-CATEGORIES (Gaming & Entertainment)
-  { name: 'Gaming Consoles', is_imei_based: true, parent_name: 'Gaming & Entertainment', attributes: [ { attribute_name: 'Storage', attribute_type: 'text', is_required: true }, { attribute_name: 'Condition', attribute_type: 'select', options: 'New,Used', is_required: true } ] },
-  { name: 'Gaming Accessories', is_imei_based: false, parent_name: 'Gaming & Entertainment', attributes: [ { attribute_name: 'Type', attribute_type: 'select', options: 'Controller/Gamepad,Gaming Headset,Cooling Fan,Mobile Triggers', is_required: true } ] }
+  // SUB-CATEGORIES: 3. Spare Parts & Repairing
+  { 
+    name: 'LCDs & Displays', 
+    is_imei_based: false, 
+    parent_name: 'Spare Parts & Repairing', 
+    attributes: [
+      { attribute_name: 'Quality / Type', attribute_type: 'select', options: 'Original Pull / Glass Change,OLED / Crown / GX,Incell / Copy', is_required: false },
+      { attribute_name: 'Compatible Model', attribute_type: 'text', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Batteries', 
+    is_imei_based: false, 
+    parent_name: 'Spare Parts & Repairing', 
+    attributes: [
+      { attribute_name: 'Quality', attribute_type: 'select', options: 'Original,High Copy / Timing,Standard', is_required: false },
+      { attribute_name: 'Compatible Model', attribute_type: 'text', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Charging Flex & Small Parts', 
+    is_imei_based: false, 
+    parent_name: 'Spare Parts & Repairing', 
+    attributes: [
+      { attribute_name: 'Part Type', attribute_type: 'select', options: 'Charging Strip / Flex,Back Glass / Door,Camera Module,Audio / Power IC,Body Frame', is_required: false },
+      { attribute_name: 'Compatible Model', attribute_type: 'text', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Tools & Lab Equipment', 
+    is_imei_based: false, 
+    parent_name: 'Spare Parts & Repairing', 
+    attributes: [
+      { attribute_name: 'Tool Type', attribute_type: 'select', options: 'Soldering Station,Heat Gun,Microscope,Power Supply,Screwdriver Set,OCA Machine,Glue / Tapes', is_required: false }
+    ] 
+  }
 ];
 
 // --- CROCKERY CATEGORIES BLUEPRINT ---

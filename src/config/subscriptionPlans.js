@@ -27,7 +27,7 @@ export const SUBSCRIPTION_PLANS = {
     // --- Feature Flags (Restricted) ---
     allow_reports: false,                 // Reports 100% Locked (Blur Overlay)
     allow_backup: false,                  // No Offline Backup
-    allow_custom_categories: false,       
+    allow_custom_categories: true,       
     allow_customer_management: false,     // Udhar/Customer Khata Locked
     allow_supplier_management: false,     // Supplier Ledger Locked
     allow_warranty_system: false,         // Warranty Locked

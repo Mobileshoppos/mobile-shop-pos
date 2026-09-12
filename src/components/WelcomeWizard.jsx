@@ -112,7 +112,7 @@ const WelcomeWizard = () => {
           <Col xs={24} sm={12}>
             <Form.Item name="business_type" label="Business Type" rules={[{ required: true }]}>
               <Select prefix={<ShopOutlined />}>
-                <Select.Option value="Mobile Shop">Mobile & Electronics</Select.Option>
+                <Select.Option value="Mobile Shop">Mobiles & Accessories</Select.Option>
                 <Select.Option value="Crockery">Crockery & Glassware</Select.Option>
                 <Select.Option value="Grocery & Minimart">Grocery & Supermarket</Select.Option>
                 <Select.Option value="Pharmacy & Medical">Pharmacy & Medical Store</Select.Option>

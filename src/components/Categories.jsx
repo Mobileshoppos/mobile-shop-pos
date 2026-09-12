@@ -427,7 +427,8 @@ const Categories = () => {
             <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => showAttributeModal(record)} />
                 {(() => {
-                   const isLocked = !profile?.subscription_tier || profile?.subscription_tier === 'free';
+                   const limits = getPlanLimits(profile?.subscription_tier);
+                   const isLocked = !limits.allow_custom_categories;
                    return (
                      <Popconfirm 
                        title="Delete this attribute?" 
