@@ -1753,7 +1753,7 @@ const Inventory = () => {
             items={[
               {
                 key: '1',
-                label: <Text strong>Advanced Settings (Prices, Limits, FBR, Image)</Text>,
+                label: <Text strong>Advanced Settings (Prices, Limits, HS Code, Image)</Text>,
                 children: (
                   <>
                     <Row gutter={16}>

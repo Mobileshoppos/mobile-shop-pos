@@ -107,36 +107,15 @@ const Categories = () => {
     if (!categoryId) return;
     try {
       setLoadingAttributes(true);
-      
-      // NAYA IZAFA: Parent Categories ke attributes bhi lana
-      const hierarchyIds = [];
-      let currentId = categoryId;
-      
-      // Jab tak parent milta rahe, ID save karte raho (Neeche se Upar ki taraf)
-      while (currentId) {
-        hierarchyIds.push(currentId);
-        const currentCat = rawCategories.find(c => c.id === currentId);
-        currentId = currentCat ? currentCat.parent_id : null;
-      }
-
-      let combinedAttributes = [];
-      
-      // Har ID ke attributes DataService se mangwayein
-      for (const id of hierarchyIds) {
-        const data = await DataService.getCategoryAttributes(id);
-        const mappedData = data.map(attr => ({
-          ...attr,
-          // Agar attribute ki ID current category se match na ho, to matlab virasat (inherit) mein mila hai
-          is_inherited: attr.category_id !== categoryId, 
-          source_category_name: attr.category_id !== categoryId ? rawCategories.find(c => c.id === attr.category_id)?.name : null
-        }));
-        combinedAttributes = [...combinedAttributes, ...mappedData];
-      }
-
-      setAttributes(combinedAttributes);
-    } catch (error) { message.error("Failed to fetch attributes: " + error.message); } 
-    finally { setLoadingAttributes(false); }
-  }, [message, rawCategories]); // rawCategories ko dependencies mein add kiya
+      // Sirf is specific category ke apne attributes layein (No inheritance)
+      const data = await DataService.getCategoryAttributes(categoryId);
+      setAttributes(data || []);
+    } catch (error) { 
+      message.error("Failed to fetch attributes: " + error.message); 
+    } finally { 
+      setLoadingAttributes(false); 
+    }
+  }, [message]);
 
   const showCategoryModal = async (category = null) => {
     setEditingCategory(category);

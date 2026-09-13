@@ -591,26 +591,11 @@ const AddPurchaseForm = () => {
   
   const totalAmount = purchaseItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.purchase_price || 0)), 0);
 
-  // --- NAYA IZAFA: Parent aur Child dono ke attributes lane ka function ---
+  // --- Sirf is category ke apne attributes lane ka function (Direct Only) ---
   const fetchInheritedAttributes = async (categoryId) => {
-    let currentId = categoryId;
-    const hierarchyIds = [];
-    const allCategories = await db.categories.toArray();
-
-    // Jab tak parent milta rahe, ID save karte raho (Neeche se Upar ki taraf)
-    while (currentId) {
-        hierarchyIds.push(currentId);
-        const currentCat = allCategories.find(c => c.id === currentId);
-        currentId = currentCat ? currentCat.parent_id : null;
-    }
-
-    let combinedAttributes = [];
-    // Har ID ke attributes Local DB se mangwayein
-    for (const id of hierarchyIds) {
-        const attrs = await db.category_attributes.where('category_id').equals(id).toArray();
-        combinedAttributes = [...combinedAttributes, ...attrs];
-    }
-    return combinedAttributes;
+    if (!categoryId) return [];
+    const attrs = await db.category_attributes.where('category_id').equals(categoryId).toArray();
+    return attrs || [];
   };
 
   const getProductsWithCategory = useCallback(async () => {

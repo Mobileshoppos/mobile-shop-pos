@@ -1176,30 +1176,36 @@ const POS = () => {
   const isWalkIn = customers.find(c => c.id === selectedCustomer)?.name === 'Walk-in Customer';
 
   // --- NAYA IZAFA: Dynamic Wholesale Pricing ---
+  const prevCustomerRef = useRef(selectedCustomer);
+
   useEffect(() => {
-    if (cart.length > 0) {
-      const customer = customers.find(c => c.id === selectedCustomer);
-      const isWholesale = isWholesaleActive && customer?.customer_group?.includes('Wholesale');
+    // Sirf tab chalayen jab customer waqayi change ho (Page refresh ya tab switch par nahi)
+    if (prevCustomerRef.current !== selectedCustomer) {
+      if (cart.length > 0) {
+        const customer = customers.find(c => c.id === selectedCustomer);
+        const isWholesale = isWholesaleActive && customer?.customer_group?.includes('Wholesale');
 
-      let priceChanged = false;
-      const updatedCart = cart.map(item => {
-        // Agar retail_price save nahi hai, to pehle usey save kar lein
-        const retail = item.retail_price || item.sale_price;
-        const newPrice = (isWholesale && item.wholesale_price) ? item.wholesale_price : retail;
-        
-        if (item.sale_price !== newPrice) {
-          priceChanged = true;
-          return { ...item, retail_price: retail, sale_price: newPrice };
+        let priceChanged = false;
+        const updatedCart = cart.map(item => {
+          // Agar retail_price save nahi hai, to pehle usey save kar lein
+          const retail = item.retail_price || item.sale_price;
+          const newPrice = (isWholesale && item.wholesale_price) ? item.wholesale_price : retail;
+          
+          if (item.sale_price !== newPrice) {
+            priceChanged = true;
+            return { ...item, retail_price: retail, sale_price: newPrice };
+          }
+          return { ...item, retail_price: retail };
+        });
+
+        if (priceChanged) {
+          setCart(updatedCart);
+          message.info(`Prices updated to ${isWholesale ? 'Wholesale' : 'Retail'} for this customer.`);
         }
-        return { ...item, retail_price: retail };
-      });
-
-      if (priceChanged) {
-        setCart(updatedCart);
-        message.info(`Prices updated to ${isWholesale ? 'Wholesale' : 'Retail'} for this customer.`);
       }
+      prevCustomerRef.current = selectedCustomer;
     }
-  }, [selectedCustomer, customers]);
+  }, [selectedCustomer, customers, isWholesaleActive, cart.length]);
   // ---------------------------------------------
   // Agar Walk-in select ho jaye to payment method ko "Paid" par reset kar dein
   useEffect(() => {

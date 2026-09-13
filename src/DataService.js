@@ -40,7 +40,7 @@ const DEFAULT_CATEGORIES = [
     ] 
   },
   { 
-    name: 'Keypad & Feature Phones (With IMEI)', 
+    name: 'Keypad Phones (With IMEI)', 
     is_imei_based: true, 
     parent_name: 'Mobile Phones & Devices', 
     attributes: [
@@ -50,7 +50,7 @@ const DEFAULT_CATEGORIES = [
     ] 
   },
   { 
-    name: 'Keypad & Feature Phones (By Quantity)', 
+    name: 'Keypad Phones (By Quantity)', 
     is_imei_based: false, 
     parent_name: 'Mobile Phones & Devices', 
     attributes: [
@@ -81,42 +81,78 @@ const DEFAULT_CATEGORIES = [
     ] 
   },
 
-  // SUB-CATEGORIES: 2. Accessories & Audio
+  // SUB-CATEGORIES: 2. Accessories
   { 
-    name: 'Chargers & Power', 
+    name: 'Charging & Data Cables', 
     is_imei_based: false, 
     parent_name: 'Accessories & Audio', 
     attributes: [
-      { attribute_name: 'Type', attribute_type: 'select', options: 'Wall Charger / Adapter,Data Cable,Power Bank,Car Charger,Wireless Charger', is_required: false },
-      { attribute_name: 'Port / Interface', attribute_type: 'select', options: 'Type-C,Lightning (iPhone),Micro-USB,Dual Port / Multi-Port', is_required: false },
-      { attribute_name: 'Wattage', attribute_type: 'text', is_required: false }
+      { attribute_name: 'Connector', attribute_type: 'select', options: 'Type-C,iPhone (Lightning),Micro-USB,Type-C to C,Type-C to Lightning,3-in-1', is_required: false },
+      { attribute_name: 'Speed', attribute_type: 'select', options: '2.4A Fast,3A Fast,6A Super Fast,20W PD,65W PD,100W+ PD', is_required: false }
     ] 
   },
   { 
-    name: 'Audio & Handsfree', 
+    name: 'Chargers & Adapters', 
     is_imei_based: false, 
     parent_name: 'Accessories & Audio', 
     attributes: [
-      { attribute_name: 'Type', attribute_type: 'select', options: 'TWS Wireless Earbuds,Wireless Neckband,Wired Handsfree,Bluetooth Speaker', is_required: false },
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Wall Charger,Car Charger,Wireless Charger', is_required: false },
+      { attribute_name: 'Power', attribute_type: 'select', options: '10W/12W,18W,20W PD,25W,33W,45W,67W,120W+', is_required: false },
+      { attribute_name: 'Ports', attribute_type: 'select', options: 'Single Type-C,Single USB,USB + Type-C (Dual Port)', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Power Banks', 
+    is_imei_based: false, 
+    parent_name: 'Accessories & Audio', 
+    attributes: [
+      { attribute_name: 'Capacity', attribute_type: 'select', options: '5000 mAh,10000 mAh,20000 mAh,30000 mAh,50000 mAh', is_required: false },
+      { attribute_name: 'Features', attribute_type: 'select', options: 'Fast Charging PD,MagSafe Wireless,Standard', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Audio & Earphones', 
+    is_imei_based: false, 
+    parent_name: 'Accessories & Audio', 
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'TWS Earbuds,Type-C Handsfree,iPhone (Lightning) Handsfree,3.5mm Pin Handsfree,Wireless Neckband,Headphones (Over-Ear),Bluetooth Speaker', is_required: false },
       { attribute_name: 'Color', attribute_type: 'text', is_required: false }
     ] 
   },
   { 
-    name: 'Protection & Covers', 
+    name: 'Screen Protectors', 
     is_imei_based: false, 
     parent_name: 'Accessories & Audio', 
     attributes: [
-      { attribute_name: 'Type', attribute_type: 'select', options: 'Glass Protector,Matte Protector,Privacy Sheet,Back Cover,Silicone Pouch,Camera Lens Protector', is_required: false },
+      { attribute_name: 'Type', attribute_type: 'select', options: '9D / 11D Glass,OG / Super D,Matte,Privacy,UV Curved,Back Sheet', is_required: false },
       { attribute_name: 'Compatible Model', attribute_type: 'text', is_required: false }
     ] 
   },
   { 
-    name: 'Smartwatches & Wearables', 
+    name: 'Covers & Cases', 
     is_imei_based: false, 
     parent_name: 'Accessories & Audio', 
     attributes: [
-      { attribute_name: 'Type', attribute_type: 'select', options: 'Smartwatch,Fitness Band,Watch Strap / Belt', is_required: false },
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Clear Jelly,Color Jelly,MagSafe,Fancy,Armor Rugged,Pouch', is_required: false },
+      { attribute_name: 'Compatible Model', attribute_type: 'text', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Smartwatches & Straps', 
+    is_imei_based: false, 
+    parent_name: 'Accessories & Audio', 
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Calling Smartwatch,Normal Smartwatch,Watch Strap / Belt', is_required: false },
+      { attribute_name: 'Dial Shape', attribute_type: 'select', options: 'Square / Ultra,Round', is_required: false },
       { attribute_name: 'Color', attribute_type: 'text', is_required: false }
+    ] 
+  },
+  { 
+    name: 'Other Accessories', 
+    is_imei_based: false, 
+    parent_name: 'Accessories & Audio', 
+    attributes: [
+      { attribute_name: 'Type', attribute_type: 'select', options: 'Car Phone Holder,OTG Adapter,Collar / Vlog Mic,Ring Light / Tripod,Phone Stand', is_required: false }
     ] 
   },
 
