@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Collapse, Tag, Tooltip, Tabs, Card, theme, ConfigProvider, Empty
+  Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Collapse, Tag, Tooltip, Tabs, Card, theme, ConfigProvider, Empty, Switch
 } from 'antd';
-import { DeleteOutlined, BarcodeOutlined, EditOutlined, UserAddOutlined, PauseCircleOutlined, ClockCircleOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, BarcodeOutlined, EditOutlined, UserAddOutlined, PauseCircleOutlined, ClockCircleOutlined, SearchOutlined, PlusOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import DraftBillsModal from '../components/DraftBillsModal';
 import DataService from '../DataService';
 import { supabase } from '../supabaseClient';
@@ -22,6 +22,7 @@ const { Option } = Select;
 // --- ITEM DETAIL MODAL (Chota Modal) ---
 const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialValues, existingItems, editingItemIndex }) => {
   const { token } = theme.useToken();
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const { profile } = useAuth();
   const { isDarkMode } = useTheme();
   const limits = getPlanLimits(profile?.subscription_tier);
@@ -33,6 +34,79 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
   const imeiInputRefs = useRef([]);
   const isImeiCategory = product?.category_is_imei_based;
   const [isBarcodeLocked, setIsBarcodeLocked] = useState(!!initialValues);
+
+  // --- NAYA IZAFA: Dropdown mein naya option add karne ki state aur function ---
+  const [newOptionValues, setNewOptionValues] = useState({});
+
+  // --- NAYA IZAFA: Nayi Field (Attribute) banane ki state aur form ---
+  const [isAddFieldModalOpen, setIsAddFieldModalOpen] = useState(false);
+  const [addFieldForm] = Form.useForm();
+  const [isSubmittingField, setIsSubmittingField] = useState(false);
+  const addFieldType = Form.useWatch('attribute_type', addFieldForm);
+
+  const handleAddFieldSubmit = async (values) => {
+    if (!product?.category_id) {
+      message.error("Category ID not found for this product.");
+      return;
+    }
+    try {
+      setIsSubmittingField(true);
+      const payload = {
+        category_id: product.category_id,
+        attribute_name: values.attribute_name.trim(),
+        attribute_type: values.attribute_type,
+        options: values.attribute_type === 'select' && values.options ? values.options : null,
+        is_required: values.is_required || false
+      };
+
+      const newAttr = await DataService.addCategoryAttribute(payload);
+      
+      // Local array mein shamil karein taake foran screen par naya dabba nazar aaye
+      if (attributes) {
+        attributes.push(newAttr);
+      }
+
+      message.success(`Field "${values.attribute_name}" added successfully!`);
+      addFieldForm.resetFields();
+      setIsAddFieldModalOpen(false);
+    } catch (error) {
+      message.error("Failed to add custom field: " + error.message);
+    } finally {
+      setIsSubmittingField(false);
+    }
+  };
+  // -------------------------------------------------------------------
+  
+  const handleAddNewOption = async (attribute) => {
+    const newValue = newOptionValues[attribute.id];
+    if (!newValue || !newValue.trim()) return;
+    
+    const cleanValue = newValue.trim();
+    
+    // 1. Check karein ke option pehle se to nahi hai
+    if (attribute.options && attribute.options.includes(cleanValue)) {
+        message.warning("This option already exists!");
+        return;
+    }
+
+    try {
+        // 2. Naya options array banayein
+        const updatedOptions = [...(attribute.options || []), cleanValue];
+        
+        // 3. Database mein update karein (Taake hamesha ke liye save ho jaye)
+        await DataService.updateCategoryAttribute(attribute.id, { options: updatedOptions });
+        
+        // 4. UI mein foran dikhane ke liye local array update karein
+        attribute.options = updatedOptions;
+        
+        // 5. Input field saaf kar dein
+        setNewOptionValues(prev => ({ ...prev, [attribute.id]: '' }));
+        message.success(`"${cleanValue}" added successfully!`);
+    } catch (error) {
+        message.error("Failed to add option: " + error.message);
+    }
+  };
+  // -----------------------------------------------------------------------------
 
   useEffect(() => {
     if (visible && product) {
@@ -267,7 +341,40 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
 
     switch (attribute.attribute_type) {
       case 'number': return <Form.Item name={attribute.attribute_name} label={attribute.attribute_name} rules={commonRules}><InputNumber style={{ width: '100%' }} /></Form.Item>;
-      case 'select': return <Form.Item name={attribute.attribute_name} label={attribute.attribute_name} rules={commonRules}><Select>{(attribute.options || []).map(opt => <Option key={opt} value={opt}>{opt}</Option>)}</Select></Form.Item>;
+      case 'select': 
+        return (
+          <Form.Item name={attribute.attribute_name} label={attribute.attribute_name} rules={commonRules}>
+            <Select
+              allowClear
+              placeholder={`Select ${attribute.attribute_name}`}
+              popupRender={(menu) => (
+                <>
+                  {menu}
+                  <Divider style={{ margin: '8px 0' }} />
+                  <Space style={{ padding: '0 8px 4px' }}>
+                    <Input
+                      placeholder="Enter new option"
+                      value={newOptionValues[attribute.id] || ''}
+                      onChange={(e) => setNewOptionValues(prev => ({ ...prev, [attribute.id]: e.target.value }))}
+                      onKeyDown={(e) => {
+                        e.stopPropagation();
+                        if (e.key === 'Enter') {
+                          e.preventDefault(); // Dropdown ko band hone se rokne ke liye
+                          handleAddNewOption(attribute);
+                        }
+                      }}
+                    />
+                    <Button type="text" icon={<PlusOutlined />} onClick={() => handleAddNewOption(attribute)}>
+                      Add
+                    </Button>
+                  </Space>
+                </>
+              )}
+            >
+              {(attribute.options || []).map(opt => <Option key={opt} value={opt}>{opt}</Option>)}
+            </Select>
+          </Form.Item>
+        );
       default: return <Form.Item name={attribute.attribute_name} label={attribute.attribute_name} rules={commonRules}><Input /></Form.Item>;
     }
   };
@@ -283,7 +390,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
     <Modal
       title={<>Details for: <Typography.Text type="success">{product?.name}</Typography.Text></>}
       open={visible} onCancel={onCancel} onOk={handleOk} okText={initialValues ? "Update Item" : "Add to List"}
-      width={800}
+      width={isMobile ? '95%' : '80%'}
       style={{ top: 20 }}
       destroyOnHidden
     >
@@ -352,25 +459,25 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
         ) : (
             <>
                 <Row gutter={16}>
-                    {/* Row 1: Purchase Price, Sale Price, Wholesale (if enabled), aur Total Quantity */}
-                    <Col xs={24} sm={isWholesaleActive ? 6 : 8}>
+                    {/* Row 1: Purchase Price, Sale Price, Wholesale, Quantity, aur Variant Barcode (All in Row 1) */}
+                    <Col xs={24} sm={12} md={isWholesaleActive ? 4 : 6}>
                         <Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}>
                             <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
                         </Form.Item>
                     </Col>
-                    <Col xs={24} sm={isWholesaleActive ? 6 : 8}>
+                    <Col xs={24} sm={12} md={isWholesaleActive ? 5 : 6}>
                         <Form.Item name="sale_price" label={isWholesaleActive ? "Retail Price" : "Sale Price"} rules={[{ required: true }]}>
                             <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
                         </Form.Item>
                     </Col>
                     {isWholesaleActive && (
-                        <Col xs={24} sm={6}>
+                        <Col xs={24} sm={12} md={5}>
                             <Form.Item name="wholesale_price" label="Wholesale Price">
                                 <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
                             </Form.Item>
                         </Col>
                     )}
-                    <Col xs={24} sm={isWholesaleActive ? 6 : 8}>
+                    <Col xs={24} sm={12} md={isWholesaleActive ? 4 : 6}>
                         <Form.Item 
                             name="quantity" 
                             label="Total Quantity" 
@@ -387,8 +494,8 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         </Form.Item>
                     </Col>
 
-                    {/* Row 2: Barcode, Batch, Expiry, Warranty */}
-                    <Col xs={24} sm={8}>
+                    {/* Variant Barcode (Now sitting in Row 1 on wide screens) */}
+                    <Col xs={24} sm={12} md={6}>
                         <Form.Item label="Variant Barcode" tooltip="Assign a unique barcode to this variant.">
                             <Space.Compact style={{ width: '100%' }}>
                                 <Form.Item name="barcode" noStyle>
@@ -409,14 +516,15 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         </Form.Item>
                     </Col>
 
+                    {/* Batch, Expiry & Warranty (Shown conditionally) */}
                     {isBatchExpiryEnabled && (
                         <>
-                            <Col xs={24} sm={8}>
+                            <Col xs={24} sm={12} md={8}>
                                 <Form.Item name="batch_number" label="Batch / Lot Number" tooltip="Optional: Enter batch number for tracking">
                                     <Input placeholder="e.g. BATCH-001" />
                                 </Form.Item>
                             </Col>
-                            <Col xs={24} sm={8}>
+                            <Col xs={24} sm={12} md={8}>
                                 <Form.Item name="expiry_date" label="Expiry Date" tooltip="Optional: When does this item expire?">
                                     <Input type="date" style={{ width: '100%' }} />
                                 </Form.Item>
@@ -425,7 +533,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                     )}
 
                     {profile?.warranty_system_enabled !== false && (
-                    <Col xs={24} sm={8}>
+                    <Col xs={24} sm={12} md={isBatchExpiryEnabled ? 8 : 12}>
                         <Form.Item shouldUpdate={(prev, curr) => prev.warranty_days !== curr.warranty_days}>
                             {({ getFieldValue }) => {
                                 const supplierDays = getFieldValue('warranty_days') || 0;
@@ -448,18 +556,92 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                     )}
                 </Row>
 
-                {/* Professional Title instead of "Attributes" */}
-                {attributes && attributes.length > 0 && (
+                {/* Professional Title with Info Tooltip for Variants */}
+                {attributes && (
                     <>
-                        <Divider style={{ margin: '16px 0 12px 0' }}>Product Specifications</Divider>
-                        <Row gutter={16}>
-                            {attributes.map(attr => <Col xs={24} sm={12} key={attr.id}>{renderAttributeField(attr)}</Col>)}
-                        </Row>
+                        <Divider style={{ margin: '16px 0 12px 0' }}>
+                            <Space size={6} align="center">
+                                <span>Product Specifications</span>
+                                <Tooltip title="Choosing different specifications (like Color, Type, or Speed) automatically creates a separate variant in inventory with its own stock and barcode.">
+                                    <QuestionCircleOutlined style={{ color: token.colorTextSecondary, cursor: 'pointer', fontSize: '13px' }} />
+                                </Tooltip>
+                            </Space>
+                        </Divider>
+                        {attributes.length > 0 && (
+                            <Row gutter={16}>
+                                {attributes.map(attr => <Col xs={24} sm={12} md={8} key={attr.id}>{renderAttributeField(attr)}</Col>)}
+                            </Row>
+                        )}
+                        <div style={{ marginTop: attributes.length > 0 ? '8px' : '0' }}>
+                          <Button 
+                            type="dashed" 
+                            block 
+                            icon={<PlusOutlined />} 
+                            onClick={() => {
+                              addFieldForm.resetFields();
+                              addFieldForm.setFieldsValue({ attribute_type: 'text', is_required: false });
+                              setIsAddFieldModalOpen(true);
+                            }}
+                          >
+                            Add Custom Field
+                          </Button>
+                        </div>
                     </>
                 )}
             </>
         )}
       </Form>
+
+      {/* --- NAYA IZAFA: Add Custom Field Mini Modal --- */}
+      <Modal
+        title="Add Custom Field"
+        open={isAddFieldModalOpen}
+        onCancel={() => {
+          setIsAddFieldModalOpen(false);
+          addFieldForm.resetFields();
+        }}
+        onOk={() => addFieldForm.submit()}
+        okText="Add Field"
+        confirmLoading={isSubmittingField}
+        width={480}
+        centered
+        destroyOnHidden
+      >
+        <Form form={addFieldForm} layout="vertical" onFinish={handleAddFieldSubmit} style={{ marginTop: '16px' }}>
+          <button type="submit" style={{ display: 'none' }} />
+          <Form.Item 
+            name="attribute_name" 
+            label="Field Name" 
+            rules={[{ required: true, message: 'Please enter field name' }]}
+          >
+            <Input placeholder="e.g. Color, Cable Length, Material" autoFocus />
+          </Form.Item>
+          <Form.Item 
+            name="attribute_type" 
+            label="Field Type" 
+            rules={[{ required: true }]}
+          >
+            <Select>
+              <Option value="text">Text (e.g. Red, 1 Meter)</Option>
+              <Option value="select">Dropdown (Options List)</Option>
+              <Option value="number">Number (Digits only)</Option>
+            </Select>
+          </Form.Item>
+          {addFieldType === 'select' && (
+            <Form.Item 
+              name="options" 
+              label="Options (Type and press Enter)" 
+              rules={[{ required: true, message: 'Please add at least one option!' }]}
+              tooltip="Type an option name and press Enter to add as a tag."
+            >
+              <Select mode="tags" style={{ width: '100%' }} placeholder="e.g. 1m, 2m, 3m (Press Enter)" open={false} />
+            </Form.Item>
+          )}
+          <Form.Item name="is_required" label="Required?" valuePropName="checked">
+            <Switch checkedChildren="Yes" unCheckedChildren="No" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Modal>
   );
 };

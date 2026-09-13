@@ -266,7 +266,7 @@ const Categories = () => {
       });
     } else {
       attributeForm.resetFields();
-      attributeForm.setFieldsValue({ is_required: true, attribute_type: 'text' });
+      attributeForm.setFieldsValue({ is_required: false, attribute_type: 'text' });
     }
     setIsAttributeModalOpen(true);
   };
@@ -575,7 +575,7 @@ const Categories = () => {
                 name="is_imei_based" 
                 label="Stock Tracking Type"
                 valuePropName="checked"
-                tooltip={hasProducts ? "Tracking type cannot be changed because products already exist in this category." : "Enable this if items in this category need to be tracked individually."}
+                tooltip={hasProducts ? "Tracking type cannot be changed because products already exist in this category." : "Turn ON if each item has a unique IMEI or Serial Number. Keep OFF for bulk items."}
               >
                 <Switch 
                     checkedChildren="Per-Item (IMEI/Serial)" 
@@ -602,13 +602,13 @@ const Categories = () => {
                           {/* Hidden ID field for updates */}
                           <Form.Item {...restField} name={[name, 'id']} hidden><Input /></Form.Item>
                           
-                          <Col xs={24} sm={7}>
+                          <Col xs={24} sm={6}>
                             <Form.Item {...restField} name={[name, 'attribute_name']} label="Field Name" rules={[{ required: true, message: 'Missing name' }]} style={{ marginBottom: isMobile ? 12 : 0 }}>
                               <Input placeholder="e.g. Color" />
                             </Form.Item>
                           </Col>
                           
-                          <Col xs={24} sm={6}>
+                          <Col xs={24} sm={5}>
                             <Form.Item {...restField} name={[name, 'attribute_type']} label="Input Type" rules={[{ required: true }]} style={{ marginBottom: isMobile ? 12 : 0 }}>
                               <Select>
                                 <Option value="text">Text</Option>
@@ -618,39 +618,40 @@ const Categories = () => {
                             </Form.Item>
                           </Col>
 
-                          <Col xs={24} sm={8}>
-                            {/* Conditional rendering inside Form.List using shouldUpdate */}
-                            <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => {
-                               const prevType = prevValues.attributes_list?.[name]?.attribute_type;
-                               const currType = currentValues.attributes_list?.[name]?.attribute_type;
-                               return prevType !== currType;
-                            }}>
-                              {({ getFieldValue }) => {
-                                const type = getFieldValue(['attributes_list', name, 'attribute_type']);
-                                if (type === 'select') {
-                                  return (
-                                    <Form.Item {...restField} name={[name, 'options']} label="Options (Tags)" rules={[{ required: true, message: 'Add options' }]} style={{ marginBottom: 0 }}>
-                                      <Select mode="tags" style={{ width: '100%' }} placeholder="Type & Enter" open={false} />
-                                    </Form.Item>
-                                  );
-                                }
-                                return (
-                                  <Form.Item {...restField} name={[name, 'is_required']} label="Required?" valuePropName="checked" style={{ marginBottom: 0 }}>
-                                     <Switch checkedChildren="Yes" unCheckedChildren="No" />
+                          <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => {
+                             const prevType = prevValues.attributes_list?.[name]?.attribute_type;
+                             const currType = currentValues.attributes_list?.[name]?.attribute_type;
+                             return prevType !== currType;
+                          }}>
+                            {({ getFieldValue }) => {
+                              const type = getFieldValue(['attributes_list', name, 'attribute_type']);
+                              return type === 'select' ? (
+                                <Col xs={24} sm={9}>
+                                  <Form.Item {...restField} name={[name, 'options']} label="Options (Tags)" rules={[{ required: true, message: 'Add options' }]} style={{ marginBottom: isMobile ? 12 : 0 }}>
+                                    <Select mode="tags" style={{ width: '100%' }} placeholder="Type & Enter" open={false} />
                                   </Form.Item>
-                                );
-                              }}
-                            </Form.Item>
-                          </Col>
+                                </Col>
+                              ) : (
+                                <Col xs={0} sm={9}></Col>
+                              );
+                            }}
+                          </Form.Item>
 
-                          <Col xs={24} sm={3} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingTop: isMobile ? 0 : '30px' }}>
-                            <Button type="text" danger icon={<MinusCircleOutlined />} onClick={() => remove(name)} />
+                          <Col xs={24} sm={4}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', gap: '12px' }}>
+                                <Form.Item {...restField} name={[name, 'is_required']} label="Required?" valuePropName="checked" style={{ marginBottom: isMobile ? 12 : 0 }}>
+                                   <Switch checkedChildren="Yes" unCheckedChildren="No" />
+                                </Form.Item>
+                                <div style={{ paddingTop: isMobile ? 0 : '30px' }}>
+                                    <Button type="text" danger icon={<MinusCircleOutlined />} onClick={() => remove(name)} />
+                                </div>
+                            </div>
                           </Col>
                         </Row>
                       </Card>
                     ))}
                     <Form.Item style={{ marginBottom: 0 }}>
-                      <Button type="dashed" onClick={() => add({ attribute_type: 'text', is_required: true })} block icon={<PlusOutlined />}>
+                      <Button type="dashed" onClick={() => add({ attribute_type: 'text', is_required: false })} block icon={<PlusOutlined />}>
                         Add Custom Field
                       </Button>
                     </Form.Item>
