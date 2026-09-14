@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useLocation, Link, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme, DatePicker, Tooltip, TreeSelect, Switch } from 'antd';
-import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined, LockOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined, CalendarOutlined, WarningOutlined, MinusCircleOutlined } from '@ant-design/icons';
+import { Button, Table, Typography, Modal, Form, Input, InputNumber, App, Select, Tag, Row, Col, Card, List, Spin, Space, Collapse, Empty, Divider, Dropdown, Menu, Alert, AutoComplete, theme, DatePicker, Tooltip, TreeSelect, Switch, Popover } from 'antd';
+import { DatabaseOutlined, PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined, FilterOutlined, SearchOutlined, BarcodeOutlined, MoreOutlined, ReloadOutlined, InboxOutlined, RollbackOutlined, AlertOutlined, LockOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined, CalendarOutlined, WarningOutlined, MinusCircleOutlined, PlusSquareOutlined, MinusSquareOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -55,13 +55,16 @@ const formatPriceRange = (min, max, currency) => {
   return `${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`;
 };
 
-const ProductList = ({ isSingleColumn, showArchived, products, categories, warehouses, filterWarehouse, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged, onTransferStock, refFirstStock, onPrintBarcode, onViewLedger }) => {
-  const { token } = theme.useToken(); // Control Center Connection
+const ProductList = ({ isSingleColumn, showArchived, products, categories, warehouses, filterWarehouse, loading, onDelete, onAddStock, onQuickEdit, onEditProductModel, onMarkDamaged, onTransferStock, refFirstStock, onPrintBarcode, onViewLedger, searchText }) => {
+  const { token } = theme.useToken();
   const { profile } = useAuth();
-  const limits = getPlanLimits(profile?.subscription_tier); // <--- NAYA IZAFA: Yahan limits ko define kar diya
+  const limits = getPlanLimits(profile?.subscription_tier);
   const { isDarkMode } = useTheme();
-  const { can } = useStaff(); // <--- Naya Guard
-  
+  const { can } = useStaff();
+
+  // --- NAYA IZAFA: Expand All / Collapse All State ---
+  const [expandedRowKeys, setExpandedRowKeys] = useState([]);
+
   const memoizedProducts = React.useMemo(() => {
     if (!products) return [];
 
@@ -93,12 +96,10 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
         
         const whKey = variant.warehouse_id || 'default';
         const resolvedWhId = whKey === 'default' ? defaultWhId : whKey;
-        // Check karein ke kya yeh item selected location ka hai?
         const isSelectedLocation = filterWarehouse === 'all' || resolvedWhId === filterWarehouse || whKey === filterWarehouse;
 
         if (itemsMap.has(key)) {
           const existing = itemsMap.get(key);
-          // Sirf tab add karo jab location match ho
           if (isSelectedLocation) {
               existing.display_quantity += (variant.available_qty || 0); 
           }
@@ -124,7 +125,6 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
 
     return products.map(product => {
       const grouped = getGroupedVariants(product.variants);
-      // Main product ki quantity ko selected location ke hisaab se theek karein
       const totalFilteredQty = grouped.reduce((sum, v) => sum + v.display_quantity, 0);
       return {
         ...product,
@@ -135,355 +135,560 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
 
   }, [products, filterWarehouse, warehouses]);
 
+  // --- NAYA IZAFA: Search karte waqt khud ba khud Rows Expand karna (Sahi Jagah) ---
+  useEffect(() => {
+    if (searchText && searchText.trim().length > 0) {
+      setExpandedRowKeys(memoizedProducts.map(p => p.id));
+    } else {
+      setExpandedRowKeys([]);
+    }
+  }, [searchText, memoizedProducts]);
+
   if (loading) return <div style={{ textAlign: 'center', padding: '50px' }}><Spin size="large" /></div>;
 
   if (!memoizedProducts || memoizedProducts.length === 0) {
     return <div style={{ marginTop: '40px' }}><Empty description="No products found matching your filters." /></div>;
   }
 
+  // === 1. MASTER TABLE COLUMNS (Main Products Row) ===
+  const masterColumns = [
+    {
+      title: 'Product Details',
+      key: 'product_details',
+      render: (_, product) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {product.image_url && (
+            <img 
+              src={product.image_url} 
+              alt={product.name} 
+              style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', border: `1px solid ${token.colorBorder}` }} 
+            />
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {/* e.stopPropagation() add kiya taake row expand na ho */}
+              <a 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewLedger(product);
+                }} 
+                className="product-name-link"
+                style={{ fontSize: '15px', fontWeight: 'bold' }}
+              >
+                {product.name}
+              </a>
+              <Tag style={{ margin: 0, fontSize: '12px', padding: '1px 6px', backgroundColor: token.colorCardCategoryTag + '15', color: token.colorCardCategoryTag, border: `1px solid ${token.colorCardCategoryTag}33` }}>
+                {product.category_name}
+              </Tag>
+              {product.brand && <Text style={{ fontSize: '13px', color: token.colorCardBrandText }}>({product.brand})</Text>}
+              {limits.allow_stock_location && product.rack_location && (
+                <Tag style={{ margin: 0, fontSize: '12px', padding: '1px 6px', backgroundColor: token.colorCardLocationTag + '15', color: token.colorCardLocationTag, border: `1px solid ${token.colorCardLocationTag}33` }}>
+                  📍 {product.rack_location}
+                </Tag>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: 'Total Stock',
+      dataIndex: 'quantity',
+      key: 'quantity',
+      width: 140,
+      align: 'center',
+      render: (qty, product) => {
+        const variantCount = product.groupedVariants ? product.groupedVariants.length : 0;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+            <Tag 
+              style={{ 
+                margin: 0, 
+                fontSize: '13px', 
+                padding: '1px 8px',
+                fontWeight: 'bold',
+                backgroundColor: 'transparent',
+                color: qty > 0 ? token.colorPrimary : token.colorAmountNegative,
+                borderColor: qty > 0 ? token.colorPrimary : token.colorAmountNegative
+              }}
+            >
+              {qty} {qty === 1 ? 'Unit' : 'Units'}
+            </Tag>
+            {variantCount > 0 && (
+              <Text type="secondary" style={{ fontSize: '11px', lineHeight: '1', whiteSpace: 'nowrap' }}>
+                {variantCount} {variantCount === 1 ? 'Variant' : 'Variants'}
+              </Text>
+            )}
+          </div>
+        );
+      }
+    },
+    {
+      title: 'Sale Price Range',
+      key: 'price_range',
+      width: 220,
+      align: 'right',
+      render: (_, product) => (
+        <Text strong style={{ fontSize: '15px', color: token.colorAmountPositive, whiteSpace: 'nowrap' }}>
+          {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
+        </Text>
+      )
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 90,
+      align: 'center',
+      render: (_, product) => {
+        if (!can('can_edit_inventory')) return null;
+
+        const menuItems = [
+          {
+            key: 'edit',
+            label: 'Edit Details',
+            icon: <EditOutlined />,
+            onClick: () => onEditProductModel(product)
+          },
+          {
+            key: 'archive',
+            label: showArchived ? 'Unarchive (Restore)' : 'Archive (Hide)',
+            icon: <span style={{ fontSize: '14px' }}>{showArchived ? '♻️' : '📦'}</span>,
+            onClick: () => onDelete(product, !showArchived)
+          },
+          {
+            type: 'divider'
+          },
+          {
+            key: 'delete',
+            label: 'Delete Model',
+            icon: <DeleteOutlined />,
+            danger: true,
+            onClick: () => onDelete(product)
+          }
+        ];
+
+        return (
+          /* e.stopPropagation() add kiya taake 3-dots par click se row expand na ho */
+          <div onClick={(e) => e.stopPropagation()}>
+            <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+              <Button type="text" size="small" icon={<MoreOutlined style={{ fontSize: '18px' }} />} />
+            </Dropdown>
+          </div>
+        );
+      }
+    }
+  ];
+
+  // === 2. NESTED (SUB-TABLE) RENDER (Jab [+] dabaya jaye) ===
+  const renderNestedVariants = (product) => {
+    // Agar koi stock na ho
+    if (!product.groupedVariants || product.groupedVariants.length === 0) {
+      return (
+        <div style={{ 
+          padding: '16px', 
+          textAlign: 'center', 
+          background: isDarkMode ? 'rgba(255, 255, 255, 0.02)' : '#fafafa',
+          borderRadius: '6px',
+          border: `1px dashed ${token.colorBorderSecondary}`,
+          margin: '4px 0'
+        }}>
+          <Text type="secondary" style={{ display: 'block', marginBottom: '8px', fontSize: '13px' }}>
+            No stock available. Create a Purchase Invoice to receive stock for this model.
+          </Text>
+          {can('can_edit_inventory') && (
+            <Button 
+              ref={refFirstStock}
+              type="dashed" 
+              size="small"
+              icon={<PlusOutlined />} 
+              onClick={() => onAddStock(product)} 
+            >
+              Create Purchase Invoice
+            </Button>
+          )}
+        </div>
+      );
+    }
+
+    // Category ke mutabiq dynamic attribute names nikalna (Color, Size, RAM, Connector etc.)
+    const attributeKeysSet = new Set();
+    product.groupedVariants.forEach(variant => {
+      if (variant.item_attributes && typeof variant.item_attributes === 'object') {
+        Object.keys(variant.item_attributes).forEach(k => {
+          const lower = k.toLowerCase();
+          if (!lower.includes('imei') && !lower.includes('serial')) {
+            attributeKeysSet.add(k);
+          }
+        });
+      }
+    });
+    const dynamicAttributeKeys = Array.from(attributeKeysSet);
+
+    // Sub-Table ke Columns banana
+    const nestedColumns = [
+      {
+        title: 'Stock',
+        dataIndex: 'display_quantity',
+        key: 'display_quantity',
+        width: 80,
+        align: 'center',
+        render: (qty) => (
+          <Tag 
+            style={{ 
+              margin: 0, 
+              fontSize: '13px', 
+              padding: '1px 6px',
+              fontWeight: 'bold',
+              backgroundColor: 'transparent',
+              color: qty > 0 ? token.colorPrimary : token.colorAmountNegative,
+              borderColor: qty > 0 ? token.colorPrimary : token.colorAmountNegative
+            }}
+          >
+            {qty}
+          </Tag>
+        )
+      }
+    ];
+
+    // Dynamic Attribute Columns add karein
+    if (dynamicAttributeKeys.length > 0) {
+      dynamicAttributeKeys.forEach(attrName => {
+        nestedColumns.push({
+          title: attrName,
+          key: attrName,
+          render: (_, variant) => (
+            <Text strong style={{ fontSize: '13px', color: token.colorCardDetailsText }}>
+              {variant.item_attributes?.[attrName] || '—'}
+            </Text>
+          )
+        });
+      });
+    } else {
+      nestedColumns.push({
+        title: 'Specification',
+        key: 'spec',
+        render: () => <Text style={{ fontSize: '13px', color: token.colorTextSecondary }}>Standard</Text>
+      });
+    }
+
+    // IMEI Column (Smart Badge + Popover for 1 to 100+ items)
+    const hasAnyImei = product.groupedVariants.some(v => v.imeis && v.imeis.length > 0);
+    if (hasAnyImei) {
+      nestedColumns.push({
+        title: 'IMEI / Serial',
+        key: 'imei',
+        width: 170,
+        render: (_, variant) => {
+          if (!variant.imeis || variant.imeis.length === 0) return '—';
+
+          // Case 1: Agar sirf 1 piece hai
+          if (variant.imeis.length === 1) {
+            return (
+              <Tag color="purple" style={{ margin: 0, fontSize: '12px', fontFamily: 'monospace' }}>
+                {variant.imeis[0]}
+              </Tag>
+            );
+          }
+
+          // Case 2: Agar multiple pieces hain (10, 50, ya 100+ devices)
+          const popoverContent = (
+            <div style={{ maxHeight: '220px', overflowY: 'auto', minWidth: '220px', paddingRight: '4px' }} className="hide-scrollbar">
+              <div style={{ marginBottom: '8px', paddingBottom: '4px', borderBottom: `1px solid ${token.colorBorderSecondary}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text strong style={{ fontSize: '12px', color: token.colorTextSecondary }}>Total Serials</Text>
+                <Tag color="purple" style={{ margin: 0, fontSize: '11px', fontWeight: 'bold' }}>{variant.imeis.length} Units</Tag>
+              </div>
+              <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                {variant.imeis.map((imei, idx) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: token.colorFillAlter, padding: '3px 8px', borderRadius: '4px' }}>
+                    <Text style={{ fontSize: '12px', fontFamily: 'monospace' }}>
+                      <span style={{ color: token.colorTextSecondary, marginRight: '6px' }}>{idx + 1}.</span>
+                      {imei}
+                    </Text>
+                  </div>
+                ))}
+              </Space>
+            </div>
+          );
+
+          return (
+            <Popover content={popoverContent} title="IMEI / Serial Numbers" trigger="click" placement="topLeft">
+              <Tag color="purple" style={{ margin: 0, cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
+                📱 {variant.imeis[0].slice(0, 6)}... (+{variant.imeis.length - 1} More)
+              </Tag>
+            </Popover>
+          );
+        }
+      });
+    }
+
+    // Batch & Expiry Column
+    const hasBatchOrExp = product.groupedVariants.some(v => v.batch_number || v.expiry_date);
+    if (hasBatchOrExp) {
+      nestedColumns.push({
+        title: 'Batch / Expiry',
+        key: 'batch_exp',
+        render: (_, variant) => (
+          <Space size={4} wrap>
+            {variant.batch_number && (
+              <Tag color="blue" style={{ margin: 0, fontSize: '11px', padding: '0 4px', border: 'none', background: token.colorFillAlter }}>
+                B: {variant.batch_number}
+              </Tag>
+            )}
+            {variant.expiry_date && (() => {
+              const expDate = new Date(variant.expiry_date);
+              const todayZero = new Date(); todayZero.setHours(0,0,0,0);
+              const alertDays = profile?.expiry_alert_days || 30;
+              const alertLimitDate = new Date(); alertLimitDate.setDate(alertLimitDate.getDate() + alertDays);
+
+              let iconColor = token.colorTextSecondary;
+              let tooltipText = "Valid Expiry";
+              let Icon = CalendarOutlined;
+
+              if (expDate < todayZero) {
+                iconColor = token.colorError;
+                tooltipText = "EXPIRED";
+                Icon = WarningOutlined;
+              } else if (expDate <= alertLimitDate) {
+                iconColor = token.colorWarning;
+                tooltipText = "Expiring Soon";
+                Icon = WarningOutlined;
+              }
+
+              return (
+                <Tooltip title={tooltipText}>
+                  <Tag style={{ margin: 0, fontSize: '11px', padding: '0 4px', border: 'none', background: token.colorFillAlter, color: iconColor, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                    <Icon style={{ fontSize: '11px' }} /> {expDate.toLocaleDateString()}
+                  </Tag>
+                </Tooltip>
+              );
+            })()}
+          </Space>
+        )
+      });
+    }
+
+    // Warranty Column
+    if (profile?.warranty_system_enabled !== false) {
+      nestedColumns.push({
+        title: 'Warranty',
+        key: 'warranty',
+        width: 100,
+        render: (_, variant) => (
+          variant.warranty_days > 0 ? (
+            <Tag color="cyan" style={{ margin: 0, fontSize: '11px', border: 'none', background: token.colorFillAlter }}>
+              🛡️ {variant.warranty_days} Days
+            </Tag>
+          ) : <Text type="secondary" style={{ fontSize: '12px' }}>—</Text>
+        )
+      });
+    }
+
+    // Locations Breakdown (Godowns)
+    nestedColumns.push({
+      title: 'Locations',
+      key: 'locations',
+      render: (_, variant) => {
+        if (!variant.locations) return '—';
+        const defaultWh = warehouses?.find(w => w.is_default);
+        const resolvedFilter = filterWarehouse === 'all' ? 'all' : filterWarehouse;
+
+        return (
+          <Space size={4} wrap>
+            {Object.entries(variant.locations).map(([whId, qty]) => {
+              if (qty <= 0) return null;
+              const resolvedWhId = whId === 'default' ? (defaultWh?.id || 'default') : whId;
+              if (resolvedFilter !== 'all' && (whId === resolvedFilter || resolvedWhId === resolvedFilter)) {
+                return null;
+              }
+              const whName = whId === 'default' ? 'Main Shop' : (warehouses?.find(w => w.id === whId)?.name || 'Main Shop');
+              return (
+                <Tag key={whId} color="purple" style={{ margin: 0, fontSize: '11px', padding: '0 4px', border: 'none', background: token.colorFillAlter }}>
+                  🏠 {whName}: {qty}
+                </Tag>
+              );
+            })}
+          </Space>
+        );
+      }
+    });
+
+    // Buy Price Column (Sirf unke liye jinko ijazat ho)
+    if (can('can_view_reports')) {
+      nestedColumns.push({
+        title: 'Buy Price',
+        dataIndex: 'purchase_price',
+        key: 'purchase_price',
+        align: 'right',
+        width: 110,
+        render: (price) => (
+          <Text style={{ fontSize: '13px', color: token.colorCardDetailsText }}>
+            {formatCurrency(price, profile?.currency)}
+          </Text>
+        )
+      });
+    }
+
+    // Sale Price Column
+    nestedColumns.push({
+      title: 'Sale Price',
+      dataIndex: 'sale_price',
+      key: 'sale_price',
+      align: 'right',
+      width: 120,
+      render: (price) => (
+        <Text strong style={{ fontSize: '13px', color: token.colorAmountPositive }}>
+          {formatCurrency(price, profile?.currency)}
+        </Text>
+      )
+    });
+
+    // Actions Column (Variant level)
+    if (can('can_edit_inventory')) {
+      nestedColumns.push({
+        title: 'Actions',
+        key: 'actions',
+        width: 130,
+        align: 'center',
+        render: (_, variant) => (
+          <Space size={2}>
+            <Tooltip title="Create Purchase Invoice to Add Stock">
+              <Button 
+                type="text" 
+                icon={<PlusOutlined />} 
+                size="small" 
+                style={{ color: token.colorSuccess }} 
+                onClick={() => onAddStock(variant)} 
+              />
+            </Tooltip>
+            <Tooltip title="Quick Edit Barcode / Price">
+              <Button 
+                type="text" 
+                icon={<EditOutlined />} 
+                size="small" 
+                style={{ color: token.colorPrimary }} 
+                onClick={() => {
+                  const cat = categories?.find(c => c.id === product.category_id);
+                  const isImei = cat ? cat.is_imei_based : false;
+                  onQuickEdit(variant, isImei); 
+                }}
+              />
+            </Tooltip>
+            <Tooltip title="Mark as Damaged / Defective">
+              <Button 
+                type="text" 
+                danger
+                icon={<AlertOutlined />} 
+                size="small" 
+                onClick={() => onMarkDamaged({ ...variant, product_name: product.name })} 
+              />
+            </Tooltip>
+            <Tooltip title={filterWarehouse === 'all' ? "Select a specific location above to transfer" : "Transfer Stock to another Location"}>
+              <Button 
+                type="text" 
+                disabled={filterWarehouse === 'all'}
+                icon={<span style={{ fontSize: '15px' }}>⇄</span>} 
+                size="small" 
+                style={{ color: filterWarehouse === 'all' ? token.colorTextDisabled : token.colorInfo }} 
+                onClick={() => onTransferStock({ ...variant, product_name: product.name })} 
+              />
+            </Tooltip>
+          </Space>
+        )
+      });
+    }
+
+    return (
+      <div style={{ padding: '8px 12px', background: token.colorFillQuaternary, borderRadius: '6px' }}>
+        <Table 
+          columns={nestedColumns} 
+          dataSource={product.groupedVariants} 
+          rowKey={(record) => record.key || record.id || record.variant_id || (record.ids && record.ids[0]) || 'variant-row'}
+          pagination={false}
+          size="small"
+          scroll={{ x: 'max-content' }}
+        />
+      </div>
+    );
+  };
+
   return (
     <>
       <style>{`
-        .hide-scrollbar::-webkit-scrollbar { display: none; } 
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        /* Pure GPU-Accelerated CSS Hover with Theme Tokens */
         .product-name-link {
           color: ${token.colorLink};
           transition: color 0.12s ease-in-out;
+          cursor: pointer;
         }
         .product-name-link:hover {
           color: ${token.colorLinkHover} !important;
+          text-decoration: underline;
+        }
+        .inventory-master-table .ant-table-row {
+          cursor: pointer;
+        }
+        .inventory-master-table .ant-table-expanded-row > .ant-table-cell {
+          padding: 8px 16px 12px 32px !important;
+          background-color: ${token.colorFillAlter} !important;
+          cursor: default;
         }
       `}</style>
 
-      <List
-        grid={isSingleColumn ? { gutter: 16, xs: 1, sm: 1, md: 1, lg: 1, xl: 1 } : { gutter: 16, xs: 1, sm: 1, md: 2, lg: 2, xl: 2 }}
-        dataSource={memoizedProducts}
-        rowKey="id"
-        renderItem={(product) => (
-          <List.Item>
-            <Card
-              hoverable
-              style={{ 
-                borderRadius: 8,
-                border: `1px solid ${token.colorCardBorder}`, 
-                boxShadow: `0 4px 12px ${token.colorCardShadow}`, 
-                transition: 'all 0.3s ease',
-                backgroundColor: token.colorCardBg || token.colorBgContainer, 
-                height: '100%' 
-              }}
-              styles={{ body: { padding: '16px' } }}
-            >
-              {/* === HEADER AREA (SINGLE ROW) === */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                
-                {/* Left Side: Name, Category, Brand */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', flex: 1 }}>
-                  {product.image_url && (
-                    <img src={product.image_url} alt={product.name} style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: `1px solid ${token.colorBorder}` }} />
-                  )}
-                  {/* NAYA IZAFA: Name ko clickable link bana diya */}
-                  <a 
-                    onClick={() => onViewLedger(product)} 
-                    className="product-name-link"
+      <Card
+        styles={{ body: { padding: '0px' } }}
+        style={{ 
+          borderRadius: 8,
+          border: `1px solid ${token.colorCardBorder}`, 
+          boxShadow: `0 4px 12px ${token.colorCardShadow}`, 
+          backgroundColor: token.colorCardBg || token.colorBgContainer,
+          overflow: 'hidden'
+        }}
+      >
+        <Table 
+          className="inventory-master-table"
+          columns={masterColumns}
+          dataSource={memoizedProducts}
+          rowKey="id"
+          pagination={{ pageSize: 15, showSizeChanger: true, pageSizeOptions: ['10', '15', '25', '50'] }}
+          scroll={{ x: 'max-content' }}
+          expandable={{
+            expandedRowKeys: expandedRowKeys,
+            onExpandedRowsChange: (newKeys) => setExpandedRowKeys(newKeys),
+            columnTitle: (() => {
+              const allKeys = memoizedProducts.map(p => p.id);
+              const isAllExpanded = allKeys.length > 0 && expandedRowKeys.length === allKeys.length;
+
+              const handleToggleExpandAll = () => {
+                if (isAllExpanded) {
+                  setExpandedRowKeys([]);
+                } else {
+                  setExpandedRowKeys(allKeys);
+                }
+              };
+
+              return (
+                <Tooltip title={isAllExpanded ? "Collapse All Rows" : "Expand All Rows"}>
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={isAllExpanded ? <MinusSquareOutlined style={{ fontSize: '15px' }} /> : <PlusSquareOutlined style={{ fontSize: '15px' }} />} 
+                    onClick={(e) => { e.stopPropagation(); handleToggleExpandAll(); }}
                     style={{ 
-                      fontSize: '18px', 
-                      lineHeight: 1, 
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    {product.name}
-                  </a>
-                  <Tag style={{ margin: 0, fontSize: '13px', padding: '2px 6px', backgroundColor: token.colorCardCategoryTag + '15', color: token.colorCardCategoryTag, border: `1px solid ${token.colorCardCategoryTag}33` }}>
-                    {product.category_name}
-                  </Tag>
-                  {product.brand && <Text style={{ fontSize: '15px', color: token.colorCardBrandText }}>{product.brand}</Text>}
-                  {limits.allow_stock_location && product.rack_location && (
-                      <Tag style={{ margin: 0, fontSize: '13px', padding: '2px 6px', backgroundColor: token.colorCardLocationTag + '15', color: token.colorCardLocationTag, border: `1px solid ${token.colorCardLocationTag}33` }}>
-                        📍 {product.rack_location}
-                      </Tag>
-                    )}
-                </div>
-
-                {/* --- RIGHT SIDE (Price + Menu) --- */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  
-                  {/* Price Range */}
-                  <Text strong style={{ fontSize: '17px', color: token.colorAmountPositive, whiteSpace: 'nowrap' }}>
-                    {formatPriceRange(product.min_sale_price, product.max_sale_price, profile?.currency)}
-                  </Text>
-                  
-                  {/* 3-DOTS MENU (Sirf Ijazat walo ke liye) */}
-                  {can('can_edit_inventory') && (
-                  <Dropdown 
-                    trigger={['click']}
-                    menu={{
-                      items: [
-                        {
-                          key: 'edit',
-                          label: 'Edit Details',
-                          icon: <EditOutlined />,
-                          onClick: () => onEditProductModel(product)
-                        },
-                        {
-                          key: 'archive',
-                          // Agar showArchived true hai to "Unarchive", warna "Archive"
-                          label: showArchived ? 'Unarchive (Restore)' : 'Archive (Hide)',
-                          icon: <span style={{ fontSize: '16px' }}>{showArchived ? '♻️' : '📦'}</span>,
-                          // Agar Unarchive karna hai to 'false' bhejein, Archive ke liye 'true'
-                          onClick: () => onDelete(product, !showArchived) 
-                        },
-                        {
-                          key: 'delete',
-                          label: 'Delete Model',
-                          icon: <DeleteOutlined />,
-                          danger: true,
-                          onClick: () => onDelete(product)
-                        }
-                      ]
-                    }}
-                  >
-                    {/* Style thora adjust kiya taake icon upar align ho */}
-                    <Button 
-                        type="text" 
-                        size="small"
-                        icon={<MoreOutlined style={{ fontSize: '20px', fontWeight: 'bold' }} />} 
-                        style={{ marginTop: '-2px' }} 
-                    />
-                  </Dropdown>
-                  )}
-
-                </div>
-              </div>
-
-              <Divider style={{ margin: '12px 0', borderColor: token.colorBorderSecondary }} />
-
-              {/* === VARIANTS LIST === */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {product.groupedVariants.map((variant, index) => (
-                  <div key={index} 
-                    style={{ 
-                      overflowX: 'auto', whiteSpace: 'nowrap', padding: '10px',
-                      background: token.colorFillQuaternary, // Control Center se halka background
-                      borderRadius: '6px', border: 'none',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }} className="hide-scrollbar">
-                    
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      {/* STOCK BADGE - FONT INCREASED TO 14px */}
-                      <div style={{ marginRight: '12px', flexShrink: 0 }}>
-                        {/* STOCK BADGE - TRANSPARENT STYLE */}
-                      <div style={{ marginRight: '12px', flexShrink: 0 }}>
-                        <Tag 
-                          style={{ 
-                            margin: 0, 
-                            fontSize: '15px', 
-                            padding: '1px 8px', // Box ko chota karne ke liye padding kam ki
-                            fontWeight: 'bold', // Numbers ko bold kiya
-                            backgroundColor: 'transparent',
-                            color: variant.display_quantity > 0 ? token.colorPrimary : token.colorAmountNegative,
-                            borderColor: variant.display_quantity > 0 ? token.colorPrimary : token.colorAmountNegative
-                          }}
-                        >
-                          {variant.display_quantity}
-                        </Tag>
-                      </div>
-                      </div>
-
-                      <div style={{ marginRight: '16px', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
-                        {/* SALE PRICE */}
-                        <Text strong style={{ color: token.colorAmountPositive, fontSize: isSingleColumn ? '18px' : '16px', lineHeight: '1.2' }}>
-                           <span style={{ fontSize: isSingleColumn ? '14px' : '12px', opacity: 0.8, marginRight: '4px', color: token.colorCardColumnsTitleText }}>Sale:</span>
-                           {formatCurrency(variant.sale_price, profile?.currency)}
-                        </Text>
-                        {/* BUY PRICE */}
-                        {can('can_view_reports') && (
-                          <Text style={{ fontSize: isSingleColumn ? '14px' : '12px', lineHeight: '1.2', color: token.colorCardDetailsText }}>
-                             <span style={{ fontSize: isSingleColumn ? '12px' : '10px', opacity: 0.8, marginRight: '4px', color: token.colorCardColumnsTitleText }}>Buy:</span>
-                             {formatCurrency(variant.purchase_price, profile?.currency)}
-                          </Text>
-                        )}
-                      </div>
-
-                      {/* ATTRIBUTES & TAGS - 2 ROWS PROFESSIONAL LAYOUT (ALIGNED & SCROLLABLE) */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', justifyContent: 'center', overflow: 'hidden' }}>
-                        
-                        {/* ROW 1: Item Attributes (Plain Text with Pipes, Aligned with Sale Price) */}
-                        <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', height: '20px' }}>
-                          {(() => {
-                            const attrValues = [];
-                            if (variant.item_attributes) {
-                              Object.entries(variant.item_attributes).forEach(([key, value]) => {
-                                if (value && !key.toLowerCase().includes('imei') && !key.toLowerCase().includes('serial')) {
-                                  attrValues.push(value);
-                                }
-                              });
-                            }
-                            
-                            const hasAttributes = attrValues.length > 0;
-                            const hasImeis = variant.imeis && variant.imeis.length > 0;
-
-                            return (
-                              <>
-                                <Text strong style={{ fontSize: isSingleColumn ? '18px' : '16px', lineHeight: '1.2', color: token.colorCardDetailsText }}>
-                                  {hasAttributes ? attrValues.join('  |  ') : 'Standard'}
-                                </Text>
-                                {hasImeis && (
-                                  <Text style={{ fontSize: isSingleColumn ? '18px' : '16px', lineHeight: '1.2', color: isDarkMode ? '#aaa' : '#666', marginLeft: hasAttributes ? '8px' : '0' }}>
-                                    {hasAttributes ? '  |  ' : ''}IMEI: {variant.imeis.join(', ')}
-                                  </Text>
-                                )}
-                              </>
-                            );
-                          })()}
-                        </div>
-
-                        {/* ROW 2: Batch, Expiry, Warranty & Location Tags (Aligned with Buy Price, Scrollable) */}
-                        {(variant.batch_number || variant.expiry_date || (profile?.warranty_system_enabled !== false && variant.warranty_days > 0) || variant.locations) && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', minHeight: '18px' }}>
-                            {variant.batch_number && <Tag color="blue" style={{ margin: 0, fontSize: '12px', padding: '1px 6px', color: token.colorText, border: 'none', background: token.colorFillAlter, lineHeight: '1.2' }}>B.No: {variant.batch_number}</Tag>}
-                            
-                            {variant.expiry_date && (() => {
-                              const expDate = new Date(variant.expiry_date);
-                              const todayZero = new Date(); todayZero.setHours(0,0,0,0);
-                              const alertDays = profile?.expiry_alert_days || 30;
-                              const alertLimitDate = new Date(); alertLimitDate.setDate(alertLimitDate.getDate() + alertDays);
-                              
-                              let iconColor = token.colorTextSecondary; // Normal/Valid
-                              let tooltipText = "Valid Expiry";
-                              let Icon = CalendarOutlined;
-
-                              if (expDate < todayZero) {
-                                  iconColor = token.colorError; // Expired (Red)
-                                  tooltipText = "EXPIRED";
-                                  Icon = WarningOutlined;
-                              } else if (expDate <= alertLimitDate) {
-                                  iconColor = token.colorWarning; // Expiring Soon (Yellow/Orange)
-                                  tooltipText = "Expiring Soon";
-                                  Icon = WarningOutlined;
-                              }
-
-                              return (
-                                  <Tooltip title={tooltipText}>
-                                      <Tag style={{ margin: 0, fontSize: '12px', padding: '1px 6px', border: 'none', background: token.colorFillAlter, color: iconColor, display: 'flex', alignItems: 'center', gap: '4px', lineHeight: '1.2' }}>
-                                          <Icon style={{ fontSize: '12px' }} /> {expDate.toLocaleDateString()}
-                                      </Tag>
-                                  </Tooltip>
-                              );
-                            })()}
-
-                            {profile?.warranty_system_enabled !== false && variant.warranty_days > 0 && (
-                              <Tag color="cyan" style={{ margin: 0, fontSize: '12px', padding: '1px 6px', color: token.colorText, border: 'none', background: token.colorFillAlter, lineHeight: '1.2' }}>
-                                🛡️ {variant.warranty_days}
-                              </Tag>
-                            )}
-                            
-                            {/* --- NAYA IZAFA: Location Wise Breakdown Tags --- */}
-                            {variant.locations && Object.entries(variant.locations).map(([whId, qty]) => {
-                               if (qty <= 0) return null;
-                               
-                               // NAYA LOGIC: Hide tag if it matches the selected filterWarehouse
-                               const defaultWh = warehouses?.find(w => w.is_default);
-                               const resolvedFilter = filterWarehouse === 'all' ? 'all' : filterWarehouse;
-                               const resolvedWhId = whId === 'default' ? (defaultWh?.id || 'default') : whId;
-
-                               // Agar 'all' select nahi hai, aur yeh tag selected location ka hi hai, to isay chupa dein
-                               if (resolvedFilter !== 'all' && (whId === resolvedFilter || resolvedWhId === resolvedFilter)) {
-                                   return null; 
-                               }
-
-                               const whName = whId === 'default' ? 'Main Shop' : (warehouses?.find(w => w.id === whId)?.name || 'Main Shop');
-                               return (
-                                 <Tag key={whId} color="purple" style={{ margin: 0, fontSize: '11px', padding: '1px 6px', border: 'none', background: token.colorFillAlter, lineHeight: '1.2' }}>
-                                   🏠 {whName}: {qty}
-                                 </Tag>
-                               );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* ADD STOCK BUTTON (Sirf Ijazat walo ke liye) */}
-                    {can('can_edit_inventory') && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto', flexShrink: 0 }}>
-                        <Button 
-                          type="text" 
-                          icon={<PlusOutlined />} 
-                          size="small" 
-                          style={{ color: token.colorSuccess, fontSize: '16px' }} 
-                          onClick={() => onAddStock(variant)} 
-                          title="Create Purchase Invoice to Add Stock"
-                        />
-                        <Button 
-                          type="text" 
-                          icon={<EditOutlined />} 
-                          size="small" 
-                          style={{ color: 'token.colorPrimary', fontSize: '16px' }} 
-                          onClick={() => {
-                              const cat = categories?.find(c => c.id === product.category_id);
-                              const isImei = cat ? cat.is_imei_based : false;
-                              onQuickEdit(variant, isImei); 
-                          }}
-                          title="Edit Barcode/Price"
-                        />
-                        
-                        <Button 
-                          type="text" 
-                          danger
-                          icon={<AlertOutlined />} 
-                          size="small" 
-                          style={{ fontSize: '16px' }} 
-                          onClick={() => onMarkDamaged({ ...variant, product_name: product.name })} 
-                          title="Mark as Damaged/Defective"
-                        />
-                        {/* --- NAYA IZAFA: Transfer Button --- */}
-                        <Tooltip title={filterWarehouse === 'all' ? "Select a specific Location/Godown from the top filter to transfer stock." : "Transfer Stock to another Godown/Shop"}>
-                          <Button 
-                            type="text" 
-                            disabled={filterWarehouse === 'all'}
-                            icon={<span style={{fontSize: '16px'}}>⇄</span>} 
-                            size="small" 
-                            style={{ color: filterWarehouse === 'all' ? token.colorTextDisabled : token.colorInfo, fontSize: '16px' }} 
-                            onClick={() => onTransferStock({ ...variant, product_name: product.name })} 
-                          />
-                        </Tooltip>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {/* AGAR PRODUCT KHALI HAI TO YEH DIKHAO */}
-                {product.groupedVariants.length === 0 && (
-                  <div style={{ 
-                      padding: '16px', 
-                      textAlign: 'center', 
-                      background: isDarkMode ? 'rgba(255, 255, 255, 0.03)' : '#f9f9f9',
-                      borderRadius: '6px',
-                      border: '1px dashed #d9d9d9'
-                  }}>
-                      <Text type="secondary" style={{ display: 'block', marginBottom: '8px' }}>
-                        No stock available. Create a Purchase Invoice to receive stock for this and other items.
-                      </Text>
-                      
-                      {/* Sirf Owner stock add kar sake */}
-                      {can('can_edit_inventory') && (
-                        <Button 
-                          ref={refFirstStock}
-                          type="dashed" 
-                          icon={<PlusOutlined />} 
-                          onClick={() => onAddStock(product)} 
-                        >
-                          Create Purchase Invoice
-                        </Button>
-                      )}
-                  </div>
-                )}
-              </div>
-            </Card>
-          </List.Item>
-        )}
-      />
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      color: token.colorPrimary,
+                      padding: 0
+                    }} 
+                  />
+                </Tooltip>
+              );
+            })(),
+            expandedRowRender: renderNestedVariants,
+            rowExpandable: () => true,
+            expandRowByClick: true
+          }}
+        />
+      </Card>
     </>
   );
 };
@@ -1479,19 +1684,6 @@ const Inventory = () => {
                />
              </Tooltip>
 
-             {/* View Mode Toggle Button */}
-             {!isMobile && (
-               <Tooltip title={isSingleColumn ? 'Grid View (2 Columns)' : 'List View (1 Column)'}>
-                 <Button 
-                   icon={isSingleColumn ? <AppstoreOutlined /> : <UnorderedListOutlined />} 
-                   onClick={() => setIsSingleColumn(!isSingleColumn)} 
-                   type="text"
-                   size="small"
-                   style={{ color: token.colorCardDetailsText }}
-                 />
-               </Tooltip>
-             )}
-
              {/* --- NAYA IZAFA: Inventory Export/Print Button --- */}
              <DataExport 
                 data={(() => {
@@ -1641,6 +1833,7 @@ const Inventory = () => {
       </div>
 
       <ProductList 
+        searchText={searchText}
         isSingleColumn={isSingleColumn} // <--- NAYA IZAFA
         products={products} 
         categories={categories}
