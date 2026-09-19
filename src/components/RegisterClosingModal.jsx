@@ -86,6 +86,7 @@ const RegisterClosingModal = ({ visible, onCancel }) => {
       footer={null}
       closable={!showResult}
       maskClosable={false}
+      style={{ top: 40 }}
     >
       {!showResult ? (
         <div style={{ padding: '10px 0' }}>

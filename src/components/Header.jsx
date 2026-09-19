@@ -616,7 +616,7 @@ return (
               {!isMobile && (
                 <>
                   {/* 1. Current Plan Status Badge - Desktop Only */}
-                  {(() => {
+                  {false && (() => {
                     const tier = profile?.subscription_tier?.toLowerCase() || 'free';
                     
                     // Har plan ke liye ek khubsoorat rang tay karte hain
@@ -661,8 +661,8 @@ return (
                   {/* 2. Register Status + Live Digital Clock - Desktop Only */}
                   {!isMobile && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                      {/* Register Status Tag (Sirf tab dikhega jab shift CLOSED ho) */}
-                      {!activeSession && (
+                      {/* Register Status Tag (Sirf tab dikhega jab shift CLOSED ho aur sync mukammal ho chuki ho) */}
+                      {!activeSession && !isSyncing && (
                         <Tooltip title="Register is CLOSED - Click to Open">
                           <Tag 
                             color="error" 
@@ -706,7 +706,7 @@ return (
                   {/* Naam aur Tag sirf Desktop par dikhega */}
                   {!isMobile && (
                     <div style={{ textAlign: 'left' }}>
-                      <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorHeaderText }}>{activeStaff ? activeStaff.name : (profile?.name || 'Owner')}</Text>
+                      <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorHeaderText }}>{activeStaff ? activeStaff.name : (profile?.full_name || profile?.name || 'Owner')}</Text>
                       <Tag color={activeStaff ? (activeSession ? "green" : "blue") : "gold"} style={{ fontSize: '10px', margin: 0, padding: '0 4px', lineHeight: '1.4', borderRadius: '4px', border: 'none', color: token.colorText }}>
                         {activeStaff ? (activeSession ? "SHIFT ACTIVE" : activeStaff.role?.toUpperCase()) : 'ADMIN'}
                       </Tag>

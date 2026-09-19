@@ -62,6 +62,9 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
   const { isDarkMode } = useTheme();
   const { can } = useStaff();
 
+  // --- NAYA IZAFA: Dynamic Page Size State ---
+  const [pageSize, setPageSize] = useState(15);
+
   // --- NAYA IZAFA: Expand All / Collapse All State ---
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
 
@@ -135,13 +138,23 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
 
   }, [products, filterWarehouse, warehouses]);
 
-  // --- NAYA IZAFA: Search karte waqt khud ba khud Rows Expand karna (Sahi Jagah) ---
+  // --- NAYA IZAFA: Search, 0 Stock, aur Pehle se Kholi hui Rows ko Khula Rakhna ---
   useEffect(() => {
-    if (searchText && searchText.trim().length > 0) {
-      setExpandedRowKeys(memoizedProducts.map(p => p.id));
-    } else {
-      setExpandedRowKeys([]);
-    }
+    setExpandedRowKeys(prevKeys => {
+      if (searchText && searchText.trim().length > 0) {
+        return memoizedProducts.map(p => p.id);
+      }
+
+      // 1. 0 Stock wale products
+      const zeroStockKeys = memoizedProducts.filter(p => (p.quantity || 0) === 0).map(p => p.id);
+
+      // 2. Jo rows user ne pehle se khol rakhi theen (unko mehfooz rakhein)
+      const currentValidProductIds = new Set(memoizedProducts.map(p => p.id));
+      const preservedKeys = (prevKeys || []).filter(k => currentValidProductIds.has(k));
+
+      // 3. Dono ko mila kar wapis bhein taake koi khuli row band na ho
+      return Array.from(new Set([...preservedKeys, ...zeroStockKeys]));
+    });
   }, [searchText, memoizedProducts]);
 
   if (loading) return <div style={{ textAlign: 'center', padding: '50px' }}><Spin size="large" /></div>;
@@ -628,7 +641,7 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
         }
         .inventory-master-table .ant-table-expanded-row > .ant-table-cell {
           padding: 8px 16px 12px 32px !important;
-          background-color: ${token.colorFillAlter} !important;
+          background-color: transparent !important;
           cursor: default;
         }
       `}</style>
@@ -648,7 +661,12 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
           columns={masterColumns}
           dataSource={memoizedProducts}
           rowKey="id"
-          pagination={{ pageSize: 15, showSizeChanger: true, pageSizeOptions: ['10', '15', '25', '50'] }}
+          pagination={{ 
+            pageSize: pageSize, 
+            onShowSizeChange: (_, size) => setPageSize(size),
+            showSizeChanger: true, 
+            pageSizeOptions: ['10', '15', '25', '50'] 
+          }}
           scroll={{ x: 'max-content' }}
           expandable={{
             expandedRowKeys: expandedRowKeys,

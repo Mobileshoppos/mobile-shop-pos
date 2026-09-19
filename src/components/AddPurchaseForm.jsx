@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Modal, Form, Select, Input, Button, Divider, Typography, Table, Space, App, Row, Col, InputNumber, Collapse, Tag, Tooltip, Tabs, Card, theme, ConfigProvider, Empty, Switch
 } from 'antd';
-import { DeleteOutlined, BarcodeOutlined, EditOutlined, UserAddOutlined, PauseCircleOutlined, ClockCircleOutlined, SearchOutlined, PlusOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { DeleteOutlined, BarcodeOutlined, EditOutlined, UserAddOutlined, PauseCircleOutlined, ClockCircleOutlined, SearchOutlined, PlusOutlined, QuestionCircleOutlined, CheckOutlined } from '@ant-design/icons';
 import DraftBillsModal from '../components/DraftBillsModal';
 import DataService from '../DataService';
 import { supabase } from '../supabaseClient';
@@ -150,18 +150,48 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
   }, [visible, product, isImeiCategory, form, initialValues]);
 
   const handleValuesChange = (changedValues, allValues) => {
-    if (!initialValues) return;
-    const attributeNames = attributes.map(a => a.attribute_name);
-    const isAttributeChanged = attributeNames.some(attr => {
-        return allValues[attr] !== initialValues.item_attributes[attr];
-    });
+    const attributeNames = (attributes || []).map(a => a.attribute_name);
+    const isAttributeChanged = Object.keys(changedValues).some(k => attributeNames.includes(k));
+
     if (isAttributeChanged) {
-        if (isBarcodeLocked) setIsBarcodeLocked(false);
-    } else {
-        if (!isBarcodeLocked) setIsBarcodeLocked(true);
-        if (allValues.barcode !== initialValues.barcode) {
-            form.setFieldValue('barcode', initialValues.barcode);
+      const currentAttrs = {};
+      attributeNames.forEach(attr => {
+        if (allValues[attr] !== undefined && allValues[attr] !== null && allValues[attr] !== '') {
+          currentAttrs[attr] = allValues[attr];
         }
+      });
+
+      const areAttrsEqual = (attrsA, attrsB) => {
+        const cleanA = {};
+        const cleanB = {};
+        Object.entries(attrsA || {}).forEach(([k, v]) => {
+          if (v && !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial')) cleanA[k] = v;
+        });
+        Object.entries(attrsB || {}).forEach(([k, v]) => {
+          if (v && !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial')) cleanB[k] = v;
+        });
+        const keysA = Object.keys(cleanA).sort();
+        const keysB = Object.keys(cleanB).sort();
+        if (keysA.length !== keysB.length) return false;
+        return keysA.every(k => cleanA[k] === cleanB[k]);
+      };
+
+      // 1. Check karein ke kya yeh kisi mojooda variant se match karta hai?
+      const matchingVariant = product?.variants?.find(v => {
+        const vAttrs = v.attributes || v.item_attributes || {};
+        return areAttrsEqual(vAttrs, currentAttrs);
+      });
+
+      if (matchingVariant) {
+        // Mojooda variant mil gaya -> Uska apna barcode foran set kar do
+        form.setFieldValue('barcode', matchingVariant.barcode || '');
+      } else if (initialValues && areAttrsEqual(initialValues.item_attributes, currentAttrs)) {
+        // Agar shuruati variant par wapis aaya -> Purana barcode set kar do
+        form.setFieldValue('barcode', initialValues.barcode || '');
+      } else {
+        // Agar koi bilkul naya combination banaya -> Barcode khali kar do taake naya scan/generate ho sake
+        form.setFieldValue('barcode', '');
+      }
     }
   };
   
@@ -280,7 +310,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                 );
 
                 if (itemInList) {
-                    const listAttrsJson = JSON.stringify(Object.entries(item_list?.item_attributes || {}).sort());
+                    const listAttrsJson = JSON.stringify(Object.entries(itemInList?.item_attributes || {}).sort());
                     const isExactMatchInList = itemInList.product_id === product.id && listAttrsJson === currentAttrsJson;
 
                     if (!isExactMatchInList) {
@@ -499,7 +529,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         <Form.Item label="Variant Barcode" tooltip="Assign a unique barcode to this variant.">
                             <Space.Compact style={{ width: '100%' }}>
                                 <Form.Item name="barcode" noStyle>
-                                    <Input prefix={<BarcodeOutlined />} placeholder="Scan or type barcode" disabled={isBarcodeLocked} style={disabledInputStyle} />
+                                    <Input prefix={<BarcodeOutlined />} placeholder="Scan or type barcode" />
                                 </Form.Item>
                                 <Button 
                                     onClick={() => {
@@ -508,7 +538,6 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                                         const randomNum = Math.floor(10000 + Math.random() * 90000);
                                         form.setFieldValue('barcode', `${prefix}-${randomNum}`);
                                     }}
-                                    disabled={isBarcodeLocked}
                                 >
                                     Generate
                                 </Button>
@@ -1433,6 +1462,26 @@ const AddPurchaseForm = () => {
                                       .map(([k, val]) => val);
                                   if (attrs.length > 0) attrStr = attrs.join(', ');
                               }
+
+                              // Check karein ke kya yeh variant bill mein pehle se shamil hai?
+                              const isAdded = purchaseItems.some(item => {
+                                  if (item.product_id !== product.id) return false;
+                                  const itemAttrs = item.item_attributes || {};
+                                  const vAttrs = variantAttrs || {};
+                                  const cleanA = {};
+                                  const cleanB = {};
+                                  Object.entries(itemAttrs).forEach(([k, v]) => {
+                                      if (v && !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial')) cleanA[k] = v;
+                                  });
+                                  Object.entries(vAttrs).forEach(([k, v]) => {
+                                      if (v && !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial')) cleanB[k] = v;
+                                  });
+                                  const keysA = Object.keys(cleanA).sort();
+                                  const keysB = Object.keys(cleanB).sort();
+                                  if (keysA.length !== keysB.length) return false;
+                                  return keysA.every(k => cleanA[k] === cleanB[k]);
+                              });
+
                               return (
                                   <div 
                                       key={variant.id || idx}
@@ -1443,36 +1492,51 @@ const AddPurchaseForm = () => {
                                           borderRadius: '6px', 
                                           marginBottom: '4px',
                                           cursor: 'pointer',
-                                          border: `1px solid ${token.colorBorderSecondary}`,
+                                          border: `1px solid ${isAdded ? token.colorSuccess + '66' : token.colorBorderSecondary}`,
                                           display: 'flex',
                                           justifyContent: 'space-between',
                                           alignItems: 'center'
                                       }}
                                   >
-                                      <Text style={{ fontSize: '13px' }}>{attrStr || 'Standard'}</Text>
-                                      <Button size="small" type="text" icon={<PlusOutlined />} style={{ color: token.colorPrimary }} />
+                                      <Text style={{ fontSize: '13px', fontWeight: isAdded ? '600' : 'normal' }}>{attrStr || 'Standard'}</Text>
+                                      <Button 
+                                          size="small" 
+                                          type="text" 
+                                          icon={isAdded ? <CheckOutlined /> : <PlusOutlined />} 
+                                          style={{ color: isAdded ? token.colorSuccess : token.colorPrimary }} 
+                                      />
                                   </div>
                               );
                           })
                       ) : (
                           /* No variants, just the product */
-                          <div 
-                              onClick={() => handleCatalogItemClick(product, null)}
-                              style={{ 
-                                  padding: '8px', 
-                                  background: token.colorFillQuaternary, 
-                                  borderRadius: '6px', 
-                                  marginBottom: '4px',
-                                  cursor: 'pointer',
-                                  border: `1px solid ${token.colorBorderSecondary}`,
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center'
-                              }}
-                          >
-                              <Text style={{ fontSize: '13px' }}>Standard</Text>
-                              <Button size="small" type="text" icon={<PlusOutlined />} style={{ color: token.colorPrimary }} />
-                          </div>
+                          (() => {
+                              const isProductAdded = purchaseItems.some(item => item.product_id === product.id);
+                              return (
+                                  <div 
+                                      onClick={() => handleCatalogItemClick(product, null)}
+                                      style={{ 
+                                          padding: '8px', 
+                                          background: token.colorFillQuaternary, 
+                                          borderRadius: '6px', 
+                                          marginBottom: '4px',
+                                          cursor: 'pointer',
+                                          border: `1px solid ${isProductAdded ? token.colorSuccess + '66' : token.colorBorderSecondary}`,
+                                          display: 'flex',
+                                          justifyContent: 'space-between',
+                                          alignItems: 'center'
+                                      }}
+                                  >
+                                      <Text style={{ fontSize: '13px', fontWeight: isProductAdded ? '600' : 'normal' }}>Standard</Text>
+                                      <Button 
+                                          size="small" 
+                                          type="text" 
+                                          icon={isProductAdded ? <CheckOutlined /> : <PlusOutlined />} 
+                                          style={{ color: isProductAdded ? token.colorSuccess : token.colorPrimary }} 
+                                      />
+                                  </div>
+                              );
+                          })()
                       )}
                   </div>
               ))}
@@ -1484,7 +1548,7 @@ const AddPurchaseForm = () => {
         {/* --- RIGHT SIDE: INVOICE & CART --- */}
         <Col xs={24} lg={16}>
           <Card
-            styles={{ body: { padding: isMobile ? '12px' : '20px', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 220px)' } }}
+            styles={{ body: { padding: isMobile ? '12px' : '16px', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 220px)', overflow: 'hidden' } }}
             style={{ borderRadius: '8px', background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}`, height: '100%' }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -1498,7 +1562,7 @@ const AddPurchaseForm = () => {
             dataSource={purchaseItems}
             rowKey={(record) => record.id || record.temp_id}
             pagination={false}
-            scroll={{ x: 'max-content', y: isMobile ? undefined : 'calc(100vh - 380px)' }}
+            scroll={{ x: 'max-content', y: isMobile ? undefined : 'calc(100vh - 430px)' }}
             style={{ flex: 1 }}
             size={isMobile ? "small" : "middle"}
             summary={pageData => {
@@ -1514,7 +1578,7 @@ const AddPurchaseForm = () => {
           />
           {/* Payment Record UI yahan se hata diya gaya hai */}
           
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: 'auto', paddingTop: '12px', flexWrap: 'wrap' }}>
             <Button key="back" onClick={onCancel}>{isMobile ? "Back" : "Cancel"}</Button>
             
             {/* --- NAYA IZAFA: View Drafts Button --- */}

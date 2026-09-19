@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip, Badge, Tag, Checkbox, theme
+  Typography, Row, Col, Input, List, Card, Button, Statistic, Empty, App, Select, Radio, InputNumber, Form, Modal, Space, Divider, Tooltip, Badge, Tag, Checkbox, theme, Segmented
 } from 'antd';
 import { ShoppingCartOutlined, PlusOutlined, UserAddOutlined, DeleteOutlined, StarOutlined, BarcodeOutlined, SearchOutlined, FilterOutlined, WalletOutlined, BankOutlined, ClockCircleOutlined, PauseCircleOutlined, LockOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined, CalendarOutlined, WarningOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
@@ -94,6 +94,7 @@ const POS = () => {
   const customerNameInputRef = useRef(null); // NAYA IZAFA: Auto-focus ke liye
   const [discount, setDiscount] = useState(0);
   const isMobile = useMediaQuery('(max-width: 768px)'); // <--- isMobile KO UPAR LE AAYE HAIN
+  const [mobileTab, setMobileTab] = useState('products'); // NAYA: Mobile switcher ('products' ya 'cart')
 
   // NAYA IZAFA: Modal khulte hi cursor Full Name par lane ke liye
   useEffect(() => {
@@ -1497,12 +1498,39 @@ const POS = () => {
         `}
       </style>
       {isMobile && (
-        <Title level={2} style={{ marginBottom: '5px', marginLeft: '8px', fontSize: '23px' }}>
-            <ShoppingCartOutlined /> Point of Sale
-        </Title>
+        <>
+          <Title level={2} style={{ marginBottom: '8px', marginLeft: '8px', fontSize: '23px' }}>
+              <ShoppingCartOutlined /> Point of Sale
+          </Title>
+          {/* NAYA: Mobile Tabs Switcher */}
+          <div style={{ marginBottom: '12px', padding: '0 4px' }}>
+            <Segmented
+              block
+              size="large"
+              value={mobileTab}
+              onChange={(val) => setMobileTab(val)}
+              options={[
+                {
+                  label: `Products (${displayedProducts?.length || 0})`,
+                  value: 'products',
+                  icon: <AppstoreOutlined />
+                },
+                {
+                  label: (
+                    <span>
+                      Current Bill {cart.length > 0 && <Badge count={cart.reduce((sum, item) => sum + item.quantity, 0)} size="small" style={{ marginLeft: 6 }} />}
+                    </span>
+                  ),
+                  value: 'cart',
+                  icon: <ShoppingCartOutlined />
+                }
+              ]}
+            />
+          </div>
+        </>
       )}
       <Row gutter={16}>
-        <Col xs={24} md={13}>
+        <Col xs={24} md={13} style={{ display: (isMobile && mobileTab !== 'products') ? 'none' : 'block' }}>
           <Card variant="borderless" style={{ background: 'transparent', boxShadow: 'none' }} styles={{ body: { padding: isMobile ? '8px 0' : '0 0px 0 0', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 110px)' } }}>
             {/* === ROW 1: SEARCH, CATEGORY, BUTTONS === */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
@@ -1917,7 +1945,7 @@ const POS = () => {
             />
           </Card>
         </Col>
-        <Col xs={24} md={11}>
+        <Col xs={24} md={11} style={{ display: (isMobile && mobileTab !== 'cart') ? 'none' : 'block' }}>
           <Card variant="borderless" style={{ background: 'transparent', boxShadow: 'none' }} styles={{ body: { padding: isMobile ? '16px 0 0 0' : '0 0 0 16px', borderLeft: isMobile ? 'none' : `1px solid ${token.colorBorderSecondary}`, borderTop: isMobile ? `1px solid ${token.colorBorderSecondary}` : 'none', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 110px)' } }}>
             {/* --- TOP ROW: Current Bill, Customer Select & Reset --- */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
@@ -2307,24 +2335,24 @@ const POS = () => {
 
             {/* --- NEW VIDEO-STYLE PAYMENT & CHECKOUT ROW --- */}
             <div style={{ marginBottom: '0px' }}>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: isMobile ? '4px' : '8px', alignItems: 'center', flexWrap: 'nowrap' }}>
                 
                 {/* 1. Payment Type Toggle (Full vs Credit) */}
                 <Radio.Group 
                   value={paymentMethod} 
                   onChange={(e) => setPaymentMethod(e.target.value)}
                   buttonStyle="solid"
-                  size="large"
+                  size={isMobile ? "middle" : "large"}
                   style={{ flexShrink: 0, display: 'flex' }}
                   disabled={!selectedCustomer || isWalkIn}
                 >
                   <Tooltip title="Pay Full Amount">
-                    <Radio.Button value="Paid" style={{ padding: '0 12px', textAlign: 'center' }}>
+                    <Radio.Button value="Paid" style={{ padding: isMobile ? '0 6px' : '0 12px', textAlign: 'center', fontSize: isMobile ? '12px' : '13px' }}>
                       <WalletOutlined /> Full
                     </Radio.Button>
                   </Tooltip>
                   <Tooltip title={(!selectedCustomer || isWalkIn) ? "Select customer for Credit Sale" : "Pay Later / Credit"}>
-                    <Radio.Button value="Unpaid" style={{ padding: '0 12px', textAlign: 'center' }}>
+                    <Radio.Button value="Unpaid" style={{ padding: isMobile ? '0 6px' : '0 12px', textAlign: 'center', fontSize: isMobile ? '12px' : '13px' }}>
                       <UserAddOutlined /> Credit
                     </Radio.Button>
                   </Tooltip>
@@ -2333,27 +2361,29 @@ const POS = () => {
                 {/* 2. Unified Account Dropdown (Cash + Banks) */}
                 <Select
                   id="pos-account-select"
-                  size="large"
+                  size={isMobile ? "middle" : "large"}
                   value={selectedAccountId}
                   onChange={(val) => setSelectedAccountId(val)}
-                  style={{ flex: 1 }}
-                  placeholder="Select Account"
+                  style={{ flex: 1, minWidth: isMobile ? '100px' : '140px' }}
+                  placeholder="Account"
                   options={[
                     {
                       value: 'Cash',
                       label: (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <WalletOutlined style={{ color: token.colorSuccess }} />
-                          <span style={{ fontWeight: 500, fontSize: '13px' }}>Cash (Counter)</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <WalletOutlined style={{ color: token.colorSuccess, fontSize: isMobile ? '12px' : '14px' }} />
+                          <span style={{ fontWeight: 500, fontSize: isMobile ? '11px' : '13px', whiteSpace: 'nowrap' }}>
+                            {isMobile ? 'Cash' : 'Cash (Counter)'}
+                          </span>
                         </div>
                       )
                     },
                     ...paymentAccounts.map(acc => ({
                       value: acc.id,
                       label: (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <BankOutlined style={{ color: token.colorInfo }} />
-                          <span style={{ fontWeight: 500, fontSize: '13px' }}>{acc.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <BankOutlined style={{ color: token.colorInfo, fontSize: isMobile ? '12px' : '14px' }} />
+                          <span style={{ fontWeight: 500, fontSize: isMobile ? '11px' : '13px', whiteSpace: 'nowrap' }}>{acc.name}</span>
                         </div>
                       )
                     }))
@@ -2365,10 +2395,19 @@ const POS = () => {
                   <Button 
                     id="pos-complete-sale-btn"
                     type="primary" 
+                    size={isMobile ? "middle" : "large"}
                     disabled={cart.length === 0 || isSubmitting || !activeSession} 
                     loading={isSubmitting} 
                     onClick={handleCompleteSale}
-                    style={{ flex: 1.5, height: '38px', fontSize: '15px', fontWeight: 'bold', borderRadius: '8px', padding: '0 4px' }}
+                    style={{ 
+                      flex: isMobile ? 1.2 : 1.5, 
+                      height: isMobile ? '32px' : '38px', 
+                      fontSize: isMobile ? '12px' : '15px', 
+                      fontWeight: 'bold', 
+                      borderRadius: '8px', 
+                      padding: isMobile ? '0 6px' : '0 8px',
+                      whiteSpace: 'nowrap'
+                    }}
                   >
                     Complete Sale
                   </Button>
@@ -2570,6 +2609,42 @@ const POS = () => {
           />
         </div>
       </Modal>
+
+      {/* NAYA: Mobile Par Floating Quick Cart Button */}
+      {isMobile && mobileTab === 'products' && cart.length > 0 && (
+        <div style={{
+          position: 'fixed',
+          bottom: '20px',
+          left: '16px',
+          right: '16px',
+          zIndex: 999,
+          boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
+          borderRadius: '8px'
+        }}>
+          <Button
+            type="primary"
+            size="large"
+            block
+            onClick={() => setMobileTab('cart')}
+            style={{
+              height: '48px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontWeight: 'bold',
+              fontSize: '15px',
+              borderRadius: '8px',
+              padding: '0 16px'
+            }}
+          >
+            <Space>
+              <Badge count={cart.reduce((sum, item) => sum + item.quantity, 0)} overflowCount={99} style={{ backgroundColor: '#fff', color: token.colorPrimary, fontWeight: 'bold' }} />
+              <span>View Current Bill</span>
+            </Space>
+            <span>{formatCurrency(grandTotal, profile?.currency)} &rarr;</span>
+          </Button>
+        </div>
+      )}
 
     </div>
   );
