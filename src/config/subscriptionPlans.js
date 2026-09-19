@@ -144,7 +144,21 @@ export const SUBSCRIPTION_PLANS = {
   }
 };
 
-export const getPlanLimits = (tier) => {
-  const planKey = tier ? tier.toLowerCase() : 'free';
+export const getPlanLimits = (tierOrProfile) => {
+  if (!tierOrProfile) return SUBSCRIPTION_PLANS.free;
+
+  // Agar poora profile object bheja gaya ho (Offline Expiry Check)
+  if (typeof tierOrProfile === 'object') {
+    const { subscription_tier, subscription_expires_at } = tierOrProfile;
+    // Agar expiry date guzar chuki ho to foran Free limits lagu karein
+    if (subscription_expires_at && new Date(subscription_expires_at) < new Date()) {
+      return SUBSCRIPTION_PLANS.free;
+    }
+    const planKey = subscription_tier ? subscription_tier.toLowerCase() : 'free';
+    return SUBSCRIPTION_PLANS[planKey] || SUBSCRIPTION_PLANS.free;
+  }
+
+  // Agar sirf plan ka naam string mein bheja gaya ho (e.g. 'scale')
+  const planKey = typeof tierOrProfile === 'string' ? tierOrProfile.toLowerCase() : 'free';
   return SUBSCRIPTION_PLANS[planKey] || SUBSCRIPTION_PLANS.free;
 };

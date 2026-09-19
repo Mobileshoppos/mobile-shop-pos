@@ -23,7 +23,9 @@ const SubscriptionPage = () => {
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [selectedPlan, setSelectedPlan] = useState(null);
 
-  const currentTier = profile?.subscription_tier?.toLowerCase() || 'free';
+  // Smart Expiry Check: Agar trial expire ho chuka ho to 'free' plan consider karein
+  const isExpired = profile?.subscription_expires_at && dayjs(profile.subscription_expires_at).isBefore(dayjs());
+  const currentTier = isExpired ? 'free' : (profile?.subscription_tier?.toLowerCase() || 'free');
 
   // --- CORE HIGHLIGHTS (Supabase Style Top Banner) ---
   const coreHighlights = [
@@ -237,11 +239,11 @@ const SubscriptionPage = () => {
                     {isCurrent ? 'Current Plan' : plan.buttonText}
                   </Button>
                   
-                  {/* NAYA IZAFA: Expiry Date Display */}
-                  {isCurrent && profile?.subscription_expires_at && (
+                  {/* NAYA IZAFA: Free Trial Expiry & Remaining Days Display */}
+                  {isCurrent && profile?.subscription_expires_at && !isExpired && (
                     <div style={{ textAlign: 'center' }}>
                       <Text type="secondary" style={{ fontSize: '12px' }}>
-                        ⏳ Expires on: <Text strong style={{ color: token.colorText }}>{dayjs(profile.subscription_expires_at).format('DD MMM YYYY')}</Text>
+                        ⏳ Free Trial: <Text strong style={{ color: token.colorText }}>{dayjs(profile.subscription_expires_at).format('DD MMM YYYY')}</Text> ({Math.max(0, dayjs(profile.subscription_expires_at).diff(dayjs(), 'day'))} days left)
                       </Text>
                     </div>
                   )}
@@ -323,7 +325,7 @@ const SubscriptionPage = () => {
               {currentTier === 'free' && profile?.subscription_expires_at && (
                 <div style={{ width: '100%', maxWidth: isMobile ? '100%' : '200px', textAlign: 'center' }}>
                   <Text type="secondary" style={{ fontSize: '11px' }}>
-                    ⏳ Valid till: <Text strong>{dayjs(profile.subscription_expires_at).format('DD MMM YYYY')}</Text>
+                    ⏳ Trial expired on: <Text strong>{dayjs(profile.subscription_expires_at).format('DD MMM YYYY')}</Text>
                   </Text>
                 </div>
               )}

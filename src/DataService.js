@@ -645,8 +645,8 @@ const checkSubscriptionLimit = async (newItemsCount = 0) => {
   const profile = await db.user_settings.toCollection().first();
   if (!profile) return; // Profile nahi to check skip
 
-  // 2. Control Center se Limits mangwayein
-  const limits = getPlanLimits(profile.subscription_tier);
+  // 2. Control Center se Limits mangwayein (Ab poora profile object pass hoga taake expiry check ho sake)
+  const limits = getPlanLimits(profile);
 
   // 3. Mojooda stock ginein (Available items)
   const allInventory = await db.inventory.where('status').anyOf('Available', 'available').toArray();
