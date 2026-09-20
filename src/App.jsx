@@ -170,7 +170,7 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
             <AppHeader collapsed={collapsed} setCollapsed={setCollapsed} isMobile={isMobile} />
             
             {/* flex: 1 ka matlab hai ke yeh darmiyan wala hissa baqi saari jagah le lega */}
-            <div style={{ padding: isMobile ? '0 8px 60px' : '0 12px 24px', flex: 1 }}>
+            <div style={{ padding: isMobile ? '0 8px 60px' : '0 12px 6px', flex: 1 }}>
               <Outlet />
             </div>
 

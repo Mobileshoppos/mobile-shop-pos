@@ -326,7 +326,7 @@ const SettingsPage = () => {
   }, [searchParams, activeTab]);
   
   const [selectedCurrency, setSelectedCurrency] = useState('PKR');
-  const [themeMode, setThemeMode] = useState('dark');
+  const [themeMode, setThemeMode] = useState('light');
   const [isSaving, setIsSaving] = useState(false);
   const [isBackupLoading, setIsBackupLoading] = useState(false);
   const [isRestoreLoading, setIsRestoreLoading] = useState(false);

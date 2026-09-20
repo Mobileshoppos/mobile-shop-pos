@@ -186,7 +186,7 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
                   onViewLedger(product);
                 }} 
                 className="product-name-link"
-                style={{ fontSize: '15px', fontWeight: 'bold' }}
+                style={{ fontSize: '17px', fontWeight: 'bold' }}
               >
                 {product.name}
               </a>
@@ -208,17 +208,17 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
       title: 'Total Stock',
       dataIndex: 'quantity',
       key: 'quantity',
-      width: 140,
+      width: 180,
       align: 'center',
       render: (qty, product) => {
         const variantCount = product.groupedVariants ? product.groupedVariants.length : 0;
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'nowrap' }}>
             <Tag 
               style={{ 
                 margin: 0, 
                 fontSize: '13px', 
-                padding: '1px 8px',
+                padding: '2px 8px',
                 fontWeight: 'bold',
                 backgroundColor: 'transparent',
                 color: qty > 0 ? token.colorPrimary : token.colorAmountNegative,
@@ -228,8 +228,8 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
               {qty} {qty === 1 ? 'Unit' : 'Units'}
             </Tag>
             {variantCount > 0 && (
-              <Text type="secondary" style={{ fontSize: '11px', lineHeight: '1', whiteSpace: 'nowrap' }}>
-                {variantCount} {variantCount === 1 ? 'Variant' : 'Variants'}
+              <Text type="secondary" style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>
+                ({variantCount} {variantCount === 1 ? 'Variant' : 'Variants'})
               </Text>
             )}
           </div>
@@ -611,8 +611,15 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
     }
 
     return (
-      <div style={{ padding: '8px 12px', background: token.colorFillQuaternary, borderRadius: '6px' }}>
+      <div style={{ 
+        padding: '8px 12px', 
+        background: token.colorCardBg, 
+        borderRadius: '6px',
+        border: `1px solid ${token.colorBorderSecondary}`,
+        boxShadow: `0 2px 6px ${token.colorCardShadow}`
+      }}>
         <Table 
+          className="inventory-nested-table"
           columns={nestedColumns} 
           dataSource={product.groupedVariants} 
           rowKey={(record) => record.key || record.id || record.variant_id || (record.ids && record.ids[0]) || 'variant-row'}
@@ -639,10 +646,27 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
         .inventory-master-table .ant-table-row {
           cursor: pointer;
         }
+        .inventory-master-table .ant-table-tbody > tr > td {
+          background-color: ${token.colorCardBg} !important;
+        }
         .inventory-master-table .ant-table-expanded-row > .ant-table-cell {
           padding: 8px 16px 12px 32px !important;
-          background-color: transparent !important;
+          background-color: ${token.colorCardBg} !important;
           cursor: default;
+        }
+        .inventory-nested-table .ant-table-tbody > tr > td {
+          background-color: ${token.colorCardBg} !important;
+          border-bottom: 1px solid ${token.colorBorderSecondary} !important;
+        }
+        .inventory-nested-table .ant-table-tbody > tr:last-child > td {
+          border-bottom: none !important;
+        }
+        .inventory-filters-bar .ant-input,
+        .inventory-filters-bar .ant-input-affix-wrapper,
+        .inventory-filters-bar .ant-select-selector,
+        .inventory-filters-bar .ant-input-number {
+          background-color: ${token.colorCardBg} !important;
+          background: ${token.colorCardBg} !important;
         }
       `}</style>
 
@@ -1567,6 +1591,16 @@ const Inventory = () => {
 
   return (
     <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}>
+      <style>{`
+        .inventory-filters-bar .ant-input,
+        .inventory-filters-bar .ant-input-affix-wrapper,
+        .inventory-filters-bar .ant-select-selector,
+        .inventory-filters-bar .ant-tree-select .ant-select-selector,
+        .inventory-filters-bar .ant-input-number {
+          background-color: ${token.colorCardBg} !important;
+          background: ${token.colorCardBg} !important;
+        }
+      `}</style>
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: isMobile ? 'space-between' : 'flex-end', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: isMobile ? '16px' : '0' }}>
         {isMobile && (
         <Title level={2} style={{ margin: 0, marginLeft: '8px', fontSize: '23px' }}>
@@ -1605,7 +1639,7 @@ const Inventory = () => {
       })()}
     </div>
 
-      <div style={{ marginBottom: '18px', padding: isMobile ? '0 8px' : '0' }}>
+      <div className="inventory-filters-bar" style={{ marginBottom: '18px', padding: isMobile ? '0 8px' : '0' }}>
         <Row gutter={[8, 8]} align="middle">
           {/* 1. Search Box (Thora chota kiya UI theek karne ke liye) */}
           <Col xs={24} sm={12} md={6} lg={5}>

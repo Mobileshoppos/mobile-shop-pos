@@ -117,6 +117,7 @@ const POS = () => {
   const searchInputRef = useRef(null);
   const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
   const [productForVariantSelection, setProductForVariantSelection] = useState(null);
+  const [variantFilterForModal, setVariantFilterForModal] = useState(null); // <--- NAYA IZAFA
   const [isDraftModalOpen, setIsDraftModalOpen] = useState(false); 
   const [heldCount, setHeldCount] = useState(0);
   const [isPurchaseModalVisible, setIsPurchaseModalVisible] = useState(false);
@@ -258,6 +259,7 @@ const POS = () => {
             const parentProduct = allProducts.find(p => p.id === variantItem.product_id);
             if (parentProduct) {
                 setProductForVariantSelection(parentProduct);
+                setVariantFilterForModal(variantItem); // <--- NAYA IZAFA: Sirf isi variant ko filter karega
                 setIsVariantModalOpen(true);
             }
         } else {
@@ -462,6 +464,7 @@ const POS = () => {
     } else {
        // Agar 1 se zyada variants hon to modal khol dein
        setProductForVariantSelection(product);
+       setVariantFilterForModal(null); // <--- NAYA IZAFA: Grid view se click par saare variants dikhayein
        setIsVariantModalOpen(true);
     }
   };
@@ -1474,7 +1477,7 @@ const POS = () => {
   };
 
   return (
-    <div style={{ padding: isMobile ? '4px 0' : '8px 0' }}>
+    <div style={{ padding: isMobile ? '4px 0' : '0' }}>
     <style>
         {`
           /* Scrollbar ki churai (width) */
@@ -1494,6 +1497,27 @@ const POS = () => {
           /* Jab mouse upar layein */
           ::-webkit-scrollbar-thumb:hover {
             background-color: ${token.colorTextTertiary};
+          }
+          
+          /* NAYA: POS Inputs & Selects White Background */
+          .pos-search-bar .ant-input,
+          .pos-search-bar .ant-select-selector,
+          .pos-customer-bar .ant-select-selector,
+          .pos-customer-bar .ant-btn,
+          .pos-account-select .ant-select-selector {
+            background-color: ${token.colorCardBg} !important;
+            background: ${token.colorCardBg} !important;
+          }
+          
+          /* NAYA: Payment Toggle (Full / Credit) Clean Standard Accent */
+          .pos-payment-toggle .ant-radio-button-wrapper {
+            background-color: ${token.colorCardBg};
+            border-color: ${token.colorBorder};
+          }
+          .pos-payment-toggle .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled) {
+            background-color: ${token.colorPrimary} !important;
+            border-color: ${token.colorPrimary} !important;
+            color: #ffffff !important;
           }
         `}
       </style>
@@ -1531,9 +1555,9 @@ const POS = () => {
       )}
       <Row gutter={16}>
         <Col xs={24} md={13} style={{ display: (isMobile && mobileTab !== 'products') ? 'none' : 'block' }}>
-          <Card variant="borderless" style={{ background: 'transparent', boxShadow: 'none' }} styles={{ body: { padding: isMobile ? '8px 0' : '0 0px 0 0', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 110px)' } }}>
+          <Card variant="borderless" style={{ background: 'transparent', boxShadow: 'none' }} styles={{ body: { padding: isMobile ? '8px 0' : '0 0px 0 0', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 118px)' } }}>
             {/* === ROW 1: SEARCH, CATEGORY, BUTTONS === */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <div className="pos-search-bar" style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
               
               {/* 1. Search & Scan Input */}
               <Input
@@ -1946,18 +1970,35 @@ const POS = () => {
           </Card>
         </Col>
         <Col xs={24} md={11} style={{ display: (isMobile && mobileTab !== 'cart') ? 'none' : 'block' }}>
-          <Card variant="borderless" style={{ background: 'transparent', boxShadow: 'none' }} styles={{ body: { padding: isMobile ? '16px 0 0 0' : '0 0 0 16px', borderLeft: isMobile ? 'none' : `1px solid ${token.colorBorderSecondary}`, borderTop: isMobile ? `1px solid ${token.colorBorderSecondary}` : 'none', display: 'flex', flexDirection: 'column', height: isMobile ? 'auto' : 'calc(100vh - 110px)' } }}>
+          <Card 
+            style={{ 
+              borderRadius: 8,
+              border: `1px solid ${token.colorCardBorder}`, 
+              boxShadow: `0 4px 12px ${token.colorCardShadow}`, 
+              backgroundColor: token.colorCardBg || token.colorBgContainer,
+              height: isMobile ? 'auto' : 'calc(100vh - 118px)',
+              display: 'flex',
+              flexDirection: 'column'
+            }} 
+            styles={{ 
+              body: { 
+                padding: '12px 14px', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                height: '100%' 
+              } 
+            }}
+          >
             {/* --- TOP ROW: Current Bill, Customer Select & Reset --- */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
               <Text strong style={{ fontSize: '15px', whiteSpace: 'nowrap' }}>Current Bill</Text>
               
-              <Space.Compact style={{ flex: 1 }}>
+              <Space.Compact className="pos-customer-bar" style={{ flex: 1 }}>
                 <Select 
                   id="pos-customer-select"
                   showSearch 
-                  variant="borderless"
                   placeholder="Select customer..." 
-                  style={{ width: '100%', background: token.colorFillAlter, borderRadius: '6px 0 0 6px' }} 
+                  style={{ width: '100%' }} 
                   value={selectedCustomer} 
                   onChange={(value) => setSelectedCustomer(value)} 
                   filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())} 
@@ -2257,13 +2298,12 @@ const POS = () => {
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     <InputNumber 
   id="pos-discount-input"
-  variant="borderless" 
   size="small" 
-  style={{ width: '80px', background: token.colorFillAlter, borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }} 
+  style={{ width: '80px', background: token.colorCardBg, borderRadius: '6px', border: `1px solid ${token.colorBorder}` }} 
   placeholder="0" 
   value={discount} 
   onChange={onDiscountChange} 
-  onBlur={validateBillDiscount} // <--- NAYA IZAFA: Bahar click karne par check karega
+  onBlur={validateBillDiscount} 
   min={0} 
 />
                     <Radio.Group 
@@ -2339,6 +2379,7 @@ const POS = () => {
                 
                 {/* 1. Payment Type Toggle (Full vs Credit) */}
                 <Radio.Group 
+                  className="pos-payment-toggle"
                   value={paymentMethod} 
                   onChange={(e) => setPaymentMethod(e.target.value)}
                   buttonStyle="solid"
@@ -2361,6 +2402,7 @@ const POS = () => {
                 {/* 2. Unified Account Dropdown (Cash + Banks) */}
                 <Select
                   id="pos-account-select"
+                  className="pos-account-select"
                   size={isMobile ? "middle" : "large"}
                   value={selectedAccountId}
                   onChange={(val) => setSelectedAccountId(val)}
@@ -2540,7 +2582,7 @@ const POS = () => {
 
   </Form>
 </Modal>
-      {isVariantModalOpen && <SelectVariantModal visible={isVariantModalOpen} onCancel={() => setIsVariantModalOpen(false)} onOk={handleVariantsSelected} product={productForVariantSelection} cart={cart} />}
+      {isVariantModalOpen && <SelectVariantModal visible={isVariantModalOpen} onCancel={() => { setIsVariantModalOpen(false); setVariantFilterForModal(null); }} onOk={handleVariantsSelected} product={productForVariantSelection} cart={cart} variantFilter={variantFilterForModal} />}
       
       <DraftBillsModal 
         visible={isDraftModalOpen} 

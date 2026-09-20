@@ -13,6 +13,14 @@ export const themeConfig = {
       colorPrimaryHover: '#088395',
       colorPrimaryActive: '#5F6368',
     },
+    Select: {
+      optionSelectedBg: 'rgba(8, 131, 149, 0.12)',     // Side Menu jesa soft teal highlight
+      optionSelectedColor: '#09637E',                  // Standard teal text
+      optionActiveBg: 'rgba(8, 131, 149, 0.06)',       // Halka hover effect
+    },
+    TreeSelect: {
+      nodeSelectedBg: 'rgba(8, 131, 149, 0.12)',       // Category Tree ke liye soft highlight
+    },
   },
 };
 

@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Table, Button, App, Tag, Space, InputNumber } from 'antd';
-import { PlusOutlined, CheckOutlined } from '@ant-design/icons';
+import { Modal, Table, Button, App, Tag, Space, InputNumber, theme, Input } from 'antd';
+import { PlusOutlined, CheckOutlined, SearchOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { getPlanLimits } from '../config/subscriptionPlans'; // <--- NAYA IZAFA
 import { db } from '../db';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
-const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
+const SelectVariantModal = ({ visible, onCancel, onOk, product, cart, variantFilter }) => {
+    const { token } = theme.useToken();
+    const isMobile = useMediaQuery('(max-width: 768px)');
     const { profile } = useAuth();
     const limits = getPlanLimits(profile?.subscription_tier); // <--- NAYA IZAFA
     const { message, modal } = App.useApp(); // <--- NAYA IZAFA: modal ko add kiya
@@ -15,6 +18,7 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
     const [warehouses, setWarehouses] = useState([]); // <--- NAYA IZAFA
     const [loading, setLoading] = useState(false);
     const [selectedVariants, setSelectedVariants] = useState([]);
+    const [searchText, setSearchText] = useState(''); // <--- NAYA IZAFA: Search ke liye
 
     // NAYA IZAFA: Load warehouses
     useEffect(() => {
@@ -36,7 +40,7 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
                     const mainShop = whData.find(w => w.is_default);
                     const mainShopId = mainShop ? mainShop.id : null;
 
-                    const data = await db.inventory
+                    let data = await db.inventory
                         .where('product_id').equals(product.id)
                         .filter(item => 
                             (item.status === 'Available' || item.status === 'available') && 
@@ -44,6 +48,12 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
                         )
                         .toArray();
                     
+                    // --- NAYA IZAFA: Agar kisi makhsoos variant par click hua hai, to sirf uske IMEIs dikhayein ---
+                    if (variantFilter && variantFilter.ids) {
+                        data = data.filter(item => variantFilter.ids.includes(item.id));
+                    }
+                    // ---------------------------------------------------------------------------------------------
+
                     // Error check ki zaroorat nahi kyunke Dexie empty array dega agar kuch na mila
 
                     const grouped = {};
@@ -148,6 +158,47 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
             }
         } else if (quantity > 0) {
             setSelectedVariants([...selectedVariants, { key, quantity }]);
+        }
+    };
+
+    // --- NAYA IZAFA: Smart Filter Logic ---
+    const filteredVariants = variants.filter(v => {
+        if (!searchText) return true;
+        const lowerSearch = searchText.toLowerCase();
+        // Search in IMEI
+        if (v.imei && v.imei.toLowerCase().includes(lowerSearch)) return true;
+        // Search in Batch
+        if (v.batch_number && v.batch_number.toLowerCase().includes(lowerSearch)) return true;
+        // Search in Attributes
+        if (v.item_attributes) {
+            return Object.values(v.item_attributes).some(val => 
+                val && val.toString().toLowerCase().includes(lowerSearch)
+            );
+        }
+        return false;
+    });
+
+    // --- NAYA IZAFA: Select/Deselect All Logic ---
+    // Check karein ke kya filter shuda tamam items pehle se select ho chuke hain?
+    const areAllFilteredSelected = filteredVariants.length > 0 && filteredVariants.every(v => 
+        selectedVariants.some(sv => sv.key === v.key)
+    );
+
+    const handleSelectAllToggle = () => {
+        if (areAllFilteredSelected) {
+            // Deselect All: Jo items screen par filter huye hain, unko selection se nikaal dein
+            const filteredKeys = filteredVariants.map(v => v.key);
+            setSelectedVariants(selectedVariants.filter(sv => !filteredKeys.includes(sv.key)));
+        } else {
+            // Select All: Screen wale tamam items ko select kar lein
+            const newSelections = [...selectedVariants];
+            filteredVariants.forEach(variant => {
+                const exists = newSelections.find(v => v.key === variant.key);
+                if (!exists && variant.stock > 0) {
+                    newSelections.push({ key: variant.key, quantity: 1 });
+                }
+            });
+            setSelectedVariants(newSelections);
         }
     };
 
@@ -274,16 +325,42 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart }) => {
                 </div>
             }
             open={visible}
-            onCancel={onCancel}
-            onOk={handleOk}
+            onCancel={() => { setSearchText(''); onCancel(); }}
+            onOk={() => { setSearchText(''); handleOk(); }}
             okText="Add Selected to Cart"
             okButtonProps={{ disabled: selectedVariants.length === 0 }}
-            width={800}
+            width={isMobile ? '95%' : '80%'}
+            style={{ top: 20 }}
             destroyOnHidden={true}
         >
+            {/* --- NAYA IZAFA: Search & Select All Bar --- */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px' }}>
+                <Input 
+                    placeholder="Search IMEI, Batch, or Details..." 
+                    prefix={<SearchOutlined style={{ color: token.colorTextSecondary }} />}
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    allowClear
+                    style={{ flex: 1, backgroundColor: token.colorCardBg }}
+                />
+                <Button onClick={handleSelectAllToggle} disabled={filteredVariants.length === 0}>
+                    {areAllFilteredSelected ? 'Deselect All' : 'Select All'}
+                </Button>
+            </div>
+
+            <style>{`
+              .select-variant-table .ant-table-tbody > tr > td {
+                background-color: ${token.colorCardBg} !important;
+                border-bottom: 1px solid ${token.colorBorderSecondary} !important;
+              }
+              .select-variant-table .ant-table-tbody > tr:last-child > td {
+                border-bottom: none !important;
+              }
+            `}</style>
             <Table
+                className="select-variant-table"
                 columns={columns}
-                dataSource={variants}
+                dataSource={filteredVariants}
                 rowKey="key"
                 loading={loading}
                 pagination={false}

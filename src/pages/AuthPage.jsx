@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout, Modal, Space, Divider, Checkbox, theme, ConfigProvider } from 'antd';
 import { LockOutlined, MailOutlined, AppstoreOutlined, KeyOutlined, UserOutlined } from '@ant-design/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import { darkThemeTokens } from '../theme/themeConfig';
+import { lightThemeTokens } from '../theme/themeConfig';
 
 const { Title, Text } = Typography;
 const { Content } = Layout;
@@ -365,8 +365,8 @@ const AuthPage = () => {
   );
 
   return (
-    <ConfigProvider theme={{ algorithm: theme.darkAlgorithm, token: darkThemeTokens }}>
-      <Layout style={{ minHeight: '100vh', background: darkThemeTokens.colorBgLayout }}>
+    <ConfigProvider theme={{ algorithm: theme.defaultAlgorithm, token: lightThemeTokens }}>
+      <Layout style={{ minHeight: '100vh', background: lightThemeTokens.colorBgLayout }}>
         <Content style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: isMobile ? '12px 8px' : '20px' }}>
           {/* --- NAYA IZAFA: 2-Column Split Layout (Left: Marketing, Right: Auth Form) --- */}
           <div style={{ 
@@ -374,11 +374,11 @@ const AuthPage = () => {
             flexDirection: isMobile ? 'column' : 'row', 
             width: isMobile ? '100%' : '90%', 
             maxWidth: '1200px', 
-            background: darkThemeTokens.colorBgContainer, 
+            background: lightThemeTokens.colorCardBg, 
             borderRadius: '16px', 
             overflow: 'hidden', 
-            border: `1px solid ${darkThemeTokens.colorBorderSecondary}`,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.2)'
+            border: `1px solid ${lightThemeTokens.colorBorder}`,
+            boxShadow: '0 8px 30px rgba(0,0,0,0.08)'
           }}>
 
             {/* LEFT SIDE - Marketing Banner (Sirf bari screen par nazar aayega) */}
@@ -389,27 +389,27 @@ const AuthPage = () => {
                 display: 'flex', 
                 flexDirection: 'column', 
                 justifyContent: 'space-between',
-                background: `linear-gradient(135deg, ${darkThemeTokens.colorBgElevated} 0%, ${darkThemeTokens.colorBgLayout} 100%)`,
-                borderRight: `1px solid ${darkThemeTokens.colorBorderSecondary}`
+                background: `linear-gradient(135deg, #FFFFFF 0%, ${lightThemeTokens.colorBgLayout} 100%)`,
+                borderRight: `1px solid ${lightThemeTokens.colorBorder}`
               }}>
                 <div>
-                  <Title level={1} style={{ color: darkThemeTokens.colorPrimary, margin: 0, fontWeight: 900, fontSize: '42px', letterSpacing: '1px' }}>
+                  <Title level={1} style={{ color: lightThemeTokens.colorMenuSelectedText || '#09637E', margin: 0, fontWeight: 900, fontSize: '42px', letterSpacing: '1px' }}>
                     SadaPOS
                   </Title>
                   <div style={{ marginTop: '24px' }}>
-                    <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    <Text style={{ color: lightThemeTokens.colorTextSecondary, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px' }}>
                       Complete Shop Management
                     </Text>
-                    <Title level={2} style={{ color: darkThemeTokens.colorTextHeading, marginTop: '8px', marginBottom: '16px', fontWeight: 700 }}>
+                    <Title level={2} style={{ color: lightThemeTokens.colorTextHeading, marginTop: '8px', marginBottom: '16px', fontWeight: 700 }}>
                       POS & Inventory Software
                     </Title>
-                    <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '16px', lineHeight: '1.6', display: 'block' }}>
+                    <Text style={{ color: lightThemeTokens.colorText, fontSize: '16px', lineHeight: '1.6', display: 'block' }}>
                       All-in-one solution for point of sale, inventory tracking, invoicing, and reporting — built specifically for Pakistani businesses.
                     </Text>
                   </div>
 
                   <div style={{ marginTop: '40px' }}>
-                    <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>
+                    <Text style={{ color: lightThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>
                       Everything you need in one place
                     </Text>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '16px' }}>
@@ -417,9 +417,9 @@ const AuthPage = () => {
                         <div key={tag} style={{ 
                           padding: '6px 16px', 
                           borderRadius: '20px', 
-                          border: `1px solid ${darkThemeTokens.colorBorderSecondary}`,
-                          background: 'rgba(255,255,255,0.03)',
-                          color: darkThemeTokens.colorTextHeading,
+                          border: `1px solid ${lightThemeTokens.colorBorder}`,
+                          background: '#FFFFFF',
+                          color: lightThemeTokens.colorText,
                           fontSize: '13px'
                         }}>
                           {tag}
@@ -429,18 +429,18 @@ const AuthPage = () => {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '40px', paddingTop: '24px', borderTop: `1px solid ${darkThemeTokens.colorBorderSecondary}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '40px', paddingTop: '24px', borderTop: `1px solid ${lightThemeTokens.colorBorder}` }}>
                   <div>
-                    <Title level={3} style={{ margin: 0, color: darkThemeTokens.colorTextHeading }}>5000+</Title>
-                    <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase' }}>Shops</Text>
+                    <Title level={3} style={{ margin: 0, color: lightThemeTokens.colorTextHeading }}>5000+</Title>
+                    <Text style={{ color: lightThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase' }}>Shops</Text>
                   </div>
                   <div>
-                    <Title level={3} style={{ margin: 0, color: darkThemeTokens.colorTextHeading }}>99.9%</Title>
-                    <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase' }}>Uptime</Text>
+                    <Title level={3} style={{ margin: 0, color: lightThemeTokens.colorTextHeading }}>99.9%</Title>
+                    <Text style={{ color: lightThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase' }}>Uptime</Text>
                   </div>
                   <div>
-                    <Title level={3} style={{ margin: 0, color: darkThemeTokens.colorTextHeading }}>24/7</Title>
-                    <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase' }}>Offline Sync</Text>
+                    <Title level={3} style={{ margin: 0, color: lightThemeTokens.colorTextHeading }}>24/7</Title>
+                    <Text style={{ color: lightThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase' }}>Offline Sync</Text>
                   </div>
                 </div>
               </div>
@@ -450,8 +450,8 @@ const AuthPage = () => {
             <div style={{ flex: 1, padding: isMobile ? '24px 16px' : '40px 40px 20px 40px', display: 'flex', flexDirection: 'column', justifyContent: isVerificationSent ? 'center' : 'flex-start' }}>
               {/* Mobile par title dikhane ke liye */}
               {isMobile && (
-                <Title level={3} style={{ textAlign: 'center', color: darkThemeTokens.colorTextHeading, marginBottom: '24px' }}>
-                  <AppstoreOutlined style={{ marginRight: '8px', color: darkThemeTokens.colorPrimary }} /> SadaPOS
+                <Title level={3} style={{ textAlign: 'center', color: lightThemeTokens.colorTextHeading, marginBottom: '24px' }}>
+                  <AppstoreOutlined style={{ marginRight: '8px', color: lightThemeTokens.colorMenuSelectedText || '#09637E' }} /> SadaPOS
                 </Title>
               )}
 
@@ -468,9 +468,9 @@ const AuthPage = () => {
                       fontSize: '15px', 
                       fontWeight: 600, 
                       borderRadius: '8px',
-                      background: 'rgba(255,255,255,0.06)',
-                      borderColor: darkThemeTokens.colorBorderSecondary,
-                      color: darkThemeTokens.colorTextHeading,
+                      background: '#FFFFFF',
+                      borderColor: lightThemeTokens.colorBorder,
+                      color: lightThemeTokens.colorText,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -480,7 +480,7 @@ const AuthPage = () => {
                     <GoogleIcon /> Continue with Google
                   </Button>
 
-                  <Divider style={{ margin: '8px 0 16px 0', fontSize: '12px', color: darkThemeTokens.colorTextSecondary }}>
+                  <Divider style={{ margin: '8px 0 16px 0', fontSize: '12px', color: lightThemeTokens.colorTextSecondary }}>
                     OR
                   </Divider>
 
@@ -513,21 +513,21 @@ const AuthPage = () => {
                     width: '72px', 
                     height: '72px', 
                     borderRadius: '50%', 
-                    background: 'rgba(26, 182, 201, 0.12)', 
-                    border: `1px solid ${darkThemeTokens.colorPrimary}`,
+                    background: 'rgba(9, 99, 126, 0.1)', 
+                    border: `1px solid ${lightThemeTokens.colorMenuSelectedText || '#09637E'}`,
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center', 
                     margin: '0 auto 20px auto' 
                   }}>
-                    <MailOutlined style={{ fontSize: '32px', color: darkThemeTokens.colorPrimary }} />
+                    <MailOutlined style={{ fontSize: '32px', color: lightThemeTokens.colorMenuSelectedText || '#09637E' }} />
                   </div>
 
-                  <Title level={2} style={{ color: darkThemeTokens.colorTextHeading, margin: '0 0 8px 0', fontSize: '26px', fontWeight: 700 }}>
+                  <Title level={2} style={{ color: lightThemeTokens.colorTextHeading, margin: '0 0 8px 0', fontSize: '26px', fontWeight: 700 }}>
                     Check Your Inbox
                   </Title>
 
-                  <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '14px', display: 'block' }}>
+                  <Text style={{ color: lightThemeTokens.colorTextSecondary, fontSize: '14px', display: 'block' }}>
                     We've sent a verification link to:
                   </Text>
 
@@ -535,11 +535,11 @@ const AuthPage = () => {
                   <div style={{ margin: '12px 0 16px 0' }}>
                     <span style={{ 
                       display: 'inline-block',
-                      background: 'rgba(255,255,255,0.06)', 
-                      color: darkThemeTokens.colorPrimary, 
+                      background: lightThemeTokens.colorBgLayout, 
+                      color: lightThemeTokens.colorMenuSelectedText || '#09637E', 
                       padding: '6px 16px', 
                       borderRadius: '8px', 
-                      border: `1px solid ${darkThemeTokens.colorBorderSecondary}`,
+                      border: `1px solid ${lightThemeTokens.colorBorder}`,
                       fontWeight: 600,
                       fontSize: '15px'
                     }}>
@@ -547,11 +547,11 @@ const AuthPage = () => {
                     </span>
                   </div>
 
-                  <Text style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '13px', lineHeight: '1.5', display: 'block', maxWidth: '380px', margin: '0 auto 20px auto' }}>
+                  <Text style={{ color: lightThemeTokens.colorTextSecondary, fontSize: '13px', lineHeight: '1.5', display: 'block', maxWidth: '380px', margin: '0 auto 20px auto' }}>
                     Please click the confirmation link in the email to activate your account and start setting up your shop.
                   </Text>
 
-                  {/* 1-Click Webmail Direct Button (Vibrant Brand Color) */}
+                  {/* 1-Click Webmail Direct Button */}
                   {getMailProviderUrl(registeredEmail) ? (
                     <Button 
                       type="primary" 
@@ -565,9 +565,9 @@ const AuthPage = () => {
                         fontSize: '15px', 
                         fontWeight: 700, 
                         borderRadius: '8px',
-                        background: darkThemeTokens.colorPrimary,
-                        borderColor: darkThemeTokens.colorPrimary,
-                        color: '#121212'
+                        background: lightThemeTokens.colorMenuSelectedText || '#09637E',
+                        borderColor: lightThemeTokens.colorMenuSelectedText || '#09637E',
+                        color: '#FFFFFF'
                       }}
                     >
                       {getMailProviderName(registeredEmail)}
@@ -584,9 +584,9 @@ const AuthPage = () => {
                         fontSize: '15px', 
                         fontWeight: 700, 
                         borderRadius: '8px',
-                        background: darkThemeTokens.colorPrimary,
-                        borderColor: darkThemeTokens.colorPrimary,
-                        color: '#121212'
+                        background: lightThemeTokens.colorMenuSelectedText || '#09637E',
+                        borderColor: lightThemeTokens.colorMenuSelectedText || '#09637E',
+                        color: '#FFFFFF'
                       }}
                     >
                       Open Email App
@@ -609,16 +609,16 @@ const AuthPage = () => {
                       fontWeight: 600, 
                       borderRadius: '8px',
                       marginTop: '10px',
-                      background: 'rgba(255,255,255,0.04)',
-                      borderColor: darkThemeTokens.colorBorderSecondary,
-                      color: darkThemeTokens.colorTextHeading
+                      background: '#FFFFFF',
+                      borderColor: lightThemeTokens.colorBorder,
+                      color: lightThemeTokens.colorText
                     }}
                   >
                     Already verified? Proceed to Login
                   </Button>
 
                   {/* Troubleshooting Hint */}
-                  <Text style={{ fontSize: '12px', color: darkThemeTokens.colorTextSecondary, display: 'block', marginTop: '16px' }}>
+                  <Text style={{ fontSize: '12px', color: lightThemeTokens.colorTextSecondary, display: 'block', marginTop: '16px' }}>
                     Can't find the email? Check your <b>Spam</b> or <b>Promotions</b> folder.
                   </Text>
 
@@ -626,13 +626,13 @@ const AuthPage = () => {
 
                   {/* Resend Action */}
                   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
-                    <Text style={{ color: darkThemeTokens.colorTextSecondary }}>Didn't receive the email?</Text>
+                    <Text style={{ color: lightThemeTokens.colorTextSecondary }}>Didn't receive the email?</Text>
                     <Button 
                       type="link" 
                       disabled={resendCooldown > 0} 
                       loading={resendLoading} 
                       onClick={handleResendVerification}
-                      style={{ padding: 0, fontSize: '13px', fontWeight: 600, color: darkThemeTokens.colorPrimary }}
+                      style={{ padding: 0, fontSize: '13px', fontWeight: 600, color: lightThemeTokens.colorMenuSelectedText || '#09637E' }}
                     >
                       {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Email'}
                     </Button>
@@ -643,7 +643,7 @@ const AuthPage = () => {
                     <Button 
                       type="link" 
                       onClick={() => { setIsVerificationSent(false); setActiveTab('2'); }} 
-                      style={{ color: darkThemeTokens.colorTextSecondary, fontSize: '12px', padding: 0 }}
+                      style={{ color: lightThemeTokens.colorTextSecondary, fontSize: '12px', padding: 0 }}
                     >
                       Wrong email address? Back to Sign Up
                     </Button>
@@ -653,13 +653,13 @@ const AuthPage = () => {
               <Divider style={{ margin: '12px 0' }} />
               <div style={{ textAlign: 'center' }}>
                 <Space size="small" split={<Divider type="vertical" />}>
-                  <Typography.Link href="https://www.sadapos.com/privacy-policy" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+                  <Typography.Link href="https://www.sadapos.com/privacy-policy" target="_blank" style={{ fontSize: '12px', color: lightThemeTokens.colorTextSecondary }}>
                     Privacy
                   </Typography.Link>
-                  <Typography.Link href="https://www.sadapos.com/terms-of-service" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+                  <Typography.Link href="https://www.sadapos.com/terms-of-service" target="_blank" style={{ fontSize: '12px', color: lightThemeTokens.colorTextSecondary }}>
                     Terms
                   </Typography.Link>
-                  <Typography.Link href="https://www.sadapos.com/refunds-policy" target="_blank" style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+                  <Typography.Link href="https://www.sadapos.com/refunds-policy" target="_blank" style={{ fontSize: '12px', color: lightThemeTokens.colorTextSecondary }}>
                     Refund
                   </Typography.Link>
                 </Space>
