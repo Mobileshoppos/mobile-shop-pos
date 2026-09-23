@@ -230,7 +230,8 @@ const BarcodePrinter = ({ visible, onClose, product, variant, bulkItems }) => {
       title={isBulk ? "Print Bulk Barcodes" : "Print Barcode Sticker"}
       open={visible}
       onCancel={onClose}
-      width={isBulk ? 700 : 550}
+      width="80%"
+      style={{ top: 20 }}
       footer={[
         <Button key="cancel" onClick={onClose}>Cancel</Button>,
         <Button key="print" type="primary" icon={<PrinterOutlined />} onClick={handlePrint}>
@@ -238,143 +239,160 @@ const BarcodePrinter = ({ visible, onClose, product, variant, bulkItems }) => {
         </Button>
       ]}
     >
-      <Row gutter={24} style={{ marginTop: '15px' }}>
-        {/* Left Side: Settings Panel */}
-        <Col span={isBulk ? 10 : 12}>
-          <div style={{ padding: '15px', background: token.colorFillAlter, borderRadius: '8px', height: '100%' }}>
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              <div>
-                <Text strong><SettingOutlined /> Sticker Settings</Text>
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text>Shop Name ({profile?.shop_name || 'My Shop'}):</Text>
-                <Switch checked={showShopName} onChange={setShowShopName} size="small" />
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text>Show Item Name:</Text>
-                <Switch checked={showName} onChange={setShowName} size="small" />
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text>Show Price:</Text>
-                <Switch checked={showPrice} onChange={setShowPrice} size="small" />
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text>Show Date:</Text>
-                <Switch checked={showDate} onChange={setShowDate} size="small" />
-              </div>
+      <Row gutter={20} style={{ marginTop: '16px' }}>
+        {/* Left Side: 2-Column Settings Panel */}
+        <Col xs={24} md={isBulk ? 14 : 15}>
+          <div style={{ 
+            padding: '16px', 
+            background: token.colorFillAlter, 
+            borderRadius: '8px', 
+            border: `1px solid ${token.colorBorderSecondary}`,
+            height: '100%' 
+          }}>
+            <Text strong style={{ display: 'block', marginBottom: '14px', fontSize: '14px', color: token.colorTextHeading }}>
+              <SettingOutlined style={{ marginRight: '6px' }} /> Sticker Settings
+            </Text>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text>Show Warranty:</Text>
-                <Switch checked={showWarranty} onChange={setShowWarranty} size="small" />
-              </div>
+            {/* 2-Columns Grid of Switches */}
+            <Row gutter={[12, 10]}>
+              <Col xs={24} sm={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: token.colorCardBg, padding: '7px 12px', borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }}>
+                  <Text style={{ fontSize: '12px' }}>Shop Name</Text>
+                  <Switch checked={showShopName} onChange={setShowShopName} size="small" />
+                </div>
+              </Col>
+              
+              <Col xs={24} sm={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: token.colorCardBg, padding: '7px 12px', borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }}>
+                  <Text style={{ fontSize: '12px' }}>Item Name</Text>
+                  <Switch checked={showName} onChange={setShowName} size="small" />
+                </div>
+              </Col>
+              
+              <Col xs={24} sm={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: token.colorCardBg, padding: '7px 12px', borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }}>
+                  <Text style={{ fontSize: '12px' }}>Price</Text>
+                  <Switch checked={showPrice} onChange={setShowPrice} size="small" />
+                </div>
+              </Col>
+              
+              <Col xs={24} sm={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: token.colorCardBg, padding: '7px 12px', borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }}>
+                  <Text style={{ fontSize: '12px' }}>Print Date</Text>
+                  <Switch checked={showDate} onChange={setShowDate} size="small" />
+                </div>
+              </Col>
+
+              <Col xs={24} sm={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: token.colorCardBg, padding: '7px 12px', borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }}>
+                  <Text style={{ fontSize: '12px' }}>Warranty</Text>
+                  <Switch checked={showWarranty} onChange={setShowWarranty} size="small" />
+                </div>
+              </Col>
 
               {profile?.enable_batch_expiry && (
-                  <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text>Show Batch No:</Text>
-                        <Switch checked={showBatch} onChange={setShowBatch} size="small" />
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text>Show Expiry Date:</Text>
-                        <Switch checked={showExpiry} onChange={setShowExpiry} size="small" />
-                      </div>
-                  </>
-              )}
-
-              <div>
-                <Text style={{ display: 'block', marginBottom: '4px' }}>Sticker/Page Size:</Text>
-                <Select value={stickerSize} onChange={setStickerSize} style={{ width: '100%' }} size="small">
-                  <Option value="50x25">50mm x 25mm (Thermal Roll)</Option>
-                  <Option value="38x25">38mm x 25mm (Thermal Roll)</Option>
-                  <Option value="58x40">58mm x 40mm (Thermal Roll)</Option>
-                  <Option value="A4-40">A4 Sheet (40 Stickers)</Option>
-                </Select>
-              </div>
-
-              {/* Single mode mein Number of copies ka box dikhayein */}
-              {!isBulk && (
-                  <div>
-                    <Text style={{ display: 'block', marginBottom: '4px' }}>Number of Copies:</Text>
-                    <InputNumber min={1} max={500} value={copies} onChange={setCopies} style={{ width: '100%' }} size="small" />
-                  </div>
-              )}
-            </Space>
-
-            {/* NAYA IZAFA: Bulk Mode mein chota sa Preview Left Side par dikhayein */}
-            {isBulk && bulkList.length > 0 && (
-                <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <Text type="secondary" style={{ fontSize: '12px', marginBottom: '8px' }}>Sample Preview</Text>
-                    <div style={{ 
-                        border: `1px dashed ${token.colorBorder}`, 
-                        padding: '10px', 
-                        borderRadius: '8px', 
-                        backgroundColor: 'white',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                        transform: 'scale(0.9)' /* Thora chota kar diya taake jagah kam gheray */
-                    }}>
-                        {renderStickerContent(bulkList[0].product_name, bulkList[0].product_brand, bulkList[0].barcode, bulkList[0].sale_price, bulkList[0].warranty_days || 0, bulkList[0].batch_number, bulkList[0].expiry_date)}
+                <>
+                  <Col xs={24} sm={12}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: token.colorCardBg, padding: '7px 12px', borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }}>
+                      <Text style={{ fontSize: '12px' }}>Batch No</Text>
+                      <Switch checked={showBatch} onChange={setShowBatch} size="small" />
                     </div>
-                </div>
-            )}
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: token.colorCardBg, padding: '7px 12px', borderRadius: '6px', border: `1px solid ${token.colorBorderSecondary}` }}>
+                      <Text style={{ fontSize: '12px' }}>Expiry Date</Text>
+                      <Switch checked={showExpiry} onChange={setShowExpiry} size="small" />
+                    </div>
+                  </Col>
+                </>
+              )}
 
+              {/* Bottom Controls: Sticker Size & Number of Copies */}
+              <Col xs={24} sm={12}>
+                <div style={{ marginTop: '6px' }}>
+                  <Text type="secondary" style={{ display: 'block', fontSize: '11px', marginBottom: '3px' }}>Sticker / Page Size</Text>
+                  <Select value={stickerSize} onChange={setStickerSize} style={{ width: '100%' }}>
+                    <Option value="50x25">50mm x 25mm (Thermal Roll)</Option>
+                    <Option value="38x25">38mm x 25mm (Thermal Roll)</Option>
+                    <Option value="58x40">58mm x 40mm (Thermal Roll)</Option>
+                    <Option value="A4-40">A4 Sheet (40 Stickers)</Option>
+                  </Select>
+                </div>
+              </Col>
+
+              {!isBulk && (
+                <Col xs={24} sm={12}>
+                  <div style={{ marginTop: '6px' }}>
+                    <Text type="secondary" style={{ display: 'block', fontSize: '11px', marginBottom: '3px' }}>Number of Copies</Text>
+                    <InputNumber min={1} max={500} value={copies} onChange={setCopies} style={{ width: '100%' }} />
+                  </div>
+                </Col>
+              )}
+            </Row>
           </div>
         </Col>
 
-        {/* Right Side: Preview or Bulk List */}
-        <Col span={isBulk ? 14 : 12} style={{ display: 'flex', flexDirection: 'column', height: isBulk ? '400px' : 'auto' }}>
+        {/* Right Side: Live Preview or Bulk List */}
+        <Col xs={24} md={isBulk ? 10 : 9} style={{ display: 'flex', flexDirection: 'column' }}>
           {isBulk ? (
-              <>
-                  <Text type="secondary" style={{ marginBottom: '10px' }}>Select Items & Quantity</Text>
-                  <div style={{ flex: 1, overflowY: 'auto', border: `1px solid ${token.colorBorder}`, borderRadius: '8px', padding: '10px' }}>
-                      <List
-                          dataSource={bulkList}
-                          renderItem={(item, idx) => (
-                              <List.Item style={{ padding: '8px 0', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                                      <Checkbox 
-                                          checked={item.selected} 
-                                          onChange={(e) => handleBulkSelect(idx, e.target.checked)}
-                                          disabled={!item.barcode}
-                                      />
-                                      <div style={{ flex: 1, marginLeft: '10px', display: 'flex', flexDirection: 'column' }}>
-                                          <Text strong style={{ fontSize: '13px' }}>{item.product_name}</Text>
-                                          <Text type={item.barcode ? "secondary" : "danger"} style={{ fontSize: '11px' }}>
-                                              {item.barcode ? `Barcode: ${item.barcode}` : 'No Barcode (Generate first)'}
-                                          </Text>
-                                      </div>
-                                      <div style={{ width: '70px' }}>
-                                          <InputNumber 
-                                              min={1} 
-                                              value={item.printQty} 
-                                              onChange={(val) => handleBulkQtyChange(idx, val)}
-                                              disabled={!item.selected}
-                                              size="small"
-                                              style={{ width: '100%' }}
-                                          />
-                                      </div>
-                                  </div>
-                              </List.Item>
-                          )}
-                      />
-                  </div>
-              </>
-          ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                  <Text type="secondary" style={{ marginBottom: '10px' }}>Live Preview</Text>
-                  <div style={{ 
-                      border: `1px dashed ${token.colorBorder}`, 
-                      padding: '10px', 
-                      borderRadius: '8px', 
-                      backgroundColor: 'white',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                  }}>
-                      {renderStickerContent(product?.name, product?.brand, variant?.barcode, variant?.sale_price, variant?.warranty_days || product?.default_warranty_days || 0, variant?.batch_number, variant?.expiry_date)}
-                  </div>
+            <>
+              <Text type="secondary" style={{ marginBottom: '10px' }}>Select Items & Quantity</Text>
+              <div style={{ flex: 1, overflowY: 'auto', border: `1px solid ${token.colorBorder}`, borderRadius: '8px', padding: '10px', background: token.colorFillAlter }}>
+                <List
+                  dataSource={bulkList}
+                  renderItem={(item, idx) => (
+                    <List.Item style={{ padding: '8px 0', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+                      <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                        <Checkbox 
+                          checked={item.selected} 
+                          onChange={(e) => handleBulkSelect(idx, e.target.checked)}
+                          disabled={!item.barcode}
+                        />
+                        <div style={{ flex: 1, marginLeft: '10px', display: 'flex', flexDirection: 'column' }}>
+                          <Text strong style={{ fontSize: '13px' }}>{item.product_name}</Text>
+                          <Text type={item.barcode ? "secondary" : "danger"} style={{ fontSize: '11px' }}>
+                            {item.barcode ? `Barcode: ${item.barcode}` : 'No Barcode (Generate first)'}
+                          </Text>
+                        </div>
+                        <div style={{ width: '70px' }}>
+                          <InputNumber 
+                            min={1} 
+                            value={item.printQty} 
+                            onChange={(val) => handleBulkQtyChange(idx, val)}
+                            disabled={!item.selected}
+                            size="small"
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      </div>
+                    </List.Item>
+                  )}
+                />
               </div>
+            </>
+          ) : (
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              height: '100%',
+              padding: '16px',
+              background: token.colorFillAlter,
+              borderRadius: '8px',
+              border: `1px solid ${token.colorBorderSecondary}`
+            }}>
+              <Text strong style={{ fontSize: '13px', color: token.colorTextSecondary, marginBottom: '12px' }}>Live Preview</Text>
+              <div style={{ 
+                border: `1px solid ${token.colorBorder}`, 
+                padding: '14px', 
+                borderRadius: '8px', 
+                backgroundColor: '#FFFFFF',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
+              }}>
+                {renderStickerContent(product?.name, product?.brand, variant?.barcode, variant?.sale_price, variant?.warranty_days || product?.default_warranty_days || 0, variant?.batch_number, variant?.expiry_date)}
+              </div>
+            </div>
           )}
         </Col>
       </Row>

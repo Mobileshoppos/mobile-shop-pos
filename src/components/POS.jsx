@@ -1594,19 +1594,22 @@ const POS = () => {
                 }
               </Select>
 
-              {/* 3. Filter Toggle Button (Yeh Naya Hai) */}
+              {/* 3. Filter Toggle Button */}
               <Tooltip title="More Filters">
                 <Button 
                   icon={<FilterOutlined />} 
-                  type={showFilters ? 'primary' : 'default'}
+                  type={showFilters ? 'primary' : 'text'}
+                  style={{ color: showFilters ? undefined : token.colorHeaderIcon }}
                   onClick={() => setShowFilters(!showFilters)}
                 />
               </Tooltip>
 
-              {/* 3.5 View Mode Toggle (Naya Izafa) */}
+              {/* 3.5 View Mode Toggle */}
               <Tooltip title={viewMode === 'grid' ? "Switch to List View" : "Switch to Grid View"}>
                 <Button 
+                  type="text"
                   icon={viewMode === 'grid' ? <UnorderedListOutlined /> : <AppstoreOutlined />} 
+                  style={{ color: token.colorHeaderIcon }}
                   onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
                 />
               </Tooltip>
@@ -1614,7 +1617,9 @@ const POS = () => {
               {/* 4. Top Selling Button */}
               <Tooltip title="Show Top Selling">
                 <Button
+                  type="text"
                   icon={<StarOutlined />}
+                  style={{ color: token.colorHeaderIcon }}
                   onClick={() => {
                     setActiveCategoryId(null);
                     setSearchTerm('');
@@ -1990,10 +1995,54 @@ const POS = () => {
             }}
           >
             {/* --- TOP ROW: Current Bill, Customer Select & Reset --- */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <Text strong style={{ fontSize: '15px', whiteSpace: 'nowrap' }}>Current Bill</Text>
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: isMobile ? 'column' : 'row',
+              alignItems: isMobile ? 'stretch' : 'center', 
+              gap: '8px', 
+              marginBottom: '12px' 
+            }}>
               
-              <Space.Compact className="pos-customer-bar" style={{ flex: 1 }}>
+              {/* Mobile Header Row (Text + Action Icons) */}
+              {isMobile && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <Text strong style={{ fontSize: '15px' }}>Current Bill</Text>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {profile?.reprint_button_enabled !== false && lastSaleData && (
+                      <Tooltip title="Reprint Last Receipt">
+                        <Button type="text" icon={<PrinterOutlined style={{ color: token.colorInfo }} />} onClick={handleReprintLastReceipt} size="small" />
+                      </Tooltip>
+                    )}
+
+                    {cart.length > 0 && (
+                      <Tooltip title="Hold Bill / Quotation">
+                        <Button id="pos-hold-bill-btn" type="text" icon={<PauseCircleOutlined style={{ color: token.colorWarning }} />} onClick={handleHoldBill} size="small" />
+                      </Tooltip>
+                    )}
+
+                    <Tooltip title="View Drafts">
+                      <Badge count={heldCount} size="small" offset={[-2, 2]}>
+                        <Button id="pos-view-drafts-btn" type="text" icon={<ClockCircleOutlined />} onClick={() => setIsDraftModalOpen(true)} size="small" />
+                      </Badge>
+                    </Tooltip>
+
+                    {cart.length > 0 && (
+                      <Tooltip title="Reset Bill">
+                        <Button id="pos-reset-bill-btn" danger type="text" icon={<DeleteOutlined />} onClick={handleResetCart} size="small" />
+                      </Tooltip>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Desktop Header Text */}
+              {!isMobile && (
+                <Text strong style={{ fontSize: '15px', whiteSpace: 'nowrap' }}>Current Bill</Text>
+              )}
+              
+              {/* Customer Dropdown + Add Button */}
+              <Space.Compact className="pos-customer-bar" style={{ flex: 1, width: isMobile ? '100%' : 'auto' }}>
                 <Select 
                   id="pos-customer-select"
                   showSearch 
@@ -2017,7 +2066,6 @@ const POS = () => {
                       <Button 
                         id="pos-add-customer-btn"
                         icon={<UserAddOutlined />} 
-                        type="text"
                         onClick={() => {
                           if (isLocked) {
                               modal.info({
@@ -2045,40 +2093,46 @@ const POS = () => {
                           }
                         }}
                         disabled={isLocked}
-                        style={{ opacity: isLocked ? 0.7 : 1, background: token.colorFillAlter, borderRadius: '0 6px 6px 0' }}
+                        style={{ 
+                          opacity: isLocked ? 0.7 : 1, 
+                          color: token.colorHeaderIcon,
+                          borderLeft: 'none'
+                        }}
                       />
                     </Tooltip>
                   );
                 })()}
               </Space.Compact>
 
-              {/* 1. Quick Reprint (Always visible if data exists and enabled) */}
-            {profile?.reprint_button_enabled !== false && lastSaleData && (
-              <Tooltip title="Reprint Last Receipt">
-                <Button type="text" icon={<PrinterOutlined style={{ color: token.colorInfo }} />} onClick={handleReprintLastReceipt} style={{ padding: '0 8px' }} />
-              </Tooltip>
-            )}
+              {/* Desktop Action Icons */}
+              {!isMobile && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                  {profile?.reprint_button_enabled !== false && lastSaleData && (
+                    <Tooltip title="Reprint Last Receipt">
+                      <Button type="text" icon={<PrinterOutlined style={{ color: token.colorInfo }} />} onClick={handleReprintLastReceipt} style={{ padding: '0 8px' }} />
+                    </Tooltip>
+                  )}
 
-            {/* 2. Hold Bill (Only if cart has items) */}
-            {cart.length > 0 && (
-              <Tooltip title="Hold Bill / Quotation">
-                <Button id="pos-hold-bill-btn" type="text" icon={<PauseCircleOutlined style={{ color: token.colorWarning }} />} onClick={handleHoldBill} style={{ padding: '0 8px' }} />
-              </Tooltip>
-            )}
+                  {cart.length > 0 && (
+                    <Tooltip title="Hold Bill / Quotation">
+                      <Button id="pos-hold-bill-btn" type="text" icon={<PauseCircleOutlined style={{ color: token.colorWarning }} />} onClick={handleHoldBill} style={{ padding: '0 8px' }} />
+                    </Tooltip>
+                  )}
 
-            {/* 3. View Drafts (Always visible) */}
-            <Tooltip title="View Drafts">
-              <Badge count={heldCount} size="small" offset={[-5, 5]}>
-                <Button id="pos-view-drafts-btn" type="text" icon={<ClockCircleOutlined />} onClick={() => setIsDraftModalOpen(true)} style={{ padding: '0 8px' }} />
-              </Badge>
-            </Tooltip>
+                  <Tooltip title="View Drafts">
+                    <Badge count={heldCount} size="small" offset={[-5, 5]}>
+                      <Button id="pos-view-drafts-btn" type="text" icon={<ClockCircleOutlined />} onClick={() => setIsDraftModalOpen(true)} style={{ padding: '0 8px' }} />
+                    </Badge>
+                  </Tooltip>
 
-            {/* 4. Reset Bill (Only if cart has items) */}
-            {cart.length > 0 && (
-              <Tooltip title="Reset Bill">
-                <Button id="pos-reset-bill-btn" danger type="text" icon={<DeleteOutlined />} onClick={handleResetCart} style={{ padding: '0 8px' }} />
-              </Tooltip>
-            )}
+                  {cart.length > 0 && (
+                    <Tooltip title="Reset Bill">
+                      <Button id="pos-reset-bill-btn" danger type="text" icon={<DeleteOutlined />} onClick={handleResetCart} style={{ padding: '0 8px' }} />
+                    </Tooltip>
+                  )}
+                </div>
+              )}
+
             </div>
             {/* Payment Methods ko video design ke mutabiq neechay Totals ke paas muntaqil kar diya gaya hai */}
             {cart.length === 0 ? <Empty description="Cart is empty" style={{ margin: '40px 0' }} /> : 
@@ -2477,111 +2531,107 @@ const POS = () => {
         </Col>
       </Row>
       <Modal 
-  title="Add a New Customer" 
-  open={isAddCustomerModalOpen} 
-  onCancel={() => setIsAddCustomerModalOpen(false)} 
-  onOk={() => addForm.submit()} 
-  okText="Save Customer"
-  width={600}
->
-  <Form form={addForm} layout="vertical" onFinish={handleAddCustomer} style={{ marginTop: '20px' }}>
-    {/* NAYA IZAFA: Hidden submit button taake Enter dabane se form save ho jaye */}
-    <button type="submit" style={{ display: 'none' }} />
-    <Row gutter={16}>
-      <Col span={12}>
-        <Form.Item name="name" label="Full Name" rules={[{ required: true, message: 'Please enter name' }]}>
-          <Input ref={customerNameInputRef} placeholder="e.g. John Doe" />
-        </Form.Item>
-      </Col>
-      <Col span={12}>
-        <Form.Item name="phone_number" label="Phone / Mobile" rules={[{ required: true, message: 'Please enter phone' }]}>
-          <Input placeholder="e.g. +923001234567" />
-        </Form.Item>
-      </Col>
-    </Row>
+        title="Add a New Customer" 
+        open={isAddCustomerModalOpen} 
+        onCancel={() => setIsAddCustomerModalOpen(false)} 
+        onOk={() => addForm.submit()} 
+        okText="Save Customer"
+        width={isMobile ? '95%' : '80%'}
+        style={{ top: 20 }}
+      >
+        <Form form={addForm} layout="vertical" onFinish={handleAddCustomer} style={{ marginTop: '24px' }}>
+          {/* NAYA IZAFA: Hidden submit button taake Enter dabane se form save ho jaye */}
+          <button type="submit" style={{ display: 'none' }} />
+          
+          <Row gutter={16}>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="name" label="Full Name" rules={[{ required: true, message: 'Please enter name' }]}>
+                <Input ref={customerNameInputRef} placeholder="e.g. John Doe" />
+              </Form.Item>
+            </Col>
+            
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="phone_number" label="Phone / Mobile" rules={[{ required: true, message: 'Please enter phone' }]}>
+                <Input placeholder="e.g. +923001234567" />
+              </Form.Item>
+            </Col>
 
-    <Row gutter={16}>
-      <Col span={12}>
-        <Form.Item name="email" label="Email Address" rules={[{ type: 'email', message: 'Invalid email format' }]}>
-          <Input placeholder="e.g. customer@example.com" />
-        </Form.Item>
-      </Col>
-      <Col span={12}>
-        <Form.Item 
-          name="tax_id" 
-          label={profile?.fbr_integration_enabled ? "NTN / CNIC (FBR)" : "Tax ID / VAT #"} 
-          tooltip={profile?.fbr_integration_enabled ? "FBR requires exact 7 digit NTN or 13 digit CNIC without dashes." : "Required for Business (B2B) invoices"}
-          rules={profile?.fbr_integration_enabled ?[
-            { 
-              pattern: /^(\d{7}|\d{13})$/, 
-              message: 'Must be exactly 7 (NTN) or 13 (CNIC) digits' 
-            }
-          ] :[]}
-        >
-          <Input 
-            placeholder={profile?.fbr_integration_enabled ? "e.g. 1234567 or 4220112345671" : "e.g. TRN-123456"} 
-            onChange={(e) => {
-              if (profile?.fbr_integration_enabled) {
-                addForm.setFieldsValue({ tax_id: e.target.value.replace(/[\s-]/g, '') });
-              }
-            }}
-          />
-        </Form.Item>
-      </Col>
-    </Row>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="email" label="Email Address" rules={[{ type: 'email', message: 'Invalid email format' }]}>
+                <Input placeholder="e.g. customer@example.com" />
+              </Form.Item>
+            </Col>
 
-    <Row gutter={16}>
-      <Col span={12}>
-        <Form.Item name="address" label="Street Address">
-          <Input placeholder="Building, Street, Area..." />
-        </Form.Item>
-      </Col>
-      <Col span={12}>
-        <Form.Item name="customer_group" label="Customer Group" tooltip="Assign to a specific route or category">
-          <Select 
-            mode="tags" 
-            placeholder="e.g. Wholesale, Route A" 
-            options={availableGroups.map(g => ({ label: g, value: g }))}
-          />
-        </Form.Item>
-      </Col>
-    </Row>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item 
+                name="tax_id" 
+                label={profile?.fbr_integration_enabled ? "NTN / CNIC (FBR)" : "Tax ID / VAT #"} 
+                tooltip={profile?.fbr_integration_enabled ? "FBR requires exact 7 digit NTN or 13 digit CNIC without dashes." : "Required for Business (B2B) invoices"}
+                rules={profile?.fbr_integration_enabled ? [
+                  { 
+                    pattern: /^(\d{7}|\d{13})$/, 
+                    message: 'Must be exactly 7 (NTN) or 13 (CNIC) digits' 
+                  }
+                ] : []}
+              >
+                <Input 
+                  placeholder={profile?.fbr_integration_enabled ? "e.g. 1234567 or 4220112345671" : "e.g. TRN-123456"} 
+                  onChange={(e) => {
+                    if (profile?.fbr_integration_enabled) {
+                      addForm.setFieldsValue({ tax_id: e.target.value.replace(/[\s-]/g, '') });
+                    }
+                  }}
+                />
+              </Form.Item>
+            </Col>
 
-    <Row gutter={16}>
-      <Col span={12}>
-        <Form.Item name="city" label="City">
-          <Input placeholder="e.g. Karachi / London" />
-        </Form.Item>
-      </Col>
-      <Col span={12}>
-        <Form.Item name="country" label="Country">
-          <Select 
-            showSearch 
-            placeholder="Select Country" 
-            options={countries}
-            filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
-          />
-        </Form.Item>
-      </Col>
-    </Row>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="customer_group" label="Customer Group" tooltip="Assign to a specific route or category">
+                <Select 
+                  mode="tags" 
+                  placeholder="e.g. Wholesale, Route A" 
+                  options={availableGroups.map(g => ({ label: g, value: g }))}
+                />
+              </Form.Item>
+            </Col>
 
-    {/* --- NAYA IZAFA: Credit Limit Field --- */}
-    {profile?.enable_customer_credit_limits && can('can_set_credit_limit') && (
-      <Row gutter={16}>
-        <Col span={12}>
-          <Form.Item 
-            name="credit_limit" 
-            label="Credit Limit (Rs)" 
-            tooltip="Maximum allowed debt. Leave empty for unlimited, or enter 0 for NO CREDIT."
-          >
-            <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 50000" />
-          </Form.Item>
-        </Col>
-      </Row>
-    )}
+            {profile?.enable_customer_credit_limits && can('can_set_credit_limit') && (
+              <Col xs={24} sm={12} md={8}>
+                <Form.Item 
+                  name="credit_limit" 
+                  label="Credit Limit (Rs)" 
+                  tooltip="Maximum allowed debt. Leave empty for unlimited, or enter 0 for NO CREDIT."
+                >
+                  <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 50000" />
+                </Form.Item>
+              </Col>
+            )}
 
-  </Form>
-</Modal>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="address" label="Street Address">
+                <Input placeholder="Building, Street, Area..." />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="city" label="City">
+                <Input placeholder="e.g. Karachi / London" />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="country" label="Country">
+                <Select 
+                  showSearch 
+                  placeholder="Select Country" 
+                  options={countries}
+                  filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+      </Modal>
       {isVariantModalOpen && <SelectVariantModal visible={isVariantModalOpen} onCancel={() => { setIsVariantModalOpen(false); setVariantFilterForModal(null); }} onOk={handleVariantsSelected} product={productForVariantSelection} cart={cart} variantFilter={variantFilterForModal} />}
       
       <DraftBillsModal 

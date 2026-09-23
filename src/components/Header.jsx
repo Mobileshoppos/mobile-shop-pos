@@ -377,7 +377,7 @@ return (
                   <div 
                     onClick={stuckCount > 0 ? showSyncCenter : null}
                     style={{
-                      width: '10px', height: '10px', borderRadius: '50%',
+                      width: '14px', height: '14px', borderRadius: '50%',
                       background: stuckCount > 0 ? token.colorHeaderBulbRed : token.colorHeaderBulbInactive, 
                       boxShadow: stuckCount > 0 ? `0 0 8px ${token.colorHeaderBulbRed}` : 'none',
                       cursor: stuckCount > 0 ? 'pointer' : 'default',
@@ -705,9 +705,31 @@ return (
                 >
                   {/* Naam aur Tag sirf Desktop par dikhega */}
                   {!isMobile && (
-                    <div style={{ textAlign: 'left' }}>
-                      <Text strong style={{ display: 'block', fontSize: '15px', color: token.colorHeaderText }}>{activeStaff ? activeStaff.name : (profile?.full_name || profile?.name || 'Owner')}</Text>
-                      <Tag color={activeStaff ? (activeSession ? "green" : "blue") : "gold"} style={{ fontSize: '10px', margin: 0, padding: '0 4px', lineHeight: '1.4', borderRadius: '4px', border: 'none', color: token.colorText }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'flex-end', 
+                      justifyContent: 'center' 
+                    }}>
+                      <Text strong style={{ 
+                        display: 'block', 
+                        fontSize: '15px', 
+                        color: token.colorHeaderText,
+                        marginBottom: '1px',
+                        lineHeight: '1.2'
+                      }}>
+                        {activeStaff ? activeStaff.name : (profile?.full_name || profile?.name || 'Owner')}
+                      </Text>
+                      <Tag style={{ 
+                        fontSize: '10px', 
+                        margin: 0, 
+                        padding: '0 6px', 
+                        lineHeight: '1.4', 
+                        borderRadius: '4px', 
+                        border: `1px solid ${token.colorHeaderBorder}`, 
+                        color: token.colorHeaderText,
+                        background: 'transparent'
+                      }}>
                         {activeStaff ? (activeSession ? "SHIFT ACTIVE" : activeStaff.role?.toUpperCase()) : 'ADMIN'}
                       </Tag>
                     </div>
@@ -715,10 +737,12 @@ return (
                   {/* Icon hamesha dikhega */}
                   <div style={{ 
                     position: 'relative',
-                    width: '36px', height: '36px', borderRadius: '10px',
-                    background: 'transparent', color: token.colorHeaderIcon,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px',
-                    border: `1px solid ${token.colorHeaderBorder}`
+                    width: '36px', height: '36px', borderRadius: '50%',
+                    background: token.colorHeaderAvatarBg || '#0288D1', 
+                    color: '#ffffff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px',
+                    border: 'none',
+                    boxShadow: '0 2px 6px rgba(2, 136, 209, 0.35)'
                   }}>
                     <UserSwitchOutlined />
                     {/* Mobile par shift active hone ki nishani (Green Dot) */}

@@ -1707,7 +1707,7 @@ const Inventory = () => {
                   onClick={handleResetFilters} 
                   type="text"
                   size="small"
-                  style={{ color: token.colorCardDetailsText }}
+                  style={{ color: token.colorHeaderIcon }}
                />
              </Tooltip>
              
@@ -1719,7 +1719,7 @@ const Inventory = () => {
                  onClick={() => setShowFilters(!showFilters)} 
                  type={showFilters ? 'primary' : 'text'}
                  size="small"
-                 style={{ color: showFilters ? undefined : token.colorCardDetailsText }}
+                 style={{ color: showFilters ? undefined : token.colorHeaderIcon }}
                />
              </Tooltip>
 
@@ -1732,7 +1732,7 @@ const Inventory = () => {
                  type={showArchived ? 'primary' : 'text'}
                  danger={showArchived}
                  size="small"
-                 style={{ color: showArchived ? undefined : token.colorCardDetailsText }}
+                 style={{ color: showArchived ? undefined : token.colorHeaderIcon }}
                />
              </Tooltip>
 
@@ -2002,27 +2002,24 @@ const Inventory = () => {
                 children: (
                   <>
                     <Row gutter={16}>
-                      <Col xs={24} md={12}>
+                      <Col xs={24} sm={12} md={8}>
                           <Form.Item name="purchase_price" label="Default Purchase Price">
                               <InputNumber style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
                           </Form.Item>
                       </Col>
-                      <Col xs={24} md={12}>
+                      <Col xs={24} sm={12} md={8}>
                           <Form.Item name="sale_price" label="Default Sale Price">
                               <InputNumber style={{ width: '100%' }} formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} parser={(v) => v.replace(/,/g, '')} />
                           </Form.Item>
                       </Col>
-                    </Row>
-
-                    <Row gutter={16}>
                       {profile?.warranty_system_enabled !== false && (
-                          <Col xs={24} md={12}>
-                              <Form.Item name="default_warranty_days" label="Default Customer Warranty (Days)" tooltip="How many days warranty do you usually give to customers for this product?">
+                          <Col xs={24} sm={12} md={8}>
+                              <Form.Item name="default_warranty_days" label="Default Warranty (Days)" tooltip="How many days warranty do you usually give to customers for this product?">
                                   <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 330" />
                               </Form.Item>
                           </Col>
                       )}
-                      <Col xs={24} md={profile?.warranty_system_enabled !== false ? 12 : 24}>
+                      <Col xs={24} sm={12} md={8}>
                           <Form.Item 
                               name="low_stock_threshold" 
                               label="Low Stock Warning At" 
@@ -2031,20 +2028,17 @@ const Inventory = () => {
                               <InputNumber style={{ width: '100%' }} min={1} placeholder={`Default: ${profile?.low_stock_threshold || 5}`} />
                           </Form.Item>
                       </Col>
-                    </Row>
-
-                    <Row gutter={16}>
                       {limits.allow_stock_location && (
-                        <Col xs={24} md={12}>
-                          <Form.Item name="rack_location" label="Stock Location (Rack/Shelf)" tooltip="e.g. Shelf A, Counter 2">
+                        <Col xs={24} sm={12} md={8}>
+                          <Form.Item name="rack_location" label="Location (Rack/Shelf)" tooltip="e.g. Shelf A, Counter 2">
                             <Input placeholder="e.g. Shelf A" />
                           </Form.Item>
                         </Col>
                       )}
-                      <Col xs={24} md={limits.allow_stock_location ? 12 : 24}>
+                      <Col xs={24} sm={12} md={8}>
                           <Form.Item 
                               name="price_drop_limit" 
-                              label="Max Price Drop Limit (%)" 
+                              label="Price Drop Limit (%)" 
                               tooltip="Override the global price drop limit for this specific product. E.g., put 0 to block any discount, or 50 for clearance items."
                           >
                               <InputNumber style={{ width: '100%' }} min={0} max={100} addonAfter="%" placeholder={`Default: ${profile?.price_drop_limit || 5}%`} />
@@ -2099,98 +2093,112 @@ const Inventory = () => {
       </Modal>
 
       {/* --- QUICK EDIT MODAL --- */}
-<Modal
-  title="Quick Edit Item"
-  open={isEditModalOpen}
-  onOk={editForm.submit}
-  onCancel={() => setIsEditModalOpen(false)}
-  okText="Update"
->
-  <Form form={editForm} layout="vertical" onFinish={handleQuickEditOk}>
-    {/* NAYA IZAFA: Hidden submit button taake Enter dabane se form save ho jaye */}
-    <button type="submit" style={{ display: 'none' }} />
-    {/* Agar Item IMEI Based NAHI hai, tab hi Barcode dikhao */}
-    {!editingItem?.is_imei_based && (
-        <Form.Item label="Barcode" help="Generate a new barcode and print sticker instantly.">
-            <Space.Compact style={{ width: '100%' }}>
-                <Form.Item name="barcode" noStyle>
-                    <Input prefix={<BarcodeOutlined />} placeholder="Scan Barcode" />
-                </Form.Item>
-                <Button 
-                    onClick={() => {
+      <Modal
+        title="Quick Edit Item"
+        open={isEditModalOpen}
+        onOk={editForm.submit}
+        onCancel={() => setIsEditModalOpen(false)}
+        okText="Update"
+        width={isMobile ? '95%' : '80%'} 
+        style={{ top: 20 }} 
+      >
+        <Form form={editForm} layout="vertical" onFinish={handleQuickEditOk} style={{ marginTop: '24px' }}>
+          {/* NAYA IZAFA: Hidden submit button taake Enter dabane se form save ho jaye */}
+          <button type="submit" style={{ display: 'none' }} />
+          
+          <Row gutter={16}>
+            {/* 1. Barcode */}
+            {!editingItem?.is_imei_based && (
+              <Col xs={24} sm={12} md={8}>
+                <Form.Item label="Barcode" tooltip="Generate a new barcode and print sticker instantly.">
+                  <Space.Compact style={{ width: '100%' }}>
+                    <Form.Item name="barcode" noStyle>
+                      <Input prefix={<BarcodeOutlined />} placeholder="Scan Barcode" />
+                    </Form.Item>
+                    <Button 
+                      onClick={() => {
                         const parentProduct = products.find(p => p.id === editingItem?.product_id);
                         const catName = parentProduct?.category_name || 'ITM';
                         const prefix = catName.substring(0, 3).toUpperCase();
                         const randomNum = Math.floor(10000 + Math.random() * 90000);
                         editForm.setFieldValue('barcode', `${prefix}-${randomNum}`);
-                    }}
-                >
-                    Generate
-                </Button>
-                <Button 
-                    type="primary"
-                    icon={<PrinterOutlined />} 
-                    onClick={() => {
+                      }}
+                    >
+                      Generate
+                    </Button>
+                    <Button 
+                      type="primary"
+                      icon={<PrinterOutlined />} 
+                      onClick={() => {
                         const currentBarcode = editForm.getFieldValue('barcode');
                         if (!currentBarcode) {
-                            message.warning("Please generate or enter a barcode first!");
-                            return;
+                          message.warning("Please generate or enter a barcode first!");
+                          return;
                         }
                         const parentProduct = products.find(p => p.id === editingItem.product_id);
                         setBarcodeProduct(parentProduct || { name: 'Item' });
                         setBarcodeVariant({ ...editingItem, barcode: currentBarcode, sale_price: editForm.getFieldValue('sale_price') });
                         setIsBarcodePrinterOpen(true);
-                    }}
-                    title="Print Sticker"
-                />
-            </Space.Compact>
-        </Form.Item>
-    )}
-    
-    <Form.Item 
-        name="sale_price" 
-        label={isWholesaleActive ? "Retail Price (Sale)" : "Sale Price"} 
-        rules={[{ required: true }]}
-    >
-        <InputNumber style={{ width: '100%' }} />
-    </Form.Item>
-    
-    {/* --- NAYA IZAFA: Wholesale Price in Quick Edit --- */}
-    {isWholesaleActive && (
-        <Form.Item 
-            name="wholesale_price" 
-            label="Wholesale Price" 
-        >
-            <InputNumber style={{ width: '100%' }} />
-        </Form.Item>
-    )}
+                      }}
+                      title="Print Sticker"
+                    />
+                  </Space.Compact>
+                </Form.Item>
+              </Col>
+            )}
+            
+            {/* 2. Retail/Sale Price */}
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item 
+                name="sale_price" 
+                label={isWholesaleActive ? "Retail Price (Sale)" : "Sale Price"} 
+                rules={[{ required: true }]}
+              >
+                <InputNumber style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            
+            {/* 3. Wholesale Price */}
+            {isWholesaleActive && (
+              <Col xs={24} sm={12} md={8}>
+                <Form.Item 
+                  name="wholesale_price" 
+                  label="Wholesale Price" 
+                >
+                  <InputNumber style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+            )}
 
-    {/* --- NAYA IZAFA: Variant Level Low Stock Limit --- */}
-    <Form.Item 
-        name="low_stock_threshold" 
-        label="Variant Low Stock Limit" 
-        help="Leave empty to use the main product's limit."
-    >
-        <InputNumber style={{ width: '100%' }} min={1} placeholder="e.g. 2" />
-    </Form.Item>
-    
-    {/* --- NAYA IZAFA: Batch & Expiry in Quick Edit --- */}
-    {profile?.enable_batch_expiry && (
-        <Row gutter={16}>
-            <Col span={12}>
-                <Form.Item name="batch_number" label="Batch Number">
+            {/* 4. Variant Low Stock Limit */}
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item 
+                name="low_stock_threshold" 
+                label="Variant Low Stock Limit" 
+                tooltip="Leave empty to use the main product's limit."
+              >
+                <InputNumber style={{ width: '100%' }} min={1} placeholder="e.g. 2" />
+              </Form.Item>
+            </Col>
+            
+            {/* 5 & 6. Batch & Expiry */}
+            {profile?.enable_batch_expiry && (
+              <>
+                <Col xs={24} sm={12} md={8}>
+                  <Form.Item name="batch_number" label="Batch Number">
                     <Input placeholder="e.g. BAT-001" />
-                </Form.Item>
-            </Col>
-            <Col span={12}>
-                <Form.Item name="expiry_date" label="Expiry Date">
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} md={8}>
+                  <Form.Item name="expiry_date" label="Expiry Date">
                     <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-                </Form.Item>
-            </Col>
-        </Row>
-    )}
-  </Form>
-</Modal>
+                  </Form.Item>
+                </Col>
+              </>
+            )}
+          </Row>
+        </Form>
+      </Modal>
 
       <Modal
         title="Edit Product Details"
@@ -2318,31 +2326,70 @@ const Inventory = () => {
         onOk={transferForm.submit}
         onCancel={() => setIsTransferModalOpen(false)}
         okText="Transfer Now"
+        width={isMobile ? '95%' : '70%'}
+        style={{ top: 20 }}
       >
-        <Form form={transferForm} layout="vertical" onFinish={handleTransferOk}>
-          <Text type="secondary" style={{display: 'block', marginBottom: '15px'}}>
-            Product: <b>{transferItem?.product_name}</b><br/>
-            Current Location: <b>{warehouses.find(w => w.id === transferItem?.warehouse_id)?.name || 'Main Shop'}</b><br/>
-            Available to transfer: <b>{transferItem?.display_quantity} units</b>
-          </Text>
-          
-          <Form.Item name="to_warehouse_id" label="Transfer To (Destination)" rules={[{ required: true, message: 'Please select destination' }]}>
-            <Select placeholder="Select Godown/Shop">
-              {warehouses.filter(w => w.id !== transferItem?.warehouse_id).map(w => (
-                <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
+        <Form form={transferForm} layout="vertical" onFinish={handleTransferOk} style={{ marginTop: '16px' }}>
+          {/* NAYA: Enter dabane se form submit ho jaye */}
+          <button type="submit" style={{ display: 'none' }} />
 
-          {!transferItem?.imei && (
-            <Form.Item name="quantity" label="Quantity to Transfer" rules={[{ required: true }]}>
-              <InputNumber min={1} max={transferItem?.display_quantity} style={{ width: '100%' }} />
-            </Form.Item>
-          )}
+          {/* Khubsoorat Top Summary Info Box */}
+          <div style={{ 
+            background: token.colorFillAlter, 
+            padding: '12px 16px', 
+            borderRadius: '8px', 
+            border: `1px solid ${token.colorBorderSecondary}`,
+            marginBottom: '20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div>
+              <Text type="secondary" style={{ fontSize: '11px', display: 'block', textTransform: 'uppercase' }}>Product</Text>
+              <Text strong style={{ fontSize: '15px', color: token.colorTextHeading }}>{transferItem?.product_name}</Text>
+            </div>
+            <div>
+              <Text type="secondary" style={{ fontSize: '11px', display: 'block', textTransform: 'uppercase' }}>Current Location</Text>
+              <Tag color="blue" style={{ margin: 0, fontWeight: 'bold' }}>
+                📍 {warehouses.find(w => w.id === transferItem?.warehouse_id)?.name || 'Main Shop'}
+              </Tag>
+            </div>
+            <div>
+              <Text type="secondary" style={{ fontSize: '11px', display: 'block', textTransform: 'uppercase' }}>Available Stock</Text>
+              <Tag color="green" style={{ margin: 0, fontWeight: 'bold', fontSize: '13px' }}>
+                {transferItem?.display_quantity} {transferItem?.display_quantity === 1 ? 'Unit' : 'Units'}
+              </Tag>
+            </div>
+          </div>
 
-          <Form.Item name="notes" label="Transfer Notes (Optional)">
-            <Input.TextArea placeholder="e.g. Sent via driver Ali" />
-          </Form.Item>
+          {/* 1 Row Mein 2 Fields Grid */}
+          <Row gutter={16}>
+            <Col xs={24} md={transferItem?.imei ? 24 : 12}>
+              <Form.Item name="to_warehouse_id" label="Transfer To (Destination)" rules={[{ required: true, message: 'Please select destination' }]}>
+                <Select placeholder="Select Destination Godown/Shop">
+                  {warehouses.filter(w => w.id !== transferItem?.warehouse_id).map(w => (
+                    <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+
+            {!transferItem?.imei && (
+              <Col xs={24} md={12}>
+                <Form.Item name="quantity" label="Quantity to Transfer" rules={[{ required: true, message: 'Enter quantity' }]}>
+                  <InputNumber min={1} max={transferItem?.display_quantity} style={{ width: '100%' }} placeholder="Enter units to transfer" />
+                </Form.Item>
+              </Col>
+            )}
+
+            <Col xs={24}>
+              <Form.Item name="notes" label="Transfer Notes (Optional)">
+                <Input.TextArea rows={2} placeholder="e.g. Sent via driver Ali, Cartons checked" />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
 

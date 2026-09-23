@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout, Modal, Space, Divider, Checkbox, theme, ConfigProvider } from 'antd';
+import { Form, Input, Button, Card, Typography, App as AntApp, Tabs, Layout, Modal, Space, Divider, Checkbox, theme, ConfigProvider, Row, Col } from 'antd';
 import { LockOutlined, MailOutlined, AppstoreOutlined, KeyOutlined, UserOutlined } from '@ant-design/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { lightThemeTokens } from '../theme/themeConfig';
@@ -292,73 +292,111 @@ const AuthPage = () => {
   };
   
   const loginForm = (
-    <Form onFinish={handleLogin} layout="vertical">
-      <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email', message: 'Please enter a valid email!' }]}>
-        <Input prefix={<MailOutlined />} placeholder="your@email.com" />
+    <Form onFinish={handleLogin} layout="vertical" style={{ marginTop: '12px' }}>
+      <Form.Item name="email" label={<Text strong style={{ fontSize: '13px', color: '#202124' }}>Email Address</Text>} rules={[{ required: true, type: 'email', message: 'Please enter a valid email!' }]}>
+        <Input prefix={<MailOutlined style={{ color: '#5F6368' }} />} placeholder="your@email.com" size="large" style={{ borderRadius: '8px' }} />
       </Form.Item>
-      <Form.Item name="password" label="Password" rules={[{ required: true, message: 'Please enter your password!' }]}>
-        <Input.Password prefix={<LockOutlined />} placeholder="Password" />
+      
+      <Form.Item name="password" label={<Text strong style={{ fontSize: '13px', color: '#202124' }}>Password</Text>} rules={[{ required: true, message: 'Please enter your password!' }]}>
+        <Input.Password prefix={<LockOutlined style={{ color: '#5F6368' }} />} placeholder="Enter your password" size="large" style={{ borderRadius: '8px' }} />
       </Form.Item>
-      <Form.Item>
-        <Button type="link" onClick={() => setIsModalVisible(true)} style={{ float: 'right', padding: 0 }}>
+      
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px', marginTop: '-4px' }}>
+        <Button type="link" onClick={() => setIsModalVisible(true)} style={{ padding: 0, fontSize: '13px', color: '#1A73E8', fontWeight: 500 }}>
           Forgot Password?
         </Button>
-      </Form.Item>
-      <Form.Item>
-        <Button type="primary" htmlType="submit" loading={loading} block size="large">
-          Log In
+      </div>
+
+      <Form.Item style={{ marginBottom: '16px' }}>
+        <Button 
+          type="primary" 
+          htmlType="submit" 
+          loading={loading} 
+          block 
+          size="large"
+          style={{ 
+            height: '46px', 
+            borderRadius: '8px', 
+            fontSize: '15px', 
+            fontWeight: 700,
+            background: '#1A73E8',
+            boxShadow: '0 4px 12px rgba(26, 115, 232, 0.3)'
+          }}
+        >
+          Sign In
         </Button>
       </Form.Item>
-      <Divider style={{ fontSize: '12px' }}>OR</Divider>
-      <Button 
-        block 
-        icon={<KeyOutlined />} 
-        onClick={() => { setIsTokenModalVisible(true); setOtpStep(false); }}
-        style={{ marginBottom: '8px' }}
-      >
-        Login with Terminal Token
-      </Button>
-      {/* NAYA IZAFA: Magic Link Button */}
-      <Button 
-        block 
-        icon={<MailOutlined />} 
-        onClick={() => { setIsMagicLinkModalVisible(true); setMagicLinkOtpStep(false); }}
-      >
-        Login with Email OTP
-      </Button>
+
+      <Divider style={{ margin: '16px 0', fontSize: '12px', color: '#5F6368' }}>Secondary Options</Divider>
+      
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <Button 
+          block 
+          icon={<KeyOutlined style={{ color: '#5F6368' }} />} 
+          onClick={() => { setIsTokenModalVisible(true); setOtpStep(false); }}
+          style={{ height: '40px', borderRadius: '8px', fontWeight: 500, borderColor: '#DADCE0' }}
+        >
+          Login with Terminal Token
+        </Button>
+        
+        <Button 
+          block 
+          icon={<MailOutlined style={{ color: '#5F6368' }} />} 
+          onClick={() => { setIsMagicLinkModalVisible(true); setMagicLinkOtpStep(false); }}
+          style={{ height: '40px', borderRadius: '8px', fontWeight: 500, borderColor: '#DADCE0' }}
+        >
+          Login with Email OTP
+        </Button>
+      </div>
     </Form>
   );
 
   const signupForm = (
-     <Form onFinish={handleSignup} layout="vertical">
-      {/* NAYA IZAFA: Full Name Input */}
-      <Form.Item name="fullName" label="Full Name" rules={[{ required: true, message: 'Please enter your full name!' }]}>
-        <Input prefix={<UserOutlined />} placeholder="e.g. Ali Raza" />
+    <Form onFinish={handleSignup} layout="vertical" style={{ marginTop: '12px' }}>
+      <Form.Item name="fullName" label={<Text strong style={{ fontSize: '13px', color: '#202124' }}>Full Name</Text>} rules={[{ required: true, message: 'Please enter your full name!' }]}>
+        <Input prefix={<UserOutlined style={{ color: '#5F6368' }} />} placeholder="e.g. Ali Raza" size="large" style={{ borderRadius: '8px' }} />
       </Form.Item>
       
-      <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email', message: 'Please enter a valid email!' }]}>
-        <Input prefix={<MailOutlined />} placeholder="your@email.com" />
+      <Form.Item name="email" label={<Text strong style={{ fontSize: '13px', color: '#202124' }}>Email Address</Text>} rules={[{ required: true, type: 'email', message: 'Please enter a valid email!' }]}>
+        <Input prefix={<MailOutlined style={{ color: '#5F6368' }} />} placeholder="your@email.com" size="large" style={{ borderRadius: '8px' }} />
       </Form.Item>
-      <Form.Item name="password" label="Password" rules={[{ required: true, min: 6, message: 'Password must be at least 6 characters long!' }]}>
-        <Input.Password prefix={<LockOutlined />} placeholder="Create a strong password" />
+      
+      <Form.Item name="password" label={<Text strong style={{ fontSize: '13px', color: '#202124' }}>Password</Text>} rules={[{ required: true, min: 6, message: 'Password must be at least 6 characters long!' }]}>
+        <Input.Password prefix={<LockOutlined style={{ color: '#5F6368' }} />} placeholder="Create a strong password (6+ chars)" size="large" style={{ borderRadius: '8px' }} />
       </Form.Item>
+      
       <Form.Item
         name="agreement"
         valuePropName="checked"
         rules={[
           {
             validator: (_, value) =>
-              value ? Promise.resolve() : Promise.reject(new Error('Should accept agreement')),
+              value ? Promise.resolve() : Promise.reject(new Error('Please accept the agreement to continue')),
           },
         ]}
       >
-        <Checkbox style={{ fontSize: '12px' }}>
-          I agree to SadaPOS <a href="https://www.sadapos.com/terms-of-service" target="_blank" rel="noopener noreferrer">Terms of Service</a> and <a href="https://www.sadapos.com/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+        <Checkbox style={{ fontSize: '12px', color: '#5F6368' }}>
+          I agree to SadaPOS <a href="https://www.sadapos.com/terms-of-service" target="_blank" rel="noopener noreferrer" style={{ color: '#1A73E8' }}>Terms</a> & <a href="https://www.sadapos.com/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#1A73E8' }}>Privacy Policy</a>
         </Checkbox>
       </Form.Item>
+      
       <Form.Item>
-        <Button type="primary" htmlType="submit" loading={loading} block size="large">
-          Sign Up
+        <Button 
+          type="primary" 
+          htmlType="submit" 
+          loading={loading} 
+          block 
+          size="large"
+          style={{ 
+            height: '46px', 
+            borderRadius: '8px', 
+            fontSize: '15px', 
+            fontWeight: 700,
+            background: '#1A73E8',
+            boxShadow: '0 4px 12px rgba(26, 115, 232, 0.3)'
+          }}
+        >
+          Create Free Account
         </Button>
       </Form.Item>
     </Form>
@@ -367,60 +405,81 @@ const AuthPage = () => {
   return (
     <ConfigProvider theme={{ algorithm: theme.defaultAlgorithm, token: lightThemeTokens }}>
       <Layout style={{ minHeight: '100vh', background: lightThemeTokens.colorBgLayout }}>
-        <Content style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: isMobile ? '12px 8px' : '20px' }}>
+        <Content style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: isMobile ? '12px 8px' : '30px 20px' }}>
           {/* --- NAYA IZAFA: 2-Column Split Layout (Left: Marketing, Right: Auth Form) --- */}
           <div style={{ 
             display: 'flex', 
             flexDirection: isMobile ? 'column' : 'row', 
-            width: isMobile ? '100%' : '90%', 
-            maxWidth: '1200px', 
-            background: lightThemeTokens.colorCardBg, 
-            borderRadius: '16px', 
+            width: isMobile ? '100%' : '92%', 
+            maxWidth: '1160px', 
+            background: '#FFFFFF', 
+            borderRadius: '20px', 
             overflow: 'hidden', 
             border: `1px solid ${lightThemeTokens.colorBorder}`,
-            boxShadow: '0 8px 30px rgba(0,0,0,0.08)'
+            boxShadow: '0 12px 40px rgba(0,0,0,0.06)'
           }}>
 
-            {/* LEFT SIDE - Marketing Banner (Sirf bari screen par nazar aayega) */}
+            {/* LEFT SIDE - Brand Showcase Banner */}
             {!isMobile && (
               <div style={{ 
-                flex: 1, 
-                padding: '40px', 
+                flex: 1.1, 
+                padding: '48px 40px', 
                 display: 'flex', 
                 flexDirection: 'column', 
                 justifyContent: 'space-between',
-                background: `linear-gradient(135deg, #FFFFFF 0%, ${lightThemeTokens.colorBgLayout} 100%)`,
+                background: `linear-gradient(145deg, #FFFFFF 0%, #F8FAFC 50%, ${lightThemeTokens.colorBgLayout} 100%)`,
                 borderRight: `1px solid ${lightThemeTokens.colorBorder}`
               }}>
                 <div>
-                  <Title level={1} style={{ color: lightThemeTokens.colorMenuSelectedText || '#09637E', margin: 0, fontWeight: 900, fontSize: '42px', letterSpacing: '1px' }}>
-                    SadaPOS
-                  </Title>
-                  <div style={{ marginTop: '24px' }}>
-                    <Text style={{ color: lightThemeTokens.colorTextSecondary, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                      Complete Shop Management
-                    </Text>
-                    <Title level={2} style={{ color: lightThemeTokens.colorTextHeading, marginTop: '8px', marginBottom: '16px', fontWeight: 700 }}>
-                      POS & Inventory Software
+                  {/* Official 4-Square Brand Logo */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
+                    <svg width="34" height="34" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M4 5C4 4.44772 4.44772 4 5 4H13C13.5523 4 14 4.44772 14 5V13C14 13.5523 13.5523 14 13 14H5C4.44772 14 4 13.5523 4 13V5Z" fill="#1A73E8" />
+                      <path d="M18 5C18 4.44772 18.4477 4 19 4H27C27.5523 4 28 4.44772 28 5V13C28 13.5523 27.5523 14 27 14H19C18.4477 14 18 13.5523 18 13V5Z" fill="#1A73E8" fillOpacity="0.6" />
+                      <path d="M4 19C4 18.4477 4.44772 18 5 18H13C13.5523 18 14 18.4477 14 19V27C14 27.5523 13.5523 28 13 28H5C4.44772 28 4 27.5523 4 27V19Z" fill="#1A73E8" fillOpacity="0.6" />
+                      <path d="M18 19C18 18.4477 18.4477 18 19 18H27C27.5523 18 28 18.4477 28 19V27C28 27.5523 27.5523 28 27 28H19C18.4477 28 18 27.5523 18 27V19Z" fill="#1A73E8" />
+                    </svg>
+                    <span style={{ fontSize: '26px', fontWeight: '800', color: '#202124', letterSpacing: '-0.5px' }}>
+                      Sada<span style={{ color: '#1A73E8' }}> POS</span>
+                    </span>
+                  </div>
+
+                  <div>
+                    <span style={{ 
+                      fontSize: '11px', 
+                      fontWeight: 700, 
+                      letterSpacing: '1.2px', 
+                      textTransform: 'uppercase', 
+                      color: '#1A73E8',
+                      background: 'rgba(26, 115, 232, 0.08)',
+                      padding: '4px 10px',
+                      borderRadius: '12px'
+                    }}>
+                      Complete Retail Operating System
+                    </span>
+
+                    <Title level={2} style={{ color: '#202124', marginTop: '14px', marginBottom: '14px', fontWeight: 800, fontSize: '32px', lineHeight: 1.25 }}>
+                      Manage your shop with confidence & speed.
                     </Title>
-                    <Text style={{ color: lightThemeTokens.colorText, fontSize: '16px', lineHeight: '1.6', display: 'block' }}>
-                      All-in-one solution for point of sale, inventory tracking, invoicing, and reporting — built specifically for Pakistani businesses.
+                    
+                    <Text style={{ color: '#5F6368', fontSize: '15px', lineHeight: '1.6', display: 'block', maxWidth: '440px' }}>
+                      Fast point of sale, intelligent inventory tracking, customer khata ledgers, and profit reporting — fully offline-first.
                     </Text>
                   </div>
 
-                  <div style={{ marginTop: '40px' }}>
-                    <Text style={{ color: lightThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>
-                      Everything you need in one place
-                    </Text>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '16px' }}>
-                      {['Point of Sale', 'Inventory Management', 'Invoicing', 'Customer Ledger', 'Profit Reports', 'Multi-Counter', 'Offline-First'].map(tag => (
+                  {/* Modern Feature Pills */}
+                  <div style={{ marginTop: '32px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {['⚡ Point of Sale', '📦 Smart Inventory', '🧾 Thermal Invoicing', '👥 Customer Ledgers', '📈 Profit Analytics', '🏢 Multi-Counter', '📡 Offline-First'].map(tag => (
                         <div key={tag} style={{ 
-                          padding: '6px 16px', 
-                          borderRadius: '20px', 
+                          padding: '6px 14px', 
+                          borderRadius: '16px', 
                           border: `1px solid ${lightThemeTokens.colorBorder}`,
                           background: '#FFFFFF',
-                          color: lightThemeTokens.colorText,
-                          fontSize: '13px'
+                          color: '#202124',
+                          fontWeight: 500,
+                          fontSize: '12.5px',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
                         }}>
                           {tag}
                         </div>
@@ -429,59 +488,84 @@ const AuthPage = () => {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '40px', paddingTop: '24px', borderTop: `1px solid ${lightThemeTokens.colorBorder}` }}>
-                  <div>
-                    <Title level={3} style={{ margin: 0, color: lightThemeTokens.colorTextHeading }}>5000+</Title>
-                    <Text style={{ color: lightThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase' }}>Shops</Text>
-                  </div>
-                  <div>
-                    <Title level={3} style={{ margin: 0, color: lightThemeTokens.colorTextHeading }}>99.9%</Title>
-                    <Text style={{ color: lightThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase' }}>Uptime</Text>
-                  </div>
-                  <div>
-                    <Title level={3} style={{ margin: 0, color: lightThemeTokens.colorTextHeading }}>24/7</Title>
-                    <Text style={{ color: lightThemeTokens.colorTextSecondary, fontSize: '12px', textTransform: 'uppercase' }}>Offline Sync</Text>
-                  </div>
+                {/* 3 Metric Trust Cards */}
+                <div style={{ marginTop: '36px', paddingTop: '24px', borderTop: `1px solid ${lightThemeTokens.colorBorder}` }}>
+                  <Row gutter={12}>
+                    <Col span={8}>
+                      <div style={{ background: '#FFFFFF', padding: '12px 10px', borderRadius: '10px', border: `1px solid ${lightThemeTokens.colorBorder}`, textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+                        <div style={{ fontSize: '20px', fontWeight: '800', color: '#1A73E8' }}>5,000+</div>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#5F6368', textTransform: 'uppercase', marginTop: '2px' }}>Shops</div>
+                      </div>
+                    </Col>
+                    <Col span={8}>
+                      <div style={{ background: '#FFFFFF', padding: '12px 10px', borderRadius: '10px', border: `1px solid ${lightThemeTokens.colorBorder}`, textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+                        <div style={{ fontSize: '20px', fontWeight: '800', color: '#1A73E8' }}>99.9%</div>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#5F6368', textTransform: 'uppercase', marginTop: '2px' }}>Uptime</div>
+                      </div>
+                    </Col>
+                    <Col span={8}>
+                      <div style={{ background: '#FFFFFF', padding: '12px 10px', borderRadius: '10px', border: `1px solid ${lightThemeTokens.colorBorder}`, textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+                        <div style={{ fontSize: '20px', fontWeight: '800', color: '#1A73E8' }}>24/7</div>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#5F6368', textTransform: 'uppercase', marginTop: '2px' }}>Offline Sync</div>
+                      </div>
+                    </Col>
+                  </Row>
                 </div>
               </div>
             )}
 
-            {/* RIGHT SIDE - Auth Form (Login/Signup / Check Inbox Screen) */}
-            <div style={{ flex: 1, padding: isMobile ? '24px 16px' : '40px 40px 20px 40px', display: 'flex', flexDirection: 'column', justifyContent: isVerificationSent ? 'center' : 'flex-start' }}>
-              {/* Mobile par title dikhane ke liye */}
+            {/* RIGHT SIDE - Auth Form Box */}
+            <div style={{ 
+              flex: 1, 
+              padding: isMobile ? '28px 20px' : '48px 44px 28px 44px', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              justifyContent: isVerificationSent ? 'center' : 'flex-start' 
+            }}>
+              
+              {/* Mobile Brand Logo */}
               {isMobile && (
-                <Title level={3} style={{ textAlign: 'center', color: lightThemeTokens.colorTextHeading, marginBottom: '24px' }}>
-                  <AppstoreOutlined style={{ marginRight: '8px', color: lightThemeTokens.colorMenuSelectedText || '#09637E' }} /> SadaPOS
-                </Title>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '24px' }}>
+                  <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 5C4 4.44772 4.44772 4 5 4H13C13.5523 4 14 4.44772 14 5V13C14 13.5523 13.5523 14 13 14H5C4.44772 14 4 13.5523 4 13V5Z" fill="#1A73E8" />
+                    <path d="M18 5C18 4.44772 18.4477 4 19 4H27C27.5523 4 28 4.44772 28 5V13C28 13.5523 27.5523 14 27 14H19C18.4477 14 18 13.5523 18 13V5Z" fill="#1A73E8" fillOpacity="0.6" />
+                    <path d="M4 19C4 18.4477 4.44772 18 5 18H13C13.5523 18 14 18.4477 14 19V27C14 27.5523 13.5523 28 13 28H5C4.44772 28 4 27.5523 4 27V19Z" fill="#1A73E8" fillOpacity="0.6" />
+                    <path d="M18 19C18 18.4477 18.4477 18 19 18H27C27.5523 18 28 18.4477 28 19V27C28 27.5523 27.5523 28 27 28H19C18.4477 28 18 27.5523 18 27V19Z" fill="#1A73E8" />
+                  </svg>
+                  <span style={{ fontSize: '22px', fontWeight: '800', color: '#202124' }}>
+                    Sada<span style={{ color: '#1A73E8' }}> POS</span>
+                  </span>
+                </div>
               )}
 
               {!isVerificationSent ? (
                 <>
-                  {/* --- NAYA IZAFA: Prominent 1-Click Google Button --- */}
+                  {/* Authentic 1-Click Google OAuth Button */}
                   <Button 
                     size="large" 
                     block 
                     onClick={handleGoogleLogin}
                     loading={loading}
                     style={{ 
-                      height: '46px', 
+                      height: '48px', 
                       fontSize: '15px', 
                       fontWeight: 600, 
                       borderRadius: '8px',
                       background: '#FFFFFF',
-                      borderColor: lightThemeTokens.colorBorder,
-                      color: lightThemeTokens.colorText,
+                      borderColor: '#DADCE0',
+                      color: '#3C4043',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginBottom: '16px'
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                      marginBottom: '18px'
                     }}
                   >
                     <GoogleIcon /> Continue with Google
                   </Button>
 
-                  <Divider style={{ margin: '8px 0 16px 0', fontSize: '12px', color: lightThemeTokens.colorTextSecondary }}>
-                    OR
+                  <Divider style={{ margin: '8px 0 16px 0', fontSize: '12px', color: '#5F6368' }}>
+                    OR CONTINUE WITH EMAIL
                   </Divider>
 
                   <Tabs 
@@ -493,12 +577,12 @@ const AuthPage = () => {
                     centered
                     items={[
                       {
-                        label: 'Login',
+                        label: <span style={{ fontSize: '15px', fontWeight: 600 }}>Sign In</span>,
                         key: '1',
                         children: loginForm,
                       },
                       {
-                        label: 'Sign Up',
+                        label: <span style={{ fontSize: '15px', fontWeight: 600 }}>Create Account</span>,
                         key: '2',
                         children: signupForm,
                       },

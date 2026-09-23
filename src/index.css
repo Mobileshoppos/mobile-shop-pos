@@ -1,11 +1,11 @@
 /* Step 1: Google se zaroori fonts import karna */
-/* SadaPOS Website Style Font: Jost */
-@import url('https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&display=swap');
+/* Google Standard Font: Roboto */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
 
 /* Baqi app ke liye default styles */
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -23,4 +23,80 @@ code {
   0% { opacity: 1; }
   50% { opacity: 0.5; }
   100% { opacity: 1; }
+}
+
+/* Syncing Tag ke liye Pulse Animation */
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* --- GOOGLE ADS STYLE CLEAN ICON RAIL (SIDE MENU) --- */
+.google-nav-sider .ant-menu-inline-collapsed {
+  width: 100% !important;
+}
+
+/* Har menu item ki height aur perfect compact spacing */
+.google-nav-sider .ant-menu-inline-collapsed > .ant-menu-item,
+.google-nav-sider .ant-menu-inline-collapsed > .ant-menu-submenu > .ant-menu-submenu-title {
+  height: 36px !important;
+  line-height: 36px !important;
+  padding: 0 !important;
+  margin: 2px auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  cursor: pointer !important;
+}
+
+/* Divider lines ko compact karein */
+.google-nav-sider .ant-menu-inline-collapsed > .ant-menu-item-divider {
+  margin: 4px 10px !important;
+}
+
+/* Default Unselected Icon Pill */
+.google-nav-sider .ant-menu-inline-collapsed .ant-menu-item-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 44px !important;
+  height: 28px !important;
+  border-radius: 14px !important;
+  font-size: 16px !important;
+  color: #5F6368 !important;
+  background: transparent !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  margin: 0 !important;
+  pointer-events: none !important;
+}
+
+/* 1. Unselected Item Hover (Sirf tab jab item select NA ho) */
+.google-nav-sider .ant-menu-inline-collapsed > .ant-menu-item:not(.ant-menu-item-selected):hover .ant-menu-item-icon,
+.google-nav-sider .ant-menu-inline-collapsed > .ant-menu-submenu:not(.ant-menu-submenu-selected):hover .ant-menu-item-icon {
+  background: rgba(95, 99, 104, 0.12) !important;
+  color: #202124 !important;
+}
+
+/* 2. Selected/Active Item (Hamesha Blue Pill + White Icon, chahe Hover ho ya na ho) */
+.google-nav-sider .ant-menu-inline-collapsed > .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
+.google-nav-sider .ant-menu-inline-collapsed > .ant-menu-submenu.ant-menu-submenu-selected .ant-menu-item-icon,
+.google-nav-sider .ant-menu-inline-collapsed > .ant-menu-item.ant-menu-item-selected:hover .ant-menu-item-icon,
+.google-nav-sider .ant-menu-inline-collapsed > .ant-menu-submenu.ant-menu-submenu-selected:hover .ant-menu-item-icon {
+  background: #1A73E8 !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 1px 3px rgba(26, 115, 232, 0.3) !important;
+}
+
+.google-nav-sider .ant-menu-inline-collapsed > .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon svg,
+.google-nav-sider .ant-menu-inline-collapsed > .ant-menu-submenu.ant-menu-submenu-selected .ant-menu-item-icon svg {
+  fill: #FFFFFF !important;
+  color: #FFFFFF !important;
+}
+
+/* Collapsed halat mein text label ko chupa dein */
+.google-nav-sider .ant-menu-inline-collapsed .ant-menu-title-content {
+  display: none !important;
 }

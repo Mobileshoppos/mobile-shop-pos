@@ -115,7 +115,7 @@ const DataExport = ({ data, exportColumns, fileName = 'Export_Data', reportTitle
           onClick={handlePrint} 
           type="text" 
           size="small" 
-          style={{ color: token.colorTextSecondary }} // Aap ki theme ke mutabiq standard color
+          style={{ color: token.colorHeaderIcon }} 
         />
       </Tooltip>
 
@@ -125,7 +125,7 @@ const DataExport = ({ data, exportColumns, fileName = 'Export_Data', reportTitle
           onClick={handleExportExcel} 
           type="text" 
           size="small" 
-          style={{ color: token.colorSuccess }} 
+          style={{ color: token.colorHeaderIcon }} 
         />
       </Tooltip>
     </Space>

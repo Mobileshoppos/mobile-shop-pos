@@ -1838,106 +1838,109 @@ const handleCloseInvoiceSearchModal = () => {
       ) : (
       <Table columns={customerColumns} dataSource={customers} loading={loading} rowKey="id" />
   )}
-  </Card> {/* <--- NAYA IZAFA: Card wrapper closed */} <Modal title={editingCustomer ? "Edit Customer" : "Add New Customer"} open={isAddModalOpen} onCancel={() => setIsAddModalOpen(false)} onOk={() => addForm.submit()} okText="Save"> 
-  <Form form={addForm} layout="vertical" onFinish={handleAddCustomer}>
-  {/* NAYA IZAFA: Enter dabane se form save karne ke liye hidden button */}
-  <button type="submit" style={{ display: 'none' }} />
-  <Row gutter={16}>
-    <Col span={12}>
-      <Form.Item name="name" label="Full Name" rules={[{ required: true, message: 'Please enter name' }]}>
-        <Input ref={customerNameInputRef} placeholder="e.g. John Doe" />
-      </Form.Item>
-    </Col>
-    <Col span={12}>
-      <Form.Item name="phone_number" label="Phone / Mobile" rules={[{ required: true, message: 'Please enter phone' }]}>
-        <Input placeholder="e.g. +923001234567" />
-      </Form.Item>
-    </Col>
-  </Row>
+  </Card> {/* <--- NAYA IZAFA: Card wrapper closed */} 
+  <Modal 
+    title={editingCustomer ? "Edit Customer" : "Add New Customer"} 
+    open={isAddModalOpen} 
+    onCancel={() => setIsAddModalOpen(false)} 
+    onOk={() => addForm.submit()} 
+    okText="Save"
+    width={isMobile ? '95%' : '80%'}
+    style={{ top: 20 }}
+  > 
+    <Form form={addForm} layout="vertical" onFinish={handleAddCustomer} style={{ marginTop: '24px' }}>
+      {/* NAYA IZAFA: Enter dabane se form save karne ke liye hidden button */}
+      <button type="submit" style={{ display: 'none' }} />
+      
+      <Row gutter={16}>
+        <Col xs={24} sm={12} md={8}>
+          <Form.Item name="name" label="Full Name" rules={[{ required: true, message: 'Please enter name' }]}>
+            <Input ref={customerNameInputRef} placeholder="e.g. John Doe" />
+          </Form.Item>
+        </Col>
+        
+        <Col xs={24} sm={12} md={8}>
+          <Form.Item name="phone_number" label="Phone / Mobile" rules={[{ required: true, message: 'Please enter phone' }]}>
+            <Input placeholder="e.g. +923001234567" />
+          </Form.Item>
+        </Col>
 
-  <Row gutter={16}>
-    <Col span={12}>
-      <Form.Item name="email" label="Email Address" rules={[{ type: 'email', message: 'Invalid email format' }]}>
-        <Input placeholder="e.g. customer@example.com" />
-      </Form.Item>
-    </Col>
-    <Col span={12}>
-      <Form.Item 
-        name="tax_id" 
-        label={profile?.fbr_integration_enabled ? "NTN / CNIC (FBR)" : "Tax ID / VAT #"} 
-        tooltip={profile?.fbr_integration_enabled ? "FBR requires exact 7 digit NTN or 13 digit CNIC without dashes." : "Required for Business (B2B) invoices"}
-        rules={profile?.fbr_integration_enabled ?[
-          { 
-            pattern: /^(\d{7}|\d{13})$/, 
-            message: 'Must be exactly 7 (NTN) or 13 (CNIC) digits' 
-          }
-        ] :[]}
-      >
-        <Input 
-          placeholder={profile?.fbr_integration_enabled ? "e.g. 1234567 or 4220112345671" : "e.g. TRN-123456"} 
-          onChange={(e) => {
-            // Agar FBR ON hai, to type karte waqt khud hi dashes (-) aur spaces hata do
-            if (profile?.fbr_integration_enabled) {
-              addForm.setFieldsValue({ tax_id: e.target.value.replace(/[\s-]/g, '') });
-            }
-          }}
-        />
-      </Form.Item>
-    </Col>
-  </Row>
+        <Col xs={24} sm={12} md={8}>
+          <Form.Item name="email" label="Email Address" rules={[{ type: 'email', message: 'Invalid email format' }]}>
+            <Input placeholder="e.g. customer@example.com" />
+          </Form.Item>
+        </Col>
 
-  <Row gutter={16}>
-    <Col span={12}>
-      <Form.Item name="address" label="Street Address">
-        <Input placeholder="Building, Street, Area..." />
-      </Form.Item>
-    </Col>
-    <Col span={12}>
-      <Form.Item name="customer_group" label="Customer Group" tooltip="Assign to a specific route or category">
-        <Select 
-          mode="tags" 
-          placeholder="e.g. Wholesale, Route A" 
-          options={availableGroups.map(g => ({ label: g, value: g }))}
-        />
-      </Form.Item>
-    </Col>
-  </Row>
+        <Col xs={24} sm={12} md={8}>
+          <Form.Item 
+            name="tax_id" 
+            label={profile?.fbr_integration_enabled ? "NTN / CNIC (FBR)" : "Tax ID / VAT #"} 
+            tooltip={profile?.fbr_integration_enabled ? "FBR requires exact 7 digit NTN or 13 digit CNIC without dashes." : "Required for Business (B2B) invoices"}
+            rules={profile?.fbr_integration_enabled ? [
+              { 
+                pattern: /^(\d{7}|\d{13})$/, 
+                message: 'Must be exactly 7 (NTN) or 13 (CNIC) digits' 
+              }
+            ] : []}
+          >
+            <Input 
+              placeholder={profile?.fbr_integration_enabled ? "e.g. 1234567 or 4220112345671" : "e.g. TRN-123456"} 
+              onChange={(e) => {
+                if (profile?.fbr_integration_enabled) {
+                  addForm.setFieldsValue({ tax_id: e.target.value.replace(/[\s-]/g, '') });
+                }
+              }}
+            />
+          </Form.Item>
+        </Col>
 
-  <Row gutter={16}>
-    <Col span={12}>
-      <Form.Item name="city" label="City">
-        <Input placeholder="e.g. Karachi / London" />
-      </Form.Item>
-    </Col>
-    <Col span={12}>
-      <Form.Item name="country" label="Country">
-        <Select 
-          showSearch 
-          placeholder="Select Country" 
-          options={countries}
-          filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
-        />
-      </Form.Item>
-    </Col>
-  </Row>
+        <Col xs={24} sm={12} md={8}>
+          <Form.Item name="customer_group" label="Customer Group" tooltip="Assign to a specific route or category">
+            <Select 
+              mode="tags" 
+              placeholder="e.g. Wholesale, Route A" 
+              options={availableGroups.map(g => ({ label: g, value: g }))}
+            />
+          </Form.Item>
+        </Col>
 
-  {/* --- NAYA IZAFA: Credit Limit Field --- */}
-  {profile?.enable_customer_credit_limits && can('can_set_credit_limit') && (
-    <Row gutter={16}>
-      <Col span={12}>
-        <Form.Item 
-          name="credit_limit" 
-          label="Credit Limit (Rs)" 
-          tooltip="Maximum allowed debt. Leave empty for unlimited, or enter 0 for NO CREDIT."
-        >
-          <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 50000" />
-        </Form.Item>
-      </Col>
-    </Row>
-  )}
+        {profile?.enable_customer_credit_limits && can('can_set_credit_limit') && (
+          <Col xs={24} sm={12} md={8}>
+            <Form.Item 
+              name="credit_limit" 
+              label="Credit Limit (Rs)" 
+              tooltip="Maximum allowed debt. Leave empty for unlimited, or enter 0 for NO CREDIT."
+            >
+              <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 50000" />
+            </Form.Item>
+          </Col>
+        )}
 
-</Form> 
-</Modal> 
+        <Col xs={24} sm={12} md={8}>
+          <Form.Item name="address" label="Street Address">
+            <Input placeholder="Building, Street, Area..." />
+          </Form.Item>
+        </Col>
+
+        <Col xs={24} sm={12} md={8}>
+          <Form.Item name="city" label="City">
+            <Input placeholder="e.g. Karachi / London" />
+          </Form.Item>
+        </Col>
+
+        <Col xs={24} sm={12} md={8}>
+          <Form.Item name="country" label="Country">
+            <Select 
+              showSearch 
+              placeholder="Select Country" 
+              options={countries}
+              filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+            />
+          </Form.Item>
+        </Col>
+      </Row>
+    </Form> 
+  </Modal> 
 <Modal
     title={
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '98%', flexWrap: 'wrap', gap: '8px' }}>

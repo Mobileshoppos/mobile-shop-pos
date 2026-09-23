@@ -1,6 +1,6 @@
 import React, { useState } from 'react'; // useState add kiya hai
 import { Layout, Menu, Switch, ConfigProvider } from 'antd'; // ConfigProvider add kiya
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   HomeOutlined, 
   ShoppingCartOutlined, 
@@ -123,6 +123,7 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
     return () => window.removeEventListener('local-db-updated', checkProducts);
   }, []);
   const location = useLocation();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const { activeStaff, lockApp, can } = useStaff(); // can function shamil kiya 
   
@@ -270,6 +271,7 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
         `}
       </style>
       <Sider 
+        className="google-nav-sider"
         collapsedWidth={isMobile ? "0" : "64"}
         theme="light"
         collapsible
@@ -336,7 +338,12 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
                 // YEH DO LINES NAYI HAIN (Jo magic karengi)
                 openKeys={openKeys} 
                 onOpenChange={onOpenChange}
-
+                onClick={({ key }) => {
+                  if (key && key.startsWith('/')) {
+                    navigate(key);
+                    handleMenuItemClick();
+                  }
+                }}
                 items={menuItemsWithLogout} 
                 style={{ 
                   background: 'transparent',

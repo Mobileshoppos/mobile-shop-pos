@@ -2,24 +2,39 @@
 
 export const themeConfig = {
   token: {
-    fontFamily: "'Jost', -apple-system, sans-serif",
+    fontFamily: "'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     borderRadiusLG: 8,
     fontSize: 17,
   },
   components: {
 
     Button: {
-      colorPrimary: '#5F6368',
-      colorPrimaryHover: '#088395',
-      colorPrimaryActive: '#5F6368',
+      colorPrimary: '#1A73E8',
+      colorPrimaryHover: '#1765CC',
+      colorPrimaryActive: '#1557B0',
+    },
+    Modal: {
+      contentBg: '#EBF4F6',                            // Modal ka soft background
+      headerBg: '#EBF4F6',                             // Modal Header ka soft background
+    },
+    Input: {
+      colorBgContainer: '#FFFFFF',                     // Pure White Text Boxes
+    },
+    InputNumber: {
+      colorBgContainer: '#FFFFFF',                     // Pure White Number Boxes
     },
     Select: {
-      optionSelectedBg: 'rgba(8, 131, 149, 0.12)',     // Side Menu jesa soft teal highlight
-      optionSelectedColor: '#09637E',                  // Standard teal text
-      optionActiveBg: 'rgba(8, 131, 149, 0.06)',       // Halka hover effect
+      colorBgContainer: '#FFFFFF',                     // Pure White Dropdown Boxes
+      optionSelectedBg: 'rgba(26, 115, 232, 0.12)',     // Soft Blue highlight
+      optionSelectedColor: '#1A73E8',                  // Google Blue text
+      optionActiveBg: 'rgba(26, 115, 232, 0.06)',       // Halka hover effect
     },
     TreeSelect: {
-      nodeSelectedBg: 'rgba(8, 131, 149, 0.12)',       // Category Tree ke liye soft highlight
+      colorBgContainer: '#FFFFFF',                     // Pure White Category Tree Box
+      nodeSelectedBg: 'rgba(26, 115, 232, 0.12)',       // Soft Blue highlight
+    },
+    DatePicker: {
+      colorBgContainer: '#FFFFFF',                     // Pure White Date Picker Box
     },
   },
 };
@@ -54,6 +69,7 @@ export const darkThemeTokens = {
   colorHeaderText: 'rgba(255, 255, 255, 0.87)',
   colorHeaderIcon: '#1AB6C9',
   colorHeaderBorder: '#333333',
+  colorHeaderAvatarBg: '#0288D1',
   colorHeaderBulbGreen: '#66bb6a',
   colorHeaderBulbYellow: '#ffa726',
   colorHeaderBulbRed: '#ef5350',
@@ -83,7 +99,7 @@ export const darkThemeTokens = {
 };
 
 export const lightThemeTokens = {
-  colorPrimary: '#5F6368',
+  colorPrimary: '#1A73E8',
   colorBgLayout: '#EBF4F6',
   colorBgContainer: '#EBF4F6',
   colorFillAlter: '#EBF4F6',
@@ -105,9 +121,10 @@ export const lightThemeTokens = {
   
   // --- Header Controls (Upgraded) ---
   colorHeaderBg: '#EBF4F6',
-  colorHeaderText: '#141414',
+  colorHeaderText: '#5F6368',
   colorHeaderIcon: '#5F6368',
   colorHeaderBorder: '#BFBFBF',
+  colorHeaderAvatarBg: '#0288D1',
   colorHeaderBulbGreen: '#52c41a',
   colorHeaderBulbYellow: '#faad14',
   colorHeaderBulbRed: '#ff4d4f',
@@ -115,10 +132,10 @@ export const lightThemeTokens = {
   
   // --- Side Menu Controls ---
   colorSiderBg: '#EBF4F6',
-  colorMenuText: '#555555ff',
-  colorMenuSelectedBg: '#EBF4F6',
-  colorMenuSelectedText: '#09637E',
-  colorMenuHoverBg: '#f5f5f5',
+  colorMenuText: '#5F6368',
+  colorMenuSelectedBg: 'rgba(26, 115, 232, 0.08)',
+  colorMenuSelectedText: '#1A73E8',
+  colorMenuHoverBg: 'rgba(95, 99, 104, 0.06)',
 
   // --- Naye Custom Controls For Cards ---
   colorCardBg: '#FFFFFF',
