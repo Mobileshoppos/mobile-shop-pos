@@ -7,34 +7,18 @@ export const themeConfig = {
     fontSize: 17,
   },
   components: {
-
     Button: {
       colorPrimary: '#1A73E8',
       colorPrimaryHover: '#1765CC',
       colorPrimaryActive: '#1557B0',
     },
-    Modal: {
-      contentBg: '#EBF4F6',                            // Modal ka soft background
-      headerBg: '#EBF4F6',                             // Modal Header ka soft background
-    },
-    Input: {
-      colorBgContainer: '#FFFFFF',                     // Pure White Text Boxes
-    },
-    InputNumber: {
-      colorBgContainer: '#FFFFFF',                     // Pure White Number Boxes
-    },
     Select: {
-      colorBgContainer: '#FFFFFF',                     // Pure White Dropdown Boxes
       optionSelectedBg: 'rgba(26, 115, 232, 0.12)',     // Soft Blue highlight
       optionSelectedColor: '#1A73E8',                  // Google Blue text
       optionActiveBg: 'rgba(26, 115, 232, 0.06)',       // Halka hover effect
     },
     TreeSelect: {
-      colorBgContainer: '#FFFFFF',                     // Pure White Category Tree Box
       nodeSelectedBg: 'rgba(26, 115, 232, 0.12)',       // Soft Blue highlight
-    },
-    DatePicker: {
-      colorBgContainer: '#FFFFFF',                     // Pure White Date Picker Box
     },
   },
 };
@@ -101,7 +85,8 @@ export const darkThemeTokens = {
 export const lightThemeTokens = {
   colorPrimary: '#1A73E8',
   colorBgLayout: '#EBF4F6',
-  colorBgContainer: '#EBF4F6',
+  colorBgContainer: '#FFFFFF',
+  colorBgElevated: '#EBF4F6',
   colorFillAlter: '#EBF4F6',
   colorTextHeading: '#141414',
   colorBorder: '#BFBFBF',

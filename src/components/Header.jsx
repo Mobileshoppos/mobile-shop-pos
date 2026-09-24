@@ -25,8 +25,11 @@ import {
   SyncOutlined,
   LockOutlined,
   DownloadOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  SearchOutlined,
+  QuestionCircleOutlined
 } from '@ant-design/icons';
+import QuickHelpDrawer from './QuickHelpDrawer';
 import { useAuth } from '../context/AuthContext';
 import { useStaff } from '../context/StaffContext';
 import { useTheme } from '../context/ThemeContext'; // <--- NAYA IZAFA
@@ -156,6 +159,7 @@ const AppHeader = ({ collapsed, setCollapsed, isMobile }) => {
   const [resolveForm] = Form.useForm();
   const [isClosingModalVisible, setIsClosingModalVisible] = React.useState(false);
   const [isVoucherSearchOpen, setIsVoucherSearchOpen] = React.useState(false); // <--- NAYA IZAFA
+  const [isHelpDrawerOpen, setIsHelpDrawerOpen] = React.useState(false); // <--- NAYA IZAFA: Quick Help Drawer State
 
   // --- NAYA IZAFA: Demo Data State & Delete Logic ---
   const [hasDemoData, setHasDemoData] = React.useState(false);
@@ -377,7 +381,7 @@ return (
                   <div 
                     onClick={stuckCount > 0 ? showSyncCenter : null}
                     style={{
-                      width: '14px', height: '14px', borderRadius: '50%',
+                      width: '16px', height: '16px', borderRadius: '50%',
                       background: stuckCount > 0 ? token.colorHeaderBulbRed : token.colorHeaderBulbInactive, 
                       boxShadow: stuckCount > 0 ? `0 0 8px ${token.colorHeaderBulbRed}` : 'none',
                       cursor: stuckCount > 0 ? 'pointer' : 'default',
@@ -394,7 +398,7 @@ return (
                   "Sync Center: All data uploaded"
                 }>
                   <div style={{
-                    width: '14px', height: '14px', borderRadius: '50%',
+                    width: '16px', height: '16px', borderRadius: '50%',
                     background: pendingCount > 0 ? token.colorHeaderBulbYellow : (stuckCount > 0 ? token.colorHeaderBulbYellow : token.colorHeaderBulbInactive),
                     animation: pendingCount > 0 ? 'pulse-yellow 1.5s infinite' : 'none',
                     transition: 'all 0.3s'
@@ -408,8 +412,7 @@ return (
                   "System Online & Fully Synced"
                 }>
                   <div style={{
-                    width: '14px', height: '14px', borderRadius: '50%',
-                    // Green light hamesha jalegi (Online hone ki nishani), lekin glow tab karegi jab sab perfect ho
+                    width: '16px', height: '16px', borderRadius: '50%',
                     background: token.colorHeaderBulbGreen,
                     opacity: (pendingCount === 0 && stuckCount === 0) ? 1 : 0.6,
                     boxShadow: (pendingCount === 0 && stuckCount === 0) ? `0 0 8px ${token.colorHeaderBulbGreen}` : 'none',
@@ -423,11 +426,11 @@ return (
                     spin={isSyncing} 
                     onClick={handleManualSync}
                     style={{ 
-                      fontSize: '16px', 
+                      fontSize: '18px', 
                       color: token.colorHeaderIcon,
                       opacity: isSyncing ? 1 : 0.8,
                       cursor: isSyncing ? 'default' : 'pointer',
-                      marginLeft: '4px',
+                      marginLeft: '6px',
                       transition: 'color 0.3s'
                     }} 
                   />
@@ -455,113 +458,112 @@ return (
 
                 {/* --- LAYER 2 Warning Removed for Cleaner UI --- */}
               </div>
-              {/* Page Titles (Left Aligned) */}
+              {/* Page Titles (Left Aligned - Enhanced Size) */}
               {!isMobile && (
                 <>
                   {location.pathname === '/pos' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <ShoppingCartOutlined style={{ marginRight: '8px' }} /> Point of Sale
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <ShoppingCartOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Point of Sale
                      </span>
                   )}
                   {location.pathname === '/' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <HomeOutlined style={{ marginRight: '8px' }} /> Dashboard
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <HomeOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Dashboard
                      </span>
                   )}
                   {location.pathname === '/inventory' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <DatabaseOutlined style={{ marginRight: '8px' }} /> Inventory
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <DatabaseOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Inventory
                      </span>
                   )}
                   {location.pathname === '/warranty' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <SafetyCertificateOutlined style={{ marginRight: '8px' }} /> Warranty & Claims
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <SafetyCertificateOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Warranty & Claims
                      </span>
                   )}
                   {location.pathname === '/categories' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <TagsOutlined style={{ marginRight: '8px' }} /> Product Categories
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <TagsOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Product Categories
                      </span>
                   )}
                   {location.pathname === '/purchases' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <FileTextOutlined style={{ marginRight: '8px' }} /> Purchase History
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <FileTextOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Purchase History
                      </span>
                   )}
                   {location.pathname === '/customers' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <UserSwitchOutlined style={{ marginRight: '8px' }} /> Customer Management
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <UserSwitchOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Customer Management
                      </span>
                   )}
                   {location.pathname === '/suppliers' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <ShopOutlined style={{ marginRight: '8px' }} /> Suppliers Dashboard
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <ShopOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Suppliers Dashboard
                      </span>
                   )}
                   {location.pathname === '/sales-history' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <HistoryOutlined style={{ marginRight: '8px' }} /> Sales History
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <HistoryOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Sales History
                      </span>
                   )}
                   {location.pathname === '/expenses' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <DollarCircleOutlined style={{ marginRight: '8px' }} /> Manage Expenses
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <DollarCircleOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Manage Expenses
                      </span>
                   )}
                   {location.pathname === '/expense-categories' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <FileProtectOutlined style={{ marginRight: '8px' }} /> Expense Categories
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <FileProtectOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Expense Categories
                      </span>
                   )}
                   {location.pathname === '/damaged-stock' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <AlertOutlined style={{ marginRight: '8px' }} /> Damaged Stock
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <AlertOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Damaged Stock
                      </span>
                   )}
                   {location.pathname === '/profile' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <ProfileOutlined style={{ marginRight: '8px' }} /> Profile
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <ProfileOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Profile
                      </span>
                   )}
                   {location.pathname === '/subscription' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <CreditCardOutlined style={{ marginRight: '8px' }} /> Manage Your Subscription
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <CreditCardOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Manage Your Subscription
                      </span>
                   )}
                   {location.pathname === '/settings' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <ToolOutlined style={{ marginRight: '8px' }} /> App Settings
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <ToolOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> App Settings
                      </span>
                   )}
                   {location.pathname === '/staff' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <TeamOutlined style={{ marginRight: '8px' }} /> Staff Management
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <TeamOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Staff Management
                      </span>
                   )}
                   {location.pathname === '/purchases/new' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <FileTextOutlined style={{ marginRight: '8px' }} /> Create Purchase
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <FileTextOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Create Purchase
                      </span>
                   )}
                   {location.pathname === '/purchases/edit' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <FileTextOutlined style={{ marginRight: '8px' }} /> Edit Purchase
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <FileTextOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Edit Purchase
                      </span>
                   )}
                   {location.pathname.startsWith('/purchases/') && location.pathname !== '/purchases/new' && location.pathname !== '/purchases/edit' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <FileTextOutlined style={{ marginRight: '8px' }} /> Purchase Details
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <FileTextOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Purchase Details
                      </span>
                   )}
                   {location.pathname === '/reports' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <PieChartOutlined style={{ marginRight: '8px' }} /> Reports
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <PieChartOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Reports
                      </span>
                   )}
-                  {/* --- NAYA IZAFA: Fixed Assets ka title Header mein --- */}
                   {location.pathname === '/fixed-assets' && (
-                     <span style={{ fontSize: '16px', fontWeight: 'bold', color: token.colorHeaderText, marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-                       <DatabaseOutlined style={{ marginRight: '8px' }} /> Fixed Assets
+                     <span style={{ fontSize: '18px', fontWeight: 700, color: token.colorHeaderText, marginLeft: '18px', display: 'flex', alignItems: 'center' }}>
+                       <DatabaseOutlined style={{ marginRight: '8px', fontSize: '20px' }} /> Fixed Assets
                      </span>
                   )}
                 </>
@@ -580,14 +582,54 @@ return (
               height: '50px'
             }}>
 
-              {/* --- NAYA IZAFA: Voucher Search Trigger Button --- */}
-              <Tooltip title="Search any Voucher / Bill">
-                <Button 
-                  shape="circle" 
-                  icon={<FileTextOutlined />} 
+              {/* --- NAYA IZAFA: Google Ads Style Search Action --- */}
+              <Tooltip title="Search any Voucher / Bill (Alt + X)">
+                <div 
                   onClick={() => setIsVoucherSearchOpen(true)}
-                  style={{ border: `1px solid ${token.colorHeaderBorder}`, color: token.colorHeaderIcon }}
-                />
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '48px',
+                    padding: '0 10px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    color: token.colorHeaderIcon,
+                    transition: 'all 0.2s ease',
+                    userSelect: 'none'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(95, 99, 104, 0.08)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <SearchOutlined style={{ fontSize: '20px', marginBottom: '2px' }} />
+                  <span style={{ fontSize: '12px', fontWeight: 500, lineHeight: 1 }}>Search</span>
+                </div>
+              </Tooltip>
+
+              {/* --- NAYA IZAFA: Google Ads Style Help Action --- */}
+              <Tooltip title="Quick Help & Tutorials">
+                <div 
+                  onClick={() => setIsHelpDrawerOpen(true)}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '48px',
+                    padding: '0 10px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    color: token.colorHeaderIcon,
+                    transition: 'all 0.2s ease',
+                    userSelect: 'none'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(95, 99, 104, 0.08)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <QuestionCircleOutlined style={{ fontSize: '20px', marginBottom: '2px' }} />
+                  <span style={{ fontSize: '12px', fontWeight: 500, lineHeight: 1 }}>Help</span>
+                </div>
               </Tooltip>
 
               {/* --- NAYA IZAFA: Compact Delete Demo Data Button (With Tooltip) --- */}
@@ -703,7 +745,7 @@ return (
                   onMouseEnter={(e) => (activeSession || !activeStaff) && (e.currentTarget.style.background = token.colorFillTertiary)}
                   onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                 >
-                  {/* Naam aur Tag sirf Desktop par dikhega */}
+                  {/* Naam aur Tag sirf Desktop par dikhega (Enhanced Size) */}
                   {!isMobile && (
                     <div style={{ 
                       display: 'flex', 
@@ -713,22 +755,23 @@ return (
                     }}>
                       <Text strong style={{ 
                         display: 'block', 
-                        fontSize: '15px', 
+                        fontSize: '16.5px', 
                         color: token.colorHeaderText,
-                        marginBottom: '1px',
+                        marginBottom: '2px',
                         lineHeight: '1.2'
                       }}>
                         {activeStaff ? activeStaff.name : (profile?.full_name || profile?.name || 'Owner')}
                       </Text>
                       <Tag style={{ 
-                        fontSize: '10px', 
+                        fontSize: '11px', 
                         margin: 0, 
-                        padding: '0 6px', 
+                        padding: '0 8px', 
                         lineHeight: '1.4', 
                         borderRadius: '4px', 
                         border: `1px solid ${token.colorHeaderBorder}`, 
                         color: token.colorHeaderText,
-                        background: 'transparent'
+                        background: 'transparent',
+                        fontWeight: 500
                       }}>
                         {activeStaff ? (activeSession ? "SHIFT ACTIVE" : activeStaff.role?.toUpperCase()) : 'ADMIN'}
                       </Tag>
@@ -854,6 +897,12 @@ return (
       <VoucherSearchModal 
         open={isVoucherSearchOpen} 
         onClose={() => setIsVoucherSearchOpen(false)} 
+      />
+
+      {/* --- NAYA IZAFA: Quick Help Side Drawer --- */}
+      <QuickHelpDrawer 
+        open={isHelpDrawerOpen} 
+        onClose={() => setIsHelpDrawerOpen(false)} 
       />
     </>
   );

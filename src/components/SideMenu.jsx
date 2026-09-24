@@ -40,22 +40,20 @@ const menuItems = [
     // 1. Main Dashboard
     { key: '/', icon: <HomeOutlined />, label: <Link to="/">Dashboard</Link> },
     
-    // 2. Inventory (Naya Button)
+    // 2. Inventory
     { key: '/inventory', icon: <DatabaseOutlined />, label: <Link to="/inventory">Inventory</Link> },
 
     // 3. POS
     { key: '/pos', icon: <ShoppingCartOutlined />, label: <Link to="/pos">Point of Sale</Link> },
 
-    // 4. Warranty & Claims (Naya Button)
-    { key: '/warranty', icon: <SafetyCertificateOutlined />, label: <Link to="/warranty">Warranty & Claims</Link> },
-
-    // 5. Product Management Group
+    // 4. Product Management Group (Warranty yahan shamil ho gayi)
     {
       key: 'products',
       icon: <AppstoreOutlined />,
       label: 'Product Mgmt',
       children: [
         { key: '/categories', icon: <TagsOutlined />, label: <Link to="/categories">Product Categories</Link> },
+        { key: '/warranty', icon: <SafetyCertificateOutlined />, label: <Link to="/warranty">Warranty & Claims</Link> },
         { key: '/purchases', icon: <FileTextOutlined />, label: <Link to="/purchases">Purchase Orders</Link> },
         { key: '/purchases/new', icon: <PlusOutlined />, label: <Link to="/purchases/new">Add Purchase</Link> },
       ]
@@ -98,10 +96,10 @@ const menuItems = [
       icon: <SettingOutlined />,
       label: 'Settings',
       children: [
-        { key: '/profile', icon: <ProfileOutlined />, label: <Link to="/profile">Profile</Link> },
-        { key: '/subscription', icon: <CreditCardOutlined />, label: <Link to="/subscription">Subscription</Link> },
         { key: '/settings', icon: <ToolOutlined />, label: <Link to="/settings">App Settings</Link> },
+        { key: '/profile', icon: <ProfileOutlined />, label: <Link to="/profile">Profile</Link> },
         { key: '/about', icon: <InfoCircleOutlined />, label: <Link to="/about">About</Link> },
+        { key: '/subscription', icon: <CreditCardOutlined />, label: <Link to="/subscription">Subscription</Link> },
       ]
     },
 ];
