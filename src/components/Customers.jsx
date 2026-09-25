@@ -79,6 +79,7 @@ const Customers = () => {
   const [ledgerDateRange, setLedgerDateRange] = useState('all');
   const [ledgerCustomDates, setLedgerCustomDates] = useState([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [expandedMobileKeys, setExpandedMobileKeys] = useState([]); // <--- NAYA IZAFA: Mobile expand/collapse state
   const [selectedSale, setSelectedSale] = useState(null);
   const [returnableItems, setReturnableItems] = useState([]);
   const [selectedReturnItems, setSelectedReturnItems] = useState([]);
@@ -1342,7 +1343,7 @@ const handleCloseInvoiceSearchModal = () => {
   
   const expandedRowRender = (record) => {
     const renderItemDetails = (_, item) => {
-      if (!item.inventory) return <Text type="secondary">N/A</Text>;
+      if (!item.inventory) return <Text type="secondary" style={{ whiteSpace: 'nowrap' }}>N/A</Text>;
       
       const attributes = Object.entries(item.inventory.item_attributes || {})
         .filter(([key]) => !key.toLowerCase().includes('imei') && !key.toLowerCase().includes('serial'))
@@ -1351,7 +1352,7 @@ const handleCloseInvoiceSearchModal = () => {
 
       const details = [item.inventory.imei, attributes].filter(Boolean).join(' / ');
       
-      return <Text type="secondary">{details || 'N/A'}</Text>;
+      return <span style={{ whiteSpace: 'nowrap' }}>{details || 'N/A'}</span>;
     };
 
     if (record.type === 'sale') {
@@ -1371,7 +1372,6 @@ const handleCloseInvoiceSearchModal = () => {
               const existing = groupedItemsMap.get(key);
               existing.quantity += (item.quantity || 1);
               if (item.inventory?.imei) existing.all_imeis.push(item.inventory.imei);
-              // Tamam inventory IDs jama karein taake Return ka hisaab sahi ho
               existing.all_inventory_ids.push(item.inventory_id);
           } else {
               groupedItemsMap.set(key, {
@@ -1387,27 +1387,30 @@ const handleCloseInvoiceSearchModal = () => {
       // --- NAYA GROUPING LOGIC END ---
 
       const saleItemCols = [
-        { title: 'Product', dataIndex: ['products', 'name'] },
+        { 
+          title: 'Product', 
+          dataIndex: ['products', 'name'],
+          render: (text) => <Text strong style={{ whiteSpace: 'nowrap' }}>{text}</Text>
+        },
         { 
           title: 'Details', 
           render: (_, item) => {
               const attrValues = Object.values(item.clean_attributes || {}).filter(Boolean).join(' / ');
               return (
-                  <Space direction="vertical" size={0}>
-                      {/* Font size 13px kiya gaya hai */}
+                  <div style={{ whiteSpace: 'nowrap' }}>
                       {attrValues && <Text type="secondary" style={{ fontSize: '13px' }}>{attrValues}</Text>}
                       
                       {item.all_imeis.length > 0 && (
-                          <div style={{ marginTop: '6px' }}>
-                              <Text strong style={{ fontSize: '12px', color: token.colorPrimary }}>IMEIs: </Text>
+                          <div style={{ marginTop: '4px' }}>
+                              <Text strong style={{ fontSize: '11px', color: token.colorPrimary }}>IMEIs: </Text>
                               {item.all_imeis.map(imei => (
-                                  <Text code key={imei} style={{ fontSize: '12px', marginRight: '6px', display: 'inline-block', marginBottom: '4px' }}>
+                                  <Text code key={imei} style={{ fontSize: '11px', marginRight: '4px' }}>
                                       {imei}
                                   </Text>
                               ))}
                           </div>
                       )}
-                  </Space>
+                  </div>
               );
           }
         },
@@ -1415,24 +1418,28 @@ const handleCloseInvoiceSearchModal = () => {
           title: 'Sold', 
           dataIndex: 'quantity', 
           align: 'center', 
-          render: q => <Text strong>{q}</Text> 
+          render: q => <Text strong style={{ whiteSpace: 'nowrap' }}>{q}</Text> 
         },
         { 
           title: 'Returned', 
           key: 'returned_qty', 
           align: 'center', 
           render: (_, item) => {
-            // Is group ke tamam inventory IDs ke returns ginte hain
             const retQty = returnHistory
                 .filter(rh => 
                     item.all_inventory_ids.includes(rh.inventory_id) && 
                     String(rh.sale_id) === String(record.details.id)
                 )
                 .reduce((sum, r) => sum + (r.quantity || 0), 0);
-            return retQty > 0 ? <Text style={{ color: token.colorError }}>{retQty}</Text> : '0';
+            return <span style={{ color: retQty > 0 ? token.colorError : 'inherit', whiteSpace: 'nowrap' }}>{retQty || 0}</span>;
           }
         },
-        { title: 'Price', dataIndex: 'price_at_sale', align: 'right', render: p => formatCurrency(p, profile?.currency) },
+        { 
+          title: 'Price', 
+          dataIndex: 'price_at_sale', 
+          align: 'right', 
+          render: p => <span style={{ whiteSpace: 'nowrap' }}>{formatCurrency(p, profile?.currency)}</span> 
+        },
         { 
           title: 'Net Total', 
           key: 'total', 
@@ -1445,31 +1452,30 @@ const handleCloseInvoiceSearchModal = () => {
                 )
                 .reduce((sum, r) => sum + (r.quantity || 0), 0);
             const netQty = (item.quantity || 0) - retQty;
-            return formatCurrency(netQty * item.price_at_sale, profile?.currency);
+            return <strong style={{ whiteSpace: 'nowrap' }}>{formatCurrency(netQty * item.price_at_sale, profile?.currency)}</strong>;
           }
         }
       ];
+
       return (
         <Card size="small" style={{ margin: '8px 0', background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}` }}>
           <Descriptions title={`Invoice #${record.details.invoice_id || record.details.id} Summary`} bordered size="small" column={1}>
-            {/* --- IN 5 JAGAHON PAR TABDEELI HUI HAI --- */}
-            <Descriptions.Item label="Subtotal">{formatCurrency(record.details.subtotal || 0, profile?.currency)}</Descriptions.Item>
-            <Descriptions.Item label="Discount">- {formatCurrency(record.details.discount || 0, profile?.currency)}</Descriptions.Item>
+            <Descriptions.Item label="Subtotal"><span style={{ whiteSpace: 'nowrap' }}>{formatCurrency(record.details.subtotal || 0, profile?.currency)}</span></Descriptions.Item>
+            <Descriptions.Item label="Discount"><span style={{ whiteSpace: 'nowrap' }}>- {formatCurrency(record.details.discount || 0, profile?.currency)}</span></Descriptions.Item>
             
-            {/* --- NAYA IZAFA: Ledger mein Tax dikhana --- */}
             {record.details.tax_amount > 0 && (
               <Descriptions.Item label={`Tax (${record.details.tax_rate_applied || 0}%)`}>
-                + {formatCurrency(record.details.tax_amount, profile?.currency)}
+                <span style={{ whiteSpace: 'nowrap' }}>+ {formatCurrency(record.details.tax_amount, profile?.currency)}</span>
               </Descriptions.Item>
             )}
-            {/* ------------------------------------------ */}
 
-            <Descriptions.Item label="Grand total"><strong>{formatCurrency(record.details.total_amount || 0, profile?.currency)}</strong></Descriptions.Item>
-            <Descriptions.Item label="Amount paid at sale">{formatCurrency(record.details.amount_paid_at_sale || 0, profile?.currency)}</Descriptions.Item>
-            <Descriptions.Item label="New credit from this sale"><strong>{formatCurrency(record.debit, profile?.currency)}</strong></Descriptions.Item>
+            <Descriptions.Item label="Grand total"><strong><span style={{ whiteSpace: 'nowrap' }}>{formatCurrency(record.details.total_amount || 0, profile?.currency)}</span></strong></Descriptions.Item>
+            <Descriptions.Item label="Amount paid at sale"><span style={{ whiteSpace: 'nowrap' }}>{formatCurrency(record.details.amount_paid_at_sale || 0, profile?.currency)}</span></Descriptions.Item>
+            <Descriptions.Item label="New credit from this sale"><strong><span style={{ whiteSpace: 'nowrap' }}>{formatCurrency(record.debit, profile?.currency)}</span></strong></Descriptions.Item>
           </Descriptions>
-          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px'}}>
-            <Title level={5} style={{ margin: 0 }}>Items in this Invoice</Title>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap', gap: '8px' }}>
+            <Title level={5} style={{ margin: 0, whiteSpace: 'nowrap' }}>Items in this Invoice</Title>
             <Tooltip title={!activeSession ? "Please open a register shift to process returns." : ""}>
               <Button 
                 icon={<SwapOutlined />} 
@@ -1477,20 +1483,29 @@ const handleCloseInvoiceSearchModal = () => {
                 ghost 
                 onClick={() => openReturnModal(record.details)}
                 disabled={!activeSession}
+                size="small"
               >
                 Return Items
               </Button>
             </Tooltip>
           </div>
-          <>
-            <Table columns={saleItemCols} dataSource={groupedDataSource} pagination={false} rowKey="id" style={{marginTop: '8px'}} />
-            {record.details.discount > 0 && (
-              <div style={{ textAlign: 'right', marginTop: '12px', paddingRight: '24px' }}>
-                <Text type="secondary" style={{ fontSize: '14px' }}>Invoice Discount: </Text>
-                <Text type="danger" strong style={{ fontSize: '14px' }}>- {formatCurrency(record.details.discount, profile?.currency)}</Text>
-              </div>
-            )}
-          </>
+          
+          <Table 
+            columns={saleItemCols} 
+            dataSource={groupedDataSource} 
+            pagination={false} 
+            rowKey="id" 
+            size="small"
+            scroll={{ x: 'max-content' }}
+            style={{ marginTop: '8px' }} 
+          />
+          
+          {record.details.discount > 0 && (
+            <div style={{ textAlign: 'right', marginTop: '10px' }}>
+              <Text type="secondary" style={{ fontSize: '13px' }}>Invoice Discount: </Text>
+              <Text type="danger" strong style={{ fontSize: '13px' }}>- {formatCurrency(record.details.discount, profile?.currency)}</Text>
+            </div>
+          )}
         </Card>
       );
     }
@@ -1548,41 +1563,68 @@ const handleCloseInvoiceSearchModal = () => {
   <ConfigProvider theme={{ components: { Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg, headerColor: token.colorCardColumnsTitleText, colorText: token.colorCardDetailsText }, Descriptions: { colorTextLabel: token.colorCardColumnsTitleText, colorTextValue: token.colorCardDetailsText } } }}>
   <div style={{ padding: isMobile ? '12px 0' : '4px 0' }}> 
 
-  {/* --- NAYA IZAFA: Customer Accounts KPI Summary (Competitor's Report 1 Feature - Increased Text Size) --- */}
-  {(!isMobile && can('can_view_reports')) && (
+  {/* --- NAYA IZAFA: Customer Accounts KPI Summary (Universal: Desktop + Mobile) --- */}
+  {can('can_view_reports') && (
     <Card 
       size="small" 
       style={{ 
-          marginBottom: '16px', 
-          background: token.colorFillAlter, 
-          border: `1px dashed ${token.colorBorder}` 
+        marginBottom: '14px', 
+        background: token.colorCardBg, 
+        border: `1px solid ${token.colorBorderSecondary}`,
+        borderRadius: '8px',
+        boxShadow: `0 2px 8px ${token.colorCardShadow}`
       }}
-      styles={{ body: { padding: '16px 20px' } }}
+      styles={{ body: { padding: isMobile ? '10px 8px' : '10px 20px' } }}
     >
-      <Row gutter={[16, 8]} align="middle">
-        <Col span={8}>
-          <Statistic 
-            title={<Text type="secondary" style={{ fontSize: '13px', fontWeight: 500 }}>Total Customer Receivables (Udhaar)</Text>} 
-            value={customers.filter(c => (c.balance || 0) > 0).reduce((sum, c) => sum + c.balance, 0)} 
-            formatter={(val) => formatCurrency(val, profile?.currency)} 
-            valueStyle={{ fontSize: '18px', fontWeight: 'bold', color: token.colorError }} 
-          />
+      <Row align="middle" justify="space-between" gutter={[8, 8]}>
+        {/* 1. Receivables (Udhaar) */}
+        <Col xs={8} sm={8} style={{ textAlign: isMobile ? 'center' : 'left' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: isMobile ? 'center' : 'space-between', paddingRight: isMobile ? 0 : '12px' }}>
+            <div>
+              <Text type="secondary" style={{ fontSize: isMobile ? '10px' : '11.5px', fontWeight: 600, display: 'block', textTransform: 'uppercase', letterSpacing: '0.3px', color: token.colorTextSecondary }}>
+                {isMobile ? 'Receivables' : 'Total Receivables (Udhaar)'}
+              </Text>
+              <Text style={{ fontSize: isMobile ? '13px' : '17px', fontWeight: 700, color: token.colorError, lineHeight: 1.2 }}>
+                {formatCurrency(customers.filter(c => (c.balance || 0) > 0).reduce((sum, c) => sum + c.balance, 0), profile?.currency)}
+              </Text>
+            </div>
+            {!isMobile && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: token.colorError, flexShrink: 0 }} />}
+          </div>
         </Col>
-        <Col span={8}>
-          <Statistic 
-            title={<Text type="secondary" style={{ fontSize: '13px', fontWeight: 500 }}>Total Customer Credits (Advances)</Text>} 
-            value={Math.abs(customers.filter(c => (c.balance || 0) < 0).reduce((sum, c) => sum + c.balance, 0))} 
-            formatter={(val) => formatCurrency(val, profile?.currency)} 
-            valueStyle={{ fontSize: '18px', fontWeight: 'bold', color: token.colorSuccess }} 
-          />
+
+        {/* 2. Customer Credits (Advances) */}
+        <Col xs={8} sm={8} style={{ 
+          textAlign: isMobile ? 'center' : 'left',
+          borderLeft: `1px solid ${token.colorBorderSecondary}`, 
+          borderRight: `1px solid ${token.colorBorderSecondary}`,
+          padding: isMobile ? '0 4px' : '0 16px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: isMobile ? 'center' : 'space-between' }}>
+            <div>
+              <Text type="secondary" style={{ fontSize: isMobile ? '10px' : '11.5px', fontWeight: 600, display: 'block', textTransform: 'uppercase', letterSpacing: '0.3px', color: token.colorTextSecondary }}>
+                {isMobile ? 'Credits' : 'Customer Credits (Advances)'}
+              </Text>
+              <Text style={{ fontSize: isMobile ? '13px' : '17px', fontWeight: 700, color: token.colorSuccess, lineHeight: 1.2 }}>
+                {formatCurrency(Math.abs(customers.filter(c => (c.balance || 0) < 0).reduce((sum, c) => sum + c.balance, 0)), profile?.currency)}
+              </Text>
+            </div>
+            {!isMobile && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: token.colorSuccess, flexShrink: 0 }} />}
+          </div>
         </Col>
-        <Col span={8}>
-          <Statistic 
-            title={<Text type="secondary" style={{ fontSize: '13px', fontWeight: 500 }}>Net Outstanding Balance</Text>} 
-            value={customers.reduce((sum, c) => sum + (c.balance || 0), 0)} 
-            formatter={(val) => formatCurrency(val, profile?.currency)} 
-            valueStyle={{ fontSize: '20px', fontWeight: 'bold', color: token.colorPrimary }} 
-          />
+
+        {/* 3. Net Outstanding Balance */}
+        <Col xs={8} sm={8} style={{ textAlign: isMobile ? 'center' : 'left', paddingLeft: isMobile ? '4px' : '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: isMobile ? 'center' : 'space-between' }}>
+            <div>
+              <Text type="secondary" style={{ fontSize: isMobile ? '10px' : '11.5px', fontWeight: 600, display: 'block', textTransform: 'uppercase', letterSpacing: '0.3px', color: token.colorTextSecondary }}>
+                {isMobile ? 'Net Total' : 'Net Outstanding Balance'}
+              </Text>
+              <Text style={{ fontSize: isMobile ? '13.5px' : '18px', fontWeight: 800, color: token.colorPrimary, lineHeight: 1.2 }}>
+                {formatCurrency(customers.reduce((sum, c) => sum + (c.balance || 0), 0), profile?.currency)}
+              </Text>
+            </div>
+            {!isMobile && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: token.colorPrimary, flexShrink: 0 }} />}
+          </div>
         </Col>
       </Row>
     </Card>
@@ -1670,36 +1712,44 @@ const handleCloseInvoiceSearchModal = () => {
       <div style={{ 
           display: 'flex', 
           flexDirection: isMobile ? 'column' : 'row', 
-          alignItems: 'center', 
-          gap: '12px',
+          alignItems: isMobile ? 'stretch' : 'center', 
+          gap: '10px',
           width: isMobile ? '100%' : 'auto' 
       }}>
-          {/* Return aur Archive Buttons - Ye hamesha ek hi row mein rahenge */}
-          <Space size="middle" align="center">
-              <Button 
-                  icon={<SwapOutlined />} 
-                  onClick={() => setIsInvoiceSearchModalOpen(true)} 
-                  title="Return by Invoice"
-              />
-              <Space>
-                  <Switch 
-                      checked={showArchived} 
-                      onChange={(val) => { setShowArchived(val); setSelectedGroupFilter(null); setSelectedCityFilter(null); }} 
-                      size="small" 
+          {/* Mobile par tamam icons ko 1 hi horizontal line mein rakhne wala container */}
+          <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              width: isMobile ? '100%' : 'auto',
+              gap: '12px'
+          }}>
+              <Space size="middle" align="center">
+                  <Button 
+                      icon={<SwapOutlined />} 
+                      onClick={() => setIsInvoiceSearchModalOpen(true)} 
+                      title="Return by Invoice"
                   />
-                  <Text type="secondary" style={{ fontSize: '11px' }}>
-                      {showArchived ? "Archived" : "Active"}
-                  </Text>
+                  <Space>
+                      <Switch 
+                          checked={showArchived} 
+                          onChange={(val) => { setShowArchived(val); setSelectedGroupFilter(null); setSelectedCityFilter(null); }} 
+                          size="small" 
+                      />
+                      <Text type="secondary" style={{ fontSize: '11px' }}>
+                          {showArchived ? "Archived" : "Active"}
+                      </Text>
+                  </Space>
               </Space>
-          </Space>
 
-          {/* --- NAYA IZAFA: PDF aur Excel Buttons --- */}
-          <DataExport 
-              data={customers} 
-              exportColumns={exportColumns} 
-              fileName="Customers_List" 
-              reportTitle="Customers Directory" 
-          />
+              {/* PDF aur Excel Buttons */}
+              <DataExport 
+                  data={customers} 
+                  exportColumns={exportColumns} 
+                  fileName="Customers_List" 
+                  reportTitle="Customers Directory" 
+              />
+          </div>
 
           {/* Add Customer Button */}
           {(() => {
@@ -1944,17 +1994,17 @@ const handleCloseInvoiceSearchModal = () => {
 <Modal
     title={
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '98%', flexWrap: 'wrap', gap: '8px' }}>
-        <span style={{ color: token.colorCardHeadingsText, fontWeight: 600 }}>Ledger: {selectedCustomer?.name}</span>
+        <span style={{ color: token.colorCardHeadingsText, fontWeight: 600, fontSize: isMobile ? '15px' : '17px' }}>Ledger: {selectedCustomer?.name}</span>
         
-        {/* --- NAYA IZAFA: Dynamic Inline Date Filter inside Ledger Modal (Competitor's Report 3 Feature) --- */}
-        <Space wrap size="small" style={{ marginLeft: 'auto' }}>
-            <Text type="secondary" style={{ fontSize: '11px' }}>Filter Period:</Text>
+        {/* --- Dynamic Inline Date Filter inside Ledger Modal --- */}
+        <Space wrap size="small" style={{ marginLeft: isMobile ? 0 : 'auto' }}>
+            <Text type="secondary" style={{ fontSize: '11px' }}>Period:</Text>
             <Select 
                 size="small" 
                 value={ledgerDateRange} 
                 onChange={(val) => { setLedgerDateRange(val); setLedgerCustomDates([]); }} 
                 style={{ width: 110 }} 
-                styles={{ popup: { root: { zIndex: 2050 } } }} // Modal ke z-index se oopar rakhne ke liye
+                styles={{ popup: { root: { zIndex: 2050 } } }}
             >
                 <Select.Option value="all">All Time</Select.Option>
                 <Select.Option value="today">Today</Select.Option>
@@ -1971,7 +2021,7 @@ const handleCloseInvoiceSearchModal = () => {
                         if (dates) setLedgerCustomDates([dates[0].toISOString(), dates[1].toISOString()]);
                         else setLedgerCustomDates([]);
                     }}
-                    style={{ width: 200 }}
+                    style={{ width: 180 }}
                 />
             )}
 
@@ -1996,97 +2046,157 @@ const handleCloseInvoiceSearchModal = () => {
       </div>
     }
     open={isLedgerModalOpen}
-    onCancel={() => { setIsLedgerModalOpen(false); setLedgerDateRange('all'); setLedgerCustomDates([]); }} // Reset filters on close
+    onCancel={() => { 
+      setIsLedgerModalOpen(false); 
+      setLedgerDateRange('all'); 
+      setLedgerCustomDates([]); 
+      setExpandedMobileKeys([]); // Mobile expand state saaf karein
+    }}
     footer={null}
-    width={isMobile ? '95vw' : '85vw'}
+    width={isMobile ? '95%' : '80%'}
+    style={{ top: 20 }}
 >
     {ledgerLoading ? <div style={{ textAlign: 'center', padding: '50px' }}><Spin /></div> : (
         isMobile ? (
             <List
                 dataSource={ledgerData}
                 rowKey="key"
-                renderItem={(record) => (
-                    <List.Item style={{ padding: '8px 0' }}>
-                        <Card style={{ width: '100%' }} styles={{ body: { padding: '12px' } }}>
-                            <Row justify="space-between">
-                                <Col span={16}>
-                                    <Text strong>{record.description}</Text><br/>
-                                    <Text type="secondary">{new Date(record.date).toLocaleString()}</Text>
-                                </Col>
-                                <Col span={8} style={{ textAlign: 'right' }}>
-                                    {record.debit > 0 && <Text style={{ color: token.colorAmountNegative }}>- {formatCurrency(record.debit, profile?.currency)}</Text>}
-                                    {record.credit > 0 && <Text style={{ color: token.colorAmountPositive, fontWeight: 'bold' }}>+ {formatCurrency(record.credit, profile?.currency)}</Text>}
-                                </Col>
-                            </Row>
-                            <div style={{ textAlign: 'right', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f0f0f0' }}>
-                                <Text type="secondary">Balance: </Text>
-                                <Text strong>{formatCurrency(record.balance, profile?.currency)}</Text>
-                            </div>
-                            {(record.type === 'payment' && record.credit > 0 && !activeStaff) || (record.type === 'payout' && record.debit > 0 && !activeStaff) ? (
-                                <div style={{ marginTop: '10px', textAlign: 'right' }}>
-                                    <Space>
-                                        {record.type === 'payment' && (
+                renderItem={(record) => {
+                    const isExpanded = expandedMobileKeys.includes(record.key);
+                    return (
+                        <List.Item style={{ padding: '8px 0' }}>
+                            <Card style={{ width: '100%', background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}` }} styles={{ body: { padding: '12px' } }}>
+                                <Row justify="space-between" align="top">
+                                    <Col span={15}>
+                                        <Text strong style={{ fontSize: '14px', color: token.colorCardHeadingsText }}>{record.description}</Text><br/>
+                                        <Text type="secondary" style={{ fontSize: '11px' }}>{new Date(record.date).toLocaleDateString()} {new Date(record.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                                    </Col>
+                                    <Col span={9} style={{ textAlign: 'right' }}>
+                                        {record.debit > 0 && <Text style={{ color: token.colorAmountNegative, fontSize: '14px' }}>- {formatCurrency(record.debit, profile?.currency)}</Text>}
+                                        {record.credit > 0 && <Text style={{ color: token.colorAmountPositive, fontWeight: 'bold', fontSize: '14px' }}>+ {formatCurrency(record.credit, profile?.currency)}</Text>}
+                                    </Col>
+                                </Row>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', paddingTop: '8px', borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+                                    <Text type="secondary" style={{ fontSize: '12px' }}>Balance:</Text>
+                                    <Text strong style={{ fontSize: '13.5px' }}>{formatCurrency(record.balance, profile?.currency)}</Text>
+                                </div>
+
+                                {/* Void Button if available */}
+                                {((record.type === 'payment' && record.credit > 0 && !activeStaff) || (record.type === 'payout' && record.debit > 0 && !activeStaff)) && (
+                                    <div style={{ marginTop: '10px', textAlign: 'right' }}>
+                                        <Space>
+                                            {record.type === 'payment' && (
+                                                <Button 
+                                                    size="small" 
+                                                    icon={<PrinterOutlined />} 
+                                                    onClick={() => handlePrintPaymentReceipt(record.details, record.balance)}
+                                                >
+                                                    Print
+                                                </Button>
+                                            )}
                                             <Button 
                                                 size="small" 
-                                                icon={<PrinterOutlined />} 
-                                                onClick={() => handlePrintPaymentReceipt(record.details, record.balance)}
+                                                danger 
+                                                onClick={() => {
+                                                    modal.confirm({
+                                                        title: record.type === 'payment' ? 'VOID this payment?' : 'VOID this payout?',
+                                                        content: 'This will set amount to 0 and revert the balance. Proceed?',
+                                                        okText: 'Yes, Void it',
+                                                        okType: 'danger',
+                                                        onOk: () => record.type === 'payment' ? handleVoidPayment(record) : handleVoidPayout(record)
+                                                    });
+                                                }}
                                             >
-                                                Print
+                                                {record.type === 'payment' ? 'Void Payment' : 'Void Payout'}
                                             </Button>
-                                        )}
+                                        </Space>
+                                    </div>
+                                )}
+
+                                {/* NAYA IZAFA: Mobile Par Collapsible Invoice Details */}
+                                {(record.type === 'sale' || record.type === 'return') && (
+                                    <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: `1px dashed ${token.colorBorderSecondary}` }}>
                                         <Button 
+                                            type="link" 
                                             size="small" 
-                                            danger 
                                             onClick={() => {
-                                                modal.confirm({
-                                                    title: record.type === 'payment' ? 'VOID this payment?' : 'VOID this payout?',
-                                                    content: 'This will set amount to 0 and revert the balance. Proceed?',
-                                                    okText: 'Yes, Void it',
-                                                    okType: 'danger',
-                                                    onOk: () => record.type === 'payment' ? handleVoidPayment(record) : handleVoidPayout(record)
-                                                });
+                                                setExpandedMobileKeys(prev => 
+                                                    prev.includes(record.key) 
+                                                        ? prev.filter(k => k !== record.key) 
+                                                        : [...prev, record.key]
+                                                );
                                             }}
+                                            style={{ padding: 0, fontSize: '12px', fontWeight: 600 }}
                                         >
-                                            {record.type === 'payment' ? 'Void Payment' : 'Void Payout'}
+                                            {isExpanded ? '▲ Hide Invoice Items' : '▼ View Invoice Items & Details'}
                                         </Button>
-                                    </Space>
-                                </div>
-                            ) : null}
-                            {(record.type === 'sale' || record.type === 'return') && (
-                                <div style={{ marginTop: '10px' }}>
-                                    {expandedRowRender(record)}
-                                </div>
-                            )}
-                        </Card>
-                    </List.Item>
-                )}
+
+                                        {isExpanded && (
+                                            <div style={{ marginTop: '8px' }}>
+                                                {expandedRowRender(record)}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </Card>
+                        </List.Item>
+                    );
+                }}
             />
         ) : (
             <Table
                 dataSource={ledgerData}
                 rowKey="key"
+                size="small"
+                scroll={{ x: 'max-content' }}
                 expandable={{ expandedRowRender, rowExpandable: (record) => record.type === 'sale' || record.type === 'return' }}
                 columns={[
-    { title: 'Date', dataIndex: 'date', render: d => new Date(d).toLocaleString() },
-    { 
-      title: 'Voucher No.', 
-      key: 'ref_no', 
-      render: (_, record) => {
-        let ref = '';
-        if (record.type === 'sale') ref = record.details?.invoice_id || record.details?.id?.split('-')[0]?.toUpperCase();
-        else ref = record.details?.voucher_no || record.details?.id?.split('-')[0]?.toUpperCase();
-        return <Text code>{ref || '-'}</Text>;
-      }
-    },
-    { title: 'Description', dataIndex: 'description' },
-    { 
-      title: 'Staff', 
-      key: 'staff', 
-      render: (_, record) => staffMembers.find(s => s.id === record.details?.staff_id)?.name || 'Owner' 
-    },
-    { title: 'Debit', dataIndex: 'debit', align: 'right', render: a => a > 0 ? <Text style={{ color: token.colorAmountNegative }}>{formatCurrency(a, profile?.currency)}</Text> : '-' },
-    { title: 'Credit', dataIndex: 'credit', align: 'right', render: a => a > 0 ? <Text style={{ color: token.colorAmountPositive, fontWeight: 'bold' }}>{formatCurrency(a, profile?.currency)}</Text> : '-' },
-    { title: 'Balance', dataIndex: 'balance', align: 'right', render: a => <Text strong>{formatCurrency(a, profile?.currency)}</Text> },
+                  { 
+                    title: 'Date', 
+                    dataIndex: 'date', 
+                    render: d => <span style={{ whiteSpace: 'nowrap' }}>{dayjs(d).format('DD/MM/YYYY, hh:mm:ss A')}</span> 
+                  },
+                  { 
+                    title: 'Voucher No.', 
+                    key: 'ref_no', 
+                    render: (_, record) => {
+                      let ref = '';
+                      if (record.type === 'sale') ref = record.details?.invoice_id || record.details?.id?.split('-')[0]?.toUpperCase();
+                      else ref = record.details?.voucher_no || record.details?.id?.split('-')[0]?.toUpperCase();
+                      return <Text code style={{ whiteSpace: 'nowrap' }}>{ref || '-'}</Text>;
+                    }
+                  },
+                  { 
+                    title: 'Description', 
+                    dataIndex: 'description',
+                    render: text => <span style={{ whiteSpace: 'nowrap' }}>{text}</span>
+                  },
+                  { 
+                    title: 'Staff', 
+                    key: 'staff', 
+                    render: (_, record) => {
+                      const staffName = staffMembers.find(s => s.id === record.details?.staff_id)?.name || 'Owner';
+                      return <span style={{ whiteSpace: 'nowrap' }}>{staffName}</span>;
+                    }
+                  },
+                  { 
+                    title: 'Debit', 
+                    dataIndex: 'debit', 
+                    align: 'right', 
+                    render: a => a > 0 ? <Text style={{ color: token.colorAmountNegative, whiteSpace: 'nowrap' }}>{formatCurrency(a, profile?.currency)}</Text> : '-' 
+                  },
+                  { 
+                    title: 'Credit', 
+                    dataIndex: 'credit', 
+                    align: 'right', 
+                    render: a => a > 0 ? <Text style={{ color: token.colorAmountPositive, fontWeight: 'bold', whiteSpace: 'nowrap' }}>{formatCurrency(a, profile?.currency)}</Text> : '-' 
+                  },
+                  { 
+                    title: 'Balance', 
+                    dataIndex: 'balance', 
+                    align: 'right', 
+                    render: a => <strong style={{ whiteSpace: 'nowrap' }}>{formatCurrency(a, profile?.currency)}</strong> 
+                  },
     { 
       title: 'Action', 
       key: 'action', 

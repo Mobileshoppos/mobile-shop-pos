@@ -4,6 +4,7 @@ import { FileExcelOutlined } from '@ant-design/icons';
 import { db } from '../db';
 import { formatCurrency } from '../utils/currencyFormatter';
 import { useAuth } from '../context/AuthContext';
+import { useMediaQuery } from '../hooks/useMediaQuery'; // <--- NAYA IZAFA
 import dayjs from 'dayjs';
 import DataExport from './DataExport'; // <--- NAYA IZAFA
 
@@ -12,6 +13,7 @@ const { Text, Title } = Typography;
 const ProductLedgerModal = ({ visible, onClose, product, warehouses }) => {
     const { token } = theme.useToken();
     const { profile } = useAuth();
+    const isMobile = useMediaQuery('(max-width: 768px)'); // <--- NAYA IZAFA
     const [loading, setLoading] = useState(false);
     const [historyData, setHistoryData] = useState([]);
 
@@ -264,40 +266,42 @@ const ProductLedgerModal = ({ visible, onClose, product, warehouses }) => {
 
     const columns = [
         {
-            title: 'Date',
+            title: 'Date & Time',
             dataIndex: 'date',
-            render: (d) => dayjs(d).format('DD MMM YYYY, hh:mm A')
+            render: (d) => <span style={{ whiteSpace: 'nowrap' }}>{dayjs(d).format('DD MMM YYYY, hh:mm A')}</span>
         },
         {
             title: 'Type',
             dataIndex: 'type',
-            render: (t, record) => <Tag color={record.color}>{t}</Tag>
+            align: 'center',
+            render: (t, record) => <Tag color={record.color} style={{ margin: 0, whiteSpace: 'nowrap' }}>{t}</Tag>
         },
         {
             title: 'Qty',
             dataIndex: 'qty',
             align: 'center',
-            render: (q) => <Text strong style={{ color: q.startsWith('+') ? token.colorAmountPositive : token.colorAmountNegative }}>{q}</Text>
+            render: (q) => <Text strong style={{ color: q.startsWith('+') ? token.colorAmountPositive : token.colorAmountNegative, whiteSpace: 'nowrap' }}>{q}</Text>
         },
         {
-            title: 'Amount', // <--- NAYA IZAFA
+            title: 'Amount',
             dataIndex: 'amount',
             align: 'right',
             render: (amt, record) => (
-                <Text style={{ color: record.type === 'Sale' ? token.colorAmountPositive : token.colorCardDetailsText }}>
+                <Text strong style={{ color: record.type === 'Sale' ? token.colorAmountPositive : token.colorCardDetailsText, whiteSpace: 'nowrap' }}>
                     {formatCurrency(amt, profile?.currency)}
                 </Text>
             )
         },
         {
-            title: 'Balance', // <--- NAYA IZAFA: Running Balance
+            title: 'Balance',
             dataIndex: 'runningBalance',
             align: 'center',
-            render: (bal) => <Tag style={{ fontWeight: 'bold', border: 'none', background: token.colorFillAlter }}>{bal}</Tag>
+            render: (bal) => <Tag style={{ fontWeight: 'bold', border: 'none', background: token.colorFillAlter, margin: 0, whiteSpace: 'nowrap' }}>{bal}</Tag>
         },
         {
             title: 'Details',
             dataIndex: 'details',
+            render: (det) => <span style={{ whiteSpace: 'nowrap' }}>{det}</span>
         }
     ];
 
@@ -305,9 +309,10 @@ const ProductLedgerModal = ({ visible, onClose, product, warehouses }) => {
         <>
         <Modal
             title={
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '24px' }}>
-                    <Title level={4} style={{ margin: 0, color: token.colorCardHeadingsText }}>Item Ledger / Overview</Title>
-                    {/* NAYA IZAFA: Yahan direct DataExport ki jagah Export Options ka button lagaya */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', paddingRight: '20px' }}>
+                    <Title level={4} style={{ margin: 0, fontSize: isMobile ? '16px' : '18px', color: token.colorCardHeadingsText }}>
+                        Item Ledger / Overview
+                    </Title>
                     <Button 
                         type="default" 
                         size="small" 
@@ -322,7 +327,7 @@ const ProductLedgerModal = ({ visible, onClose, product, warehouses }) => {
             open={visible}
             onCancel={onClose}
             footer={null}
-            width="85%" 
+            width={isMobile ? '95%' : '80%'}
             style={{ top: 20 }} 
             destroyOnHidden
         >
@@ -330,92 +335,99 @@ const ProductLedgerModal = ({ visible, onClose, product, warehouses }) => {
                 <div style={{ textAlign: 'center', padding: '50px' }}><Spin /></div>
             ) : (
                 <ConfigProvider theme={{ components: { Table: { colorBgContainer: token.colorTableBg, headerBg: token.colorTableHeaderBg, headerColor: token.colorCardColumnsTitleText, colorText: token.colorCardDetailsText }, Descriptions: { colorTextLabel: token.colorCardColumnsTitleText, colorTextValue: token.colorCardDetailsText } } }}>
-                    <Card size="small" style={{ marginBottom: '16px', background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}` }}>
-                        {/* NAYA IZAFA: Mobile view ke liye scrollable wrapper aur whiteSpace nowrap */}
-                        <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '4px' }} className="hide-scrollbar">
-                            {/* NAYA IZAFA: Desktop ke liye 3 columns (md, lg, xl, xxl ko 3 kar diya gaya hai) */}
-                            <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3, lg: 3, xl: 3, xxl: 3 }}>
-                                {/* Row 1 */}
-                                <Descriptions.Item label="Product Name"><Text strong style={{ color: token.colorCardDetailsText }}>{product?.name}</Text></Descriptions.Item>
-                                <Descriptions.Item label="Category">{product?.category_name}</Descriptions.Item>
-                                <Descriptions.Item label="Brand">{product?.brand || 'N/A'}</Descriptions.Item>
-                                
-                                {/* Row 2 */}
-                                <Descriptions.Item label="Barcode"><Text code style={{ color: token.colorCardDetailsText }}>{product?.barcode || 'N/A'}</Text></Descriptions.Item>
-                                <Descriptions.Item label="Active Variants">
-                                    <Tag color="cyan" style={{ border: 'none' }}>
-                                        {product?.groupedVariants?.length || 0} Types
-                                    </Tag>
-                                </Descriptions.Item>
-                                <Descriptions.Item label="Current Stock">
-                                    <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                                        {(() => {
-                                            const stockByLoc = {};
-                                            let globalTotal = 0; // <--- NAYA IZAFA: Asli Global Total calculate karne ke liye
-                                            
-                                            product?.groupedVariants?.forEach(v => {
-                                                if (v.locations) {
-                                                    Object.entries(v.locations).forEach(([whId, qty]) => {
-                                                        stockByLoc[whId] = (stockByLoc[whId] || 0) + qty;
-                                                        globalTotal += qty; // Har location ki quantity jama karein
-                                                    });
-                                                }
-                                            });
-                                            
-                                            return (
-                                                <>
-                                                    <Text strong style={{ fontSize: '14px', color: token.colorCardHeadingsText }}>
-                                                        {globalTotal} Units <span style={{ fontSize: '11px', fontWeight: 'normal', color: token.colorCardColumnsTitleText }}>(Global Total)</span>
-                                                    </Text>
-                                                    <Space wrap size={4}>
-                                                        {Object.entries(stockByLoc).map(([whId, qty]) => {
-                                                            if (qty <= 0) return null;
-                                                            const whName = whId === 'default' ? 'Main Shop' : (warehouses?.find(w => w.id === whId)?.name || 'Main Shop');
-                                                            return (
-                                                                <Tag key={whId} color="purple" style={{ margin: 0, fontSize: '11px', padding: '0 6px', border: 'none', background: token.colorFillAlter }}>
-                                                                    🏠 {whName}: <b>{qty}</b>
-                                                                </Tag>
-                                                            );
-                                                        })}
-                                                    </Space>
-                                                </>
-                                            );
-                                        })()}
-                                    </Space>
-                                </Descriptions.Item>
+                    <Card size="small" style={{ marginBottom: '16px', background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}` }} styles={{ body: { padding: isMobile ? '12px' : '16px' } }}>
+                        <Descriptions 
+                            size="small" 
+                            bordered={false}
+                            column={{ xs: 1, sm: 2, md: 3, lg: 3 }}
+                        >
+                            {/* Row 1 */}
+                            <Descriptions.Item label="Product Name">
+                                <Text strong style={{ color: token.colorCardHeadingsText }}>{product?.name}</Text>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Category">
+                                <Tag color="cyan" style={{ border: 'none', margin: 0 }}>{product?.category_name}</Tag>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Brand">
+                                <Text style={{ color: token.colorCardBrandText }}>{product?.brand || 'N/A'}</Text>
+                            </Descriptions.Item>
+                            
+                            {/* Row 2 */}
+                            <Descriptions.Item label="Barcode">
+                                <Text code style={{ color: token.colorCardDetailsText }}>{product?.barcode || 'N/A'}</Text>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Active Variants">
+                                <Tag color="blue" style={{ border: 'none', margin: 0 }}>
+                                    {product?.groupedVariants?.length || 0} Types
+                                </Tag>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Current Stock">
+                                <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                                    {(() => {
+                                        const stockByLoc = {};
+                                        let globalTotal = 0;
+                                        
+                                        product?.groupedVariants?.forEach(v => {
+                                            if (v.locations) {
+                                                Object.entries(v.locations).forEach(([whId, qty]) => {
+                                                    stockByLoc[whId] = (stockByLoc[whId] || 0) + qty;
+                                                    globalTotal += qty;
+                                                });
+                                            }
+                                        });
+                                        
+                                        return (
+                                            <>
+                                                <Text strong style={{ fontSize: '13px', color: token.colorCardHeadingsText }}>
+                                                    {globalTotal} Units <span style={{ fontSize: '11px', fontWeight: 'normal', color: token.colorCardColumnsTitleText }}>(Global Total)</span>
+                                                </Text>
+                                                <Space wrap size={[4, 6]}>
+                                                    {Object.entries(stockByLoc).map(([whId, qty]) => {
+                                                        if (qty <= 0) return null;
+                                                        const whName = whId === 'default' ? 'Main Shop' : (warehouses?.find(w => w.id === whId)?.name || 'Main Shop');
+                                                        return (
+                                                            <Tag key={whId} color="purple" style={{ margin: 0, fontSize: '11px', padding: '0 6px', border: 'none', background: token.colorFillAlter }}>
+                                                                🏠 {whName}: <b>{qty}</b>
+                                                            </Tag>
+                                                        );
+                                                    })}
+                                                </Space>
+                                            </>
+                                        );
+                                    })()}
+                                </Space>
+                            </Descriptions.Item>
 
-                                {/* Row 3 */}
-                                <Descriptions.Item label="Avg. Buy Price">
-                                    <Text style={{ color: token.colorCardDetailsText }}>
-                                        {formatCurrency(product?.avg_purchase_price, profile?.currency)}
-                                    </Text>
-                                </Descriptions.Item>
-                                <Descriptions.Item label="Total Stock Value">
-                                    <Text strong style={{ color: token.colorWarning }}>
-                                        {formatCurrency((product?.quantity || 0) * (product?.avg_purchase_price || 0), profile?.currency)}
-                                    </Text>
-                                </Descriptions.Item>
-                                <Descriptions.Item label="Sale Price Range">
-                                    <Text strong style={{ color: token.colorAmountPositive }}>
-                                        {formatCurrency(product?.min_sale_price, profile?.currency)} - {formatCurrency(product?.max_sale_price, profile?.currency)}
-                                    </Text>
-                                </Descriptions.Item>
-                            </Descriptions>
-                        </div>
+                            {/* Row 3 */}
+                            <Descriptions.Item label="Avg. Buy Price">
+                                <Text style={{ color: token.colorCardDetailsText }}>
+                                    {formatCurrency(product?.avg_purchase_price, profile?.currency)}
+                                </Text>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Total Stock Value">
+                                <Text strong style={{ color: token.colorWarning }}>
+                                    {formatCurrency((product?.quantity || 0) * (product?.avg_purchase_price || 0), profile?.currency)}
+                                </Text>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Sale Price Range">
+                                <Text strong style={{ color: token.colorAmountPositive }}>
+                                    {formatCurrency(product?.min_sale_price, profile?.currency)} - {formatCurrency(product?.max_sale_price, profile?.currency)}
+                                </Text>
+                            </Descriptions.Item>
+                        </Descriptions>
                     </Card>
 
-                    {/* NAYA IZAFA: Live Table ke liye inline filters Row */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
+                    {/* Live Table Filters */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                         <Title level={5} style={{ color: token.colorCardHeadingsText, margin: 0 }}>Movement History</Title>
                         <Space size="small" style={{ flexWrap: 'wrap' }}>
-                            <Text type="secondary" style={{ fontSize: '12px' }}>Filter Table:</Text>
+                            <Text type="secondary" style={{ fontSize: '12px' }}>Filter:</Text>
                             
-                            {/* Type Filter */}
                             <Select
                                 size="small"
                                 value={viewTransactionType}
                                 onChange={(val) => setViewTransactionType(val)}
-                                style={{ width: '140px' }}
+                                style={{ width: '130px' }}
                                 styles={{ popup: { root: { zIndex: 2000 } } }}
                             >
                                 <Select.Option value="all">All Types</Select.Option>
@@ -426,12 +438,11 @@ const ProductLedgerModal = ({ visible, onClose, product, warehouses }) => {
                                 <Select.Option value="Transfer">Transfers</Select.Option>
                             </Select>
                             
-                            {/* Date Filter */}
                             <Select
                                 size="small"
                                 value={viewDateRange}
                                 onChange={(val) => setViewDateRange(val)}
-                                style={{ width: '120px' }}
+                                style={{ width: '110px' }}
                                 styles={{ popup: { root: { zIndex: 2000 } } }}
                             >
                                 <Select.Option value="all">All Time</Select.Option>
@@ -444,17 +455,17 @@ const ProductLedgerModal = ({ visible, onClose, product, warehouses }) => {
 
                     <Table 
                         columns={columns} 
-                        dataSource={getLiveTableData()} // <--- NAYA IZAFA: filtered function connect kiya
+                        dataSource={getLiveTableData()} 
                         rowKey="id" 
                         size="small" 
                         pagination={{ pageSize: 10 }}
-                        scroll={{ x: 'max-content' }} // <--- NAYA IZAFA: Left-Right Scroll ke liye
+                        scroll={{ x: 'max-content' }} 
                     />
                 </ConfigProvider>
             )}
         </Modal>
 
-        {/* --- NAYA IZAFA: Export Wizard Modal --- */}
+        {/* --- Export Wizard Modal (Responsive) --- */}
         <Modal
             title="Export & Print Wizard (Item Ledger)"
             open={isExportWizardOpen}
@@ -478,7 +489,8 @@ const ProductLedgerModal = ({ visible, onClose, product, warehouses }) => {
                 </div>
             }
             centered
-            width="60%"
+            width={isMobile ? '95%' : 620}
+            style={{ top: 20 }}
         >
             <Form layout="vertical" style={{ marginTop: '16px' }}>
                 <Form.Item label={<Text strong>1. Select Date Range</Text>}>

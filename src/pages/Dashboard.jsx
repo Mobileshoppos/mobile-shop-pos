@@ -923,12 +923,12 @@ const Dashboard = () => {
         )}
       </Row>
       {/* CASH ADJUSTMENT MODAL */}
-      {/* CASH ADJUSTMENT MODAL (Professional Version) */}
+      {/* CASH ADJUSTMENT MODAL (Professional Wide & Responsive) */}
       <Modal
         title={
           <Space>
             <TransactionOutlined style={{ color: token.colorPrimary }} />
-            <span>Cash Adjustment & Transfer</span>
+            <span style={{ fontSize: '17px', fontWeight: 600, color: token.colorCardHeadingsText }}>Cash Adjustment & Transfer</span>
           </Space>
         }
         open={isAdjustmentModalOpen}
@@ -936,7 +936,8 @@ const Dashboard = () => {
         onOk={() => adjustmentForm.submit()}
         okText="Save Entry"
         confirmLoading={isAdjustmentSubmitting}
-        width={450}
+        width={isMobile ? '95%' : 750}
+        style={{ top: 20 }}
       >
         <Form 
           form={adjustmentForm} 
@@ -949,24 +950,24 @@ const Dashboard = () => {
           }}
           style={{ marginTop: '16px' }}
         >
-          {/* 1. Counter Display & Balance (Locked for Security) */}
+          {/* 1. Counter Display & Balance Header Box */}
           <div style={{ 
-            background: isDarkMode ? 'rgba(255,255,255,0.05)' : '#f5f5f5', 
-            padding: '12px', 
+            background: token.colorFillAlter, 
+            padding: '12px 16px', 
             borderRadius: '8px', 
-            marginBottom: '20px',
+            marginBottom: '18px',
             border: `1px solid ${token.colorBorderSecondary}`
           }}>
             <Row justify="space-between" align="middle">
               <Col>
-                <Text type="secondary" style={{ fontSize: '12px' }}>Current Counter:</Text>
-                <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                <Text type="secondary" style={{ fontSize: '11px', textTransform: 'uppercase', display: 'block' }}>Current Counter:</Text>
+                <div style={{ fontWeight: 'bold', fontSize: '15px', color: token.colorTextHeading }}>
                   {allCounters.find(c => c.id === (activeSession?.register_id || localStorage.getItem('paired_register_id')))?.name || 'Unknown Counter'}
                 </div>
               </Col>
               <Col style={{ textAlign: 'right' }}>
-                <Text type="secondary" style={{ fontSize: '12px' }}>Available Cash:</Text>
-                <div style={{ fontWeight: 'bold', fontSize: '16px', color: token.colorSuccess }}>
+                <Text type="secondary" style={{ fontSize: '11px', textTransform: 'uppercase', display: 'block' }}>Available Cash:</Text>
+                <div style={{ fontWeight: 'bold', fontSize: '17px', color: token.colorSuccess }}>
                   {formatCurrency(adjModalBalance, profile?.currency)}
                 </div>
               </Col>
@@ -976,7 +977,8 @@ const Dashboard = () => {
           {/* Hidden field to keep register_id in form values */}
           <Form.Item name="register_id" hidden><Input /></Form.Item>
 
-          <Form.Item name="type" label={<Text strong>What do you want to do?</Text>} rules={[{ required: true }]}>
+          {/* Action Type Selector */}
+          <Form.Item name="type" label={<Text strong style={{ fontSize: '13px' }}>What do you want to do?</Text>} rules={[{ required: true }]} style={{ marginBottom: '16px' }}>
             <Radio.Group buttonStyle="solid" style={{ width: '100%', display: 'flex' }}>
               <Radio.Button value="In" style={{ flex: 1, textAlign: 'center' }}>Cash In</Radio.Button>
               <Radio.Button value="Out" style={{ flex: 1, textAlign: 'center' }}>Cash Out</Radio.Button>
@@ -984,74 +986,81 @@ const Dashboard = () => {
             </Radio.Group>
           </Form.Item>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="amount" label={<Text strong>Amount</Text>} rules={[
-                { required: true, message: 'Enter amount' },
-                // Safety Check: Cash out balance se zyada na ho
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    if (getFieldValue('type') !== 'In' && value > adjModalBalance && getFieldValue('payment_method') === 'Cash') {
-                      return Promise.reject(new Error('Insufficient cash!'));
-                    }
-                    return Promise.resolve();
-                  },
-                }),
-              ]}>
-                <InputNumber style={{ width: '100%' }} prefix={profile?.currency} min={1} placeholder="0.00" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="payment_method" label={<Text strong>Source / Medium</Text>} rules={[{ required: true, message: 'Please select' }]}>
-                <Select placeholder="Select Source">
-                  <Select.OptGroup label="Physical Cash">
-                    <Select.Option value="Cash">This Counter (Cash)</Select.Option>
-                  </Select.OptGroup>
-                  <Select.OptGroup label="Banks & Wallets">
-                    {paymentAccounts.map(acc => (
-                      <Select.Option key={acc.id} value={acc.name}>{acc.name}</Select.Option>
-                    ))}
-                  </Select.OptGroup>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
-
-          {/* Dynamic Transfer Destination */}
+          {/* Dynamic Grid: Transfer hone par 3 columns ek hi row mein aayenge */}
           <Form.Item shouldUpdate={(prev, curr) => prev.type !== curr.type} noStyle>
-            {({ getFieldValue }) => 
-              getFieldValue('type') === 'Transfer' ? (
-                <Form.Item name="transfer_to" label={<Text strong>Transfer Destination</Text>} rules={[{ required: true, message: 'Select where to send' }]}>
-                  <Select placeholder="Where are the funds going?">
-                    <Select.OptGroup label="Banks & Wallets">
-                      {paymentAccounts.map(acc => (
-                        <Select.Option key={`dest-${acc.id}`} value={acc.name}>{acc.name}</Select.Option>
-                      ))}
-                    </Select.OptGroup>
-                    <Select.OptGroup label="Counters">
-                      {allCounters.map(c => (
-                        <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
-                      ))}
-                    </Select.OptGroup>
-                  </Select>
-                </Form.Item>
-              ) : null
-            }
-          </Form.Item>
+            {({ getFieldValue }) => {
+              const isTransfer = getFieldValue('type') === 'Transfer';
+              return (
+                <Row gutter={16}>
+                  <Col xs={24} sm={12} md={isTransfer ? 8 : 12}>
+                    <Form.Item name="amount" label={<Text strong style={{ fontSize: '13px' }}>Amount</Text>} rules={[
+                      { required: true, message: 'Enter amount' },
+                      ({ getFieldValue: getVal }) => ({
+                        validator(_, value) {
+                          if (getVal('type') !== 'In' && value > adjModalBalance && getVal('payment_method') === 'Cash') {
+                            return Promise.reject(new Error('Insufficient cash!'));
+                          }
+                          return Promise.resolve();
+                        },
+                      }),
+                    ]}>
+                      <InputNumber style={{ width: '100%' }} prefix={profile?.currency} min={1} placeholder="0.00" />
+                    </Form.Item>
+                  </Col>
 
-          <Form.Item name="notes" label={<Text strong>Reason / Category</Text>} rules={[{ required: true, message: 'Please provide a reason' }]}>
-            <Select 
-              showSearch 
-              placeholder="Select or type a reason" 
-              onSearch={(val) => adjustmentForm.setFieldsValue({ notes: val })}
-            >
-              <Select.Option value="Petty Cash / Expense">Petty Cash / Expense</Select.Option>
-              <Select.Option value="Cash Float / Change">Cash Float / Change</Select.Option>
-              <Select.Option value="Owner Withdrawal">Owner Withdrawal</Select.Option>
-              <Select.Option value="Capital Investment">Capital Investment</Select.Option>
-              <Select.Option value="Bank Deposit">Bank Deposit</Select.Option>
-              <Select.Option value="Correction (Error Fix)">Correction (Error Fix)</Select.Option>
-            </Select>
+                  <Col xs={24} sm={12} md={isTransfer ? 8 : 12}>
+                    <Form.Item name="payment_method" label={<Text strong style={{ fontSize: '13px' }}>Source / Medium</Text>} rules={[{ required: true, message: 'Please select' }]}>
+                      <Select placeholder="Select Source">
+                        <Select.OptGroup label="Physical Cash">
+                          <Select.Option value="Cash">This Counter (Cash)</Select.Option>
+                        </Select.OptGroup>
+                        <Select.OptGroup label="Banks & Wallets">
+                          {paymentAccounts.map(acc => (
+                            <Select.Option key={acc.id} value={acc.name}>{acc.name}</Select.Option>
+                          ))}
+                        </Select.OptGroup>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+
+                  {isTransfer && (
+                    <Col xs={24} sm={12} md={8}>
+                      <Form.Item name="transfer_to" label={<Text strong style={{ fontSize: '13px' }}>Transfer Destination</Text>} rules={[{ required: true, message: 'Select destination' }]}>
+                        <Select placeholder="Where are funds going?">
+                          <Select.OptGroup label="Banks & Wallets">
+                            {paymentAccounts.map(acc => (
+                              <Select.Option key={`dest-${acc.id}`} value={acc.name}>{acc.name}</Select.Option>
+                            ))}
+                          </Select.OptGroup>
+                          <Select.OptGroup label="Counters">
+                            {allCounters.map(c => (
+                              <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
+                            ))}
+                          </Select.OptGroup>
+                        </Select>
+                      </Form.Item>
+                    </Col>
+                  )}
+
+                  <Col xs={24}>
+                    <Form.Item name="notes" label={<Text strong style={{ fontSize: '13px' }}>Reason / Category</Text>} rules={[{ required: true, message: 'Please provide a reason' }]} style={{ marginBottom: '8px' }}>
+                      <Select 
+                        showSearch 
+                        placeholder="Select or type a reason" 
+                        onSearch={(val) => adjustmentForm.setFieldsValue({ notes: val })}
+                      >
+                        <Select.Option value="Petty Cash / Expense">Petty Cash / Expense</Select.Option>
+                        <Select.Option value="Cash Float / Change">Cash Float / Change</Select.Option>
+                        <Select.Option value="Owner Withdrawal">Owner Withdrawal</Select.Option>
+                        <Select.Option value="Capital Investment">Capital Investment</Select.Option>
+                        <Select.Option value="Bank Deposit">Bank Deposit</Select.Option>
+                        <Select.Option value="Correction (Error Fix)">Correction (Error Fix)</Select.Option>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                </Row>
+              );
+            }}
           </Form.Item>
         </Form>
       </Modal>
