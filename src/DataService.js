@@ -2743,7 +2743,7 @@ async addCustomer(customerData) {
       }
     });
 
-    // --- NAYA IZAFA: Variant-Level Low Stock Report Logic ---
+    // --- NAYA IZAFA: Variant-Level Low Stock Report Logic (Strict Grouping) ---
     const allVariantsForReport = await db.product_variants.toArray();
     const variantMapForReport = {};
     allVariantsForReport.forEach(v => variantMapForReport[v.id] = v);
@@ -2752,12 +2752,25 @@ async addCustomer(customerData) {
     inventory.forEach(item => {
         const qty = Number(item.available_qty) || 0;
         if (qty > 0) {
-            const key = item.variant_id || `${item.product_id}-${JSON.stringify(item.item_attributes || {})}`;
+            // IMEI ko nikaal kar RAM, Storage, Color par group banana
+            const cleanAttrs = {};
+            if (item.item_attributes && typeof item.item_attributes === 'object') {
+                Object.entries(item.item_attributes).forEach(([k, val]) => {
+                    const lowerKey = k.toLowerCase();
+                    if (val && !lowerKey.includes('imei') && !lowerKey.includes('serial')) {
+                        cleanAttrs[k] = val;
+                    }
+                });
+            }
+            const cleanAttrString = JSON.stringify(Object.entries(cleanAttrs).sort());
+            // STRICT GROUP KEY: Product ID + Specifications
+            const key = `${item.product_id}-${cleanAttrString}`;
+
             if (!variantStockForReport[key]) {
                 variantStockForReport[key] = {
                     product_id: item.product_id,
                     variant_id: item.variant_id,
-                    attributes: item.item_attributes,
+                    attributes: cleanAttrs,
                     qty: 0
                 };
             }
@@ -2779,17 +2792,15 @@ async addCustomer(customerData) {
         if (vs.qty <= alertQty) {
             let attrStr = '';
             if (vs.attributes) {
-                const attrs = Object.entries(vs.attributes)
-                    .filter(([k, val]) => val && !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial'))
-                    .map(([k, val]) => val);
+                const attrs = Object.values(vs.attributes).filter(Boolean);
                 if (attrs.length > 0) attrStr = ` (${attrs.join(', ')})`;
             }
 
             const vel = velocityMap[p.id] || { v30: 0, v60: 0, v90: 0 };
-            const required = Math.max(0, vel.v30 - vs.qty);
+            const required = vel.v30 > 0 ? Math.max(0, vel.v30 - vs.qty) : Math.max(0, alertQty - vs.qty);
 
             lowStockItems.push({
-                key: vs.variant_id || `${p.id}-${attrStr}`,
+                key: `${p.id}-${attrStr}`,
                 name: `${p.name}${attrStr}`,
                 brand: p.brand || '-',
                 qty: vs.qty,
@@ -4203,7 +4214,7 @@ async addCustomer(customerData) {
 
     // stockCounts upar Step 1 mein pehle hi calculate ho chuka hai.
 
-    // --- NAYA IZAFA: Variant-Level Low Stock Logic ---
+    // --- NAYA IZAFA: Variant-Level Low Stock Logic (Strict Grouping for Dashboard) ---
     const allVariantsForDash = await db.product_variants.toArray();
     const variantMapForDash = {};
     allVariantsForDash.forEach(v => variantMapForDash[v.id] = v);
@@ -4211,12 +4222,25 @@ async addCustomer(customerData) {
     const variantStockForDash = {};
     Object.values(inventoryMap).forEach(item => {
         if (item.status === 'Available' && (Number(item.available_qty) || 0) > 0) {
-            const key = item.variant_id || `${item.product_id}-${JSON.stringify(item.item_attributes || {})}`;
+            // IMEI ko nikaal kar Color, RAM, Storage par strict grouping key banana
+            const cleanAttrs = {};
+            if (item.item_attributes && typeof item.item_attributes === 'object') {
+                Object.entries(item.item_attributes).forEach(([k, val]) => {
+                    const lowerKey = k.toLowerCase();
+                    if (val && !lowerKey.includes('imei') && !lowerKey.includes('serial')) {
+                        cleanAttrs[k] = val;
+                    }
+                });
+            }
+            const cleanAttrString = JSON.stringify(Object.entries(cleanAttrs).sort());
+            // STRICT KEY: Product ID + Clean Attributes
+            const key = `${item.product_id}-${cleanAttrString}`;
+
             if (!variantStockForDash[key]) {
                 variantStockForDash[key] = {
                     product_id: item.product_id,
                     variant_id: item.variant_id,
-                    attributes: item.item_attributes,
+                    attributes: cleanAttrs,
                     qty: 0
                 };
             }
@@ -4241,14 +4265,21 @@ async addCustomer(customerData) {
         if (vs.qty <= alertQty) {
             let attrStr = '';
             if (vs.attributes) {
-                const attrs = Object.entries(vs.attributes)
-                    .filter(([k, val]) => val && !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial'))
-                    .map(([k, val]) => val);
+                const attrs = Object.values(vs.attributes).filter(Boolean);
                 if (attrs.length > 0) attrStr = ` (${attrs.join(', ')})`;
             }
+
+            // Double brand name fix
+            const cleanBrand = p.brand ? p.brand.trim() : '';
+            const cleanName = p.name ? p.name.trim() : 'Unknown';
+            let finalName = cleanName;
+            if (cleanBrand && !cleanName.toLowerCase().startsWith(cleanBrand.toLowerCase())) {
+                finalName = `${cleanBrand} ${cleanName}`;
+            }
+
             lowStockItemsRaw.push({
                 ...p,
-                name: `${p.name}${attrStr}`,
+                name: `${finalName}${attrStr}`,
                 quantity: vs.qty
             });
         }

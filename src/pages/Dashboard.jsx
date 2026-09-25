@@ -25,7 +25,29 @@ import {
   AreaChartOutlined
 } from '@ant-design/icons';
 import { getPlanLimits } from '../config/subscriptionPlans'; // <-- Control Center Import
-import { Area, Pie } from '@ant-design/charts'; 
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title as ChartTitle,
+  Tooltip as ChartTooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ChartTitle,
+  ChartTooltip,
+  Legend,
+  Filler
+); 
 import { useNavigate } from 'react-router-dom';
 import { useMediaQuery } from '../hooks/useMediaQuery'; 
 import DataService from '../DataService';
@@ -232,73 +254,52 @@ const Dashboard = () => {
     backgroundColor: token.colorCardBg || token.colorBgContainer
   };
 
-  // --- Graph Configuration (CONTROL CENTER LINKED) ---
-  const config = {
-    data: chartData,
-    xField: 'date',
-    yField: 'amount',
-    smooth: true,
-    // 1. Theme set karein
-    theme: isDarkMode ? 'dark' : 'light',
-    
-    // 2. Gradient Color (Area Style)
-    areaStyle: () => {
-      return {
-        fill: isDarkMode 
-            ? `l(270) 0:#1f1f1f 0.5:${token.colorPrimary} 1:${token.colorPrimary}` 
-            : `l(270) 0:#ffffff 0.5:${token.colorBorder} 1:${token.colorPrimary}`,
-      };
-    },
-    
-    // 3. Main Line Color (Yeh sab se zaroori hai)
-    color: token.colorPrimary,
-    
-    // 4. X-Axis (Neeche wali dates)
-    xAxis: {
-        label: {
-            style: {
-                fill: isDarkMode ? 'rgba(255,255,255,0.85)' : token.colorText,
-            }
-        },
-        grid: {
-            line: {
-                style: {
-                    stroke: isDarkMode ? '#444' : token.colorBorder,
-                }
-            }
-        }
-    },
+  // --- Chart.js Line Chart Configuration (Reports Page Style) ---
+  const lineChartData = {
+    labels: chartData.map(item => dayjs(item.date).format('DD MMM')),
+    datasets: [
+      {
+        fill: true,
+        label: 'Sales Revenue',
+        data: chartData.map(item => item.amount),
+        borderColor: token.colorPrimary,
+        backgroundColor: isDarkMode ? 'rgba(26, 182, 201, 0.15)' : 'rgba(26, 115, 232, 0.10)',
+        tension: 0.4,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: token.colorPrimary,
+      },
+    ],
+  };
 
-    // 5. Y-Axis (Side wali prices)
-    yAxis: {
-        label: {
-            formatter: (v) => `${v}`,
-            style: {
-                fill: isDarkMode ? 'rgba(255,255,255,0.85)' : token.colorText,
-            }
-        },
-        grid: {
-            line: {
-                style: {
-                    stroke: isDarkMode ? '#444' : token.colorBorder,
-                }
-            }
+  const lineChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        mode: 'index',
+        intersect: false,
+        callbacks: {
+          label: (context) => `Sales Revenue: ${formatCurrency(context.parsed.y, profile?.currency)}`
         }
+      },
     },
-
-    // 6. Tooltip
-    tooltip: {
-        formatter: (datum) => {
-            return { name: 'Sales', value: formatCurrency(datum.amount, profile?.currency) };
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { color: token.colorTextSecondary, font: { size: 11 } }
+      },
+      y: {
+        beginAtZero: true,
+        ticks: {
+          color: token.colorTextSecondary,
+          font: { size: 11 },
+          callback: (value) => formatCurrency(value, profile?.currency)
         },
-        domStyles: isDarkMode ? {
-            'g2-tooltip': { backgroundColor: '#333', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' },
-            'g2-tooltip-title': { color: '#fff' },
-            'g2-tooltip-list-item': { color: '#fff' }
-        } : undefined
-    },
-    autoFit: true,
-    height: 300,
+        grid: { color: token.colorBorderSecondary }
+      }
+    }
   };
 
   return (
@@ -441,7 +442,7 @@ const Dashboard = () => {
           </Card>
         </Col>
       ) : (
-        <Row gutter={[16, 16]} style={{ width: '100%', margin: 0 }}>
+        <Row gutter={[16, 16]}>
         {/* Card 1: Sales */}
         <Col xs={24} sm={12} md={8} lg={flexColProps}>
           <Card ref={refSales} style={{ ...cardStyle, backgroundColor: isDarkMode ? '#2C3E50' : token.colorPrimary }}>
@@ -686,7 +687,7 @@ const Dashboard = () => {
 
       {/* --- NAYA IZAFA: Daily Financial Summary Table --- */}
       {can('can_view_reports') && (
-        <Row gutter={[16, 16]} style={{ width: '100%', margin: 0, marginTop: 16 }}>
+        <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col span={24}>
             <DailyFinancialSummary timeRange={timeRange} customDates={customDates} />
           </Col>
@@ -694,7 +695,7 @@ const Dashboard = () => {
       )}
 
       {/* --- SECTION 2: GRAPH & ALERTS --- */}
-      <Row gutter={[16, 16]} style={{ marginTop: 10 }}>
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         
         {/* Left Side: Sales Graph AND Recent Transactions (Sirf Owner ko nazar aayega) */}
         {can('can_view_reports') && (
@@ -715,49 +716,53 @@ const Dashboard = () => {
   style={reportCardStyle}
 >
              <div style={{ height: 265 }}>
-   {/* Key lagane se chart force-refresh hoga jab theme badlegi */}
-   <Area {...config} key={(isDarkMode ? 'dark-chart' : 'light-chart') + token.colorPrimary} />
-</div>
+               {chartData?.length > 0 ? (
+                 <Line data={lineChartData} options={lineChartOptions} />
+               ) : (
+                 <Empty description="No sales data to display for this period" style={{ marginTop: '40px' }} />
+               )}
+             </div>
           </Card>
 
           {/* 2. Recent Transactions Table */}
           <Card 
-  title={
-    <Space>
-      <HistoryOutlined style={{ color: token.colorPrimary, fontSize: '18px' }} />
-      <span style={{ color: token.colorCardHeadingsText, fontWeight: 600 }}>Recent Transactions</span>
-    </Space>
-  } 
-  style={{ ...reportCardStyle, marginTop: 15 }}
->
+            title={
+              <Space>
+                <HistoryOutlined style={{ color: token.colorPrimary, fontSize: '18px' }} />
+                <span style={{ color: token.colorCardHeadingsText, fontWeight: 600 }}>Recent Transactions</span>
+              </Space>
+            } 
+            style={{ ...reportCardStyle, marginTop: 16 }}
+          >
             <Table
               dataSource={stats?.recentSales || []}
               pagination={false}
               size="small"
               rowKey="id"
+              scroll={{ x: 'max-content' }}
               columns={[
                 { 
                   title: 'Customer', 
                   dataIndex: 'customer', 
                   key: 'customer',
-                  render: (text) => <Text strong style={{ color: token.colorCardDetailsText }}>{text}</Text>
+                  render: (text) => <Text strong style={{ color: token.colorCardDetailsText, whiteSpace: 'nowrap' }}>{text}</Text>
                 },
                 { 
                   title: 'Date', 
                   dataIndex: 'date', 
                   key: 'date',
-                  render: (date) => <Text style={{ fontSize: 12, color: token.colorCardColumnsTitleText }}>{new Date(date).toLocaleDateString()}</Text>
+                  render: (date) => <Text style={{ fontSize: 12, color: token.colorCardColumnsTitleText, whiteSpace: 'nowrap' }}>{new Date(date).toLocaleDateString()}</Text>
                 },
                 { 
                   title: 'Status', 
                   dataIndex: 'payment_status', 
                   key: 'payment_status',
-                  // STANDARD: Semantic Colors for Auto Dark/Light Adaptation
+                  align: 'center',
                   render: (status) => {
-                      let color = 'success'; // Auto-adapts to Dark/Light
+                      let color = 'success';
                       if (status === 'unpaid') color = 'error';
                       if (status === 'partial') color = 'warning';
-                      return <Tag color={color}>{status ? status.toUpperCase() : 'PAID'}</Tag>
+                      return <Tag color={color} style={{ margin: 0, whiteSpace: 'nowrap' }}>{status ? status.toUpperCase() : 'PAID'}</Tag>
                   }
                 },
                 { 
@@ -765,7 +770,7 @@ const Dashboard = () => {
                   dataIndex: 'amount', 
                   key: 'amount',
                   align: 'right',
-                  render: (amount) => <Text strong style={{ color: token.colorCardDetailsText }}>{formatCurrency(amount, profile?.currency)}</Text>
+                  render: (amount) => <Text strong style={{ color: token.colorCardDetailsText, whiteSpace: 'nowrap' }}>{formatCurrency(amount, profile?.currency)}</Text>
                 },
               ]}
             />

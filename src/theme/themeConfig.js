@@ -26,7 +26,7 @@ export const themeConfig = {
 export const darkThemeTokens = {
   // --- Brand & Main Colors ---
   colorPrimary: '#1AB6C9',
-  colorBgLayout: '#121212',
+  colorBgLayout: '#1E1E1E',
   colorBgContainer: '#1E1E1E',
   colorBgElevated: '#282828',
   colorFillAlter: '#282828',
@@ -90,6 +90,8 @@ export const lightThemeTokens = {
   colorFillAlter: '#EBF4F6',
   colorTextHeading: '#141414',
   colorBorder: '#BFBFBF',
+  colorBorderSecondary: '#E0E0E0',
+  colorSplit: '#E0E0E0',
   
   // --- Semantic Colors (Status Tags waghera ke liye) ---
   colorSuccess: '#52c41a',

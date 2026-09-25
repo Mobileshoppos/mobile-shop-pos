@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Spin, Row, Col, Button, Space, Select, App, Divider } from 'antd';
+import { Card, Typography, Spin, Row, Col, Button, Space, Select, App, Divider, theme } from 'antd';
 import { PrinterOutlined, FileExcelOutlined, LayoutOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
+import { useMediaQuery } from '../hooks/useMediaQuery'; // <--- NAYA IZAFA
+import { useTheme } from '../context/ThemeContext'; // <--- NAYA IZAFA
 import { formatCurrency } from '../utils/currencyFormatter';
 import DataService from '../DataService';
 import dayjs from 'dayjs';
@@ -11,6 +13,9 @@ import autoTable from 'jspdf-autotable';
 const { Title, Text } = Typography;
 
 const BalanceSheet = () => {
+  const { token } = theme.useToken(); // <--- NAYA IZAFA
+  const { isDarkMode } = useTheme(); // <--- NAYA IZAFA
+  const isMobile = useMediaQuery('(max-width: 768px)'); // <--- NAYA IZAFA
   const { message } = App.useApp();
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -200,84 +205,115 @@ const BalanceSheet = () => {
     const headerStyle = {
       background: currentTheme.primary,
       color: currentTheme.headerText,
-      padding: '20px',
+      padding: isMobile ? '16px 12px' : '20px',
       textAlign: 'center',
       borderTopLeftRadius: '8px',
       borderTopRightRadius: '8px',
-      marginBottom: '20px'
+      marginBottom: '16px'
     };
 
     const sectionTitleStyle = {
-      background: currentTheme.secondary,
-      padding: '10px 15px',
+      background: isDarkMode ? 'rgba(255, 255, 255, 0.06)' : currentTheme.secondary,
+      padding: '10px 14px',
       fontWeight: 'bold',
       borderLeft: `4px solid ${currentTheme.primary}`,
-      marginBottom: '10px'
+      marginBottom: '10px',
+      borderRadius: '4px'
     };
 
-    const rowStyle = { padding: '12px 15px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between' };
-    const totalStyle = { ...rowStyle, fontWeight: 'bold', background: '#fafafa', borderTop: '2px solid #ddd', borderBottom: '4px double #ccc', fontSize: '16px' };
+    const rowStyle = { 
+      padding: isMobile ? '10px 12px' : '12px 14px', 
+      borderBottom: `1px solid ${token.colorBorderSecondary}`, 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      alignItems: 'center',
+      gap: '12px'
+    };
+
+    const totalStyle = { 
+      ...rowStyle, 
+      fontWeight: 'bold', 
+      background: isDarkMode ? 'rgba(255, 255, 255, 0.04)' : '#fafafa', 
+      borderTop: `2px solid ${token.colorBorder}`, 
+      borderBottom: `4px double ${token.colorBorder}`, 
+      fontSize: isMobile ? '14px' : '15px' 
+    };
 
     if (template === 't-shape') {
       return (
-        <div style={{ border: '1px solid #e8e8e8', borderRadius: '8px', background: '#fff' }}>
-          <div style={headerStyle}>
-            <Title level={3} style={{ color: currentTheme.headerText, margin: 0 }}>{profile?.shop_name || 'My Shop'}</Title>
-            <Text style={{ color: currentTheme.headerText, opacity: 0.8 }}>Balance Sheet as of {dayjs(data.date).format('DD MMM YYYY')}</Text>
-          </div>
-          <Row>
-            {/* ASSETS COLUMN */}
-            <Col span={12} style={{ borderRight: '1px solid #e8e8e8', padding: '0 20px 20px 20px' }}>
-              <div style={{ ...sectionTitleStyle, textAlign: 'center' }}>ASSETS</div>
-              <div style={rowStyle}><span>Cash in Hand</span><span>{formatCurrency(data.assets.cash, curr)}</span></div>
-              <div style={rowStyle}><span>Bank & Wallets</span><span>{formatCurrency(data.assets.bank, curr)}</span></div>
-              <div style={rowStyle}><span>Accounts Receivable</span><span>{formatCurrency(data.assets.receivables, curr)}</span></div>
-              <div style={rowStyle}><span>Inventory (Stock Value)</span><span>{formatCurrency(data.assets.inventory, curr)}</span></div>
-              <div style={rowStyle}><span>Fixed Assets (Shop/Equipment)</span><span>{formatCurrency(data.assets.fixedAssets || 0, curr)}</span></div>
-              <div style={{ height: '45px' }}></div> {/* Spacer to align totals */}
-              <div style={totalStyle}><span>Total Assets</span><span style={{ color: currentTheme.primary }}>{formatCurrency(data.totalAssets, curr)}</span></div>
-            </Col>
+        <div style={{ border: `1px solid ${token.colorCardBorder}`, borderRadius: '8px', background: token.colorCardBg, overflowX: 'auto' }}>
+          <div style={{ minWidth: isMobile ? '340px' : 'auto' }}>
+            <div style={headerStyle}>
+              <Title level={3} style={{ color: currentTheme.headerText, margin: 0, fontSize: isMobile ? '20px' : '24px' }}>
+                {profile?.shop_name || 'My Shop'}
+              </Title>
+              <Text style={{ color: currentTheme.headerText, opacity: 0.85, fontSize: isMobile ? '12px' : '13px' }}>
+                Balance Sheet as of {dayjs(data.date).format('DD MMM YYYY')}
+              </Text>
+            </div>
             
-            {/* LIABILITIES COLUMN */}
-            <Col span={12} style={{ padding: '0 20px 20px 20px' }}>
-              <div style={{ ...sectionTitleStyle, textAlign: 'center' }}>LIABILITIES & EQUITY</div>
-              <div style={rowStyle}><span>Accounts Payable</span><span>{formatCurrency(data.liabilities.payables, curr)}</span></div>
-              <div style={rowStyle}><span>Total Equity (Net Worth)</span><span>{formatCurrency(data.equity, curr)}</span></div>
-              <div style={{ height: '45px' }}></div>
-              <div style={{ height: '45px' }}></div>
-              <div style={{ height: '45px' }}></div> {/* Extra spacer for balancing Fixed Assets row */}
-              <div style={totalStyle}><span>Total Liab. & Equity</span><span style={{ color: currentTheme.primary }}>{formatCurrency(data.totalLiabilitiesAndEquity, curr)}</span></div>
-            </Col>
-          </Row>
+            <Row gutter={[0, isMobile ? 16 : 0]}>
+              {/* ASSETS COLUMN */}
+              <Col xs={24} md={12} style={{ borderRight: isMobile ? 'none' : `1px solid ${token.colorBorderSecondary}`, padding: isMobile ? '0 12px' : '0 20px 20px 20px' }}>
+                <div style={{ ...sectionTitleStyle, textAlign: 'center' }}>ASSETS</div>
+                <div style={rowStyle}><span style={{ whiteSpace: 'nowrap' }}>Cash in Hand</span><span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{formatCurrency(data.assets.cash, curr)}</span></div>
+                <div style={rowStyle}><span style={{ whiteSpace: 'nowrap' }}>Bank & Wallets</span><span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{formatCurrency(data.assets.bank, curr)}</span></div>
+                <div style={rowStyle}><span style={{ whiteSpace: 'nowrap' }}>Accounts Receivable</span><span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{formatCurrency(data.assets.receivables, curr)}</span></div>
+                <div style={rowStyle}><span style={{ whiteSpace: 'nowrap' }}>Inventory (Stock Value)</span><span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{formatCurrency(data.assets.inventory, curr)}</span></div>
+                <div style={rowStyle}><span style={{ whiteSpace: 'nowrap' }}>Fixed Assets (Shop/Equipment)</span><span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{formatCurrency(data.assets.fixedAssets || 0, curr)}</span></div>
+                {!isMobile && <div style={{ height: '45px' }}></div>}
+                <div style={totalStyle}><span style={{ whiteSpace: 'nowrap' }}>Total Assets</span><span style={{ color: currentTheme.primary, whiteSpace: 'nowrap' }}>{formatCurrency(data.totalAssets, curr)}</span></div>
+              </Col>
+              
+              {/* LIABILITIES COLUMN */}
+              <Col xs={24} md={12} style={{ padding: isMobile ? '0 12px 16px 12px' : '0 20px 20px 20px' }}>
+                <div style={{ ...sectionTitleStyle, textAlign: 'center' }}>LIABILITIES & EQUITY</div>
+                <div style={rowStyle}><span style={{ whiteSpace: 'nowrap' }}>Accounts Payable</span><span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{formatCurrency(data.liabilities.payables, curr)}</span></div>
+                <div style={rowStyle}><span style={{ whiteSpace: 'nowrap' }}>Total Equity (Net Worth)</span><span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{formatCurrency(data.equity, curr)}</span></div>
+                {!isMobile && (
+                  <>
+                    <div style={{ height: '45px' }}></div>
+                    <div style={{ height: '45px' }}></div>
+                    <div style={{ height: '45px' }}></div>
+                  </>
+                )}
+                <div style={totalStyle}><span style={{ whiteSpace: 'nowrap' }}>Total Liab. & Equity</span><span style={{ color: currentTheme.primary, whiteSpace: 'nowrap' }}>{formatCurrency(data.totalLiabilitiesAndEquity, curr)}</span></div>
+              </Col>
+            </Row>
+          </div>
         </div>
       );
     }
 
     // Vertical Templates (Corporate, Executive, Formal)
     return (
-      <div style={{ border: '1px solid #e8e8e8', borderRadius: '8px', background: template === 'executive' ? '#141414' : '#fff', color: template === 'executive' ? '#fff' : '#000' }}>
+      <div style={{ border: `1px solid ${token.colorCardBorder}`, borderRadius: '8px', background: token.colorCardBg, overflow: 'hidden' }}>
         <div style={headerStyle}>
-          <Title level={3} style={{ color: currentTheme.headerText, margin: 0 }}>{profile?.shop_name || 'My Shop'}</Title>
-          <Text style={{ color: currentTheme.headerText, opacity: 0.8 }}>Balance Sheet as of {dayjs(data.date).format('DD MMM YYYY')}</Text>
+          <Title level={3} style={{ color: currentTheme.headerText, margin: 0, fontSize: isMobile ? '20px' : '24px' }}>
+            {profile?.shop_name || 'My Shop'}
+          </Title>
+          <Text style={{ color: currentTheme.headerText, opacity: 0.85, fontSize: isMobile ? '12px' : '13px' }}>
+            Balance Sheet as of {dayjs(data.date).format('DD MMM YYYY')}
+          </Text>
         </div>
-        <div style={{ padding: '0 20px 20px 20px' }}>
+        <div style={{ padding: isMobile ? '0 12px 16px 12px' : '0 20px 20px 20px' }}>
           <div style={sectionTitleStyle}>ASSETS</div>
-          <div style={rowStyle}><span>Cash in Hand</span><span>{formatCurrency(data.assets.cash, curr)}</span></div>
-          <div style={rowStyle}><span>Bank & Wallets</span><span>{formatCurrency(data.assets.bank, curr)}</span></div>
-          <div style={rowStyle}><span>Accounts Receivable</span><span>{formatCurrency(data.assets.receivables, curr)}</span></div>
-          <div style={rowStyle}><span>Inventory (Stock Value)</span><span>{formatCurrency(data.assets.inventory, curr)}</span></div>
-          <div style={rowStyle}><span>Fixed Assets (Shop/Equipment)</span><span>{formatCurrency(data.assets.fixedAssets || 0, curr)}</span></div>
-          <div style={{ ...totalStyle, background: template === 'executive' ? '#262626' : '#fafafa' }}>
-            <span>Total Assets</span><span style={{ color: currentTheme.text }}>{formatCurrency(data.totalAssets, curr)}</span>
+          <div style={rowStyle}><span style={{ whiteSpace: 'nowrap' }}>Cash in Hand</span><span style={{ whiteSpace: 'nowrap', fontWeight: 500 }}>{formatCurrency(data.assets.cash, curr)}</span></div>
+          <div style={rowStyle}><span style={{ whiteSpace: 'nowrap' }}>Bank & Wallets</span><span style={{ whiteSpace: 'nowrap', fontWeight: 500 }}>{formatCurrency(data.assets.bank, curr)}</span></div>
+          <div style={rowStyle}><span style={{ whiteSpace: 'nowrap' }}>Accounts Receivable</span><span style={{ whiteSpace: 'nowrap', fontWeight: 500 }}>{formatCurrency(data.assets.receivables, curr)}</span></div>
+          <div style={rowStyle}><span style={{ whiteSpace: 'nowrap' }}>Inventory (Stock Value)</span><span style={{ whiteSpace: 'nowrap', fontWeight: 500 }}>{formatCurrency(data.assets.inventory, curr)}</span></div>
+          <div style={rowStyle}><span style={{ whiteSpace: 'nowrap' }}>Fixed Assets (Shop/Equipment)</span><span style={{ whiteSpace: 'nowrap', fontWeight: 500 }}>{formatCurrency(data.assets.fixedAssets || 0, curr)}</span></div>
+          <div style={totalStyle}>
+            <span style={{ whiteSpace: 'nowrap' }}>Total Assets</span><span style={{ color: currentTheme.text, whiteSpace: 'nowrap' }}>{formatCurrency(data.totalAssets, curr)}</span>
           </div>
           
           <div style={{ height: '20px' }}></div>
 
           <div style={sectionTitleStyle}>LIABILITIES & EQUITY</div>
-          <div style={rowStyle}><span>Accounts Payable (Liabilities)</span><span>{formatCurrency(data.liabilities.payables, curr)}</span></div>
-          <div style={rowStyle}><span>Total Equity (Net Worth)</span><span>{formatCurrency(data.equity, curr)}</span></div>
-          <div style={{ ...totalStyle, background: template === 'executive' ? '#262626' : '#fafafa' }}>
-            <span>Total Liabilities & Equity</span><span style={{ color: currentTheme.text }}>{formatCurrency(data.totalLiabilitiesAndEquity, curr)}</span>
+          <div style={rowStyle}><span style={{ whiteSpace: 'nowrap' }}>Accounts Payable (Liabilities)</span><span style={{ whiteSpace: 'nowrap', fontWeight: 500 }}>{formatCurrency(data.liabilities.payables, curr)}</span></div>
+          <div style={rowStyle}><span style={{ whiteSpace: 'nowrap' }}>Total Equity (Net Worth)</span><span style={{ whiteSpace: 'nowrap', fontWeight: 500 }}>{formatCurrency(data.equity, curr)}</span></div>
+          <div style={totalStyle}>
+            <span style={{ whiteSpace: 'nowrap' }}>Total Liabilities & Equity</span><span style={{ color: currentTheme.text, whiteSpace: 'nowrap' }}>{formatCurrency(data.totalLiabilitiesAndEquity, curr)}</span>
           </div>
         </div>
       </div>

@@ -310,15 +310,56 @@ const Categories = () => {
   };
 
   const categoryColumns = [
-    { title: 'Category Name', dataIndex: 'name', key: 'name' },
     { 
-      title: 'Stock Type', dataIndex: 'is_imei_based', key: 'is_imei_based', align: 'center',
+      title: 'Category Name', 
+      dataIndex: 'name', 
+      key: 'name',
+      render: (name) => <Text strong style={{ whiteSpace: 'nowrap', color: token.colorCardHeadingsText }}>{name}</Text>
+    },
+    { 
+      title: 'Stock Type', 
+      dataIndex: 'is_imei_based', 
+      key: 'is_imei_based', 
+      align: 'center',
       render: (is_imei_based) => is_imei_based 
-        ? <Tag icon={<MobileOutlined />} color="cyan">Per-Item</Tag> 
-        : <Tag icon={<TagsOutlined />} color="processing">Quantity</Tag>
+        ? (
+          <Tag 
+            icon={<MobileOutlined style={{ marginRight: '4px' }} />} 
+            style={{ 
+              background: 'rgba(26, 115, 232, 0.08)', 
+              color: '#1A73E8', 
+              border: '1px solid rgba(26, 115, 232, 0.25)', 
+              borderRadius: '4px', 
+              fontSize: '11.5px', 
+              fontWeight: 500, 
+              padding: '1px 8px',
+              margin: 0, 
+              whiteSpace: 'nowrap' 
+            }}
+          >
+            Per-Item (IMEI)
+          </Tag>
+        ) : (
+          <Tag 
+            icon={<TagsOutlined style={{ marginRight: '4px' }} />} 
+            style={{ 
+              background: token.colorFillAlter, 
+              color: token.colorTextSecondary, 
+              border: `1px solid ${token.colorBorderSecondary}`, 
+              borderRadius: '4px', 
+              fontSize: '11.5px', 
+              fontWeight: 500, 
+              padding: '1px 8px',
+              margin: 0, 
+              whiteSpace: 'nowrap' 
+            }}
+          >
+            Quantity (Bulk)
+          </Tag>
+        )
     },
     {
-      title: 'Actions', key: 'actions', width: 120, align: 'center',
+      title: 'Actions', key: 'actions', width: 100, align: 'center',
       render: (_, record) => (
         <Space>
           <Tooltip title="Edit Category">
@@ -481,8 +522,13 @@ const Categories = () => {
                 );
               })()}
             </div>
-            <Table columns={categoryColumns} dataSource={categories} loading={loadingCategories} rowKey="id" size="small"
-            scroll={{ x: true }}
+            <Table 
+              columns={categoryColumns} 
+              dataSource={categories} 
+              loading={loadingCategories} 
+              rowKey="id" 
+              size="small"
+              scroll={{ x: 'max-content' }}
               onRow={(record) => ({ onClick: () => { setSelectedCategory(record); getAttributesForCategory(record.id); }})}
               rowClassName={(record) => (selectedCategory?.id === record.id ? 'ant-table-row-selected' : '')}
             />

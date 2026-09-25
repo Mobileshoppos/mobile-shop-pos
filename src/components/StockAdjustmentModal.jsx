@@ -3,14 +3,16 @@ import { Modal, Table, Select, InputNumber, Input, Button, Space, Typography, Ta
 import { DeleteOutlined, SearchOutlined, InboxOutlined } from '@ant-design/icons';
 import DataService from '../DataService';
 import { useStaff } from '../context/StaffContext';
+import { useMediaQuery } from '../hooks/useMediaQuery'; // <--- NAYA IZAFA: Mobile Hook
 
 const { Text } = Typography;
 const { Option } = Select;
 
 const StockAdjustmentModal = ({ visible, onCancel, onSuccess, initialItem }) => {
-    const { token } = theme.useToken(); // <--- NAYA IZAFA: Theme tokens access karein
+    const { token } = theme.useToken();
     const { message } = App.useApp();
     const { activeStaff } = useStaff();
+    const isMobile = useMediaQuery('(max-width: 768px)'); // <--- NAYA IZAFA: Mobile detect
     
     const [cart, setCart] = useState([]);
     const [inventoryList, setInventoryList] = useState([]);
@@ -123,13 +125,13 @@ const StockAdjustmentModal = ({ visible, onCancel, onSuccess, initialItem }) => 
         }
     };
 
-    // --- TABLE COLUMNS ---
+    // --- TABLE COLUMNS (Responsive & Non-Breaking) ---
     const columns = [
         {
             title: 'Product Details',
             key: 'product',
             render: (_, record) => (
-                <Space direction="vertical" size={0}>
+                <Space direction="vertical" size={0} style={{ whiteSpace: 'nowrap' }}>
                     <Text strong>{record.product_name}</Text>
                     <Text type="secondary" style={{ fontSize: '11px' }}>
                         {record.imei ? `IMEI: ${record.imei} ` : (record.imeis && record.imeis.length > 0 ? `IMEI: ${record.imeis[0]} ` : '')}
@@ -143,13 +145,13 @@ const StockAdjustmentModal = ({ visible, onCancel, onSuccess, initialItem }) => 
             title: 'Available',
             dataIndex: 'display_quantity',
             align: 'center',
-            width: 100,
-            render: (qty) => <Tag color="blue">{qty}</Tag>
+            width: 90,
+            render: (qty) => <Tag color="blue" style={{ margin: 0, whiteSpace: 'nowrap' }}>{qty}</Tag>
         },
         {
             title: 'Qty to Adjust',
             key: 'qtyToMark',
-            width: 130,
+            width: 120,
             render: (_, record) => (
                 <InputNumber 
                     min={1} 
@@ -163,7 +165,7 @@ const StockAdjustmentModal = ({ visible, onCancel, onSuccess, initialItem }) => 
         {
             title: 'Reason (Type)',
             key: 'adjustmentType',
-            width: 150,
+            width: 160,
             render: (_, record) => (
                 <Select 
                     value={record.adjustmentType} 
@@ -180,7 +182,7 @@ const StockAdjustmentModal = ({ visible, onCancel, onSuccess, initialItem }) => 
         {
             title: 'Notes',
             key: 'notes',
-            width: 200,
+            width: 180,
             render: (_, record) => (
                 <Input 
                     placeholder="Optional details..." 
@@ -210,12 +212,14 @@ const StockAdjustmentModal = ({ visible, onCancel, onSuccess, initialItem }) => 
             title={
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <InboxOutlined style={{ color: '#faad14', fontSize: '20px' }} />
-                    <span style={{ fontSize: '18px' }}>Stock Adjustment & Write-off</span>
+                    <span style={{ fontSize: '18px', fontWeight: 600, color: token.colorCardHeadingsText }}>
+                        Stock Adjustment & Write-off
+                    </span>
                 </div>
             }
             open={visible}
             onCancel={onCancel}
-            width="85%" // Bara Modal (Professional Style)
+            width={isMobile ? '95%' : 800}
             style={{ top: 20 }}
             footer={[
                 <Button key="cancel" onClick={onCancel}>Cancel</Button>,
@@ -275,7 +279,8 @@ const StockAdjustmentModal = ({ visible, onCancel, onSuccess, initialItem }) => 
                     columns={columns} 
                     rowKey="key"
                     pagination={false}
-                    size="middle"
+                    size="small"
+                    scroll={{ x: 'max-content' }}
                     locale={{ emptyText: 'No items added yet. Search above to add items.' }}
                 />
             </div>

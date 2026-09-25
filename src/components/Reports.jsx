@@ -1428,7 +1428,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         </Card>
 
         <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
-          {/* Staff Performance (Aligned Header) */}
+          {/* Staff Performance (Aligned Header & Non-Breaking Layout) */}
           <Col xs={24} lg={12}>
             <Card 
               title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}><TeamOutlined /> Staff Performance</Text>} 
@@ -1440,19 +1440,49 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 dataSource={salesData.staffPerformance}
                 rowKey="name"
                 pagination={false}
-                scroll={{ x: true }}
+                size="small"
+                scroll={{ x: 'max-content' }}
                 columns={[
-                  { title: 'Staff Name', dataIndex: 'name', key: 'name' },
-                  { title: 'Invoices', dataIndex: 'sale_count', key: 'sale_count', align: 'center', render: (val) => <Tag>{val}</Tag> },
-                  { title: 'Items Sold', dataIndex: 'items_sold', key: 'items_sold', align: 'center', render: (val) => <Text>{val}</Text> },
-                  { title: 'Revenue', dataIndex: 'total_sales', key: 'total_sales', align: 'right', render: (val) => <Text strong>{formatCurrency(val, profile?.currency)}</Text> },
-                  { title: 'Profit', dataIndex: 'profit', key: 'profit', align: 'right', render: (val) => <Text strong style={{ color: token.colorAmountPositive }}>{formatCurrency(val, profile?.currency)}</Text> }
+                  { 
+                    title: 'Staff Name', 
+                    dataIndex: 'name', 
+                    key: 'name',
+                    render: (text) => <Text strong style={{ whiteSpace: 'nowrap' }}>{text}</Text>
+                  },
+                  { 
+                    title: 'Invoices', 
+                    dataIndex: 'sale_count', 
+                    key: 'sale_count', 
+                    align: 'center', 
+                    render: (val) => <Tag style={{ margin: 0, whiteSpace: 'nowrap' }}>{val}</Tag> 
+                  },
+                  { 
+                    title: 'Items Sold', 
+                    dataIndex: 'items_sold', 
+                    key: 'items_sold', 
+                    align: 'center', 
+                    render: (val) => <Text style={{ whiteSpace: 'nowrap' }}>{val}</Text> 
+                  },
+                  { 
+                    title: 'Revenue', 
+                    dataIndex: 'total_sales', 
+                    key: 'total_sales', 
+                    align: 'right', 
+                    render: (val) => <Text strong style={{ whiteSpace: 'nowrap' }}>{formatCurrency(val, profile?.currency)}</Text> 
+                  },
+                  { 
+                    title: 'Profit', 
+                    dataIndex: 'profit', 
+                    key: 'profit', 
+                    align: 'right', 
+                    render: (val) => <Text strong style={{ color: token.colorAmountPositive, whiteSpace: 'nowrap' }}>{formatCurrency(val, profile?.currency)}</Text> 
+                  }
                 ]}
               />
             </Card>
           </Col>
 
-          {/* Top Selling Products (Aligned Header & Rich Data) */}
+          {/* Top Selling Products (Aligned Header & Non-Breaking Layout) */}
           <Col xs={24} lg={12}>
             <Card 
               title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}><TrophyOutlined style={{ color: '#faad14' }} /> Top 10 Selling Products</Text>} 
@@ -1483,29 +1513,34 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 rowKey="name"
                 pagination={false}
                 size="small"
-                scroll={{ x: true }}
+                scroll={{ x: 'max-content' }}
                 columns={[
-                  { title: 'Product', dataIndex: 'name', key: 'name' },
+                  { 
+                    title: 'Product', 
+                    dataIndex: 'name', 
+                    key: 'name',
+                    render: (text) => <Text strong style={{ whiteSpace: 'nowrap' }}>{text}</Text>
+                  },
                   { 
                     title: 'Qty', 
                     dataIndex: 'qty', 
                     key: 'qty', 
                     align: 'center', 
-                    render: (val) => <Tag color={productFilter === 'qty' ? 'blue' : 'default'}>{val}</Tag> 
+                    render: (val) => <Tag color={productFilter === 'qty' ? 'blue' : 'default'} style={{ margin: 0, whiteSpace: 'nowrap' }}>{val}</Tag> 
                   },
                   { 
                     title: 'Revenue', 
                     dataIndex: 'revenue', 
                     key: 'revenue', 
                     align: 'right', 
-                    render: (val) => <Text strong style={{ color: productFilter === 'rev' ? token.colorPrimary : 'inherit' }}>{formatCurrency(val, profile?.currency)}</Text> 
+                    render: (val) => <Text strong style={{ color: productFilter === 'rev' ? token.colorPrimary : 'inherit', whiteSpace: 'nowrap' }}>{formatCurrency(val, profile?.currency)}</Text> 
                   },
                   { 
                     title: 'Profit', 
                     dataIndex: 'profit', 
                     key: 'profit', 
                     align: 'right', 
-                    render: (val) => <Text strong style={{ color: productFilter === 'profit' ? token.colorAmountPositive : 'inherit', opacity: productFilter === 'profit' ? 1 : 0.6 }}>{formatCurrency(val, profile?.currency)}</Text> 
+                    render: (val) => <Text strong style={{ color: productFilter === 'profit' ? token.colorAmountPositive : 'inherit', opacity: productFilter === 'profit' ? 1 : 0.6, whiteSpace: 'nowrap' }}>{formatCurrency(val, profile?.currency)}</Text> 
                   }
                 ]}
               />
@@ -1930,7 +1965,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           </Col>
         </Row>
 
-        {/* Row 3: Brand Valuation & Health Lists */}
+        {/* Row 3: Brand Valuation & Health Lists (Non-Breaking & Responsive) */}
         <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
           <Col span={24}>
             <Card 
@@ -1971,17 +2006,18 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 rowKey="name"
                 pagination={{ pageSize: 6 }}
                 size="small"
+                scroll={{ x: 'max-content' }}
                 columns={[
-                  { title: 'Brand', dataIndex: 'name', key: 'name' },
-                  { title: 'Qty', dataIndex: 'qty', key: 'qty', align: 'center' },
-                  { title: 'Asset Value', dataIndex: 'value', key: 'value', align: 'right', render: (val) => formatCurrency(val, profile?.currency) },
-                  { title: 'Potential Profit', dataIndex: 'profit', key: 'profit', align: 'right', render: (val) => <Text strong style={{ color: token.colorAmountPositive }}>{formatCurrency(val, profile?.currency)}</Text> }
+                  { title: 'Brand', dataIndex: 'name', key: 'name', render: (val) => <Text strong style={{ whiteSpace: 'nowrap' }}>{val}</Text> },
+                  { title: 'Qty', dataIndex: 'qty', key: 'qty', align: 'center', render: (val) => <Tag style={{ margin: 0, whiteSpace: 'nowrap' }}>{val}</Tag> },
+                  { title: 'Asset Value', dataIndex: 'value', key: 'value', align: 'right', render: (val) => <Text strong style={{ whiteSpace: 'nowrap' }}>{formatCurrency(val, profile?.currency)}</Text> },
+                  { title: 'Potential Profit', dataIndex: 'profit', key: 'profit', align: 'right', render: (val) => <Text strong style={{ color: token.colorAmountPositive, whiteSpace: 'nowrap' }}>{formatCurrency(val, profile?.currency)}</Text> }
                 ]}
               />
             </Card>
           </Col>
           <Col span={24}>
-            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Inventory Health</Text>} style={cardStyle} styles={{ body: { padding: '0 16px' } }}>
+            <Card title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}>Inventory Health</Text>} style={cardStyle} styles={{ body: { padding: '0 16px 12px 16px' } }}>
               <Tabs 
                 activeKey={innerTab} 
                 onChange={(key) => { setInnerTab(key); setHealthSearchText(''); }} 
@@ -2203,62 +2239,91 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                   key: 'low',
                   label: <Badge count={inventoryData.lowStockItems?.length} offset={[10, 0]} size="small"><Text type="warning">Low Stock</Text></Badge>,
                   children: (
-                    <Table dataSource={getFilteredLowStockItems()} rowKey="key" pagination={{ pageSize: 5 }} size="small" columns={[
-                      { title: 'Product', key: 'p', render: (_, r) => `${r.brand} ${r.name}` },
-                      { title: '0-30 Qty Sale', dataIndex: 'v30', align: 'center', render: (val) => <Text>{val || 0}</Text> },
-                      { title: '30-60 Qty Sale', dataIndex: 'v60', align: 'center', render: (val) => <Text type="secondary">{val || 0}</Text> },
-                      { title: '60-90 Qty Sale', dataIndex: 'v90', align: 'center', render: (val) => <Text type="secondary">{val || 0}</Text> },
-                      { title: 'Quantity', dataIndex: 'qty', align: 'right', render: (q) => <Tag color="orange">{q}</Tag> },
-                      { title: 'Alert Qty', dataIndex: 'alert_qty', align: 'center', render: (val) => <Text>{val}</Text> },
-                      { title: 'Required', dataIndex: 'required', align: 'right', render: (val) => <Text strong style={{ color: val > 0 ? token.colorError : 'inherit' }}>{val > 0 ? `+${val}` : '0'}</Text> }
-                    ]} />
+                    <Table 
+                      dataSource={getFilteredLowStockItems()} 
+                      rowKey="key" 
+                      pagination={{ pageSize: 5 }} 
+                      size="small" 
+                      scroll={{ x: 'max-content' }}
+                      columns={[
+                        { title: 'Product', key: 'p', render: (_, r) => <Text strong style={{ whiteSpace: 'nowrap' }}>{r.name}</Text> },
+                        { title: '0-30 Qty Sale', dataIndex: 'v30', align: 'center', render: (val) => <Text style={{ whiteSpace: 'nowrap' }}>{val || 0}</Text> },
+                        { title: '30-60 Qty Sale', dataIndex: 'v60', align: 'center', render: (val) => <Text type="secondary" style={{ whiteSpace: 'nowrap' }}>{val || 0}</Text> },
+                        { title: '60-90 Qty Sale', dataIndex: 'v90', align: 'center', render: (val) => <Text type="secondary" style={{ whiteSpace: 'nowrap' }}>{val || 0}</Text> },
+                        { title: 'Quantity', dataIndex: 'qty', align: 'right', render: (q) => <Tag color="orange" style={{ margin: 0, whiteSpace: 'nowrap' }}>{q}</Tag> },
+                        { title: 'Alert Qty', dataIndex: 'alert_qty', align: 'center', render: (val) => <Text style={{ whiteSpace: 'nowrap' }}>{val}</Text> },
+                        { title: 'Required', dataIndex: 'required', align: 'right', render: (val) => <Text strong style={{ color: val > 0 ? token.colorError : 'inherit', whiteSpace: 'nowrap' }}>{val > 0 ? `+${val}` : '0'}</Text> }
+                      ]} 
+                    />
                   )
                 },
                 {
                   key: 'out',
                   label: <Badge count={inventoryData.outOfStockItems?.length} offset={[10, 0]} size="small"><Text type="danger">Out of Stock</Text></Badge>,
                   children: (
-                    <Table dataSource={getFilteredOutOfStockItems()} rowKey="name" pagination={{ pageSize: 5 }} size="small" columns={[
-                      { title: 'Product', key: 'p', render: (_, r) => `${r.brand} ${r.name}` },
-                      { title: 'Status', key: 's', align: 'right', render: () => <Tag color="red">0 Left</Tag> }
-                    ]} />
+                    <Table 
+                      dataSource={getFilteredOutOfStockItems()} 
+                      rowKey="name" 
+                      pagination={{ pageSize: 5 }} 
+                      size="small" 
+                      scroll={{ x: 'max-content' }}
+                      columns={[
+                        { title: 'Product', key: 'p', render: (_, r) => <Text strong style={{ whiteSpace: 'nowrap' }}>{`${r.brand} ${r.name}`}</Text> },
+                        { title: 'Status', key: 's', align: 'right', render: () => <Tag color="red" style={{ margin: 0, whiteSpace: 'nowrap' }}>0 Left</Tag> }
+                      ]} 
+                    />
                   )
                 },
                 {
                   key: 'slow',
                   label: <Text>Slow Moving</Text>,
                   children: (
-                    <Table dataSource={getFilteredSlowMovingItems()} rowKey="name" pagination={{ pageSize: 5 }} size="small" columns={[
-                      { title: 'Product', key: 'p', render: (_, r) => `${r.brand} ${r.name}` },
-                      { title: 'In Stock', dataIndex: 'qty', align: 'right' }
-                    ]} />
+                    <Table 
+                      dataSource={getFilteredSlowMovingItems()} 
+                      rowKey="name" 
+                      pagination={{ pageSize: 5 }} 
+                      size="small" 
+                      scroll={{ x: 'max-content' }}
+                      columns={[
+                        { title: 'Product', key: 'p', render: (_, r) => <Text strong style={{ whiteSpace: 'nowrap' }}>{`${r.brand} ${r.name}`}</Text> },
+                        { title: 'In Stock', dataIndex: 'qty', align: 'right', render: (q) => <Tag style={{ margin: 0, whiteSpace: 'nowrap' }}>{q}</Tag> }
+                      ]} 
+                    />
                   )
                 },
                 {
                   key: 'expiry',
                   label: <Badge count={inventoryData.expiringSoonItems?.filter(i => i.isExpired)?.length} offset={[10, 0]} size="small"><Text type="danger">Expiry</Text></Badge>,
                   children: (
-                    <Table dataSource={getFilteredExpiringSoonItems()} rowKey="id" pagination={{ pageSize: 5 }} size="small" columns={[
-                      { title: 'Product', key: 'p', render: (_, r) => `${r.brand} ${r.name}` },
-                      { title: 'Batch', dataIndex: 'batch_number', key: 'b' },
-                      { title: 'Exp. Date', key: 'exp', render: (_, r) => (
-                        <Text type={r.isExpired ? 'danger' : 'warning'}>
-                          {new Date(r.expiry_date).toLocaleDateString()} {r.isExpired ? '(Expired)' : ''}
-                        </Text>
-                      )},
-                      { title: 'Qty', dataIndex: 'qty', align: 'right' },
-                      { title: 'Action', key: 'action', align: 'center', render: (_, r) => (
-                          <Tooltip title="Return to Supplier">
-                              <Button 
-                                  type="primary" 
-                                  danger 
-                                  size="small" 
-                                  icon={<RollbackOutlined />} 
-                                  onClick={() => navigate(`/purchases?action=return&inventory_id=${r.id}`)}
-                              />
-                          </Tooltip>
-                      )}
-                    ]} locale={{ emptyText: 'No items expiring soon!' }} />
+                    <Table 
+                      dataSource={getFilteredExpiringSoonItems()} 
+                      rowKey="id" 
+                      pagination={{ pageSize: 5 }} 
+                      size="small" 
+                      scroll={{ x: 'max-content' }}
+                      columns={[
+                        { title: 'Product', key: 'p', render: (_, r) => <Text strong style={{ whiteSpace: 'nowrap' }}>{`${r.brand} ${r.name}`}</Text> },
+                        { title: 'Batch', dataIndex: 'batch_number', key: 'b', render: (val) => <Text style={{ whiteSpace: 'nowrap' }}>{val || '-'}</Text> },
+                        { title: 'Exp. Date', key: 'exp', render: (_, r) => (
+                          <Text type={r.isExpired ? 'danger' : 'warning'} style={{ whiteSpace: 'nowrap' }}>
+                            {new Date(r.expiry_date).toLocaleDateString()} {r.isExpired ? '(Expired)' : ''}
+                          </Text>
+                        )},
+                        { title: 'Qty', dataIndex: 'qty', align: 'right', render: (val) => <Text strong style={{ whiteSpace: 'nowrap' }}>{val}</Text> },
+                        { title: 'Action', key: 'action', align: 'center', render: (_, r) => (
+                            <Tooltip title="Return to Supplier">
+                                <Button 
+                                    type="primary" 
+                                    danger 
+                                    size="small" 
+                                    icon={<RollbackOutlined />} 
+                                    onClick={() => navigate(`/purchases?action=return&inventory_id=${r.id}`)}
+                                />
+                            </Tooltip>
+                        )}
+                      ]} 
+                      locale={{ emptyText: 'No items expiring soon!' }} 
+                    />
                   )
                 },
                 {
@@ -2926,7 +2991,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         }));
     };
 
-    // NAYA IZAFA: Grouped View ke Table Columns
+    // NAYA IZAFA: Grouped View ke Table Columns (Non-Breaking)
     const groupedColumns = [
         {
             title: 'Date / Category / Party Name',
@@ -2934,9 +2999,9 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             key: 'title',
             render: (text, record) => {
                 if (record.isLeaf) {
-                    return dayjs(record.date).format('DD MMM YYYY, hh:mm A');
+                    return <span style={{ whiteSpace: 'nowrap' }}>{dayjs(record.date).format('DD MMM YYYY, hh:mm A')}</span>;
                 }
-                return <Text strong style={{ color: token.colorCardHeadingsText }}>{text}</Text>;
+                return <Text strong style={{ color: token.colorCardHeadingsText, whiteSpace: 'nowrap' }}>{text}</Text>;
             }
         },
         {
@@ -2947,7 +3012,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 if (!record.isLeaf) return null;
                 const staff = staffList.find(s => s.id === staffId);
                 const displayRole = profile?.role ? (profile.role.charAt(0).toUpperCase() + profile.role.slice(1).toLowerCase()) : 'Owner';
-                return <Text>{staff ? staff.name : displayRole}</Text>;
+                return <Text style={{ whiteSpace: 'nowrap' }}>{staff ? staff.name : displayRole}</Text>;
             }
         },
         {
@@ -2956,7 +3021,7 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
             key: 'description',
             render: (notes, record) => {
                 if (!record.isLeaf) return null;
-                return notes;
+                return <span style={{ whiteSpace: 'nowrap' }}>{notes || '-'}</span>;
             }
         },
         {
@@ -2968,9 +3033,9 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 if (record.isLeaf) {
                     const isCredit = record.type === 'Credit (In)';
                     if (!isCredit) return '-';
-                    return <Text strong style={{ color: token.colorAmountPositive }}>+{formatCurrency(record.amount, profile?.currency)}</Text>;
+                    return <Text strong style={{ color: token.colorAmountPositive, whiteSpace: 'nowrap' }}>+{formatCurrency(record.amount, profile?.currency)}</Text>;
                 }
-                return val > 0 ? <Text strong style={{ color: token.colorAmountPositive }}>{formatCurrency(val, profile?.currency)}</Text> : '-';
+                return val > 0 ? <Text strong style={{ color: token.colorAmountPositive, whiteSpace: 'nowrap' }}>{formatCurrency(val, profile?.currency)}</Text> : '-';
             }
         },
         {
@@ -2982,9 +3047,9 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                 if (record.isLeaf) {
                     const isDebit = record.type === 'Debit (Out)';
                     if (!isDebit) return '-';
-                    return <Text strong style={{ color: token.colorAmountNegative }}>-{formatCurrency(record.amount, profile?.currency)}</Text>;
+                    return <Text strong style={{ color: token.colorAmountNegative, whiteSpace: 'nowrap' }}>-{formatCurrency(record.amount, profile?.currency)}</Text>;
                 }
-                return val > 0 ? <Text strong style={{ color: token.colorAmountNegative }}>{formatCurrency(val, profile?.currency)}</Text> : '-';
+                return val > 0 ? <Text strong style={{ color: token.colorAmountNegative, whiteSpace: 'nowrap' }}>{formatCurrency(val, profile?.currency)}</Text> : '-';
             }
         }
     ];
@@ -3487,16 +3552,32 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
           })()}
 
           <Table 
-            dataSource={vaultViewMode === 'grouped' ? getGroupedVaultData() : getRawFilteredData()} // <--- NAYA IZAFA: Conditional Data
-            rowKey={(record) => record.unique_key || record.key || record.id} // <--- NAYA IZAFA: Dynamic safe RowKey with duplicate checks
-            pagination={vaultViewMode === 'grouped' ? false : { pageSize: 10 }} // <--- NAYA IZAFA: Grouped view mein pagination off (Accordion design)
-            columns={vaultViewMode === 'grouped' ? groupedColumns : [ // <--- NAYA IZAFA: Conditional Columns
-              { title: 'Date & Time', dataIndex: 'date', render: d => dayjs(d).format('DD MMM YYYY, hh:mm A') },
-              { title: 'Account', dataIndex: 'account_name', render: t => <Text strong>{t || '-'}</Text> }, 
-              { title: 'Source', dataIndex: 'source' },
-              { title: 'Description', dataIndex: 'notes' },
-              
-              // NAYA IZAFA: Handled by Column (Responsive & Customized)
+            dataSource={vaultViewMode === 'grouped' ? getGroupedVaultData() : getRawFilteredData()} 
+            rowKey={(record) => record.unique_key || record.key || record.id} 
+            pagination={vaultViewMode === 'grouped' ? false : { pageSize: 10 }} 
+            size="small"
+            scroll={{ x: 'max-content' }}
+            columns={vaultViewMode === 'grouped' ? groupedColumns : [ 
+              { 
+                title: 'Date & Time', 
+                dataIndex: 'date', 
+                render: d => <span style={{ whiteSpace: 'nowrap' }}>{dayjs(d).format('DD MMM YYYY, hh:mm A')}</span> 
+              },
+              { 
+                title: 'Account', 
+                dataIndex: 'account_name', 
+                render: t => <Text strong style={{ whiteSpace: 'nowrap' }}>{t || '-'}</Text> 
+              }, 
+              { 
+                title: 'Source', 
+                dataIndex: 'source',
+                render: s => <Tag style={{ margin: 0, whiteSpace: 'nowrap' }}>{s}</Tag>
+              },
+              { 
+                title: 'Description', 
+                dataIndex: 'notes',
+                render: n => <span style={{ whiteSpace: 'nowrap' }}>{n || '-'}</span>
+              },
               { 
                 title: 'Handled by', 
                 dataIndex: 'staff_id', 
@@ -3506,21 +3587,19 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                   return <Text strong style={{ whiteSpace: 'nowrap' }}>{staff ? staff.name : displayRole}</Text>;
                 } 
               },
-
               { 
                 title: 'Type', 
                 dataIndex: 'type', 
                 render: t => {
-                  if (t === 'Credit (In)') return <Tag color="green">{t}</Tag>;
-                  if (t === 'Debit (Out)') return <Tag color="volcano">{t}</Tag>;
-                  return <Tag color="blue">{t}</Tag>; 
+                  if (t === 'Credit (In)') return <Tag color="green" style={{ margin: 0, whiteSpace: 'nowrap' }}>{t}</Tag>;
+                  if (t === 'Debit (Out)') return <Tag color="volcano" style={{ margin: 0, whiteSpace: 'nowrap' }}>{t}</Tag>;
+                  return <Tag color="blue" style={{ margin: 0, whiteSpace: 'nowrap' }}>{t}</Tag>; 
                 }
               },
               { 
                 title: 'Amount', 
                 dataIndex: 'amount', 
                 align: 'right', 
-                width: 140, 
                 render: (v, rec) => {
                   if (rec.type === 'Info') return <Text type="secondary" style={{ whiteSpace: 'nowrap' }}>{formatCurrency(v, profile?.currency)}</Text>;
                   const isCredit = rec.type === 'Credit (In)';

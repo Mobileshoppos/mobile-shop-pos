@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Table, Typography, Spin, ConfigProvider, theme, Modal, Tag, Button, Space, App, Form, Radio, Checkbox, Row, Col, DatePicker, Select } from 'antd'; // <--- UPDATED (Select Added)
+import { Card, Table, Typography, Spin, ConfigProvider, theme, Modal, Tag, Button, Space, App, Form, Radio, Checkbox, Row, Col, DatePicker, Select, Segmented } from 'antd';
 import { PrinterOutlined, FileExcelOutlined, BookOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import DataService from '../DataService';
 import DataExport from './DataExport'; // <--- NAYA IZAFA: Smart Export System
 import VoucherSearchModal from './VoucherSearchModal'; // <--- NAYA IZAFA
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext'; // <--- NAYA IZAFA: Theme Hook
+import { useMediaQuery } from '../hooks/useMediaQuery'; // <--- NAYA IZAFA: Mobile detection
 import { formatCurrency } from '../utils/currencyFormatter';
 import dayjs from 'dayjs';
 
@@ -14,7 +16,9 @@ const { Text, Title } = Typography;
 const DailyFinancialSummary = ({ timeRange, customDates }) => {
   const { token } = theme.useToken();
   const { profile } = useAuth();
+  const { isDarkMode } = useTheme(); // <--- NAYA IZAFA
   const { message } = App.useApp();
+  const isMobile = useMediaQuery('(max-width: 768px)'); // <--- NAYA IZAFA
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -221,7 +225,8 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       title: 'Date',
       dataIndex: 'date',
       key: 'date',
-      render: (text) => <Text strong>{dayjs(text).format('DD-MMM-YYYY')}</Text>,
+      width: 140,
+      render: (text) => <Text strong style={{ whiteSpace: 'nowrap' }}>{dayjs(text).format('DD-MMM-YYYY')}</Text>,
     },
     {
       title: 'Daily Sale',
@@ -229,7 +234,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       key: 'sale',
       align: 'right',
       render: (val, record) => (
-        <a onClick={() => handleCellClick(record.date, 'sale')} style={{ color: token.colorCardDetailsText }}>
+        <a onClick={() => handleCellClick(record.date, 'sale')} style={{ color: token.colorCardDetailsText, whiteSpace: 'nowrap' }}>
           {formatCurrency(val, profile?.currency)}
         </a>
       ),
@@ -240,7 +245,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       key: 'purchase',
       align: 'right',
       render: (val, record) => (
-        <a onClick={() => handleCellClick(record.date, 'purchase')} style={{ color: token.colorText }}>
+        <a onClick={() => handleCellClick(record.date, 'purchase')} style={{ color: token.colorText, whiteSpace: 'nowrap' }}>
           {formatCurrency(val, profile?.currency)}
         </a>
       ),
@@ -251,7 +256,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       key: 'receipt',
       align: 'right',
       render: (val, record) => (
-        <a onClick={() => handleCellClick(record.date, 'receipt')} style={{ color: token.colorText }}>
+        <a onClick={() => handleCellClick(record.date, 'receipt')} style={{ color: token.colorText, whiteSpace: 'nowrap' }}>
           {formatCurrency(val, profile?.currency)}
         </a>
       ),
@@ -262,7 +267,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       key: 'payment',
       align: 'right',
       render: (val, record) => (
-        <a onClick={() => handleCellClick(record.date, 'payment')} style={{ color: token.colorText }}>
+        <a onClick={() => handleCellClick(record.date, 'payment')} style={{ color: token.colorText, whiteSpace: 'nowrap' }}>
           {formatCurrency(val, profile?.currency)}
         </a>
       ),
@@ -274,7 +279,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
       render: (_, record) => {
         const net = (record.receipt || 0) - (record.payment || 0);
         return (
-          <Text strong style={{ color: net >= 0 ? token.colorAmountPositive : token.colorAmountNegative }}>
+          <Text strong style={{ color: net >= 0 ? token.colorAmountPositive : token.colorAmountNegative, whiteSpace: 'nowrap' }}>
             {net >= 0 ? '+' : ''}{formatCurrency(net, profile?.currency)}
           </Text>
         );
@@ -368,7 +373,7 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
             rowKey="date"
             pagination={{ pageSize: 7 }}
             size="small"
-            scroll={{ x: true }}
+            scroll={{ x: 'max-content' }}
           />
         )}
       </Card>
@@ -429,70 +434,78 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
         autoSearchQuery={voucherToSearch}
       />
 
-      {/* --- NAYA IZAFA: Export & Print Wizard Modal --- */}
-          <Modal
-            title="Export & Print Wizard (Day Book)"
-            open={isExportWizardOpen}
-            onCancel={() => {
-              setIsExportWizardOpen(false);
-              setExportDateRangeType('current');
-              setExportCustomDates([]);
-              setSelectedColumns(['sale', 'purchase', 'receipt', 'payment', 'net']); // <--- Reset adjusted
-              setExportFormat('summary'); // <--- NAYA IZAFA
-              setDetailedExportData([]); // <--- NAYA IZAFA
-            }}
-            footer={
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text type="secondary" style={{ fontSize: '11px' }}>
-                  {exportLoading ? 'Loading data...' : `${exportData.length} ${exportData.length === 1 ? 'Day' : 'Days'} with Activity`}
-                </Text>
-                <Space>
-                  {exportData.length > 0 && !exportLoading && (
-                    <DataExport
-                      data={exportFormat === 'detailed' 
-                        ? detailedExportData 
-                        : exportData.map(item => ({
-                            ...item,
-                            formattedDate: dayjs(item.date).format('DD-MMM-YYYY'),
-                            net_flow: (item.receipt || 0) - (item.payment || 0)
-                          }))
-                      }
-                      exportColumns={exportFormat === 'detailed' ? detailedExportColumns : dynamicExportColumns}
-                      fileName={exportFormat === 'detailed' ? "Detailed_Day_Book" : "Daily_Financial_Summary"}
-                      reportTitle={exportFormat === 'detailed' ? "Detailed Day Book Report" : "Daily Financial Summary (Day Book)"}
-                    />
-                  )}
-                  <Button onClick={() => {
-                    setIsExportWizardOpen(false);
-                    setExportDateRangeType('current');
-                    setExportCustomDates([]);
-                    setSelectedColumns(['sale', 'purchase', 'receipt', 'payment', 'net']); // <--- Reset adjusted
-                    setExportFormat('summary'); // <--- NAYA IZAFA
-                    setDetailedExportData([]); // <--- NAYA IZAFA
-                  }}>Close</Button>
-                </Space>
-              </div>
-            }
-        centered
-        width="65%" // <--- NAYA IZAFA: Pop-up width is set to 65% of screen
+      {/* --- NAYA IZAFA: Export & Print Wizard Modal (Responsive & Professional) --- */}
+      <Modal
+        title={
+          <div style={{ paddingRight: '20px' }}>
+            <span style={{ fontSize: '17px', fontWeight: 600, color: token.colorCardHeadingsText }}>
+              Export & Print Wizard (Day Book)
+            </span>
+          </div>
+        }
+        open={isExportWizardOpen}
+        onCancel={() => {
+          setIsExportWizardOpen(false);
+          setExportDateRangeType('current');
+          setExportCustomDates([]);
+          setSelectedColumns(['sale', 'purchase', 'receipt', 'payment', 'net']);
+          setExportFormat('summary');
+          setDetailedExportData([]);
+        }}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              {exportLoading ? 'Loading data...' : `${exportData.length} ${exportData.length === 1 ? 'Day' : 'Days'} with Activity`}
+            </Text>
+            <Space size="middle">
+              {exportData.length > 0 && !exportLoading && (
+                <DataExport
+                  data={exportFormat === 'detailed' 
+                    ? detailedExportData 
+                    : exportData.map(item => ({
+                        ...item,
+                        formattedDate: dayjs(item.date).format('DD-MMM-YYYY'),
+                        net_flow: (item.receipt || 0) - (item.payment || 0)
+                      }))
+                  }
+                  exportColumns={exportFormat === 'detailed' ? detailedExportColumns : dynamicExportColumns}
+                  fileName={exportFormat === 'detailed' ? "Detailed_Day_Book" : "Daily_Financial_Summary"}
+                  reportTitle={exportFormat === 'detailed' ? "Detailed Day Book Report" : "Daily Financial Summary (Day Book)"}
+                />
+              )}
+              <Button onClick={() => {
+                setIsExportWizardOpen(false);
+                setExportDateRangeType('current');
+                setExportCustomDates([]);
+                setSelectedColumns(['sale', 'purchase', 'receipt', 'payment', 'net']);
+                setExportFormat('summary');
+                setDetailedExportData([]);
+              }}>
+                Close
+              </Button>
+            </Space>
+          </div>
+        }
+        width={isMobile ? '95%' : 600}
+        style={{ top: 20 }}
       >
         <Form layout="vertical" style={{ marginTop: '16px' }}>
-          {/* 1. Date Range Configuration (Dynamic Dropdown Layout) */}
-          <Form.Item label={<Text strong>1. Select Date Range</Text>}>
+          
+          {/* 1. Date Range Configuration */}
+          <Form.Item label={<Text strong style={{ fontSize: '13px' }}>1. Select Date Range</Text>}>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', flexWrap: 'wrap' }}>
-              {/* Dropdown: Presets (Ab Active Filter iske andar hai) */}
               <Select
                 value={['current', 'today', 'yesterday', 'week', 'month', 'year'].includes(exportDateRangeType) ? exportDateRangeType : undefined}
                 onChange={(val) => {
                   setExportDateRangeType(val);
                   handleExportRangeChange(val);
                 }}
-                style={{ flex: 1.5, minWidth: '160px' }}
+                style={{ flex: 1.5, minWidth: '140px' }}
                 placeholder="Choose Preset Range"
-                styles={{ popup: { root: { zIndex: 2000 } } }} // FIX: Deprecated dropdownStyle replaced with styles.popup.root
+                styles={{ popup: { root: { zIndex: 2000 } } }}
                 allowClear={false}
               >
-                <Select.Option value="current">Active Filter</Select.Option>
+                <Select.Option value="current">Active Filter (7 Days)</Select.Option>
                 <Select.Option value="today">Today Only</Select.Option>
                 <Select.Option value="yesterday">Yesterday</Select.Option>
                 <Select.Option value="week">This Week</Select.Option>
@@ -500,7 +513,6 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
                 <Select.Option value="year">This Year</Select.Option>
               </Select>
 
-              {/* Button 2: Custom Range Calendar */}
               <Button 
                 type={exportDateRangeType === 'custom' ? 'primary' : 'default'} 
                 onClick={() => {
@@ -534,50 +546,115 @@ const DailyFinancialSummary = ({ timeRange, customDates }) => {
             </Form.Item>
           )}
 
-          {/* --- NAYA IZAFA: Export Format Selection --- */}
-          <Form.Item label={<Text strong>2. Select Export Format</Text>}>
-            <Radio.Group 
-              value={exportFormat} 
-              onChange={(e) => setExportFormat(e.target.value)}
-              buttonStyle="solid"
-              style={{ width: '100%', display: 'flex' }}
-            >
-              <Radio.Button value="summary" style={{ flex: 1, textAlign: 'center' }}>
-                Summary (Totals Only)
-              </Radio.Button>
-              <Radio.Button value="detailed" style={{ flex: 1, textAlign: 'center' }}>
-                Detailed (All Transactions)
-              </Radio.Button>
-            </Radio.Group>
+          {/* 2. Export Format Selection (Prominent Radio Cards) */}
+          <Form.Item label={<Text strong style={{ fontSize: '13px' }}>2. Select Export Format</Text>}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              
+              {/* Option 1: Summary */}
+              <div
+                onClick={() => setExportFormat('summary')}
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  border: `2px solid ${exportFormat === 'summary' ? '#1A73E8' : token.colorBorderSecondary}`,
+                  background: exportFormat === 'summary' ? (isDarkMode ? 'rgba(26, 115, 232, 0.2)' : '#E8F0FE') : token.colorCardBg,
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}
+              >
+                {/* Radio Dot Circle */}
+                <div style={{
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  border: `2px solid ${exportFormat === 'summary' ? '#1A73E8' : '#5F6368'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: '#FFFFFF',
+                  flexShrink: 0
+                }}>
+                  {exportFormat === 'summary' && (
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#1A73E8' }} />
+                  )}
+                </div>
+                <div>
+                  <Text strong style={{ fontSize: '13px', color: exportFormat === 'summary' ? '#1A73E8' : token.colorTextHeading, display: 'block', lineHeight: 1.2 }}>
+                    Summary
+                  </Text>
+                  <Text type="secondary" style={{ fontSize: '11px', display: 'block' }}>Totals only</Text>
+                </div>
+              </div>
+
+              {/* Option 2: Detailed */}
+              <div
+                onClick={() => setExportFormat('detailed')}
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  border: `2px solid ${exportFormat === 'detailed' ? '#1A73E8' : token.colorBorderSecondary}`,
+                  background: exportFormat === 'detailed' ? (isDarkMode ? 'rgba(26, 115, 232, 0.2)' : '#E8F0FE') : token.colorCardBg,
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}
+              >
+                {/* Radio Dot Circle */}
+                <div style={{
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  border: `2px solid ${exportFormat === 'detailed' ? '#1A73E8' : '#5F6368'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: '#FFFFFF',
+                  flexShrink: 0
+                }}>
+                  {exportFormat === 'detailed' && (
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#1A73E8' }} />
+                  )}
+                </div>
+                <div>
+                  <Text strong style={{ fontSize: '13px', color: exportFormat === 'detailed' ? '#1A73E8' : token.colorTextHeading, display: 'block', lineHeight: 1.2 }}>
+                    Detailed
+                  </Text>
+                  <Text type="secondary" style={{ fontSize: '11px', display: 'block' }}>All transactions</Text>
+                </div>
+              </div>
+            </div>
+
             {exportFormat === 'detailed' && (
-              <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
-                * Detailed export will combine every single transaction for the selected dates into one master file.
+              <Text type="secondary" style={{ fontSize: '11.5px', display: 'block', marginTop: '8px' }}>
+                * Detailed report will combine every individual sale, purchase, receipt, and payment into one file.
               </Text>
             )}
           </Form.Item>
 
-          {/* 3. Columns Selection */}
-          <Form.Item label={<Text strong>3. Select Columns to Include</Text>}>
-                <Checkbox.Group
-                  value={selectedColumns}
-                  onChange={(vals) => {
-                    if (vals.length > 0) {
-                      setSelectedColumns(vals);
-                    } else {
-                      message.warning('At least one column must be selected.');
-                    }
-                  }}
-                  style={{ width: '100%' }}
-                >
-                  <Row gutter={[16, 8]}>
-                    <Col span={12}><Checkbox value="sale">Daily Sale</Checkbox></Col>
-                    <Col span={12}><Checkbox value="purchase">Daily Purchase</Checkbox></Col>
-                    <Col span={12}><Checkbox value="receipt">Daily Receipt</Checkbox></Col>
-                    <Col span={12}><Checkbox value="payment">Daily Payment</Checkbox></Col>
-                    <Col span={12}><Checkbox value="net">Daily Net</Checkbox></Col> {/* <--- NAYA CHECKBOX */}
-                  </Row>
-                </Checkbox.Group>
-              </Form.Item>
+          {/* 3. Columns Selection (Clean Checkboxes Grid) */}
+          <Form.Item label={<Text strong style={{ fontSize: '13px' }}>3. Select Columns to Include</Text>} style={{ marginBottom: 0 }}>
+            <Checkbox.Group
+              value={selectedColumns}
+              onChange={(vals) => {
+                if (vals.length > 0) setSelectedColumns(vals);
+                else message.warning('At least one column must be selected.');
+              }}
+              style={{ width: '100%' }}
+            >
+              <Row gutter={[12, 10]}>
+                <Col xs={12} sm={8}><Checkbox value="sale">Daily Sale</Checkbox></Col>
+                <Col xs={12} sm={8}><Checkbox value="purchase">Daily Purchase</Checkbox></Col>
+                <Col xs={12} sm={8}><Checkbox value="receipt">Daily Receipt</Checkbox></Col>
+                <Col xs={12} sm={8}><Checkbox value="payment">Daily Payment</Checkbox></Col>
+                <Col xs={12} sm={8}><Checkbox value="net">Daily Net</Checkbox></Col>
+              </Row>
+            </Checkbox.Group>
+          </Form.Item>
         </Form>
       </Modal>
     </ConfigProvider>

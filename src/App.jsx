@@ -159,7 +159,7 @@ const MainLayout = ({ isDarkMode, toggleTheme }) => {
       <Layout style={{ background: token.colorBgLayout }}>
         <Content style={{ padding: 0 }}>
           <div style={{
-            background: token.colorBgContainer,
+            background: token.colorBgLayout,
             minHeight: '100vh',
             paddingTop: 0,
             display: 'flex', // NAYA IZAFA: Footer ko neechay rakhne ke liye
