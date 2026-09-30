@@ -1326,21 +1326,38 @@ const QuickHelpDrawer = ({ open, onClose }) => {
   };
 
   return (
-    <Drawer
-      title={
+    <>
+      <style>{`
+        .quick-help-drawer .ant-drawer-body::-webkit-scrollbar {
+          width: 6px;
+        }
+        .quick-help-drawer .ant-drawer-body::-webkit-scrollbar-track {
+          background: ${token.colorCardBg};
+        }
+        .quick-help-drawer .ant-drawer-body::-webkit-scrollbar-thumb {
+          background: ${token.colorBorderSecondary};
+          border-radius: 4px;
+        }
+        .quick-help-drawer .ant-drawer-body::-webkit-scrollbar-thumb:hover {
+          background: ${token.colorBorder};
+        }
+      `}</style>
+      <Drawer
+        rootClassName="quick-help-drawer"
+        title={
         <div style={{ padding: '4px 0 2px 0' }}>
-          {/* Row 1: Top Bar with Back, Clean Title (No Brackets), Compact [Ur | En] Toggle & Close */}
+          {/* Row 1: Top Bar with Back, Title, Language Toggle & Close */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {selectedArticle && (
                 <Button 
                   type="text" 
-                  icon={<ArrowLeftOutlined style={{ fontSize: '18px', color: '#5F6368' }} />} 
+                  icon={<ArrowLeftOutlined style={{ fontSize: '18px', color: token.colorTextSecondary }} />} 
                   onClick={() => setSelectedArticle(null)}
                   style={{ padding: 0, height: '36px', width: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 />
               )}
-              <span style={{ fontSize: '22px', fontWeight: 700, color: '#202124', letterSpacing: '-0.3px' }}>
+              <span style={{ fontSize: '22px', fontWeight: 700, color: token.colorTextHeading, letterSpacing: '-0.3px' }}>
                 Quick help
               </span>
             </div>
@@ -1356,7 +1373,7 @@ const QuickHelpDrawer = ({ open, onClose }) => {
                   { label: 'En', value: 'en' }
                 ]}
                 style={{ 
-                  background: '#F1F3F4', 
+                  background: token.colorFillAlter, 
                   fontWeight: 700, 
                   fontSize: '11.5px',
                   borderRadius: '6px'
@@ -1364,17 +1381,17 @@ const QuickHelpDrawer = ({ open, onClose }) => {
               />
               <Button 
                 type="text" 
-                icon={<CloseOutlined style={{ fontSize: '17px', color: '#5F6368' }} />} 
+                icon={<CloseOutlined style={{ fontSize: '17px', color: token.colorTextSecondary }} />} 
                 onClick={handleClose} 
                 style={{ padding: 0, height: '36px', width: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               />
             </div>
           </div>
 
-          {/* Row 2: Search Input (AB YEH DIVIDER LINE KE UPAR HAI) */}
+          {/* Row 2: Search Input */}
           <Input
             placeholder={language === 'ur' ? "Search Quick help..." : "Search Quick help..."}
-            prefix={<SearchOutlined style={{ color: '#5F6368', fontSize: '18px', marginRight: '6px' }} />}
+            prefix={<SearchOutlined style={{ color: token.colorTextSecondary, fontSize: '18px', marginRight: '6px' }} />}
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -1384,8 +1401,9 @@ const QuickHelpDrawer = ({ open, onClose }) => {
             style={{
               borderRadius: '8px',
               height: '44px',
-              background: '#FFFFFF',
-              borderColor: '#DADCE0',
+              background: token.colorCardBg,
+              borderColor: token.colorBorder,
+              color: token.colorText,
               fontSize: '14.5px'
             }}
           />
@@ -1397,8 +1415,8 @@ const QuickHelpDrawer = ({ open, onClose }) => {
       open={open}
       width={480}
       styles={{
-        body: { padding: '24px', background: '#FFFFFF' },
-        header: { borderBottom: `1px solid #E0E0E0`, background: '#FFFFFF', padding: '16px 24px 14px 24px' }
+        body: { padding: '24px', background: token.colorCardBg },
+        header: { borderBottom: `1px solid ${token.colorBorderSecondary}`, background: token.colorCardBg, padding: '16px 24px 14px 24px' }
       }}
     >
       {/* ======================================================== */}
@@ -1407,12 +1425,12 @@ const QuickHelpDrawer = ({ open, onClose }) => {
       {selectedArticle ? (
         <div>
           {/* Bada Headline */}
-          <Title level={2} style={{ fontSize: '26px', fontWeight: 700, color: '#202124', lineHeight: 1.3, marginBottom: '16px', letterSpacing: '-0.5px' }}>
+          <Title level={2} style={{ fontSize: '26px', fontWeight: 700, color: token.colorTextHeading, lineHeight: 1.3, marginBottom: '16px', letterSpacing: '-0.5px' }}>
             {selectedArticle.title[language]}
           </Title>
 
           {/* Summary */}
-          <Paragraph style={{ fontSize: '15.5px', lineHeight: 1.6, color: '#3C4043', marginBottom: '24px' }}>
+          <Paragraph style={{ fontSize: '15.5px', lineHeight: 1.6, color: token.colorTextSecondary, marginBottom: '24px' }}>
             {selectedArticle.summary[language]}
           </Paragraph>
 
@@ -1421,8 +1439,8 @@ const QuickHelpDrawer = ({ open, onClose }) => {
             {selectedArticle.steps[language].map((step, idx) => (
               <div key={idx} style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
                 <span style={{ 
-                  background: '#E8F0FE', 
-                  color: '#1A73E8', 
+                  background: token.colorPrimary + '1F', 
+                  color: token.colorPrimary, 
                   width: '26px', 
                   height: '26px', 
                   borderRadius: '50%', 
@@ -1436,30 +1454,30 @@ const QuickHelpDrawer = ({ open, onClose }) => {
                 }}>
                   {idx + 1}
                 </span>
-                <Text style={{ fontSize: '15px', color: '#202124', lineHeight: 1.55 }}>{step}</Text>
+                <Text style={{ fontSize: '15px', color: token.colorText, lineHeight: 1.55 }}>{step}</Text>
               </div>
             ))}
           </div>
 
-          {/* Example Box (Google Style) */}
+          {/* Example Box */}
           {selectedArticle.example && (
             <div style={{ 
-              background: '#F0F4F9', 
+              background: token.colorFillAlter, 
               padding: '16px 20px', 
               borderRadius: '12px', 
-              border: `1px solid #D3E3FD`,
+              border: `1px solid ${token.colorBorderSecondary}`,
               marginBottom: '32px'
             }}>
-              <Text strong style={{ fontSize: '15px', color: '#0B57D0', display: 'block', marginBottom: '4px' }}>
+              <Text strong style={{ fontSize: '15px', color: token.colorPrimary, display: 'block', marginBottom: '4px' }}>
                 {language === 'ur' ? 'Misal (Example):' : 'Example:'}
               </Text>
-              <Text style={{ fontSize: '14.5px', color: '#3C4043', lineHeight: 1.5 }}>
+              <Text style={{ fontSize: '14.5px', color: token.colorTextSecondary, lineHeight: 1.5 }}>
                 {selectedArticle.example[language]}
               </Text>
             </div>
           )}
 
-          <Divider style={{ margin: '24px 0 20px 0', borderColor: '#E0E0E0' }} />
+          <Divider style={{ margin: '24px 0 20px 0', borderColor: token.colorBorderSecondary }} />
 
           {/* Up Next Section with Next Button */}
           {nextGuide && (
@@ -1470,7 +1488,7 @@ const QuickHelpDrawer = ({ open, onClose }) => {
                 </Text>
                 <a 
                   onClick={() => setSelectedArticle(nextGuide)}
-                  style={{ fontSize: '15.5px', fontWeight: 600, color: '#1A73E8', textDecoration: 'underline', lineHeight: 1.3, display: 'block' }}
+                  style={{ fontSize: '15.5px', fontWeight: 600, color: token.colorLink, textDecoration: 'underline', lineHeight: 1.3, display: 'block' }}
                 >
                   {nextGuide.title[language]}
                 </a>
@@ -1479,7 +1497,6 @@ const QuickHelpDrawer = ({ open, onClose }) => {
                 type="primary"
                 onClick={() => setSelectedArticle(nextGuide)}
                 style={{ 
-                  background: '#1A73E8', 
                   borderRadius: '6px', 
                   fontWeight: 600, 
                   height: '38px', 
@@ -1501,7 +1518,7 @@ const QuickHelpDrawer = ({ open, onClose }) => {
           {/* Most Relevant Section (Only if not searching) */}
           {!searchQuery && (
             <div style={{ marginBottom: '28px' }}>
-              <Text type="secondary" style={{ fontSize: '13.5px', fontWeight: 600, color: '#5F6368', display: 'block', marginBottom: '10px' }}>
+              <Text type="secondary" style={{ fontSize: '13.5px', fontWeight: 600, color: token.colorTextSecondary, display: 'block', marginBottom: '10px' }}>
                 {language === 'ur' ? 'Is Page Ke Mutaliq Khas Guide:' : 'Most relevant for this page:'}
               </Text>
 
@@ -1512,7 +1529,7 @@ const QuickHelpDrawer = ({ open, onClose }) => {
                 style={{ 
                   fontSize: '26px', 
                   fontWeight: 700, 
-                  color: '#202124', 
+                  color: token.colorTextHeading, 
                   lineHeight: 1.3, 
                   cursor: 'pointer',
                   marginBottom: '18px',
@@ -1524,19 +1541,19 @@ const QuickHelpDrawer = ({ open, onClose }) => {
 
               {/* Advisor Tip Card */}
               <div style={{ 
-                background: '#F8FAFC', 
+                background: token.colorFillAlter, 
                 padding: '16px 18px', 
                 borderRadius: '12px', 
-                border: `1px solid #E2E8F0`,
+                border: `1px solid ${token.colorBorderSecondary}`,
                 marginBottom: '24px'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                  <BulbOutlined style={{ color: '#FBBC05', fontSize: '20px' }} />
-                  <Text strong style={{ fontSize: '15px', color: '#202124' }}>
+                  <BulbOutlined style={{ color: token.colorWarning || '#FBBC05', fontSize: '20px' }} />
+                  <Text strong style={{ fontSize: '15px', color: token.colorTextHeading }}>
                     {language === 'ur' ? 'Khas Mashwara & Pro Tip' : 'Pro Tip & Shortcut'}
                   </Text>
                 </div>
-                <Text style={{ fontSize: '14px', color: '#5F6368', lineHeight: 1.5, display: 'block', marginBottom: '12px' }}>
+                <Text style={{ fontSize: '14px', color: token.colorTextSecondary, lineHeight: 1.5, display: 'block', marginBottom: '12px' }}>
                   {featuredGuide.tip[language]}
                 </Text>
                 <Button 
@@ -1544,8 +1561,8 @@ const QuickHelpDrawer = ({ open, onClose }) => {
                   style={{ 
                     borderRadius: '6px', 
                     fontWeight: 600, 
-                    color: '#1A73E8', 
-                    borderColor: '#DADCE0' 
+                    color: token.colorPrimary, 
+                    borderColor: token.colorBorder 
                   }}
                 >
                   {language === 'ur' ? 'Mukammal Tareeqa Parhein' : 'Read more'}
@@ -1554,7 +1571,7 @@ const QuickHelpDrawer = ({ open, onClose }) => {
             </div>
           )}
 
-          {/* List of Guides with Document Icon (Sirf is page se mutaliq) */}
+          {/* List of Guides with Document Icon */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', marginBottom: '36px' }}>
             {filteredGuides.map((guide) => (
               <div 
@@ -1568,11 +1585,11 @@ const QuickHelpDrawer = ({ open, onClose }) => {
                   padding: '4px 0'
                 }}
               >
-                <FileTextOutlined style={{ color: '#1A73E8', fontSize: '20px', marginTop: '2px', flexShrink: 0 }} />
+                <FileTextOutlined style={{ color: token.colorPrimary, fontSize: '20px', marginTop: '2px', flexShrink: 0 }} />
                 <span 
                   style={{ 
                     fontSize: '16px', 
-                    color: '#202124', 
+                    color: token.colorText, 
                     fontWeight: 500, 
                     lineHeight: 1.45
                   }}
@@ -1583,13 +1600,13 @@ const QuickHelpDrawer = ({ open, onClose }) => {
             ))}
           </div>
 
-          {/* WhatsApp Direct Assistance Card (Real WhatsApp: +923262324446) */}
+          {/* WhatsApp Direct Assistance Card */}
           <Card
             size="small"
             style={{
-              background: 'linear-gradient(135deg, #E8F5E9 0%, #FFFFFF 100%)',
+              background: token.colorFillAlter,
               borderRadius: '12px',
-              borderColor: '#C8E6C9',
+              borderColor: token.colorBorderSecondary,
               marginTop: 'auto'
             }}
           >
@@ -1608,10 +1625,10 @@ const QuickHelpDrawer = ({ open, onClose }) => {
                 <WhatsAppOutlined />
               </div>
               <div style={{ flex: 1 }}>
-                <Text strong style={{ fontSize: '14px', display: 'block', color: '#1B5E20' }}>
+                <Text strong style={{ fontSize: '14px', display: 'block', color: token.colorTextHeading }}>
                   {language === 'ur' ? 'Koi Baat Samajh Na Aaye?' : 'Need Direct Assistance?'}
                 </Text>
-                <Text type="secondary" style={{ fontSize: '12px', display: 'block' }}>
+                <Text type="secondary" style={{ fontSize: '12px', display: 'block', color: token.colorTextSecondary }}>
                   {language === 'ur' ? 'Hamari support team se WhatsApp par seedha raabta karein (+92 326 2324446).' : 'Chat directly with our support team on WhatsApp (+92 326 2324446).'}
                 </Text>
               </div>
@@ -1638,6 +1655,7 @@ const QuickHelpDrawer = ({ open, onClose }) => {
         </div>
       )}
     </Drawer>
+    </>
   );
 };
 

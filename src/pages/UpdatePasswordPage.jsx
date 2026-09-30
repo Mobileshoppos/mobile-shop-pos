@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { Form, Input, Button, Card, Typography, App as AntApp, Layout, Progress } from 'antd'; // Progress ko shamil kiya
+import { Form, Input, Button, Typography, App as AntApp, Layout, Progress, theme, ConfigProvider } from 'antd';
 import { LockOutlined } from '@ant-design/icons';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import { useNavigate, Link } from 'react-router-dom'; // Link ko shamil kiya
+import { useNavigate, Link } from 'react-router-dom';
+import { lightThemeTokens } from '../theme/themeConfig';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 const { Content } = Layout;
 
 const UpdatePasswordPage = () => {
@@ -65,65 +66,122 @@ const UpdatePasswordPage = () => {
   };
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Content style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: isMobile ? '12px 8px' : '20px' }}>
-        <Card style={{ width: 400, maxWidth: '100%' }}>
-          <Title level={3} style={{ textAlign: 'center' }}>Set a New Password</Title>
-          <p style={{ textAlign: 'center', marginBottom: '24px' }}>Please enter your new password below.</p>
-          <Form onFinish={handleUpdatePassword} layout="vertical">
-            <Form.Item 
-              name="password" 
-              label="New Password" 
-              rules={[{ required: true, min: 6, message: 'Password must be at least 6 characters long!' }]}
-            >
-              <Input.Password 
-                prefix={<LockOutlined />} 
-                placeholder="Enter new password" 
-                onChange={(e) => {
-                  const pass = e.target.value;
-                  setPassword(pass);
-                  checkPasswordStrength(pass);
-                }}
-              />
-            </Form.Item>
-            {password && (
-          <Progress 
-            percent={strength} 
-            strokeColor={strengthColor}
-            showInfo={false} 
-            style={{ marginBottom: '24px' }}
-          />
-        )}
-            <Form.Item 
-              name="confirmPassword" 
-              label="Confirm New Password" 
-              dependencies={['password']}
-              rules={[
-                { required: true, message: 'Please confirm your new password!' },
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    if (!value || getFieldValue('password') === value) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(new Error('The two passwords that you entered do not match!'));
-                  },
-                }),
-              ]}
-            >
-              <Input.Password prefix={<LockOutlined />} placeholder="Confirm new password" />
-            </Form.Item>
-            <Form.Item>
-              <Button type="primary" htmlType="submit" loading={loading} block size="large">
-                Update Password
-              </Button>
-            </Form.Item>
-            <div style={{ textAlign: 'center', marginTop: '16px' }}>
-          <Link to="/">Back to Login</Link>
-        </div>
-          </Form>
-        </Card>
-      </Content>
-    </Layout>
+    <ConfigProvider theme={{ algorithm: theme.defaultAlgorithm, token: lightThemeTokens }}>
+      <Layout style={{ minHeight: '100vh', background: lightThemeTokens.colorBgLayout, overflowY: 'auto' }}>
+        <Content style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: isMobile ? '16px 8px' : '24px 20px' }}>
+          <div style={{ 
+            width: 420, 
+            maxWidth: '100%', 
+            background: lightThemeTokens.colorBgLayout, 
+            borderRadius: '16px',
+            padding: isMobile ? '24px 16px' : '32px 28px',
+            textAlign: 'center'
+          }}>
+            {/* Official 4-Square Brand Logo */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '16px' }}>
+              <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 5C4 4.44772 4.44772 4 5 4H13C13.5523 4 14 4.44772 14 5V13C14 13.5523 13.5523 14 13 14H5C4.44772 14 4 13.5523 4 13V5Z" fill={lightThemeTokens.colorPrimary} />
+                <path d="M18 5C18 4.44772 18.4477 4 19 4H27C27.5523 4 28 4.44772 28 5V13C28 13.5523 27.5523 14 27 14H19C18.4477 14 18 13.5523 18 13V5Z" fill={lightThemeTokens.colorPrimary} fillOpacity="0.6" />
+                <path d="M4 19C4 18.4477 4.44772 18 5 18H13C13.5523 18 14 18.4477 14 19V27C14 27.5523 13.5523 28 13 28H5C4.44772 28 4 27.5523 4 27V19Z" fill={lightThemeTokens.colorPrimary} fillOpacity="0.6" />
+                <path d="M18 19C18 18.4477 18.4477 18 19 18H27C27.5523 18 28 18.4477 28 19V27C28 27.5523 27.5523 28 27 28H19C18.4477 28 18 27.5523 18 27V19Z" fill={lightThemeTokens.colorPrimary} />
+              </svg>
+              <span style={{ fontSize: '22px', fontWeight: '800', color: lightThemeTokens.colorTextHeading }}>
+                Sada<span style={{ color: lightThemeTokens.colorPrimary }}> POS</span>
+              </span>
+            </div>
+
+            <Title level={3} style={{ color: lightThemeTokens.colorTextHeading, margin: '0 0 6px 0', fontSize: '22px', fontWeight: 800, letterSpacing: '-0.3px' }}>
+              Set a New Password
+            </Title>
+            <p style={{ color: lightThemeTokens.colorTextSecondary, fontSize: '13px', margin: '0 0 20px 0' }}>
+              Please enter your new secure password below.
+            </p>
+
+            <Form onFinish={handleUpdatePassword} layout="vertical" style={{ textAlign: 'left' }}>
+              <Form.Item 
+                name="password" 
+                label={<Text strong style={{ fontSize: '12.5px', color: lightThemeTokens.colorTextHeading }}>New Password</Text>} 
+                rules={[{ required: true, min: 6, message: 'Password must be at least 6 characters long!' }]}
+                style={{ marginBottom: password ? '8px' : '14px' }}
+              >
+                <Input.Password 
+                  prefix={<LockOutlined style={{ color: lightThemeTokens.colorTextSecondary }} />} 
+                  placeholder="Enter new password (6+ chars)" 
+                  size="middle"
+                  style={{ borderRadius: '8px', height: '40px', background: '#FFFFFF', borderColor: lightThemeTokens.colorBorder }}
+                  onChange={(e) => {
+                    const pass = e.target.value;
+                    setPassword(pass);
+                    checkPasswordStrength(pass);
+                  }}
+                />
+              </Form.Item>
+
+              {password && (
+                <Progress 
+                  percent={strength} 
+                  strokeColor={strengthColor}
+                  showInfo={false} 
+                  style={{ marginBottom: '14px' }}
+                />
+              )}
+
+              <Form.Item 
+                name="confirmPassword" 
+                label={<Text strong style={{ fontSize: '12.5px', color: lightThemeTokens.colorTextHeading }}>Confirm New Password</Text>} 
+                dependencies={['password']}
+                style={{ marginBottom: '20px' }}
+                rules={[
+                  { required: true, message: 'Please confirm your new password!' },
+                  ({ getFieldValue }) => ({
+                    validator(_, value) {
+                      if (!value || getFieldValue('password') === value) {
+                        return Promise.resolve();
+                      }
+                      return Promise.reject(new Error('The two passwords do not match!'));
+                    },
+                  }),
+                ]}
+              >
+                <Input.Password 
+                  prefix={<LockOutlined style={{ color: lightThemeTokens.colorTextSecondary }} />} 
+                  placeholder="Confirm new password" 
+                  size="middle"
+                  style={{ borderRadius: '8px', height: '40px', background: '#FFFFFF', borderColor: lightThemeTokens.colorBorder }}
+                />
+              </Form.Item>
+
+              <Form.Item style={{ marginBottom: '0' }}>
+                <Button 
+                  type="primary" 
+                  htmlType="submit" 
+                  loading={loading} 
+                  block 
+                  size="middle"
+                  style={{ 
+                    height: '42px', 
+                    borderRadius: '8px', 
+                    fontSize: '14.5px', 
+                    fontWeight: 700,
+                    background: lightThemeTokens.colorPrimary,
+                    borderColor: lightThemeTokens.colorPrimary,
+                    boxShadow: `0 4px 12px ${lightThemeTokens.colorPrimary}40`
+                  }}
+                >
+                  Update Password
+                </Button>
+              </Form.Item>
+
+              <div style={{ textAlign: 'center', marginTop: '16px' }}>
+                <Link to="/" style={{ fontSize: '13px', color: lightThemeTokens.colorPrimary, fontWeight: 500 }}>
+                  Back to Login
+                </Link>
+              </div>
+            </Form>
+          </div>
+        </Content>
+      </Layout>
+    </ConfigProvider>
   );
 };
 

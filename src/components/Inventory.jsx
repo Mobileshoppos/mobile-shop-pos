@@ -194,15 +194,26 @@ const ProductList = ({ isSingleColumn, showArchived, products, categories, wareh
                 {product.category_name}
               </Tag>
               {product.brand && <Text style={{ fontSize: '13px', color: token.colorCardBrandText }}>({product.brand})</Text>}
-              {limits.allow_stock_location && product.rack_location && (
-                <Tag style={{ margin: 0, fontSize: '12px', padding: '1px 6px', backgroundColor: token.colorCardLocationTag + '15', color: token.colorCardLocationTag, border: `1px solid ${token.colorCardLocationTag}33` }}>
-                  📍 {product.rack_location}
-                </Tag>
-              )}
             </div>
           </div>
         </div>
       )
+    },
+    {
+      title: 'Rack/Shelf',
+      key: 'rack_location',
+      width: 120,
+      align: 'center',
+      render: (_, product) => {
+        if (!limits.allow_stock_location || !product.rack_location) {
+          return <Text type="secondary" style={{ fontSize: '13px' }}>—</Text>;
+        }
+        return (
+          <Text style={{ fontSize: '14px', color: token.colorCardDetailsText }}>
+            {product.rack_location}
+          </Text>
+        );
+      }
     },
     {
       title: 'Total Stock',
@@ -765,6 +776,8 @@ const Inventory = () => {
   const [globalSearchMap, setGlobalSearchMap] = useState({});
   
   const [products, setProducts] = useState([]);
+  const [allInventoryProducts, setAllInventoryProducts] = useState([]); // NAYA: Fast in-memory search ke liye
+  const [variantsThresholdMap, setVariantsThresholdMap] = useState({}); // NAYA: Fast low stock search
   const [totalModelCount, setTotalModelCount] = useState(0); // <--- NAYA: Total Models ki ginti
   const [categories, setCategories] = useState([]);
   const [categoryTree, setCategoryTree] = useState([]); // NAYA IZAFA: TreeSelect ke liye
@@ -1047,52 +1060,71 @@ const Inventory = () => {
     }
   }, [isProductModalOpen, isMobile]);
 
+  // 1. DATABASE LOAD ENGINE: Sirf Page khulte waqt ya data change hone par chalega (Disk Se Read)
   useEffect(() => {
     if (!user) return;
-    const fetchDropdownData = async () => {
+
+    const loadInventoryDatabase = async () => {
+      if (allInventoryProducts.length === 0) setLoading(true);
       try {
         const vMap = {};
-        
-        // 1. Variant Barcodes load karein
+        const thresholdMap = {};
+
+        // A. Variant Barcodes & Limits Load
         const allVariants = await db.product_variants.toArray();
         allVariants.forEach(v => {
-            if (v.barcode) vMap[v.barcode.toLowerCase()] = v.product_id;
+          if (v.barcode) vMap[v.barcode.toLowerCase()] = v.product_id;
+          thresholdMap[v.id] = v.low_stock_threshold;
         });
+        setVariantsThresholdMap(thresholdMap);
 
-        // 2. Saaray IMEIs load karein (Available + Sold sab)
-        // Taake agar item bik bhi gaya ho, tab bhi product dhoonda ja sake
+        // B. IMEIs Load
         const allInventory = await db.inventory.toArray();
         allInventory.forEach(item => {
-            if (item.imei) vMap[item.imei.toLowerCase()] = item.product_id;
+          if (item.imei) vMap[item.imei.toLowerCase()] = item.product_id;
         });
-
         setGlobalSearchMap(vMap);
-        
-        // NAYA IZAFA: Load Warehouses
+
+        // C. Warehouses Load
         if (DataService.getWarehouses) {
-            const whData = await DataService.getWarehouses();
-            setWarehouses(whData);
-            // Agar filter pehli dafa load ho raha hai, to Default (Main Shop) set karein
-            if (filterWarehouse === null) {
-                const defaultWh = whData.find(w => w.is_default);
-                setFilterWarehouse(defaultWh ? defaultWh.id : 'all');
-            }
+          const whData = await DataService.getWarehouses();
+          setWarehouses(whData);
+          if (filterWarehouse === null) {
+            const defaultWh = whData.find(w => w.is_default);
+            setFilterWarehouse(defaultWh ? defaultWh.id : 'all');
+          }
         }
 
+        // D. Categories Load
         const localCategories = await db.categories.toArray();
         if (localCategories.length > 0) {
-            const visibleCategories = localCategories.filter(cat => cat.is_visible !== false);
-            setCategories(visibleCategories);
-            setCategoryTree(buildCategoryTree(visibleCategories)); // NAYA IZAFA
-        } else if (navigator.onLine) {
-            const { data: categoriesData, error: categoriesError } = await supabase.rpc('get_user_categories_with_settings');
-            if (!categoriesError && categoriesData) {
-                const visibleCategories = categoriesData.filter(cat => cat.is_visible);
-                setCategories(visibleCategories);
-                setCategoryTree(buildCategoryTree(visibleCategories)); // NAYA IZAFA
-            }
+          const visibleCategories = localCategories.filter(cat => cat.is_visible !== false);
+          setCategories(visibleCategories);
+          setCategoryTree(buildCategoryTree(visibleCategories));
         }
-        if (filterCategory && navigator.onLine) {
+
+        // E. Models Count & Master Products Load (Ek dafa RAM mein)
+        const allModelsCount = await db.products.count();
+        setTotalModelCount(allModelsCount);
+
+        const { productsData } = await DataService.getInventoryData(showArchived, 'all');
+        setAllInventoryProducts(productsData || []);
+
+      } catch (error) {
+        message.error("Error fetching products: " + error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInventoryDatabase();
+  }, [user, refreshTrigger, showArchived]);
+
+  // 1.1 Category Dynamic Attributes Load
+  useEffect(() => {
+    const loadCategoryAttributes = async () => {
+      if (filterCategory && navigator.onLine) {
+        try {
           const { data: attributes, error: attributesError } = await supabase.from('category_attributes').select('attribute_name').eq('category_id', filterCategory);
           if (!attributesError && attributes) {
             const filtersPromises = attributes.map(async (attr) => {
@@ -1102,170 +1134,143 @@ const Inventory = () => {
             const resolvedFilters = await Promise.all(filtersPromises);
             setAdvancedFilters(resolvedFilters.filter(f => f.options.length > 0));
           }
-        } else { setAdvancedFilters([]); }
-      } catch (error) { console.log('Offline: Filters skipped'); }
+        } catch (e) {
+          setAdvancedFilters([]);
+        }
+      } else {
+        setAdvancedFilters([]);
+      }
     };
-    fetchDropdownData();
+    loadCategoryAttributes();
+  }, [filterCategory]);
 
-    const searchHandler = setTimeout(async () => {
-      // Naya: Agar pehle se data mojud hai to loading spinner mat dikhao (Silent Refresh)
-      if (products.length === 0) setLoading(true);
-      try {
-        // NAYA: Pehle database se total models ginein (Active + Archive)
-        const allModelsCount = await db.products.count();
-        setTotalModelCount(allModelsCount);
+  // 2. IN-MEMORY SEARCH ENGINE: Har lafz par bina database query ke foran chalega (<2ms)
+  useEffect(() => {
+    if (loading) return;
 
-        // NAYA IZAFA: Hum hamesha 'all' data mangwayenge taake dusre godowns ka pata chal sake
-        const { productsData } = await DataService.getInventoryData(showArchived, 'all');
-        let filteredProducts = productsData;
+    let filteredProducts = allInventoryProducts;
 
-        // === CHANGE 1: UPDATED SEARCH (Tags & Attributes bhi dhoondega) ===
-        if (searchText) {
-          const lowerSearch = searchText.toLowerCase();
-          
-          // Check karein ke kya yeh Search Text hamare Global Map mein hai?
-          // Yani kya yeh koi Barcode ya IMEI hai?
-          const matchedProductId = globalSearchMap[lowerSearch];
+    // A. Instant Smart Search (Name, Brand, Barcode, IMEI, Batch, Expiry, Specs)
+    if (searchText) {
+      const lowerSearch = searchText.toLowerCase().trim();
+      const matchedProductId = globalSearchMap[lowerSearch];
 
-          filteredProducts = filteredProducts.filter(p => {
-            // 1. Agar Map mein Product ID mil gaya, to seedha wohi product dikhao
-            if (matchedProductId && p.id === matchedProductId) return true;
+      filteredProducts = filteredProducts.filter(p => {
+        if (matchedProductId && p.id === matchedProductId) return true;
 
-            // 2. Warna wahi purani Smart Search (Name, Brand, Tags)
-            const mainMatch = isSmartMatch(p.name, searchText) ||
-                              isSmartMatch(p.brand, searchText) ||
-                              (p.barcode && p.barcode.toLowerCase().includes(lowerSearch));
-            
-            if (mainMatch) return true;
+        const mainMatch = isSmartMatch(p.name, searchText) ||
+                          isSmartMatch(p.brand, searchText) ||
+                          (p.barcode && p.barcode.toLowerCase().includes(lowerSearch)) ||
+                          (p.rack_location && isSmartMatch(p.rack_location, searchText));
 
-            // 3. Variants Tags, Batch, aur Expiry Check
-            if (p.variants && p.variants.length > 0) {
-                return p.variants.some(v => {
-                    // NAYA IZAFA: Batch Number se dhoondna
-                    if (isSmartMatch(v.batch_number, searchText)) return true;
-                    
-                    // NAYA IZAFA: Expiry Date se dhoondna (e.g. "2026" ya "07/")
-                    if (v.expiry_date && isSmartMatch(new Date(v.expiry_date).toLocaleDateString(), searchText)) return true;
+        if (mainMatch) return true;
 
-                    return v.item_attributes && Object.values(v.item_attributes).some(val => 
-                        isSmartMatch(val, searchText)
-                    );
-                });
+        if (p.variants && p.variants.length > 0) {
+          return p.variants.some(v => {
+            if (isSmartMatch(v.batch_number, searchText)) return true;
+            if (v.expiry_date && isSmartMatch(new Date(v.expiry_date).toLocaleDateString(), searchText)) return true;
+            return v.item_attributes && Object.values(v.item_attributes).some(val => isSmartMatch(val, searchText));
+          });
+        }
+        return false;
+      });
+    }
+
+    // B. Category Filter
+    if (filterCategory) {
+      filteredProducts = filteredProducts.filter(p => p.category_id === filterCategory);
+    }
+
+    // C. Price Range Filter
+    if (priceRange[0] !== null) {
+      filteredProducts = filteredProducts.filter(p => {
+        if (p.variants && p.variants.length > 0) return p.variants.some(v => v.sale_price >= priceRange[0]);
+        return (p.sale_price || 0) >= priceRange[0];
+      });
+    }
+    if (priceRange[1] !== null) {
+      filteredProducts = filteredProducts.filter(p => {
+        if (p.variants && p.variants.length > 0) return p.variants.some(v => v.sale_price <= priceRange[1]);
+        return (p.sale_price || 0) <= priceRange[1];
+      });
+    }
+
+    // D. Attribute Filtering (RAM, ROM, Color, etc.)
+    Object.keys(filterAttributes).forEach(attrKey => {
+      const attrValue = filterAttributes[attrKey];
+      if (attrValue) {
+        filteredProducts = filteredProducts.filter(p => 
+          p.variants && p.variants.some(v => v.item_attributes && v.item_attributes[attrKey] === attrValue)
+        );
+      }
+    });
+
+    // E. Low Stock Filter Logic
+    if (showLowStockOnly) {
+      const globalThreshold = profile?.low_stock_threshold || 5;
+
+      filteredProducts = filteredProducts.filter(p => {
+        if (p.variants && p.variants.length > 0) {
+          const variantTotals = {};
+          p.variants.forEach(v => {
+            const key = v.variant_id || JSON.stringify(v.item_attributes || {});
+            if (!variantTotals[key]) {
+              variantTotals[key] = { qty: 0, variant_id: v.variant_id, items: [] };
             }
-            return false;
+            variantTotals[key].qty += (v.available_qty || 0);
+            variantTotals[key].items.push(v);
           });
-        }
-        if (filterCategory) filteredProducts = filteredProducts.filter(p => p.category_id === filterCategory);
-        // === CHANGE 2: UPDATED PRICE RANGE (Variants ki price bhi check karega) ===
-        if (priceRange[0] !== null) {
-            filteredProducts = filteredProducts.filter(p => {
-                // Agar variants hain to unki price check karo, warna main product ki
-                if (p.variants && p.variants.length > 0) return p.variants.some(v => v.sale_price >= priceRange[0]);
-                return (p.sale_price || 0) >= priceRange[0];
-            });
-        }
-        if (priceRange[1] !== null) {
-            filteredProducts = filteredProducts.filter(p => {
-                if (p.variants && p.variants.length > 0) return p.variants.some(v => v.sale_price <= priceRange[1]);
-                return (p.sale_price || 0) <= priceRange[1];
-            });
-        }
 
-        // --- NEW: Attribute Filtering (RAM, ROM, Color, etc.) ---
-        Object.keys(filterAttributes).forEach(attrKey => {
-          const attrValue = filterAttributes[attrKey];
-          if (attrValue) {
-            filteredProducts = filteredProducts.filter(p => {
-              // Check karein ke kya is product ka koi bhi variant is attribute se match karta hai?
-              return p.variants && p.variants.some(v => 
-                v.item_attributes && v.item_attributes[attrKey] === attrValue
-              );
-            });
+          let isProductLowStock = false;
+          const lowStockVariantsOnly = [];
+
+          Object.values(variantTotals).forEach(vt => {
+            const variantThreshold = vt.variant_id ? variantsThresholdMap[vt.variant_id] : null;
+            const alertQty = (variantThreshold !== null && variantThreshold !== undefined)
+              ? variantThreshold
+              : (p.low_stock_threshold !== null && p.low_stock_threshold !== undefined ? p.low_stock_threshold : globalThreshold);
+
+            if (vt.qty > 0 && vt.qty <= alertQty) {
+              isProductLowStock = true;
+              lowStockVariantsOnly.push(...vt.items);
+            }
+          });
+
+          if (isProductLowStock) {
+            p.variants = lowStockVariantsOnly;
+            return true;
           }
-        });
-        // -------------------------------------------------------
-
-        // --- NAYA IZAFA: LOW STOCK FILTER LOGIC (View All ke liye) ---
-        if (showLowStockOnly) {
-          const globalThreshold = profile?.low_stock_threshold || 5;
-          
-          // 1. Database se Variants table mangwayein taake unki limits mil sakein
-          const allVariantsForFilter = await db.product_variants.toArray();
-          const pvMap = {};
-          allVariantsForFilter.forEach(v => pvMap[v.id] = v);
-
-          filteredProducts = filteredProducts.filter(p => {
-             if (p.variants && p.variants.length > 0) {
-                 // 2. Pehle is product ke tamam variants ka TOTAL stock nikalain (Batches ko jama karein)
-                 const variantTotals = {};
-
-                 p.variants.forEach(v => {
-                     // Group by variant_id ya attributes
-                     const key = v.variant_id || JSON.stringify(v.item_attributes || {});
-                     if (!variantTotals[key]) {
-                         variantTotals[key] = { qty: 0, variant_id: v.variant_id, items: [] };
-                     }
-                     variantTotals[key].qty += (v.available_qty || 0);
-                     variantTotals[key].items.push(v); // <-- Batches ko mehfooz rakhein
-                 });
-
-                 // 3. Check karein aur sirf LOW STOCK variants ko filter karein
-                 let isProductLowStock = false;
-                 const lowStockVariantsOnly = [];
-
-                 Object.values(variantTotals).forEach(vt => {
-                     const pv = vt.variant_id ? pvMap[vt.variant_id] : null;
-                     
-                     // Cascade Logic: Variant -> Product -> Global
-                     const alertQty = (pv && pv.low_stock_threshold !== null && pv.low_stock_threshold !== undefined) 
-                        ? pv.low_stock_threshold 
-                        : (p.low_stock_threshold !== null && p.low_stock_threshold !== undefined ? p.low_stock_threshold : globalThreshold);
-                     
-                     if (vt.qty > 0 && vt.qty <= alertQty) {
-                         isProductLowStock = true;
-                         lowStockVariantsOnly.push(...vt.items); // Sirf low stock batches ko shamil karein
-                     }
-                 });
-
-                 // 4. Agar product low stock hai, to uske variants ki list ko update kar dein
-                 if (isProductLowStock) {
-                     p.variants = lowStockVariantsOnly; // <-- YEH HAI ASAL FIX! (Zayed variants hide ho jayenge)
-                     return true;
-                 }
-                 return false;
-
-             } else {
-                 // Agar bulk product hai (bina variants ke)
-                 const alertQty = (p.low_stock_threshold !== null && p.low_stock_threshold !== undefined) 
-                    ? p.low_stock_threshold 
-                    : globalThreshold;
-                 return (p.quantity || 0) > 0 && (p.quantity || 0) <= alertQty;
-             }
-          });
+          return false;
+        } else {
+          const alertQty = (p.low_stock_threshold !== null && p.low_stock_threshold !== undefined)
+            ? p.low_stock_threshold
+            : globalThreshold;
+          return (p.quantity || 0) > 0 && (p.quantity || 0) <= alertQty;
         }
-        // -------------------------------------------------------------
+      });
+    }
 
-        const formattedForUI = filteredProducts.map(p => ({
-          ...p,
-          min_sale_price: p.min_sale_price || p.sale_price,
-          max_sale_price: p.max_sale_price || p.sale_price,
-          quantity: p.quantity || 0,
-          variants: p.variants || [] 
-        }));
+    // F. Format & Sort in Memory
+    const formattedForUI = filteredProducts.map(p => ({
+      ...p,
+      min_sale_price: p.min_sale_price || p.sale_price,
+      max_sale_price: p.max_sale_price || p.sale_price,
+      quantity: p.quantity || 0,
+      variants: p.variants || []
+    }));
 
-        formattedForUI.sort((a, b) => {
-          if (sortBy === 'name_asc') return a.name.localeCompare(b.name);
-          if (sortBy === 'price_asc') return (a.min_sale_price || 0) - (b.min_sale_price || 0);
-          if (sortBy === 'price_desc') return (b.min_sale_price || 0) - (a.min_sale_price || 0);
-          if (sortBy === 'quantity_desc') return (b.quantity || 0) - (a.quantity || 0);
-          if (sortBy === 'quantity_asc') return (a.quantity || 0) - (b.quantity || 0);
-          return 0;
-        });
-        setProducts(formattedForUI);
-      } catch (error) { message.error("Error fetching products: " + error.message); setProducts([]); } finally { setLoading(false); }
-    }, 300);
-    return () => clearTimeout(searchHandler);
-  }, [user, searchText, filterCategory, filterWarehouse, filterAttributes, priceRange, sortBy, message, showLowStockOnly, location, refreshTrigger, showArchived]);
+    formattedForUI.sort((a, b) => {
+      if (sortBy === 'name_asc') return a.name.localeCompare(b.name);
+      if (sortBy === 'price_asc') return (a.min_sale_price || 0) - (b.min_sale_price || 0);
+      if (sortBy === 'price_desc') return (b.min_sale_price || 0) - (a.min_sale_price || 0);
+      if (sortBy === 'quantity_desc') return (b.quantity || 0) - (a.quantity || 0);
+      if (sortBy === 'quantity_asc') return (a.quantity || 0) - (b.quantity || 0);
+      return 0;
+    });
+
+    setProducts(formattedForUI);
+
+  }, [searchText, filterCategory, priceRange, filterAttributes, sortBy, showLowStockOnly, allInventoryProducts, globalSearchMap, variantsThresholdMap, loading]);
 
   const handleResetFilters = () => {
     setSearchText(''); setFilterCategory(null); setFilterAttributes({}); setPriceRange([null, null]); setSortBy('name_asc');
