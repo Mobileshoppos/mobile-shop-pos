@@ -275,7 +275,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                 expiry_date: values.expiry_date || null,
                 quantity: 1,
                 imei: imei,
-                item_attributes: { ...item_attributes, 'Serial / IMEI': imei },
+                item_attributes: item_attributes,
                 barcode: null
             }));
 
@@ -821,9 +821,27 @@ const AddPurchaseForm = () => {
       return localProducts.map(p => {
         // Is product ke variants dhoondein
         const pVariants = localVariants.filter(v => v.product_id === p.id);
+
+        // Unique Variants (IMEI/Serial ko nikaal kar duplicate khatam karna)
+        const uniqueVariantsMap = new Map();
+        pVariants.forEach(v => {
+          const vAttrs = v.attributes || v.item_attributes || {};
+          const cleanAttrs = {};
+          Object.entries(vAttrs).forEach(([k, val]) => {
+            if (val && !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial')) {
+              cleanAttrs[k] = val;
+            }
+          });
+          const key = JSON.stringify(Object.entries(cleanAttrs).sort());
+          if (!uniqueVariantsMap.has(key)) {
+            uniqueVariantsMap.set(key, { ...v, attributes: cleanAttrs });
+          }
+        });
+        const uniqueVariants = Array.from(uniqueVariantsMap.values());
+
         return {
           ...p,
-          variants: pVariants, // <--- NAYA IZAFA: Variants attach kar diye
+          variants: uniqueVariants,
           category_is_imei_based: categoryMap[p.category_id] ?? false
         };
       });
@@ -1233,6 +1251,10 @@ const AddPurchaseForm = () => {
           setPurchaseItems([]);
           form.resetFields();
 
+          // NAYA IZAFA: Naye variants ko foran left catalog mein dikhane ke liye fresh list mangwayein
+          const updatedProducts = await getProductsWithCategory();
+          setProducts(updatedProducts || []);
+
           const cashSup = suppliers.find(s => s.name.toLowerCase() === 'cash purchase');
           const defaultWh = warehouses.find(w => w.is_default);
           
@@ -1596,7 +1618,7 @@ const AddPurchaseForm = () => {
             )}
 
             <Button key="submit" type="primary" loading={isSubmitting} onClick={handleSavePurchase}>
-              {editingPurchase ? (isMobile ? "Update" : "Update Purchase") : (isMobile ? "Save" : "Save Purchase")}
+              {editingPurchase ? (isMobile ? "Update" : "Update Purchase") : (isMobile ? "Complete" : "Complete Purchase")}
             </Button>
           </div>
         </div>

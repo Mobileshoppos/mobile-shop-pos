@@ -1448,6 +1448,47 @@ async createNewPurchase(purchasePayload) {
         };
     });
 
+    // Naye variants ko local database mein mehfooz karein taake catalog foran update ho sake
+    for (const item of purchasePayload.p_inventory_items) {
+      if (item.item_attributes && Object.keys(item.item_attributes).length > 0) {
+        const cleanAttrs = {};
+        Object.entries(item.item_attributes).forEach(([k, v]) => {
+          if (v && !k.toLowerCase().includes('imei') && !k.toLowerCase().includes('serial')) {
+            cleanAttrs[k] = v;
+          }
+        });
+        const cleanKey = JSON.stringify(Object.entries(cleanAttrs).sort());
+        
+        const existingVariant = await db.product_variants
+          .filter(v => {
+            if (v.product_id !== item.product_id) return false;
+            const vAttrs = {};
+            Object.entries(v.attributes || v.item_attributes || {}).forEach(([vk, vv]) => {
+              if (vv && !vk.toLowerCase().includes('imei') && !vk.toLowerCase().includes('serial')) {
+                vAttrs[vk] = vv;
+              }
+            });
+            return JSON.stringify(Object.entries(vAttrs).sort()) === cleanKey;
+          })
+          .first();
+
+        if (!existingVariant) {
+          const newVarId = item.variant_id || crypto.randomUUID();
+          await db.product_variants.put({
+            id: newVarId,
+            local_id: newVarId,
+            product_id: item.product_id,
+            user_id: userId,
+            attributes: cleanAttrs,
+            barcode: item.barcode || null,
+            purchase_price: item.purchase_price,
+            sale_price: item.sale_price,
+            wholesale_price: item.wholesale_price
+          });
+        }
+      }
+    }
+
     // Local DB mein save karein
     await db.purchases.put(purchaseData);
     await db.inventory.bulkPut(itemsData);

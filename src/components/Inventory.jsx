@@ -1410,8 +1410,8 @@ const Inventory = () => {
       setEditingProduct(null);
       productForm.resetFields();
       processSyncQueue();
-      setSearchText(prev => prev ? prev + ' ' : ' ');
-      setTimeout(() => setSearchText(prev => prev.trim()), 10);
+      setRefreshTrigger(prev => prev + 1);
+      window.dispatchEvent(new CustomEvent('local-db-updated'));
     } catch (error) { message.error('Error: ' + error.message); }
   };
 
@@ -1451,7 +1451,8 @@ const Inventory = () => {
         try {
           await DataService.deleteProduct(product.id);
           message.success('Deleted successfully');
-          setSearchText(prev => prev ? prev + ' ' : ' '); setTimeout(() => setSearchText(prev => prev.trim()), 10);
+          setRefreshTrigger(prev => prev + 1);
+          window.dispatchEvent(new CustomEvent('local-db-updated'));
         } catch (error) { message.error(error.message); }
       },
     });
