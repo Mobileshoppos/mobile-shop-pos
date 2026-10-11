@@ -292,12 +292,11 @@ const SideMenu = ({ collapsed, setCollapsed, isMobile }) => {
                 marginBottom: '8px'
             }}>
                 {/* Logo Icon */}
-                <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ minWidth: '28px' }}>
-                    <path d="M4 5C4 4.44772 4.44772 4 5 4H13C13.5523 4 14 4.44772 14 5V13C14 13.5523 13.5523 14 13 14H5C4.44772 14 4 13.5523 4 13V5Z" fill={token.colorPrimary} />
-                    <path d="M18 5C18 4.44772 18.4477 4 19 4H27C27.5523 4 28 4.44772 28 5V13C28 13.5523 27.5523 14 27 14H19C18.4477 14 18 13.5523 18 13V5Z" fill={token.colorPrimary} fillOpacity="0.6" />
-                    <path d="M4 19C4 18.4477 4.44772 18 5 18H13C13.5523 18 14 18.4477 14 19V27C14 27.5523 13.5523 28 13 28H5C4.44772 28 4 27.5523 4 27V19Z" fill={token.colorPrimary} fillOpacity="0.6" />
-                    <path d="M18 19C18 18.4477 18.4477 18 19 18H27C27.5523 18 28 18.4477 28 19V27C28 27.5523 27.5523 28 27 28H19C18.4477 28 18 27.5523 18 27V19Z" fill={token.colorPrimary} />
-                </svg>
+                <img 
+                  src="/pwa-192x192.png" 
+                  alt="SadaPOS Logo" 
+                  style={{ width: '30px', height: '30px', objectFit: 'contain', minWidth: '30px' }} 
+                />
                 
                 {/* Logo Text */}
                 {!collapsed && (
