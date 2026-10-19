@@ -30,8 +30,9 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
   const isBatchExpiryEnabled = profile?.enable_batch_expiry;
   const { message, modal } = App.useApp();
   const [form] = Form.useForm();
-  const [imeis, setImeis] = useState(['']);
-  const imeiInputRefs = useRef([]);
+  const [imeis, setImeis] = useState([]);
+  const [imeiInputText, setImeiInputText] = useState('');
+  const imeiInputRef = useRef(null);
   const isImeiCategory = product?.category_is_imei_based;
   const [isBarcodeLocked, setIsBarcodeLocked] = useState(!!initialValues);
 
@@ -124,11 +125,29 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
               expiry_date: initialValues.expiry_date,
               ...initialValues.item_attributes
           };
-          if (isImeiCategory && initialValues.imei) {
+          // Helper: Check karein agar is product ka koi adhoora draft mojood hai
+          const getSavedImeiDraft = () => {
+            if (editingItemIndex !== null) return [];
+            try {
+              const saved = localStorage.getItem('temp_purchase_imeis_draft');
+              if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed && parsed.productId === product.id && Array.isArray(parsed.imeis)) {
+                  return parsed.imeis;
+                }
+              }
+            } catch (e) { /* ignore */ }
+            return [];
+          };
+
+          if (isImeiCategory && initialValues.imeis && Array.isArray(initialValues.imeis) && initialValues.imeis.length > 0) {
+              setImeis(initialValues.imeis);
+          } else if (isImeiCategory && initialValues.imei) {
               setImeis([initialValues.imei]);
           } else if (isImeiCategory) {
-              setImeis(['']);
+              setImeis(getSavedImeiDraft());
           }
+          setImeiInputText('');
           form.setFieldsValue(formData);
       } else {
           // NEW ITEM
@@ -141,10 +160,21 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
           };
           if (isImeiCategory) {
             form.setFieldsValue({ ...commonValues });
-            setImeis(['']);
+            try {
+              const saved = localStorage.getItem('temp_purchase_imeis_draft');
+              const parsed = saved ? JSON.parse(saved) : null;
+              if (parsed && parsed.productId === product.id && Array.isArray(parsed.imeis)) {
+                setImeis(parsed.imeis);
+              } else {
+                setImeis([]);
+              }
+            } catch (e) {
+              setImeis([]);
+            }
           } else {
             form.setFieldsValue({ ...commonValues, quantity: 1 });
           }
+          setImeiInputText('');
       }
     }
   }, [visible, product, isImeiCategory, form, initialValues]);
@@ -195,26 +225,78 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
     }
   };
   
-  const handleImeiChange = (index, value) => {
-    const newImeis = [...imeis];
-    newImeis[index] = value;
-    if (index === newImeis.length - 1 && value.trim()) { newImeis.push(''); }
-    setImeis(newImeis);
-  };
+  // NAYA: Smart Scanner aur Bulk Paste Handler
+  const handleAddImeis = (rawText) => {
+    if (!rawText || !rawText.trim()) return;
+    
+    // Space, Comma, ya Enter/New-line se alag alag IMEIs nikalna
+    const incomingList = rawText
+      .split(/[\r\n,\s\t]+/)
+      .map(s => s.trim())
+      .filter(Boolean);
 
-  const handleImeiKeyDown = (event, index) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      const nextInput = imeiInputRefs.current[index + 1];
-      if (nextInput) { nextInput.focus(); }
+    if (incomingList.length === 0) return;
+
+    const existingSet = new Set(imeis.map(i => i.toLowerCase()));
+    const toAdd = [];
+    let duplicateCount = 0;
+
+    for (const item of incomingList) {
+      if (existingSet.has(item.toLowerCase()) || toAdd.some(x => x.toLowerCase() === item.toLowerCase())) {
+        duplicateCount++;
+      } else {
+        toAdd.push(item);
+      }
+    }
+
+    if (duplicateCount > 0) {
+      message.warning(`${duplicateCount} duplicate IMEI(s) ignored.`);
+    }
+
+    if (toAdd.length > 0) {
+      setImeis(prev => [...prev, ...toAdd]);
+      setImeiInputText('');
     }
   };
 
+  // Enter dabne par add karna
+  const handleImeiInputKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddImeis(imeiInputText);
+    }
+  };
+
+  // WhatsApp ya Excel se Paste karte hi foran pehchan'na
+  const handleImeiPaste = (e) => {
+    const pastedData = e.clipboardData.getData('text');
+    if (pastedData && (pastedData.includes('\n') || pastedData.includes(',') || pastedData.includes(' '))) {
+      e.preventDefault();
+      handleAddImeis(pastedData);
+    }
+  };
+
+  // Tag hatane (remove) ka function
+  const handleRemoveImei = (indexToRemove) => {
+    setImeis(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  // NAYA: Har scan par browser memory mein chupke se note karna
   useEffect(() => {
-    if (isImeiCategory) {
-        imeiInputRefs.current = imeis.map((_, i) => imeiInputRefs.current[i] || React.createRef());
+    if (isImeiCategory && product && editingItemIndex === null) {
+      if (imeis.length > 0) {
+        localStorage.setItem('temp_purchase_imeis_draft', JSON.stringify({ productId: product.id, imeis }));
+      } else {
+        localStorage.removeItem('temp_purchase_imeis_draft');
+      }
     }
-  }, [imeis, isImeiCategory]);
+  }, [imeis, isImeiCategory, product, editingItemIndex]);
+
+  // NAYA: Jab dukandar khud Cancel kare to memory saaf karna
+  const handleModalCancel = () => {
+    localStorage.removeItem('temp_purchase_imeis_draft');
+    onCancel();
+  };
 
   const handleOk = async () => {
     try {
@@ -243,10 +325,14 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
             for (const imei of finalImeis) {
                 const lowerImei = imei.toLowerCase();
 
-                // 1. Check in Current Bill (Jo screen par list hai)
-                const duplicateInList = existingItems?.some((item, idx) => 
-                    item.imei?.toLowerCase() === lowerImei && idx !== editingItemIndex
-                );
+                // 1. Check in Current Bill (Jo screen par list hai chahe grouped ho ya single)
+                const duplicateInList = existingItems?.some((item, idx) => {
+                    if (idx === editingItemIndex) return false;
+                    if (item.imeis && Array.isArray(item.imeis)) {
+                        return item.imeis.some(i => i?.toLowerCase() === lowerImei);
+                    }
+                    return item.imei?.toLowerCase() === lowerImei;
+                });
 
                 // 2. Check in Database (Jo pehle se dukan mein hai)
                 const existingInDb = await db.inventory
@@ -260,8 +346,8 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
             }
             // --- CHECK KHATAM ---
 
-            finalItemsData = finalImeis.map(imei => ({
-                // Agar edit kar rahe hain to purani ID, warna NAYI ID
+            // NAYA: 100 rows ke bajaye 1 single grouped item banana
+            finalItemsData = [{
                 id: initialValues?.id || crypto.randomUUID(), 
                 status: initialValues?.status || 'Available',
                 temp_id: crypto.randomUUID(),
@@ -273,11 +359,12 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                 warranty_days: values.warranty_days || 0,
                 batch_number: values.batch_number || null,
                 expiry_date: values.expiry_date || null,
-                quantity: 1,
-                imei: imei,
+                quantity: finalImeis.length,
+                imei: finalImeis[0],
+                imeis: finalImeis,
                 item_attributes: item_attributes,
                 barcode: null
-            }));
+            }];
 
           } else {
             // --- PERFECT VARIANT IDENTITY CHECK (Barcode) ---
@@ -339,6 +426,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
             }];
           }
           
+          localStorage.removeItem('temp_purchase_imeis_draft');
           onOk(finalItemsData);
           form.resetFields();
         } catch (err) {
@@ -419,7 +507,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
   return (
     <Modal
       title={<>Details for: <Typography.Text type="success">{product?.name}</Typography.Text></>}
-      open={visible} onCancel={onCancel} onOk={handleOk} okText={initialValues ? "Update Item" : "Add to List"}
+      open={visible} onCancel={handleModalCancel} onOk={handleOk} okText={initialValues ? "Update Item" : "Add to List"}
       width={isMobile ? '95%' : '80%'}
       style={{ top: 20 }}
       destroyOnHidden
@@ -507,15 +595,74 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         </Row>
                     </>
                 )}
-                <Divider />
-                <Title level={5}>IMEI / Serial Numbers</Title>
-                <div style={{ maxHeight: '30vh', overflowY: 'auto', padding: '8px' }}>
-                {imeis.map((imei, index) => (
-                    <Form.Item key={index} style={{ marginBottom: 8 }}>
-                    <Input ref={el => imeiInputRefs.current[index] = el} placeholder={`Serial #${index + 1}`} value={imei}
-                        onChange={(e) => handleImeiChange(index, e.target.value)} onKeyDown={(e) => handleImeiKeyDown(e, index)} />
-                    </Form.Item>
-                ))}
+                <Divider style={{ margin: '16px 0 12px 0' }} />
+                
+                {/* Header: Title + Live Counter + Clear All */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <Space align="center">
+                    <Title level={5} style={{ margin: 0 }}>IMEI / Serial Numbers</Title>
+                    <Tag color={imeis.length > 0 ? "blue" : "default"}>
+                      Total: {imeis.length} {imeis.length === 1 ? 'Phone' : 'Phones'}
+                    </Tag>
+                  </Space>
+                  {imeis.length > 0 && (
+                    <Button type="link" danger size="small" onClick={() => setImeis([])}>
+                      Clear All
+                    </Button>
+                  )}
+                </div>
+
+                {/* Single Smart Scanner & Bulk Paste Bar */}
+                <Space.Compact style={{ width: '100%', marginBottom: '10px' }}>
+                  <Input
+                    ref={imeiInputRef}
+                    prefix={<BarcodeOutlined style={{ color: token.colorTextSecondary }} />}
+                    placeholder="Scan with barcode gun OR paste list of IMEIs (from Excel / WhatsApp)..."
+                    value={imeiInputText}
+                    onChange={(e) => setImeiInputText(e.target.value)}
+                    onKeyDown={handleImeiInputKeyDown}
+                    onPaste={handleImeiPaste}
+                    autoComplete="off"
+                  />
+                  <Button type="primary" onClick={() => handleAddImeis(imeiInputText)}>
+                    Add
+                  </Button>
+                </Space.Compact>
+
+                {/* Scanned Tags Display Box */}
+                <div style={{
+                  maxHeight: '160px',
+                  overflowY: 'auto',
+                  padding: '10px',
+                  background: token.colorFillQuaternary,
+                  border: `1px solid ${token.colorBorderSecondary}`,
+                  borderRadius: '6px'
+                }}>
+                  {imeis.length === 0 ? (
+                    <Text type="secondary" style={{ fontSize: '13px', display: 'block', textAlign: 'center', padding: '12px 0' }}>
+                      No IMEI entered yet. Scan barcodes with a scanner gun or paste a list above.
+                    </Text>
+                  ) : (
+                    <Space size={[6, 8]} wrap>
+                      {imeis.map((imei, index) => (
+                        <Tag
+                          key={index}
+                          closable
+                          onClose={() => handleRemoveImei(index)}
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: '13px',
+                            borderRadius: '4px',
+                            display: 'inline-flex',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <Text strong style={{ marginRight: '6px', opacity: 0.6 }}>#{index + 1}</Text>
+                          {imei}
+                        </Tag>
+                      ))}
+                    </Space>
+                  )}
                 </div>
             </>
         ) : (
@@ -1233,11 +1380,29 @@ const AddPurchaseForm = () => {
           finalWarehouseId = defaultWh ? defaultWh.id : null;
       }
 
-      // Har item ke sath warehouse_id attach karein
-      const itemsWithLocation = purchaseItems.map(({ name, brand, categories, category_is_imei_based, ...item }) => ({
-          ...item,
-          warehouse_id: finalWarehouseId
-      }));
+      // Har item ke sath warehouse_id attach karein aur Grouped IMEIs ko database ke liye alag alag kholein
+      const itemsWithLocation = [];
+      purchaseItems.forEach(({ name, brand, categories, category_is_imei_based, ...item }) => {
+          if (item.imeis && Array.isArray(item.imeis) && item.imeis.length > 0) {
+              item.imeis.forEach(singleImei => {
+                  const { imeis, ...baseItem } = item;
+                  itemsWithLocation.push({
+                      ...baseItem,
+                      id: crypto.randomUUID(),
+                      local_id: crypto.randomUUID(),
+                      quantity: 1,
+                      available_qty: 1,
+                      imei: singleImei,
+                      warehouse_id: finalWarehouseId
+                  });
+              });
+          } else {
+              itemsWithLocation.push({
+                  ...item,
+                  warehouse_id: finalWarehouseId
+              });
+          }
+      });
 
       const payload = {
         p_local_id: purchaseId,
@@ -1312,31 +1477,29 @@ const AddPurchaseForm = () => {
         Object.entries(record.item_attributes).forEach(([key, value]) => {
             if (value) {
                 const upperKey = key.toUpperCase();
-                // IMEI ya Serial wale labels ko attributes se nikaal dein taake double na ho
                 if (upperKey.includes('IMEI') || upperKey.includes('SERIAL')) return;
-                
-                // Sirf value add karein (e.g., "New" ya "8"), label nahi
                 details.push(value);
             }
         });
     }
     
-    // --- NAYA IZAFA: Batch aur Expiry ko naam ke sath dikhana ---
     if (record.batch_number) details.push(`Batch: ${record.batch_number}`);
     if (record.expiry_date) details.push(`Exp: ${new Date(record.expiry_date).toLocaleDateString()}`);
     
-    // IMEI ko aakhir mein alag se add karein agar mojood ho
-    if (record.imei) details.push(record.imei);
+    const hasMultipleImeis = record.imeis && Array.isArray(record.imeis) && record.imeis.length > 1;
+    if (!hasMultipleImeis && record.imei) {
+        details.push(record.imei);
+    }
     
     return (
-        <span>
+        <div>
             <Text strong>{record.name}</Text>
             {details.length > 0 && (
                 <Text type="secondary" style={{ fontSize: '12px', marginLeft: '8px' }}>
                     {`(${details.join(', ')})`}
                 </Text>
             )}
-        </span>
+        </div>
     );
   }
 
@@ -1369,7 +1532,7 @@ const AddPurchaseForm = () => {
             </Space>
         ) 
     },
-    { title: 'Qty', dataIndex: 'quantity', key: 'quantity', align: 'center' },
+    { title: 'Qty', dataIndex: 'quantity', key: 'quantity', align: 'center', width: 80 },
     { title: 'Purchase Price', dataIndex: 'purchase_price', key: 'purchase_price', align: 'right', render: (price) => formatCurrency(price, profile?.currency) },
     { title: 'Subtotal', key: 'subtotal', align: 'right', render: (_, record) => formatCurrency((record.quantity || 0) * (record.purchase_price || 0), profile?.currency) },
     { 
@@ -1408,10 +1571,10 @@ const AddPurchaseForm = () => {
       <div style={{ padding: isMobile ? '12px 0' : '4px 0', width: '100%' }}>
       <Form form={form} layout="vertical" style={{ marginTop: '0px' }}>
         
-        {/* --- TOP ROW: SUPPLIER & DETAILS (FULL WIDTH) --- */}
+        {/* --- TOP ROW: SUPPLIER & DETAILS (FULL WIDTH - Seamless & Compact) --- */}
         <Card
-          styles={{ body: { padding: isMobile ? '12px' : '16px' } }}
-          style={{ borderRadius: '8px', background: token.colorCardBg, border: `1px solid ${token.colorCardBorder}`, boxShadow: `0 4px 12px ${token.colorCardShadow}`, marginBottom: '16px' }}
+          styles={{ body: { padding: isMobile ? '6px 0' : '2px 0 6px 0' } }}
+          style={{ background: 'transparent', border: 'none', boxShadow: 'none', marginBottom: '8px' }}
         >
           <Row gutter={16}>
             <Col xs={24} md={12} lg={6}>
