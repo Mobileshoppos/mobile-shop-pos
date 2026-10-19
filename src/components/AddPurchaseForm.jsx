@@ -427,21 +427,34 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
       <Form form={form} layout="vertical" autoComplete="off" style={{ marginTop: '24px' }} onValuesChange={handleValuesChange}>
         {isImeiCategory ? (
             <>
+                {/* Upar Wala Hissa: Pricing, Batch, Expiry & Warranty (Clean 4 Columns) */}
                 <Row gutter={16}>
-                    <Col span={isWholesaleActive ? 8 : 12}><Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
-                    <Col span={isWholesaleActive ? 8 : 12}><Form.Item name="sale_price" label={isWholesaleActive ? "Retail Price" : "Sale Price"} rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                    <Col xs={24} sm={12} md={6}>
+                        <Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}>
+                            <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
+                        </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={12} md={6}>
+                        <Form.Item name="sale_price" label={isWholesaleActive ? "Retail Price" : "Sale Price"} rules={[{ required: true }]}>
+                            <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
+                        </Form.Item>
+                    </Col>
                     {isWholesaleActive && (
-                        <Col span={8}><Form.Item name="wholesale_price" label="Wholesale Price"><InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} /></Form.Item></Col>
+                        <Col xs={24} sm={12} md={6}>
+                            <Form.Item name="wholesale_price" label="Wholesale Price">
+                                <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
+                            </Form.Item>
+                        </Col>
                     )}
-                    
+
                     {isBatchExpiryEnabled && (
                         <>
-                            <Col span={12}>
+                            <Col xs={24} sm={12} md={6}>
                                 <Form.Item name="batch_number" label="Batch / Lot Number" tooltip="Optional: Enter batch number for tracking">
                                     <Input placeholder="e.g. BATCH-001" />
                                 </Form.Item>
                             </Col>
-                            <Col span={12}>
+                            <Col xs={24} sm={12} md={6}>
                                 <Form.Item name="expiry_date" label="Expiry Date" tooltip="Optional: When does this item expire?">
                                     <Input type="date" style={{ width: '100%' }} />
                                 </Form.Item>
@@ -449,9 +462,9 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         </>
                     )}
 
-                    {/* --- NAYA CODE: IMEI Warranty Check --- */}
+                    {/* --- IMEI Warranty Check --- */}
                     {profile?.warranty_system_enabled !== false && (
-                    <Col span={12}>
+                    <Col xs={24} sm={12} md={6}>
                         <Form.Item shouldUpdate={(prev, curr) => prev.warranty_days !== curr.warranty_days}>
                             {({ getFieldValue }) => {
                                 const supplierDays = getFieldValue('warranty_days') || 0;
@@ -472,9 +485,28 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         </Form.Item>
                     </Col>
                     )}
-
-                    {attributes.map(attr => <Col span={12} key={attr.id}>{renderAttributeField(attr)}</Col>)}
                 </Row>
+
+                {/* Doosra Hissa: Product Specifications (Clean 4 Columns) */}
+                {attributes && attributes.length > 0 && (
+                    <>
+                        <Divider style={{ margin: '16px 0 12px 0' }}>
+                            <Space size={6} align="center">
+                                <span>Product Specifications</span>
+                                <Tooltip title="Specifications for this IMEI/Serial item.">
+                                    <QuestionCircleOutlined style={{ color: token.colorTextSecondary, cursor: 'pointer', fontSize: '13px' }} />
+                                </Tooltip>
+                            </Space>
+                        </Divider>
+                        <Row gutter={16}>
+                            {attributes.map(attr => (
+                                <Col xs={24} sm={12} md={6} key={attr.id}>
+                                    {renderAttributeField(attr)}
+                                </Col>
+                            ))}
+                        </Row>
+                    </>
+                )}
                 <Divider />
                 <Title level={5}>IMEI / Serial Numbers</Title>
                 <div style={{ maxHeight: '30vh', overflowY: 'auto', padding: '8px' }}>
@@ -489,25 +521,25 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
         ) : (
             <>
                 <Row gutter={16}>
-                    {/* Row 1: Purchase Price, Sale Price, Wholesale, Quantity, aur Variant Barcode (All in Row 1) */}
-                    <Col xs={24} sm={12} md={isWholesaleActive ? 4 : 6}>
+                    {/* Row 1 & 2: Clean 4-Column Layout (md={6}) */}
+                    <Col xs={24} sm={12} md={6}>
                         <Form.Item name="purchase_price" label="Purchase Price" rules={[{ required: true }]}>
                             <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
                         </Form.Item>
                     </Col>
-                    <Col xs={24} sm={12} md={isWholesaleActive ? 5 : 6}>
+                    <Col xs={24} sm={12} md={6}>
                         <Form.Item name="sale_price" label={isWholesaleActive ? "Retail Price" : "Sale Price"} rules={[{ required: true }]}>
                             <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
                         </Form.Item>
                     </Col>
                     {isWholesaleActive && (
-                        <Col xs={24} sm={12} md={5}>
+                        <Col xs={24} sm={12} md={6}>
                             <Form.Item name="wholesale_price" label="Wholesale Price">
                                 <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
                             </Form.Item>
                         </Col>
                     )}
-                    <Col xs={24} sm={12} md={isWholesaleActive ? 4 : 6}>
+                    <Col xs={24} sm={12} md={6}>
                         <Form.Item 
                             name="quantity" 
                             label="Total Quantity" 
@@ -524,7 +556,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         </Form.Item>
                     </Col>
 
-                    {/* Variant Barcode (Now sitting in Row 1 on wide screens) */}
+                    {/* Variant Barcode */}
                     <Col xs={24} sm={12} md={6}>
                         <Form.Item label="Variant Barcode" tooltip="Assign a unique barcode to this variant.">
                             <Space.Compact style={{ width: '100%' }}>
@@ -548,12 +580,12 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                     {/* Batch, Expiry & Warranty (Shown conditionally) */}
                     {isBatchExpiryEnabled && (
                         <>
-                            <Col xs={24} sm={12} md={8}>
+                            <Col xs={24} sm={12} md={6}>
                                 <Form.Item name="batch_number" label="Batch / Lot Number" tooltip="Optional: Enter batch number for tracking">
                                     <Input placeholder="e.g. BATCH-001" />
                                 </Form.Item>
                             </Col>
-                            <Col xs={24} sm={12} md={8}>
+                            <Col xs={24} sm={12} md={6}>
                                 <Form.Item name="expiry_date" label="Expiry Date" tooltip="Optional: When does this item expire?">
                                     <Input type="date" style={{ width: '100%' }} />
                                 </Form.Item>
@@ -562,7 +594,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                     )}
 
                     {profile?.warranty_system_enabled !== false && (
-                    <Col xs={24} sm={12} md={isBatchExpiryEnabled ? 8 : 12}>
+                    <Col xs={24} sm={12} md={6}>
                         <Form.Item shouldUpdate={(prev, curr) => prev.warranty_days !== curr.warranty_days}>
                             {({ getFieldValue }) => {
                                 const supplierDays = getFieldValue('warranty_days') || 0;
@@ -598,7 +630,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         </Divider>
                         {attributes.length > 0 && (
                             <Row gutter={16}>
-                                {attributes.map(attr => <Col xs={24} sm={12} md={8} key={attr.id}>{renderAttributeField(attr)}</Col>)}
+                                {attributes.map(attr => <Col xs={24} sm={12} md={6} key={attr.id}>{renderAttributeField(attr)}</Col>)}
                             </Row>
                         )}
                         <div style={{ marginTop: attributes.length > 0 ? '8px' : '0' }}>
