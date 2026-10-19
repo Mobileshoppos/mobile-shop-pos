@@ -576,7 +576,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                 </Row>
 
                 {/* Doosra Hissa: Product Specifications (Clean 4 Columns) */}
-                {attributes && attributes.length > 0 && (
+                {attributes && (
                     <>
                         <Divider style={{ margin: '16px 0 12px 0' }}>
                             <Space size={6} align="center">
@@ -587,11 +587,27 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                             </Space>
                         </Divider>
                         <Row gutter={16}>
-                            {attributes.map(attr => (
+                            {(attributes || []).map(attr => (
                                 <Col xs={24} sm={12} md={6} key={attr.id}>
                                     {renderAttributeField(attr)}
                                 </Col>
                             ))}
+                            <Col xs={24} sm={12} md={6}>
+                              <Form.Item label=" " colon={false}>
+                                <Button 
+                                  type="dashed" 
+                                  block 
+                                  icon={<PlusOutlined />} 
+                                  onClick={() => {
+                                    addFieldForm.resetFields();
+                                    addFieldForm.setFieldsValue({ attribute_type: 'text', is_required: false });
+                                    setIsAddFieldModalOpen(true);
+                                  }}
+                                >
+                                  Add Custom Field
+                                </Button>
+                              </Form.Item>
+                            </Col>
                         </Row>
                     </>
                 )}
@@ -775,25 +791,29 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                                 </Tooltip>
                             </Space>
                         </Divider>
-                        {attributes.length > 0 && (
-                            <Row gutter={16}>
-                                {attributes.map(attr => <Col xs={24} sm={12} md={6} key={attr.id}>{renderAttributeField(attr)}</Col>)}
-                            </Row>
-                        )}
-                        <div style={{ marginTop: attributes.length > 0 ? '8px' : '0' }}>
-                          <Button 
-                            type="dashed" 
-                            block 
-                            icon={<PlusOutlined />} 
-                            onClick={() => {
-                              addFieldForm.resetFields();
-                              addFieldForm.setFieldsValue({ attribute_type: 'text', is_required: false });
-                              setIsAddFieldModalOpen(true);
-                            }}
-                          >
-                            Add Custom Field
-                          </Button>
-                        </div>
+                        <Row gutter={16}>
+                            {(attributes || []).map(attr => (
+                                <Col xs={24} sm={12} md={6} key={attr.id}>
+                                    {renderAttributeField(attr)}
+                                </Col>
+                            ))}
+                            <Col xs={24} sm={12} md={6}>
+                              <Form.Item label=" " colon={false}>
+                                <Button 
+                                  type="dashed" 
+                                  block 
+                                  icon={<PlusOutlined />} 
+                                  onClick={() => {
+                                    addFieldForm.resetFields();
+                                    addFieldForm.setFieldsValue({ attribute_type: 'text', is_required: false });
+                                    setIsAddFieldModalOpen(true);
+                                  }}
+                                >
+                                  Add Custom Field
+                                </Button>
+                              </Form.Item>
+                            </Col>
+                        </Row>
                     </>
                 )}
             </>
