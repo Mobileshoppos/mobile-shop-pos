@@ -429,6 +429,13 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         data.staffPerformance.forEach(s => finalData.push([s.name, s.sale_count, s.items_sold, s.total_sales, s.profit]));
         finalData.push([]);
 
+        // --- NAYA IZAFA: Group Performance Export ---
+        finalData.push(["CUSTOMER GROUPS PERFORMANCE"]);
+        finalData.push(["Customer Group", "Total Invoices", `Total Revenue (${curr})`, `Net Profit (${curr})`]);
+        data.groupPerformance.forEach(g => finalData.push([g.name, g.sale_count, g.total_sales, g.profit]));
+        finalData.push([]);
+        // -------------------------------------------
+
         finalData.push(["TOP SELLING PRODUCTS"]);
         finalData.push(["Product Name", "Quantity Sold", `Total Revenue (${curr})`, `Total Profit (${curr})`]);
         data.topProductsByQty.forEach(p => finalData.push([p.name, p.qty, p.revenue, p.profit]));
@@ -612,6 +619,12 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
         addTable("STAFF PERFORMANCE", ["Staff Name", "Invoices", "Units Sold", "Revenue", "Profit"], 
           data.staffPerformance.map(s => [s.name, s.sale_count, s.items_sold, formatCurrency(s.total_sales, curr), formatCurrency(s.profit, curr)])
         );
+
+        // --- NAYA IZAFA: Group Performance PDF Export ---
+        addTable("CUSTOMER GROUPS PERFORMANCE", ["Customer Group", "Total Invoices", "Total Revenue", "Net Profit"], 
+          data.groupPerformance.map(g => [g.name, g.sale_count, formatCurrency(g.total_sales, curr), formatCurrency(g.profit, curr)])
+        );
+        // ------------------------------------------------
 
         addTable("TOP SELLING PRODUCTS", ["Product Name", "Quantity Sold", "Total Revenue", "Total Profit"], 
           data.topProductsByQty.map(p => [p.name, p.qty, formatCurrency(p.revenue, curr), formatCurrency(p.profit, curr)])
@@ -834,6 +847,11 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
       // 2. Sales & Staff Sheet
       if (slData.staffPerformance.length > 0) {
         sheets.push({ name: 'Staff Performance', data: slData.staffPerformance });
+      }
+
+      // 2.5 NAYA IZAFA: Group Performance Sheet
+      if (slData.groupPerformance && slData.groupPerformance.length > 0) {
+        sheets.push({ name: 'Customer Groups Performance', data: slData.groupPerformance });
       }
 
       // 3. Top Products Sheet
@@ -1541,6 +1559,54 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
                     key: 'profit', 
                     align: 'right', 
                     render: (val) => <Text strong style={{ color: productFilter === 'profit' ? token.colorAmountPositive : 'inherit', opacity: productFilter === 'profit' ? 1 : 0.6, whiteSpace: 'nowrap' }}>{formatCurrency(val, profile?.currency)}</Text> 
+                  }
+                ]}
+              />
+            </Card>
+          </Col>
+        </Row>
+
+        {/* --- NAYA IZAFA: Group Performance Table --- */}
+        <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
+          <Col xs={24} lg={24}>
+            <Card 
+              title={<Text strong style={{ fontSize: '16px', color: token.colorCardHeadingsText }}><TeamOutlined /> Customer Groups Performance</Text>} 
+              style={cardStyle} 
+              styles={{ body: { padding: 0 } }}
+            >
+              <Table
+                dataSource={salesData.groupPerformance}
+                rowKey="name"
+                pagination={false}
+                size="small"
+                scroll={{ x: 'max-content' }}
+                columns={[
+                  { 
+                    title: 'Customer Group', 
+                    dataIndex: 'name', 
+                    key: 'name',
+                    render: (text) => <Text strong style={{ whiteSpace: 'nowrap' }}>{text}</Text>
+                  },
+                  { 
+                    title: 'Total Invoices', 
+                    dataIndex: 'sale_count', 
+                    key: 'sale_count', 
+                    align: 'center', 
+                    render: (val) => <Tag style={{ margin: 0, whiteSpace: 'nowrap' }}>{val}</Tag> 
+                  },
+                  { 
+                    title: 'Total Revenue', 
+                    dataIndex: 'total_sales', 
+                    key: 'total_sales', 
+                    align: 'right', 
+                    render: (val) => <Text strong style={{ whiteSpace: 'nowrap' }}>{formatCurrency(val, profile?.currency)}</Text> 
+                  },
+                  { 
+                    title: 'Net Profit', 
+                    dataIndex: 'profit', 
+                    key: 'profit', 
+                    align: 'right', 
+                    render: (val) => <Text strong style={{ color: token.colorAmountPositive, whiteSpace: 'nowrap' }}>{formatCurrency(val, profile?.currency)}</Text> 
                   }
                 ]}
               />

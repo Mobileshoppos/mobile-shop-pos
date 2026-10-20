@@ -2436,6 +2436,21 @@ async addCustomer(customerData) {
     const staffMap = {};
     staffMembers.forEach(st => { staffMap[st.id] = st.name; });
 
+    // --- NAYA IZAFA: Group Performance Logic Setup ---
+    const allCustomers = await db.customers.toArray();
+    const allGroups = await db.customer_groups.toArray();
+    const customerGroupMap = {}; 
+    const defaultGroup = allGroups.find(g => g.is_default)?.name || 'Retail / Walk-in';
+    
+    allCustomers.forEach(c => {
+        const group = allGroups.find(g => g.id === c.customer_group_id);
+        customerGroupMap[c.id] = group ? group.name : (c.customer_group || defaultGroup);
+    });
+
+    const groupPerformanceMap = {};
+    const saleToGroupMap = {};
+    // -----------------------------------------------
+
     const staffPerformanceMap = {};
     const saleToStaffMap = {};
 
@@ -2447,6 +2462,16 @@ async addCustomer(customerData) {
       }
       staffPerformanceMap[staffName].sale_count += 1;
       staffPerformanceMap[staffName].total_sales += ((s.total_amount || 0) - (s.tax_amount || 0));
+
+      // --- NAYA IZAFA: Group Performance Calculation ---
+      const groupName = s.customer_id ? (customerGroupMap[s.customer_id] || defaultGroup) : defaultGroup;
+      saleToGroupMap[s.id] = groupName;
+      if (!groupPerformanceMap[groupName]) {
+          groupPerformanceMap[groupName] = { name: groupName, total_sales: 0, sale_count: 0, items_sold: 0, profit: 0 };
+      }
+      groupPerformanceMap[groupName].sale_count += 1;
+      groupPerformanceMap[groupName].total_sales += ((s.total_amount || 0) - (s.tax_amount || 0));
+      // -----------------------------------------------
     });
 
     // Returns ko staff se minus karein
@@ -2455,6 +2480,13 @@ async addCustomer(customerData) {
         if (staffPerformanceMap[staffName]) {
             staffPerformanceMap[staffName].total_sales -= ((r.total_refund_amount || 0) - (r.tax_refunded || 0));
         }
+
+        // --- NAYA IZAFA: Returns ko Group se minus karein ---
+        const groupName = r.customer_id ? (customerGroupMap[r.customer_id] || defaultGroup) : defaultGroup;
+        if (groupPerformanceMap[groupName]) {
+            groupPerformanceMap[groupName].total_sales -= ((r.total_refund_amount || 0) - (r.tax_refunded || 0));
+        }
+        // ----------------------------------------------------
     });
 
     saleItems.forEach(item => {
@@ -2465,10 +2497,24 @@ async addCustomer(customerData) {
           const revenue = (Number(item.price_at_sale) || 0) * (item.quantity || 1);
           staffPerformanceMap[staffName].profit += (revenue - cost);
       }
+
+      // --- NAYA IZAFA: Group Profit Calculation ---
+      const groupName = saleToGroupMap[item.sale_id];
+      if (groupName && groupPerformanceMap[groupName]) {
+          groupPerformanceMap[groupName].items_sold += (item.quantity || 1);
+          const cost = (Number(item.purchase_price) || 0) * (item.quantity || 1);
+          const revenue = (Number(item.price_at_sale) || 0) * (item.quantity || 1);
+          groupPerformanceMap[groupName].profit += (revenue - cost);
+      }
+      // --------------------------------------------
     });
 
     // Yeh line define karti hai staffPerformance ko (Jo pehle miss ho gayi thi)
     const staffPerformance = Object.values(staffPerformanceMap).sort((a, b) => b.total_sales - a.total_sales);
+
+    // --- NAYA IZAFA: Group Performance Array ---
+    const groupPerformance = Object.values(groupPerformanceMap).sort((a, b) => b.total_sales - a.total_sales);
+    // -------------------------------------------
 
     // 5. Top Selling Products Logic
     const productSalesMap = {};
@@ -2571,6 +2617,7 @@ async addCustomer(customerData) {
       totalTaxRefunded,
       netTax,
       staffPerformance,
+      groupPerformance, // <--- NAYA IZAFA
       topProductsByQty,
       topProductsByRev,
       topProductsByProfit,
