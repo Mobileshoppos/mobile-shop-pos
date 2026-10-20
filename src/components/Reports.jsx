@@ -1617,7 +1617,6 @@ const [profitChartFilter, setProfitChartFilter] = useState('both'); // Naya: Pro
     );
   };
 
-  // --- NAYA IZAFA: PROFIT & LOSS TAB UI ---
   // --- UPDATED: PROFESSIONAL PROFIT & LOSS TAB UI ---
   const renderProfitLossTab = () => {
     if (loading || !profitLossData) return <div style={{ textAlign: 'center', padding: '50px' }}><Spin size="large" /></div>;

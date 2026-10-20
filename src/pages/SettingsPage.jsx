@@ -169,6 +169,10 @@ const SettingsPage = () => {
   const handleAddRegister = async () => {
     if (!regName) { message.error("Please enter a name"); return; }
     
+    // NAYA IZAFA: Duplicate Check
+    const isDuplicate = registers.some(r => r.name.toLowerCase() === regName.toLowerCase() && (!editingRegister || r.id !== editingRegister.id));
+    if (isDuplicate) { message.error(`A counter named "${regName}" already exists!`); return; }
+    
     const newReg = {
       id: editingRegister ? editingRegister.id : crypto.randomUUID(),
       user_id: user.id,
@@ -221,6 +225,10 @@ const SettingsPage = () => {
   const handleAddWarehouse = async () => {
     if (!warehouseName) { message.error("Please enter a warehouse name"); return; }
     
+    // NAYA IZAFA: Duplicate Check
+    const isDuplicate = warehouses.some(w => w.name.toLowerCase() === warehouseName.toLowerCase() && (!editingWarehouse || w.id !== editingWarehouse.id));
+    if (isDuplicate) { message.error(`A warehouse named "${warehouseName}" already exists!`); return; }
+
     const newWh = {
       id: editingWarehouse ? editingWarehouse.id : crypto.randomUUID(),
       user_id: user.id,
@@ -265,6 +273,10 @@ const SettingsPage = () => {
   const handleAddAccount = async () => {
     if (!accountName) { message.error("Please enter an account name"); return; }
     
+    // NAYA IZAFA: Duplicate Check
+    const isDuplicate = paymentAccounts.some(a => a.name.toLowerCase() === accountName.toLowerCase() && (!editingAccount || a.id !== editingAccount.id));
+    if (isDuplicate) { message.error(`An account named "${accountName}" already exists!`); return; }
+
     const newAcc = {
       id: editingAccount ? editingAccount.id : crypto.randomUUID(),
       user_id: user.id,

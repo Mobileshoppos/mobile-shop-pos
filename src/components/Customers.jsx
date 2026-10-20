@@ -2637,6 +2637,10 @@ const handleCloseInvoiceSearchModal = () => {
         layout="vertical"
         onFinish={async (values) => {
           try {
+            // NAYA IZAFA: Duplicate Group Name Check
+            const isDuplicate = customerGroups.some(g => g.name.toLowerCase() === values.name.toLowerCase() && (!editingGroup || g.id !== editingGroup.id));
+            if (isDuplicate) { message.error(`A group named "${values.name}" already exists!`); return; }
+
             if (editingGroup) {
               await DataService.updateCustomerGroup(editingGroup.id, values);
               message.success('Group updated successfully!');
