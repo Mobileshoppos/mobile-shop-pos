@@ -118,6 +118,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
               purchase_price: initialValues.purchase_price,
               sale_price: initialValues.sale_price,
               wholesale_price: initialValues.wholesale_price,
+              distributor_price: initialValues.distributor_price, // <--- NAYA IZAFA (Distributor Price)
               quantity: initialValues.quantity || 1,
               barcode: initialValues.barcode,
               warranty_days: initialValues.warranty_days ?? product?.default_warranty_days ?? 0,
@@ -156,6 +157,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
             purchase_price: product.purchase_price || '', 
             sale_price: product.sale_price || '', 
             wholesale_price: product.wholesale_price || '', 
+            distributor_price: product.distributor_price || '', // <--- NAYA IZAFA (Distributor Price)
             warranty_days: product.default_warranty_days || 0,
           };
           if (isImeiCategory) {
@@ -356,6 +358,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                 purchase_price: values.purchase_price,
                 sale_price: values.sale_price,
                 wholesale_price: values.wholesale_price,
+                distributor_price: values.distributor_price || null, // <--- NAYA IZAFA (Distributor Price)
                 warranty_days: values.warranty_days || 0,
                 batch_number: values.batch_number || null,
                 expiry_date: values.expiry_date || null,
@@ -417,6 +420,7 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                 purchase_price: values.purchase_price,
                 sale_price: values.sale_price,
                 wholesale_price: values.wholesale_price,
+                distributor_price: values.distributor_price || null, // <--- NAYA IZAFA (Distributor Price)
                 warranty_days: values.warranty_days || 0,
                 batch_number: values.batch_number || null,
                 expiry_date: values.expiry_date || null,
@@ -528,11 +532,18 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         </Form.Item>
                     </Col>
                     {isWholesaleActive && (
-                        <Col xs={24} sm={12} md={6}>
-                            <Form.Item name="wholesale_price" label="Wholesale Price">
-                                <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
-                            </Form.Item>
-                        </Col>
+                        <>
+                            <Col xs={24} sm={12} md={6}>
+                                <Form.Item name="wholesale_price" label="Wholesale Price">
+                                    <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={12} md={6}>
+                                <Form.Item name="distributor_price" label="Distributor Price">
+                                    <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
+                                </Form.Item>
+                            </Col>
+                        </>
                     )}
 
                     {isBatchExpiryEnabled && (
@@ -696,11 +707,18 @@ const AddItemModal = ({ visible, onCancel, onOk, product, attributes, initialVal
                         </Form.Item>
                     </Col>
                     {isWholesaleActive && (
-                        <Col xs={24} sm={12} md={6}>
-                            <Form.Item name="wholesale_price" label="Wholesale Price">
-                                <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
-                            </Form.Item>
-                        </Col>
+                        <>
+                            <Col xs={24} sm={12} md={6}>
+                                <Form.Item name="wholesale_price" label="Wholesale Price">
+                                    <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={12} md={6}>
+                                <Form.Item name="distributor_price" label="Distributor Price">
+                                    <InputNumber style={{ width: '100%' }} prefix={profile?.currency ? `${profile.currency} ` : ''} />
+                                </Form.Item>
+                            </Col>
+                        </>
                     )}
                     <Col xs={24} sm={12} md={6}>
                         <Form.Item 
@@ -918,6 +936,7 @@ const AddPurchaseForm = () => {
   const [supplierForm] = Form.useForm();
   const [selectedProductAttributes, setSelectedProductAttributes] = useState([]);
   const [editingItemIndex, setEditingItemIndex] = useState(null);
+  const [hasHandledInitialData, setHasHandledInitialData] = useState(false); // <--- NAYA IZAFA: Modal ko do baar khulne se rokne ke liye
 
   // --- NAYA IZAFA: Catalog States ---
   const [catalogSearch, setCatalogSearch] = useState('');
@@ -1176,7 +1195,8 @@ const AddPurchaseForm = () => {
 
   // --- INVENTORY ADD LOGIC (Existing) ---
   useEffect(() => {
-    if (visible && initialData && products.length > 0 && !editingPurchase) {
+    // NAYA IZAFA: !hasHandledInitialData ki shart lagayi taake sirf pehli dafa chale
+    if (visible && initialData && products.length > 0 && !editingPurchase && !hasHandledInitialData) {
       const targetProduct = products.find(p => p.id === initialData.product_id);
       if (targetProduct) {
           setSelectedProduct(targetProduct);
@@ -1185,12 +1205,15 @@ const AddPurchaseForm = () => {
              // NAYA IZAFA: Ab hum parent aur child dono ke attributes layenge
              const data = await fetchInheritedAttributes(targetProduct.category_id);
              setSelectedProductAttributes(data || []);
-             setTimeout(() => { setIsItemModalVisible(true); }, 200);
+             setTimeout(() => { 
+                 setIsItemModalVisible(true); 
+                 setHasHandledInitialData(true); // <--- NAYA IZAFA: Lock laga diya
+             }, 200);
           };
           fetchAttributes();
       }
     }
-  }, [visible, initialData, products, form, editingPurchase]);
+  }, [visible, initialData, products, form, editingPurchase, hasHandledInitialData]);
 
   // --- RESET ON CLOSE ---
   useEffect(() => {

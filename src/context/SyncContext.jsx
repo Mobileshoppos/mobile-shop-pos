@@ -136,6 +136,10 @@ export const SyncProvider = ({ children }) => {
       const { data: paymentAccounts } = await supabase.from('payment_accounts').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
       await smartPut('payment_accounts', paymentAccounts, pendingIds);
 
+      // 0.2 Customer Groups (Retail, Wholesale, Distributor) - NAYA IZAFA
+      const { data: customerGroups } = await supabase.from('customer_groups').select('*').eq('user_id', user.id).gt('updated_at', lastSyncTime);
+      await smartPut('customer_groups', customerGroups, pendingIds);
+
       // 1. Categories
       const { data: categories } = await supabase.from('categories').select('*').or(`user_id.eq.${user.id},user_id.is.null`).gt('updated_at', lastSyncTime);
       await smartPut('categories', categories, pendingIds);
@@ -244,7 +248,7 @@ export const SyncProvider = ({ children }) => {
       await db.user_settings.put({ id: 'last_sync', value: serverNow });
       console.log('Syncing completed successfully!');
       // Naya: Agar koi bhi data download hua hai to UI ko signal dein
-      if (categories?.length > 0 || products?.length > 0 || inventoryItems?.length > 0 || customers?.length > 0) {
+      if (categories?.length > 0 || products?.length > 0 || inventoryItems?.length > 0 || customers?.length > 0 || customerGroups?.length > 0) {
         window.dispatchEvent(new CustomEvent('local-db-updated'));
       }
       
@@ -459,6 +463,23 @@ export const SyncProvider = ({ children }) => {
             else if (item.table_name === 'customers' && item.action === 'delete') {
                 const realId = idMappingRef.current[item.data.id] || item.data.id;
                 const { error: supError } = await supabase.from('customers').delete().eq('id', realId);
+                error = supError;
+            }
+
+            // --- Customer Groups Sync (NAYA IZAFA) ---
+            else if (item.table_name === 'customer_groups' && item.action === 'create') {
+                const { error: supError } = await supabase
+                    .from('customer_groups')
+                    .upsert([item.data], { onConflict: 'id' });
+                error = supError;
+            }
+            else if (item.table_name === 'customer_groups' && item.action === 'update') {
+                const { id, ...updates } = item.data;
+                const { error: supError } = await supabase.from('customer_groups').update(updates).eq('id', id);
+                error = supError;
+            }
+            else if (item.table_name === 'customer_groups' && item.action === 'delete') {
+                const { error: supError } = await supabase.from('customer_groups').delete().eq('id', item.data.id);
                 error = supError;
             }
 

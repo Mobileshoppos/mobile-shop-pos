@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Typography, Table, Button, Modal, Form, Input, App as AntApp, Space, Spin, InputNumber, Card, Descriptions, Checkbox, List, Row, Col, Divider, Radio, Tag, Dropdown, Menu, Tooltip, Select, theme, Switch, ConfigProvider, Statistic
 } from 'antd';
-import { UserSwitchOutlined, UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined, MoreOutlined, EditOutlined, ReloadOutlined, InboxOutlined, DeleteOutlined, SearchOutlined, LockOutlined, PrinterOutlined } from '@ant-design/icons';
+import { UserSwitchOutlined, UserAddOutlined, EyeOutlined, DollarCircleOutlined, SwapOutlined, MoreOutlined, EditOutlined, ReloadOutlined, InboxOutlined, DeleteOutlined, SearchOutlined, LockOutlined, PrinterOutlined, TeamOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
 import { generatePaymentReceipt } from '../utils/receiptGenerator';
 import { printThermalPaymentReceipt } from '../utils/thermalPrinter';
 import { supabase } from '../supabaseClient';
@@ -67,6 +67,10 @@ const Customers = () => {
   const [availableCities, setAvailableCities] = useState([]); 
   const [selectedGroupFilter, setSelectedGroupFilter] = useState(null); // <--- NAYA IZAFA
   const [availableGroups, setAvailableGroups] = useState([]); // <--- NAYA IZAFA
+  const [customerGroups, setCustomerGroups] = useState([]); // <--- NAYA IZAFA: Customer Groups List
+  const [isGroupsModalOpen, setIsGroupsModalOpen] = useState(false); // <--- NAYA IZAFA: Groups Management Modal
+  const [groupForm] = Form.useForm(); // <--- NAYA IZAFA: Group Form
+  const [editingGroup, setEditingGroup] = useState(null); // <--- NAYA IZAFA: Group Editing
   const [ledgerData, setLedgerData] = useState([]);
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -223,6 +227,15 @@ const Customers = () => {
       
       setCustomers(data.sort((a, b) => a.name.localeCompare(b.name)));
 
+      // NAYA IZAFA: Customer Groups Master List Load Karna
+      if (DataService.getCustomerGroups) {
+          const groupsMaster = await DataService.getCustomerGroups();
+          setCustomerGroups(groupsMaster);
+          if (groupsMaster.length > 0) {
+              setAvailableGroups(groupsMaster.map(g => g.name));
+          }
+      }
+
       if (DataService.getPaymentAccounts) {
           const accountsData = await DataService.getPaymentAccounts();
           setPaymentAccounts(accountsData);
@@ -267,8 +280,8 @@ const Customers = () => {
     setEditingCustomer(customer);
     addForm.setFieldsValue({
       ...customer,
-      // Form mein tags ke liye isay wapis array banana parta hai
-      customer_group: customer.customer_group ? customer.customer_group.split(', ') : []
+      customer_group_id: customer.customer_group_id || customerGroups.find(g => g.name.toLowerCase() === (customer.customer_group || '').toLowerCase())?.id || null,
+      customer_group: customer.customer_group || null
     });
     setIsAddModalOpen(true);
   };
@@ -320,11 +333,14 @@ const Customers = () => {
       values.phone_number = values.phone_number.replace(/[^\d+]/g, '');
     }
 
-    // --- NAYA IZAFA: Group ko array se nikal kar plain text banana ---
-    if (Array.isArray(values.customer_group)) {
+    // --- NAYA IZAFA: Group ID aur Group Name dono ko aapas mein bind karna ---
+    const matchedGroup = customerGroups.find(g => g.id === values.customer_group_id);
+    if (matchedGroup) {
+        values.customer_group = matchedGroup.name;
+    } else if (Array.isArray(values.customer_group)) {
         values.customer_group = values.customer_group.join(', ');
     }
-    // ----------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     try {
       const existingCustomerName = await DataService.checkDuplicateCustomer(values.phone_number, editingCustomer?.id);
@@ -333,17 +349,30 @@ const Customers = () => {
         return;
       }
 
+      // --- NAYA IZAFA: Default Retail Group Fallback ---
+      const defaultGroup = customerGroups.find(g => g.is_default);
+      if (!values.customer_group_id && defaultGroup) {
+          values.customer_group_id = defaultGroup.id;
+          values.customer_group = defaultGroup.name;
+      }
+
       // --- SMART LOGIC: Default Limit vs Unlimited ---
       let finalCreditLimit = values.credit_limit;
-      const defaultLimit = profile?.default_credit_limit || 0;
 
       if (profile?.enable_customer_credit_limits) {
           if (finalCreditLimit === undefined || finalCreditLimit === null) {
-              if (activeStaff && !can('can_set_credit_limit')) {
-                  // Agar edit kar raha hai aur permission nahi hai, to purani limit rehne do
-                  finalCreditLimit = editingCustomer ? editingCustomer.credit_limit : defaultLimit;
+              // Pehle check karein ke jo group laga hai (chahe user ne lagaya ya default laga), uski limit kya hai
+              const matchedGroup = customerGroups.find(g => g.id === values.customer_group_id);
+              if (matchedGroup && matchedGroup.default_credit_limit !== null && matchedGroup.default_credit_limit !== undefined) {
+                  finalCreditLimit = matchedGroup.default_credit_limit;
               } else {
-                  finalCreditLimit = null; // Unlimited
+                  const defaultLimit = profile?.default_credit_limit || 0;
+                  if (activeStaff && !can('can_set_credit_limit')) {
+                      // Agar edit kar raha hai aur permission nahi hai, to purani limit rehne do
+                      finalCreditLimit = editingCustomer ? editingCustomer.credit_limit : defaultLimit;
+                  } else {
+                      finalCreditLimit = null; // Unlimited
+                  }
               }
           }
       }
@@ -1751,6 +1780,19 @@ const handleCloseInvoiceSearchModal = () => {
               />
           </div>
 
+          {/* NAYA IZAFA: Manage Customer Groups Button */}
+          <Button
+              icon={<TeamOutlined />}
+              onClick={() => {
+                  setEditingGroup(null);
+                  groupForm.resetFields();
+                  setIsGroupsModalOpen(true);
+              }}
+              style={{ width: isMobile ? '100%' : 'auto' }}
+          >
+              Customer Groups
+          </Button>
+
           {/* Add Customer Button */}
           {(() => {
               const limits = getPlanLimits(profile?.subscription_tier);
@@ -1945,12 +1987,40 @@ const handleCloseInvoiceSearchModal = () => {
         </Col>
 
         <Col xs={24} sm={12} md={8}>
-          <Form.Item name="customer_group" label="Customer Group" tooltip="Assign to a specific route or category">
-            <Select 
-              mode="tags" 
-              placeholder="e.g. Wholesale, Route A" 
-              options={availableGroups.map(g => ({ label: g, value: g }))}
-            />
+          <Form.Item label="Customer Group" tooltip="Group decides the customer pricing tier (Retail, Wholesale, Distributor) and credit limit.">
+            <Space.Compact style={{ width: '100%' }}>
+              <Form.Item name="customer_group_id" noStyle>
+                <Select 
+                  placeholder="Select Group" 
+                  allowClear
+                  onChange={(groupId) => {
+                    const grp = customerGroups.find(g => g.id === groupId);
+                    if (grp) {
+                      addForm.setFieldsValue({ customer_group: grp.name });
+                      if (grp.default_credit_limit !== undefined && grp.default_credit_limit !== null) {
+                        addForm.setFieldsValue({ credit_limit: grp.default_credit_limit });
+                      }
+                    } else {
+                      addForm.setFieldsValue({ customer_group: null });
+                    }
+                  }}
+                  options={customerGroups.map(g => ({ 
+                    label: `${g.name} (${g.pricing_tier.toUpperCase()})`, 
+                    value: g.id 
+                  }))}
+                />
+              </Form.Item>
+              <Tooltip title="Manage Groups">
+                <Button 
+                  icon={<SettingOutlined />} 
+                  onClick={() => {
+                    setEditingGroup(null);
+                    groupForm.resetFields();
+                    setIsGroupsModalOpen(true);
+                  }} 
+                />
+              </Tooltip>
+            </Space.Compact>
           </Form.Item>
         </Col>
 
@@ -2545,6 +2615,179 @@ const handleCloseInvoiceSearchModal = () => {
       onChange={e => setMasterPinInput(e.target.value.replace(/[^0-9]/g, ''))}
       onPressEnter={handleMasterPinVerify}
       autoFocus
+    />
+  </div>
+</Modal>
+
+{/* --- NAYA IZAFA: Customer Groups Management Modal --- */}
+<Modal
+  title="Manage Customer Groups"
+  open={isGroupsModalOpen}
+  onCancel={() => { setIsGroupsModalOpen(false); setEditingGroup(null); groupForm.resetFields(); }}
+  footer={null}
+  width={isMobile ? '95%' : '80%'}
+  style={{ top: 20 }}
+  destroyOnHidden
+>
+  <div style={{ marginTop: '12px' }}>
+    {/* Form to Add/Edit Group */}
+    <Card size="small" style={{ marginBottom: '16px', background: token.colorFillAlter }}>
+      <Form
+        form={groupForm}
+        layout="vertical"
+        onFinish={async (values) => {
+          try {
+            if (editingGroup) {
+              await DataService.updateCustomerGroup(editingGroup.id, values);
+              message.success('Group updated successfully!');
+            } else {
+              await DataService.addCustomerGroup({
+                ...values,
+                user_id: user.id
+              });
+              message.success('New Group added successfully!');
+            }
+            groupForm.resetFields();
+            setEditingGroup(null);
+            const freshGroups = await DataService.getCustomerGroups();
+            setCustomerGroups(freshGroups);
+            setAvailableGroups(freshGroups.map(g => g.name));
+            processSyncQueue();
+          } catch (err) {
+            message.error(err.message);
+          }
+        }}
+      >
+        <Row gutter={12} align="bottom">
+          <Col xs={24} sm={8}>
+            <Form.Item name="name" label="Group Name" rules={[{ required: true, message: 'Enter name' }]} style={{ marginBottom: isMobile ? 8 : 0 }}>
+              <Input placeholder="e.g. VIP Dealers" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={8}>
+            <Form.Item name="pricing_tier" label="Price Tier" rules={[{ required: true }]} initialValue="retail" style={{ marginBottom: isMobile ? 8 : 0 }}>
+              <Select>
+                <Select.Option value="retail">Retail (Regular)</Select.Option>
+                <Select.Option value="wholesale">Wholesale</Select.Option>
+                <Select.Option value="distributor">Distributor</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={8}>
+            <Form.Item name="default_credit_limit" label="Default Credit Limit (Rs)" style={{ marginBottom: isMobile ? 8 : 0 }}>
+              <InputNumber style={{ width: '100%' }} min={0} placeholder="e.g. 100000" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          {editingGroup && (
+            <Button size="small" onClick={() => { setEditingGroup(null); groupForm.resetFields(); }}>
+              Cancel
+            </Button>
+          )}
+          <Button type="primary" htmlType="submit" size="small" icon={<PlusOutlined />}>
+            {editingGroup ? 'Update Group' : 'Add Group'}
+          </Button>
+        </div>
+      </Form>
+    </Card>
+
+    {/* Groups List Table */}
+    <Table
+      size="small"
+      rowKey="id"
+      pagination={false}
+      scroll={{ x: 'max-content' }}
+      dataSource={customerGroups}
+      columns={[
+        {
+          title: 'Group Name',
+          dataIndex: 'name',
+          render: (text, record) => (
+            <Space>
+              <Text strong>{text}</Text>
+              {record.is_default && <Tag color="blue">Default</Tag>}
+            </Space>
+          )
+        },
+        {
+          title: 'Price Tier',
+          dataIndex: 'pricing_tier',
+          align: 'center',
+          render: (tier) => {
+            const color = tier === 'distributor' ? 'gold' : tier === 'wholesale' ? 'purple' : 'cyan';
+            return <Tag color={color} style={{ fontWeight: 'bold' }}>{tier.toUpperCase()}</Tag>;
+          }
+        },
+        {
+          title: 'Default Credit Limit',
+          dataIndex: 'default_credit_limit',
+          align: 'right',
+          render: (limit) => {
+            // Agar limit 0 ho to saaf dikhayein ke yeh Cash Only hai, udhaar band hai
+            if (limit === 0 || limit === '0') {
+              return <Tag color="default">Rs. 0 (Cash Only)</Tag>;
+            }
+            // Agar koi raqam darj ho (maslan 100,000)
+            if (limit !== null && limit !== undefined && limit !== '') {
+              return formatCurrency(limit, profile?.currency);
+            }
+            // Sirf tab Unlimited dikhayein jab dabba waqayi khali ho
+            return <Tag color="green">Unlimited Credit</Tag>;
+          }
+        },
+        {
+          title: 'Action',
+          key: 'action',
+          align: 'center',
+          width: 90,
+          render: (_, record) => (
+            <Space size={4}>
+              <Button 
+                type="text" 
+                size="small" 
+                icon={<EditOutlined style={{ color: token.colorPrimary }} />} 
+                onClick={() => {
+                  setEditingGroup(record);
+                  groupForm.setFieldsValue({
+                    name: record.name,
+                    pricing_tier: record.pricing_tier,
+                    default_credit_limit: record.default_credit_limit
+                  });
+                }} 
+              />
+              {!record.is_default && (
+                <Button 
+                  type="text" 
+                  size="small" 
+                  danger 
+                  icon={<DeleteOutlined />} 
+                  onClick={() => {
+                    modal.confirm({
+                      title: `Delete group "${record.name}"?`,
+                      content: 'Are you sure you want to delete this customer group?',
+                      okText: 'Yes, Delete',
+                      okType: 'danger',
+                      onOk: async () => {
+                        try {
+                          await DataService.deleteCustomerGroup(record.id);
+                          message.success('Group deleted');
+                          const fresh = await DataService.getCustomerGroups();
+                          setCustomerGroups(fresh);
+                          setAvailableGroups(fresh.map(g => g.name));
+                          processSyncQueue();
+                        } catch (e) {
+                          message.error(e.message);
+                        }
+                      }
+                    });
+                  }} 
+                />
+              )}
+            </Space>
+          )
+        }
+      ]}
     />
   </div>
 </Modal>

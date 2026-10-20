@@ -1000,12 +1000,13 @@ const DataService = {
       barcode: updates.barcode, 
       sale_price: updates.sale_price,
       wholesale_price: updates.wholesale_price, // <--- NAYA IZAFA
+      distributor_price: updates.distributor_price, // <--- NAYA IZAFA (Distributor Price)
       low_stock_threshold: updates.low_stock_threshold // <--- NAYA IZAFA: Variant Threshold
     });
     await db.sync_queue.add({ 
       table_name: 'product_variants', 
       action: 'update', 
-      data: { id: variantId, barcode: updates.barcode, sale_price: updates.sale_price, wholesale_price: updates.wholesale_price, low_stock_threshold: updates.low_stock_threshold } // <--- NAYA IZAFA
+      data: { id: variantId, barcode: updates.barcode, sale_price: updates.sale_price, wholesale_price: updates.wholesale_price, distributor_price: updates.distributor_price, low_stock_threshold: updates.low_stock_threshold } // <--- NAYA IZAFA
     });
 
     // B. Mojooda Stock (Inventory) ki Sale Price update karein (Dexie + Queue)
@@ -1013,13 +1014,14 @@ const DataService = {
       await db.inventory.update(invId, { 
         sale_price: updates.sale_price, 
         wholesale_price: updates.wholesale_price,
+        distributor_price: updates.distributor_price, // <--- NAYA IZAFA (Distributor Price)
         batch_number: updates.batch_number, // <--- NAYA IZAFA
         expiry_date: updates.expiry_date    // <--- NAYA IZAFA
       }); 
       await db.sync_queue.add({ 
         table_name: 'inventory', 
         action: 'update', 
-        data: { id: invId, sale_price: updates.sale_price, wholesale_price: updates.wholesale_price, batch_number: updates.batch_number, expiry_date: updates.expiry_date } // <--- NAYA IZAFA
+        data: { id: invId, sale_price: updates.sale_price, wholesale_price: updates.wholesale_price, distributor_price: updates.distributor_price, batch_number: updates.batch_number, expiry_date: updates.expiry_date } // <--- NAYA IZAFA
       });
     }
     return true;
@@ -1483,7 +1485,8 @@ async createNewPurchase(purchasePayload) {
             barcode: item.barcode || null,
             purchase_price: item.purchase_price,
             sale_price: item.sale_price,
-            wholesale_price: item.wholesale_price
+            wholesale_price: item.wholesale_price,
+            distributor_price: item.distributor_price // <--- NAYA IZAFA (Distributor Price)
           });
         }
       }
@@ -1841,6 +1844,7 @@ async addCustomer(customerData) {
                 purchase_price: item.purchase_price,
                 sale_price: item.sale_price,
                 wholesale_price: item.wholesale_price, // <--- NAYA IZAFA
+                distributor_price: item.distributor_price, // <--- NAYA IZAFA (Distributor Price)
                 imei: item.imei,
                 item_attributes: item.item_attributes,
                 warehouse_id: item.warehouse_id, // <--- NAYA IZAFA: Warehouse Update
@@ -1862,6 +1866,7 @@ async addCustomer(customerData) {
                 purchase_price: item.purchase_price,
                 sale_price: item.sale_price,
                 wholesale_price: item.wholesale_price, // <--- NAYA IZAFA
+                distributor_price: item.distributor_price, // <--- NAYA IZAFA (Distributor Price)
                 imei: item.imei,
                 item_attributes: item.item_attributes,
                 user_id: purchaseToUpdate.user_id,
@@ -6057,6 +6062,60 @@ async addCustomer(customerData) {
 
     // Signal bhejein taake UI foran update ho
     window.dispatchEvent(new CustomEvent('local-db-updated'));
+    return true;
+  },
+
+  // --- CUSTOMER GROUPS FUNCTIONS (NAYA IZAFA) ---
+  async getCustomerGroups() {
+    const groups = await db.customer_groups.toArray();
+    return groups.sort((a, b) => {
+      if (a.is_default) return -1;
+      if (b.is_default) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  },
+
+  async addCustomerGroup(groupData) {
+    if (!groupData.id) groupData.id = crypto.randomUUID();
+    groupData.local_id = groupData.id;
+    groupData.created_at = new Date().toISOString();
+    groupData.updated_at = new Date().toISOString();
+
+    await db.customer_groups.add(groupData);
+    await db.sync_queue.add({
+      table_name: 'customer_groups',
+      action: 'create',
+      data: groupData
+    });
+    return groupData;
+  },
+
+  async updateCustomerGroup(id, updates) {
+    updates.updated_at = new Date().toISOString();
+    await db.customer_groups.update(id, updates);
+    await db.sync_queue.add({
+      table_name: 'customer_groups',
+      action: 'update',
+      data: { id, ...updates }
+    });
+    return true;
+  },
+
+  async deleteCustomerGroup(id) {
+    const group = await db.customer_groups.get(id);
+    if (group && group.is_default) {
+      throw new Error("Default system groups cannot be deleted.");
+    }
+    const usedCount = await db.customers.where('customer_group_id').equals(id).count();
+    if (usedCount > 0) {
+      throw new Error(`Cannot delete: ${usedCount} customer(s) are assigned to this group.`);
+    }
+    await db.customer_groups.delete(id);
+    await db.sync_queue.add({
+      table_name: 'customer_groups',
+      action: 'delete',
+      data: { id }
+    });
     return true;
   },
 

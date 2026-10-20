@@ -989,8 +989,8 @@ const SettingsPage = () => {
                   <Divider />
                   <Row align="middle" gutter={[16, 16]}>
                     <Col xs={24} sm={6}>
-                      <Text strong>Enable Wholesale Pricing</Text>
-                      <Text type="secondary" style={{ display: 'block' }}>Set different prices for wholesale customers.</Text>
+                      <Text strong>Multi-Tier Pricing (Wholesale & Distributor)</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>Unlock wholesale and distributor pricing levels across inventory, purchasing, and POS billing.</Text>
                     </Col>
                     <Col xs={24} sm={18}>
                       <Switch 
@@ -1052,28 +1052,15 @@ const SettingsPage = () => {
                   )}
                   <Row align="middle" gutter={[16, 16]}>
                     <Col xs={24} sm={6}>
-                      <Text strong>Customer Credit Limits</Text>
-                      <Text type="secondary" style={{ display: 'block' }}>Block sales if customer exceeds their credit limit.</Text>
+                      <Text strong>Customer Credit Limits & Controls</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>Enforce credit limits during POS billing based on Customer Group limits (e.g. Retail = Rs. 0, Wholesale = Rs. 100,000).</Text>
                     </Col>
                     <Col xs={24} sm={18}>
-                      <Space wrap>
-                        <Switch 
-                          checked={enableCustomerCreditLimits && !isCreditLimitLocked} 
-                          onChange={setEnableCustomerCreditLimits} 
-                          disabled={isCreditLimitLocked} 
-                        />
-                        {enableCustomerCreditLimits && !isCreditLimitLocked && (
-                          <Tooltip title="Maximum limit a staff can give to a new customer without Master PIN">
-                            <InputNumber 
-                              min={0} 
-                              value={defaultCreditLimit} 
-                              onChange={setDefaultCreditLimit} 
-                              addonBefore="Default Limit Rs." 
-                              style={{ width: 220 }}
-                            />
-                          </Tooltip>
-                        )}
-                      </Space>
+                      <Switch 
+                        checked={enableCustomerCreditLimits && !isCreditLimitLocked} 
+                        onChange={setEnableCustomerCreditLimits} 
+                        disabled={isCreditLimitLocked} 
+                      />
                       {isCreditLimitLocked && <Text type="warning" style={{ display: 'block', fontSize: '12px', marginTop: '4px' }}>Available in Pro and Scale plans.</Text>}
                     </Col>
                   </Row>

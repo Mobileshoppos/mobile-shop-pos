@@ -1299,6 +1299,8 @@ const Inventory = () => {
     const dataToPass = {
         product_id: isVariant ? item.product_id : item.id,
         sale_price: item.sale_price,
+        wholesale_price: item.wholesale_price, // <--- NAYA IZAFA
+        distributor_price: item.distributor_price, // <--- NAYA IZAFA (Distributor Price)
         purchase_price: item.purchase_price,
         warranty_days: item.default_warranty_days, // Yeh line shamil ki
         item_attributes: item.item_attributes || {},
@@ -1469,6 +1471,7 @@ const Inventory = () => {
           barcode: variant.barcode || '', 
           sale_price: variant.sale_price,
           wholesale_price: variant.wholesale_price, // <--- NAYA IZAFA
+          distributor_price: variant.distributor_price, // <--- NAYA IZAFA (Distributor Price)
           batch_number: variant.batch_number,       // <--- NAYA IZAFA
           expiry_date: variant.expiry_date ? dayjs(variant.expiry_date) : null // <--- NAYA IZAFA
       });
@@ -1537,6 +1540,7 @@ const Inventory = () => {
         barcode: values.barcode || null,
         sale_price: values.sale_price,
         wholesale_price: values.wholesale_price, // <--- NAYA IZAFA
+        distributor_price: values.distributor_price, // <--- NAYA IZAFA (Distributor Price)
         low_stock_threshold: values.low_stock_threshold, // <--- NAYA IZAFA: Variant Threshold
         batch_number: values.batch_number || null,                                      // <--- NAYA IZAFA
         expiry_date: values.expiry_date ? values.expiry_date.format('YYYY-MM-DD') : null // <--- NAYA IZAFA
@@ -2170,6 +2174,18 @@ const Inventory = () => {
                 <Form.Item 
                   name="wholesale_price" 
                   label="Wholesale Price" 
+                >
+                  <InputNumber style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+            )}
+
+            {/* 3.5. Distributor Price (NAYA IZAFA) */}
+            {isWholesaleActive && (
+              <Col xs={24} sm={12} md={8}>
+                <Form.Item 
+                  name="distributor_price" 
+                  label="Distributor Price" 
                 >
                   <InputNumber style={{ width: '100%' }} />
                 </Form.Item>

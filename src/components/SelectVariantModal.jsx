@@ -60,10 +60,10 @@ const SelectVariantModal = ({ visible, onCancel, onOk, product, cart, variantFil
                     data.forEach(item => {
                         const attributesKey = JSON.stringify(item.item_attributes || {});
                         
-                        // NAYA IZAFA: Agar IMEI hai to har item ki alag row banegi, warna bulk items group ho jayenge
+                        // NAYA IZAFA: Agar IMEI hai to har item ki alag row banegi, warna bulk items group ho jayenge (Distributor price shamil)
                         const key = item.imei 
                             ? `${item.product_id}-${item.imei}` 
-                            : `${item.product_id}-${attributesKey}-${item.sale_price}-${item.wholesale_price}-${item.batch_number || 'nobatch'}-${item.expiry_date || 'noexp'}-${item.warehouse_id || 'nowarehouse'}`;
+                            : `${item.product_id}-${attributesKey}-${item.sale_price}-${item.wholesale_price}-${item.distributor_price || 'nodist'}-${item.batch_number || 'nobatch'}-${item.expiry_date || 'noexp'}-${item.warehouse_id || 'nowarehouse'}`;
 
                         if (!grouped[key]) {
                             grouped[key] = { ...item, inventory_ids: [], stock: 0, key: key };

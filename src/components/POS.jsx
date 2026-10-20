@@ -76,6 +76,7 @@ const POS = () => {
   const isWholesaleActive = profile?.wholesale_pricing_enabled && limits.allow_wholesale_pricing;
   const { processSyncQueue } = useSync();
   const [customers, setCustomers] = useState([]);
+  const [customerGroups, setCustomerGroups] = useState([]); // <--- NAYA IZAFA: Customer Groups State
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState([]);
@@ -298,9 +299,17 @@ const POS = () => {
       const customersData = await db.customers.toArray();
       setCustomers(customersData.sort((a, b) => a.name.localeCompare(b.name)));
       
-      // NAYA IZAFA: Customer Groups ki list nikalna
-      const groups = [...new Set(customersData.map(c => c.customer_group).filter(Boolean))].sort();
-      setAvailableGroups(groups);
+      // NAYA IZAFA: Customer Groups Master List Load Karna
+      if (DataService.getCustomerGroups) {
+          const groupsData = await DataService.getCustomerGroups();
+          setCustomerGroups(groupsData);
+          if (groupsData.length > 0) {
+              setAvailableGroups(groupsData.map(g => g.name));
+          }
+      } else {
+          const groups = [...new Set(customersData.map(c => c.customer_group).filter(Boolean))].sort();
+          setAvailableGroups(groups);
+      }
 
       // 2. Products Local DB se layein (Wohi DataService jo Inventory mein use kiya tha)
       // NAYA IZAFA: Pehle Default Warehouse dhoondein
@@ -483,18 +492,42 @@ const POS = () => {
     setCart(currentCart => {
       let updatedCart = [...currentCart];
 
-      const isWholesale = isWholesaleActive && selectedCustomer && customers.find(c => c.id === selectedCustomer)?.customer_group?.includes('Wholesale');
+      // --- NAYA IZAFA: 3-Tier Smart Price Resolver (Retail, Wholesale, Distributor) ---
+      const activeCustomerObj = customers.find(c => c.id === selectedCustomer);
+      let customerPricingTier = 'retail';
 
-              const imeiItemsToAdd = selectedItems.filter(i => i.category_is_imei_based || i.imei).map(i => ({
-                  ...i,
-                  retail_price: i.sale_price, // Asli qeemat mehfooz karein
-                  sale_price: (isWholesale && i.wholesale_price) ? i.wholesale_price : i.sale_price
-              }));
-              const quantityItemsToAdd = selectedItems.filter(i => !i.category_is_imei_based && !i.imei).map(i => ({
-                  ...i,
-                  retail_price: i.sale_price, // Asli qeemat mehfooz karein
-                  sale_price: (isWholesale && i.wholesale_price) ? i.wholesale_price : i.sale_price
-              }));
+      if (isWholesaleActive && activeCustomerObj) {
+          const matchedGroup = customerGroups.find(g => g.id === activeCustomerObj.customer_group_id || g.name.toLowerCase() === (activeCustomerObj.customer_group || '').toLowerCase());
+          if (matchedGroup) {
+              customerPricingTier = matchedGroup.pricing_tier || 'retail';
+          } else if (activeCustomerObj.customer_group?.toLowerCase().includes('distributor')) {
+              customerPricingTier = 'distributor';
+          } else if (activeCustomerObj.customer_group?.toLowerCase().includes('wholesale')) {
+              customerPricingTier = 'wholesale';
+          }
+      }
+
+      const getTierPrice = (item) => {
+          const retail = item.sale_price;
+          if (customerPricingTier === 'distributor') {
+              return item.distributor_price || item.wholesale_price || retail;
+          }
+          if (customerPricingTier === 'wholesale') {
+              return item.wholesale_price || retail;
+          }
+          return retail;
+      };
+
+      const imeiItemsToAdd = selectedItems.filter(i => i.category_is_imei_based || i.imei).map(i => ({
+          ...i,
+          retail_price: i.sale_price, // Asli qeemat mehfooz karein
+          sale_price: getTierPrice(i)
+      }));
+      const quantityItemsToAdd = selectedItems.filter(i => !i.category_is_imei_based && !i.imei).map(i => ({
+          ...i,
+          retail_price: i.sale_price, // Asli qeemat mehfooz karein
+          sale_price: getTierPrice(i)
+      }));
 
       // 1. IMEI Items (Inki quantity hamesha 1 hoti hai)
       imeiItemsToAdd.forEach(item => {
@@ -1179,7 +1212,7 @@ const POS = () => {
   const subtotal = cart.reduce((sum, item) => sum + (item.sale_price * item.quantity), 0);
   const isWalkIn = customers.find(c => c.id === selectedCustomer)?.name === 'Walk-in Customer';
 
-  // --- NAYA IZAFA: Dynamic Wholesale Pricing ---
+  // --- NAYA IZAFA: Dynamic 3-Tier Pricing (Retail, Wholesale, Distributor) ---
   const prevCustomerRef = useRef(selectedCustomer);
 
   useEffect(() => {
@@ -1187,13 +1220,29 @@ const POS = () => {
     if (prevCustomerRef.current !== selectedCustomer) {
       if (cart.length > 0) {
         const customer = customers.find(c => c.id === selectedCustomer);
-        const isWholesale = isWholesaleActive && customer?.customer_group?.includes('Wholesale');
+        let activeTier = 'retail';
+
+        if (isWholesaleActive && customer) {
+            const matchedGroup = customerGroups.find(g => g.id === customer.customer_group_id || g.name.toLowerCase() === (customer.customer_group || '').toLowerCase());
+            if (matchedGroup) {
+                activeTier = matchedGroup.pricing_tier || 'retail';
+            } else if (customer.customer_group?.toLowerCase().includes('distributor')) {
+                activeTier = 'distributor';
+            } else if (customer.customer_group?.toLowerCase().includes('wholesale')) {
+                activeTier = 'wholesale';
+            }
+        }
 
         let priceChanged = false;
         const updatedCart = cart.map(item => {
-          // Agar retail_price save nahi hai, to pehle usey save kar lein
           const retail = item.retail_price || item.sale_price;
-          const newPrice = (isWholesale && item.wholesale_price) ? item.wholesale_price : retail;
+          let newPrice = retail;
+
+          if (activeTier === 'distributor') {
+              newPrice = item.distributor_price || item.wholesale_price || retail;
+          } else if (activeTier === 'wholesale') {
+              newPrice = item.wholesale_price || retail;
+          }
           
           if (item.sale_price !== newPrice) {
             priceChanged = true;
@@ -1204,13 +1253,13 @@ const POS = () => {
 
         if (priceChanged) {
           setCart(updatedCart);
-          message.info(`Prices updated to ${isWholesale ? 'Wholesale' : 'Retail'} for this customer.`);
+          message.info(`Prices updated to ${activeTier.toUpperCase()} for this customer.`);
         }
       }
       prevCustomerRef.current = selectedCustomer;
     }
-  }, [selectedCustomer, customers, isWholesaleActive, cart.length]);
-  // ---------------------------------------------
+  }, [selectedCustomer, customers, customerGroups, isWholesaleActive, cart.length]);
+  // -------------------------------------------------------------------------
   // Agar Walk-in select ho jaye to payment method ko "Paid" par reset kar dein
   useEffect(() => {
     if (isWalkIn && paymentMethod === 'Unpaid') {
@@ -1273,18 +1322,30 @@ const POS = () => {
         return;
       }
 
+      // --- NAYA IZAFA: Default Retail Group Fallback ---
+      const defaultGroup = customerGroups.find(g => g.is_default);
+      if (!values.customer_group_id && defaultGroup) {
+          values.customer_group_id = defaultGroup.id;
+          values.customer_group = defaultGroup.name;
+      }
+
       // --- SMART LOGIC: Default Limit vs Unlimited ---
       let finalCreditLimit = values.credit_limit;
-      const defaultLimit = profile?.default_credit_limit || 0;
 
       if (profile?.enable_customer_credit_limits) {
           if (finalCreditLimit === undefined || finalCreditLimit === null) {
-              if (activeStaff && !can('can_set_credit_limit')) {
-                  // Staff jiske paas permission nahi, usay chup-chap Default Limit de do
-                  finalCreditLimit = defaultLimit;
+              // Pehle check karein ke jo group laga hai (chahe user ne lagaya ya default laga), uski limit kya hai
+              const matchedGroup = customerGroups.find(g => g.id === values.customer_group_id);
+              if (matchedGroup && matchedGroup.default_credit_limit !== null && matchedGroup.default_credit_limit !== undefined) {
+                  finalCreditLimit = matchedGroup.default_credit_limit;
               } else {
-                  // Owner ya permission wala staff khali chhore to Unlimited (null)
-                  finalCreditLimit = null;
+                  // Agar group ki limit nahi hai, to staff/owner wala logic
+                  const defaultLimit = profile?.default_credit_limit || 0;
+                  if (activeStaff && !can('can_set_credit_limit')) {
+                      finalCreditLimit = defaultLimit;
+                  } else {
+                      finalCreditLimit = null; // Unlimited
+                  }
               }
           }
       }
@@ -2051,7 +2112,10 @@ const POS = () => {
                   value={selectedCustomer} 
                   onChange={(value) => setSelectedCustomer(value)} 
                   filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())} 
-                  options={customers.map(customer => ({ value: customer.id, label: `${customer.name} - ${customer.phone_number}` }))} 
+                  options={customers.map(customer => ({ 
+                    value: customer.id, 
+                    label: `${customer.name} ${customer.customer_group ? `(${customer.customer_group})` : ''} - ${customer.phone_number}` 
+                  }))} 
                   allowClear 
                 />
                 {(() => {
@@ -2586,12 +2650,28 @@ const POS = () => {
             </Col>
 
             <Col xs={24} sm={12} md={8}>
-              <Form.Item name="customer_group" label="Customer Group" tooltip="Assign to a specific route or category">
-                <Select 
-                  mode="tags" 
-                  placeholder="e.g. Wholesale, Route A" 
-                  options={availableGroups.map(g => ({ label: g, value: g }))}
-                />
+              <Form.Item label="Customer Group" tooltip="Assign group to set price tier and credit rules">
+                <Form.Item name="customer_group_id" noStyle>
+                  <Select 
+                    placeholder="Select Group" 
+                    allowClear
+                    onChange={(groupId) => {
+                      const grp = customerGroups.find(g => g.id === groupId);
+                      if (grp) {
+                        addForm.setFieldsValue({ customer_group: grp.name });
+                        if (grp.default_credit_limit !== undefined && grp.default_credit_limit !== null) {
+                          addForm.setFieldsValue({ credit_limit: grp.default_credit_limit });
+                        }
+                      } else {
+                        addForm.setFieldsValue({ customer_group: null });
+                      }
+                    }}
+                    options={customerGroups.map(g => ({ 
+                      label: `${g.name} (${g.pricing_tier.toUpperCase()})`, 
+                      value: g.id 
+                    }))}
+                  />
+                </Form.Item>
               </Form.Item>
             </Col>
 
