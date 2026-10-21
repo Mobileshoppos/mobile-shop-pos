@@ -29,16 +29,30 @@ const ProductImageUpload = ({ value, onChange, onUploading }) => {
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
+
+          // NAYA IZAFA: Check karein agar file PNG hai
+          const isPng = file.type === 'image/png';
+
+          // Agar PNG nahi hai (Aam photo hai), to background ko safed (white) karein taake kala dabba na banay
+          if (!isPng) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, width, height);
+          }
+
           ctx.drawImage(img, 0, 0, width, height);
           
-          // 0.7 ka matlab hai 70% quality, jo ke size ko bohat kam kar deti hai
+          // NAYA IZAFA: PNG ko PNG format mein hi save karein taake transparency barqarar rahay
+          const outputType = isPng ? 'image/png' : 'image/jpeg';
+          const fileExtension = isPng ? 'png' : 'jpg';
+
           canvas.toBlob((blob) => {
-            const compressedFile = new File([blob], file.name, {
-              type: 'image/jpeg',
+            const newFileName = file.name.replace(/\.[^/.]+$/, "") + `.${fileExtension}`;
+            const compressedFile = new File([blob], newFileName, {
+              type: outputType,
               lastModified: Date.now(),
             });
             resolve(compressedFile);
-          }, 'image/jpeg', 0.7);
+          }, outputType, isPng ? undefined : 0.7);
         };
       };
     });

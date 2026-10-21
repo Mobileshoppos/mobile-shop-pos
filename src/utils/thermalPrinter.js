@@ -3,6 +3,54 @@
 import QRCode from 'qrcode'; 
 import dayjs from 'dayjs';
 
+// --- NAYA IZAFA: Thermal Direct Print Helper (No Popup Window / PWA & Full-Screen Friendly) ---
+const printThermalDirectHtml = (htmlContent) => {
+    let iframe = document.getElementById('hidden-thermal-print-iframe');
+    if (iframe) {
+        iframe.remove();
+    }
+
+    iframe = document.createElement('iframe');
+    iframe.id = 'hidden-thermal-print-iframe';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <title>Print Thermal Receipt</title>
+                <style>
+                    body { margin: 0; padding: 5px; background-color: #fff; }
+                    @media print {
+                        @page { margin: 0; size: auto; }
+                        body { margin: 0; }
+                    }
+                </style>
+            </head>
+            <body>
+                ${htmlContent}
+                <script>
+                    window.onload = function() {
+                        window.focus();
+                        setTimeout(() => {
+                            window.print();
+                        }, 250);
+                    };
+                </script>
+            </body>
+        </html>
+    `);
+    doc.close();
+};
+
 // Note: Yeh function ab 'async' hai
 export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
     const {
@@ -15,13 +63,18 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
     const formatNumber = (num) => Number(num).toFixed(2);
     const formatMoney = (num) => `${currency} ${Number(num).toFixed(2)}`;
 
-    // --- QR CODE GENERATION ---
+    // --- QR CODE GENERATION (Caption Ke Sath) ---
     let qrCodeImgTag = '';
     if (showQrCode) {
         try {
             const qrText = fbrInvoiceNumber ? fbrInvoiceNumber : `INV:${saleId}`;
             const qrDataUrl = await QRCode.toDataURL(qrText, { width: 80, margin: 0 });
-            qrCodeImgTag = `<img src="${qrDataUrl}" style="display: block; margin: 0 auto 10px auto; width: 80px; height: 80px;" />`;
+            qrCodeImgTag = `
+                <div style="text-align: center; margin: 8px 0 10px 0;">
+                    <img src="${qrDataUrl}" style="display: block; margin: 0 auto 3px auto; width: 75px; height: 75px;" />
+                    <span style="font-size: 9px; color: #555;">Scan to Verify Invoice</span>
+                </div>
+            `;
         } catch (err) {
             console.error("QR Generation failed", err);
         }
@@ -30,19 +83,17 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
     let receiptContent = `
         <div style="width: 270px; font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #000; margin: 0 auto;">
             
-            <!-- HEADER -->
-            <div style="text-align: center; margin-bottom: 10px;">
-                <!-- NAYA IZAFA: HTML Image Tag for Shop Logo -->
-                ${shopLogo ? `<img src="${shopLogo}" style="display: block; margin: 0 auto 8px auto; max-height: 50px; object-fit: contain;" />` : ''}
-                <h2 style="margin: 0; font-size: 16px; font-weight: bold;">${shopName || 'MY SHOP'}</h2>
+            <!-- HEADER (Logo & Name in Single Row - Compact Paper Saving) -->
+            <div style="text-align: center; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
+                    ${shopLogo ? `<img src="${shopLogo}" style="max-height: 32px; max-width: 32px; object-fit: contain;" />` : ''}
+                    <h2 style="margin: 0; font-size: 15px; font-weight: bold; line-height: 1.2;">${shopName || 'MY SHOP'}</h2>
+                </div>
                 <p style="margin: 2px 0; font-size: 11px;">${shopAddress || ''}</p>
                 <p style="margin: 2px 0; font-size: 11px;">${shopPhone || ''}</p>
             </div>
 
             <hr style="border-top: 1px dashed #000; margin: 5px 0;">
-
-            <!-- QR CODE (Center mein) -->
-            ${qrCodeImgTag}
 
             <!-- INFO -->
             <div style="font-size: 11px; margin-bottom: 8px;">
@@ -161,17 +212,23 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
                 </div>
             </div>
 
-            <hr style="border-top: 1px dashed #000; margin: 10px 0;">
+            <!-- NAYA IZAFA: QR Code ko Grand Total ke theek neechay shift kiya gaya -->
+            ${qrCodeImgTag ? `
+                <hr style="border-top: 1px dashed #000; margin: 8px 0 4px 0;">
+                ${qrCodeImgTag}
+            ` : ''}
 
             <!-- WARRANTY POLICY -->
             ${footerMessage ? `
+            <hr style="border-top: 1px dashed #000; margin: 8px 0;">
             <div style="text-align: left; font-size: 10px; margin-bottom: 10px;">
                 <p style="font-weight: bold; margin: 0 0 2px 0;">Terms & Conditions:</p>
                 <p style="margin: 0; white-space: pre-wrap;">${footerMessage}</p>
             </div>
-            <hr style="border-top: 1px dashed #000; margin: 10px 0;">
             ` : ''}
             
+            <hr style="border-top: 1px dashed #000; margin: 10px 0;">
+
             <!-- FOOTER -->
             <div style="text-align: center; font-size: 11px;">
                 <p>Thank you for your purchase!</p>
@@ -180,34 +237,8 @@ export const printThermalReceipt = async (saleDetails, currency = 'PKR') => {
         </div>
     `;
 
-    const printWindow = window.open('', '_blank', 'width=300,height=600');
-    printWindow.document.write(`
-        <html>
-            <head>
-                <title>Print Receipt</title>
-                <style>
-                    body { margin: 0; padding: 5px; background-color: #fff; }
-                    @media print {
-                        @page { margin: 0; size: auto; }
-                        body { margin: 0; }
-                    }
-                </style>
-            </head>
-            <body>
-                ${receiptContent}
-                <script>
-                    window.onload = function() {
-                        window.focus();
-                        setTimeout(() => { 
-                            window.print(); 
-                            window.close();
-                        }, 500);
-                    }
-                </script>
-            </body>
-        </html>
-    `);
-    printWindow.document.close();
+    // NAYA IZAFA: Hidden Iframe Direct Print (No popup window)
+    printThermalDirectHtml(receiptContent);
 };
 
 // --- NAYA IZAFA: Customer Payment Thermal Receipt ---
@@ -223,11 +254,12 @@ export const printThermalPaymentReceipt = async (paymentDetails, currency = 'PKR
     let receiptContent = `
         <div style="width: 270px; font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #000; margin: 0 auto;">
             
-            <!-- HEADER -->
-            <div style="text-align: center; margin-bottom: 10px;">
-                <!-- NAYA IZAFA: HTML Image Tag for Shop Logo -->
-                ${shopLogo ? `<img src="${shopLogo}" style="display: block; margin: 0 auto 8px auto; max-height: 50px; object-fit: contain;" />` : ''}
-                <h2 style="margin: 0; font-size: 16px; font-weight: bold;">${shopName || 'MY SHOP'}</h2>
+            <!-- HEADER (Logo & Name in Single Row) -->
+            <div style="text-align: center; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;">
+                    ${shopLogo ? `<img src="${shopLogo}" style="max-height: 32px; max-width: 32px; object-fit: contain;" />` : ''}
+                    <h2 style="margin: 0; font-size: 15px; font-weight: bold; line-height: 1.2;">${shopName || 'MY SHOP'}</h2>
+                </div>
                 <p style="margin: 2px 0; font-size: 11px;">${shopAddress || ''}</p>
                 <p style="margin: 2px 0; font-size: 11px;">${shopPhone || ''}</p>
             </div>
@@ -293,32 +325,6 @@ export const printThermalPaymentReceipt = async (paymentDetails, currency = 'PKR
         </div>
     `;
 
-    const printWindow = window.open('', '_blank', 'width=300,height=600');
-    printWindow.document.write(`
-        <html>
-            <head>
-                <title>Print Payment Receipt</title>
-                <style>
-                    body { margin: 0; padding: 5px; background-color: #fff; }
-                    @media print {
-                        @page { margin: 0; size: auto; }
-                        body { margin: 0; }
-                    }
-                </style>
-            </head>
-            <body>
-                ${receiptContent}
-                <script>
-                    window.onload = function() {
-                        window.focus();
-                        setTimeout(() => { 
-                            window.print(); 
-                            window.close();
-                        }, 500);
-                    }
-                </script>
-            </body>
-        </html>
-    `);
-    printWindow.document.close();
+    // NAYA IZAFA: Hidden Iframe Direct Print (No popup window)
+    printThermalDirectHtml(receiptContent);
 };

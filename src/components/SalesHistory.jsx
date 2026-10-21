@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Table, Typography, Tag, App, Button, Tooltip, Space, theme, Input, DatePicker, Select, Radio, Row, Col, ConfigProvider } from 'antd';
+import { Card, Table, Typography, Tag, App, Button, Tooltip, Space, theme, Input, DatePicker, Select, Radio, Row, Col, ConfigProvider, Dropdown } from 'antd';
 import { PrinterOutlined, ReloadOutlined, HistoryOutlined, FilterOutlined, UndoOutlined, RollbackOutlined } from '@ant-design/icons';
 import { supabase } from '../supabaseClient';
 import { generateSaleReceipt } from '../utils/receiptGenerator';
@@ -299,7 +299,8 @@ const SalesHistory = () => {
     fetchSalesHistory();
   }, [message, searchText, dateRange, statusFilter, staffFilter, filterCategory, filterBrand, filterPaymentMethod]);
 
-  const handleReprint = async (saleId) => {
+  // NAYA IZAFA: formatType parameter shamil kiya taake Settings par depend na rahay
+  const handleReprint = async (saleId, formatType = 'thermal') => {
     setIsPrinting(saleId); 
   
     try {
@@ -392,7 +393,8 @@ const SalesHistory = () => {
           showQrCode: profile?.qr_code_enabled ?? true
       };
             
-      if (profile?.receipt_format === 'thermal') {
+      // NAYA IZAFA: Settings ke bajaye dukandar ke select kiye format ke mutabiq direct print
+      if (formatType === 'thermal') {
           printThermalReceipt(receiptData, profile?.currency);
       } else {
           generateSaleReceipt(receiptData, profile?.currency);
@@ -538,15 +540,31 @@ const SalesHistory = () => {
       key: 'actions',
       width: 80,
       render: (_, record) => (
-        <Space>
-          <Tooltip title="Reprint Receipt">
+        <Dropdown
+          trigger={['click']}
+          placement="bottomRight"
+          menu={{
+            items: [
+              {
+                key: 'thermal',
+                label: 'Thermal Slip',
+                onClick: () => handleReprint(record.sale_id, 'thermal'),
+              },
+              {
+                key: 'pdf',
+                label: 'A4 PDF',
+                onClick: () => handleReprint(record.sale_id, 'pdf'),
+              },
+            ],
+          }}
+        >
+          <Tooltip title="Print Receipt">
             <Button 
               icon={<PrinterOutlined />} 
-              onClick={() => handleReprint(record.sale_id)}
               loading={isPrinting === record.sale_id}
             />
           </Tooltip>
-        </Space>
+        </Dropdown>
       ),
     },
   ];
