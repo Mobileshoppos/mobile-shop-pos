@@ -34,25 +34,21 @@ export default defineConfig({
         description: 'A simple Point of Sale and Inventory Management System for Retailer Shops.',
         theme_color: '#ffffff',
         background_color: "#ffffff",
-        display: "fullscreen",
+        display: "standalone",
         scope: "/",
         start_url: "/",
         icons: [
           {
             src: 'pwa-192x192.png',
             sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any'
           },
           {
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
           }
         ]
       }
